@@ -1,12 +1,12 @@
 # 早上检查清单
 
 ## 完成情况
-- T0 / 完成（夜间代码与单测；真实账号验收待用户） / 修补脚本覆盖 JS、声明文件、目录入口、未命中与幂等；typecheck 通过，SDK 导出数 53 / 提交号将在下一任务记录中回填
-- T1 / 完成（夜间代码与单测；边界检查有临时豁免） / logger、依赖边界检查、配置示例与项目脚本完成；依赖按精确版本离线安装；`npm run check` 通过，5 项测试全过 / `checkpoint/night-t1-unverified`
-- T2 / 完成（夜间代码与单测；真实 SnowLuma/QQ 验收待用户） / 事件模型、双向段转换、账号校验和 OneBot 适配器完成；`npm run check` 通过，20 项测试全过；新增 `doc/BUILD-GUIDE.md` / `checkpoint/night-t2-unverified`
-- T3 / 完成 / 配置 schema、YAML load、deepMerge/resolve、fs.watch 防抖与原子写完成；`npm run check` 通过，30 项测试全过；初学者施工指南已加入 T3 / `checkpoint/night-t3-unverified`
-- T4 / 完成 / `node:sqlite` WAL/迁移及 repository CRUD、自然日成本汇总完成；`npm run check` 通过，36 项测试全过；Node 内置 SQLite 实测可用 / `checkpoint/night-t4-unverified`
-- T5 / 完成（真实模型调用待用户） / OpenAI-compatible provider 缓存、降级/用量记录与预算门槛完成；`npm run check` 通过，47 项测试全过；未访问外网 / `checkpoint/night-t5-unverified`
+- T0 / 完成（夜间代码与单测；真实账号验收待用户） / 修补脚本覆盖 JS、声明文件、目录入口、未命中与幂等；typecheck 通过，SDK 导出数 53 / `1c420e86ad56e92473b51d2674824b7817698794`
+- T1 / 完成（夜间代码与单测；边界检查有临时豁免） / logger、依赖边界检查、配置示例与项目脚本完成；依赖按精确版本离线安装；`npm run check` 通过，5 项测试全过 / `89bdf01ce748ee2ab9d98477dda50938827f1bc7`
+- T2 / 完成（夜间代码与单测；真实 SnowLuma/QQ 验收待用户） / 事件模型、双向段转换、账号校验和 OneBot 适配器完成；`npm run check` 通过，20 项测试全过；新增 `doc/BUILD-GUIDE.md` / `d645b5ac0cebd16c2c13bb9a1597c87a60d3d015`
+- T3 / 完成 / 配置 schema、YAML load、deepMerge/resolve、fs.watch 防抖与原子写完成；`npm run check` 通过，30 项测试全过；初学者施工指南已加入 T3 / `ae0643b16520001441d0229ac085b2b18c3dbb4c`
+- T4 / 完成 / `node:sqlite` WAL/迁移及 repository CRUD、自然日成本汇总完成；`npm run check` 通过，36 项测试全过；Node 内置 SQLite 实测可用 / `fa70efa6c2354a477df9a4e82eb4173d49189f53`
+- T5 / 完成（真实模型调用待用户） / OpenAI-compatible provider 缓存、降级/用量记录与预算门槛完成；`npm run check` 通过，47 项测试全过；未访问外网 / `52372d632ce0e51bd5abf19f3a7cd9932344ecd6`
 
 ## 需要用户操作的验证
 - T0：
