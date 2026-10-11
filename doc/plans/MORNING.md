@@ -7,7 +7,7 @@
 - T3 / 完成 / 配置 schema、YAML load、deepMerge/resolve、fs.watch 防抖与原子写完成；`npm run check` 通过，30 项测试全过；初学者施工指南已加入 T3 / `ae0643b16520001441d0229ac085b2b18c3dbb4c`
 - T4 / 完成 / `node:sqlite` WAL/迁移及 repository CRUD、自然日成本汇总完成；`npm run check` 通过，36 项测试全过；Node 内置 SQLite 实测可用 / `fa70efa6c2354a477df9a4e82eb4173d49189f53`
 - T5 / 完成（真实模型调用待用户） / OpenAI-compatible provider 缓存、降级/用量记录与预算门槛完成；`npm run check` 通过，47 项测试全过；未访问外网 / `52372d632ce0e51bd5abf19f3a7cd9932344ecd6`
-- T6 / 完成（真实 QQ/模型端到端验收待用户） / 被叫必回 pipeline、人设、触发、限流、上下文、清洗、拆条、节奏、消息/决策落库与 main 装配完成；`npm run check` 通过，70 项测试全过 / `checkpoint/night-t6-unverified`
+- T6 / 完成（真实 QQ/模型端到端验收待用户） / 被叫必回 pipeline、人设、触发、限流、上下文、清洗、拆条、节奏、消息/决策落库与 main 装配完成；`npm run check` 通过，70 项测试全过 / `e4b1510738ab5e8e0c37de3a991b3dcdd5e2caae`（`checkpoint/night-t6-unverified`）
 
 ## 需要用户操作的验证
 - T0：
