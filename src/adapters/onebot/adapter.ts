@@ -115,6 +115,7 @@ const createClient: ClientFactory = (options) => new SnowLumaWebSocketClient(opt
 
 export class OneBotAdapter implements ProtocolAdapter {
   readonly account: number;
+  nickname = '';
 
   private readonly client: OneBotClient;
   private readonly messageListeners = new Set<(message: IncomingMessage) => void>();
@@ -154,6 +155,7 @@ export class OneBotAdapter implements ProtocolAdapter {
       if (login.user_id !== this.account) {
         throw new Error(`登录账号 ${login.user_id} 与配置账号 ${this.account} 不一致，拒绝工作`);
       }
+      this.nickname = login.nickname;
       this.accountVerified = true;
       this.setStatus('online');
     } catch (error) {

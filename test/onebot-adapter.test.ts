@@ -147,6 +147,17 @@ test('读取首个 wsServers、启用重连并校验登录账号', async (t) => 
   assert.equal(statuses.at(-1), 'offline');
 });
 
+test('连接后公开已校验登录账号的昵称供人设占位使用', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => fake.client);
+
+  await adapter.connect();
+
+  assert.equal(adapter.nickname, 'Aquarium');
+  adapter.close();
+});
+
 test('拒绝连接到与配置账号不一致的登录账号', async (t) => {
   const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
   const fake = createFakeClient(account + 1);
