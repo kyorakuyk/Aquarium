@@ -13,6 +13,7 @@
     "check": "npm run typecheck && node scripts/check-boundaries.mjs && npm test",
     "start": "node --env-file-if-exists=.env src/app/main.ts",
     "spike:ping": "node --env-file-if-exists=.env src/spike/ping.ts",
+    "spike:adapter-ping": "node --env-file-if-exists=.env src/spike/adapter-ping.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

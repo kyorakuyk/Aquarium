@@ -229,7 +229,7 @@ AQUARIUM_PANEL_PASSWORD=
   - `config.example.yaml`：即 §4.3 内容。
   - 验收：`npm run check` 通过（至少有一个 logger 的测试）。
 
-- [ ] **T2 事件模型与 OneBot 适配器**
+- [x] **T2 事件模型与 OneBot 适配器**（夜间代码/单测完成；真实 SnowLuma/QQ 验收待用户，见 MORNING.md）
   - 实现 §4.1、§4.2。适配器文件：`src/adapters/onebot/adapter.ts`（类 `OneBotAdapter implements ProtocolAdapter`），构造参数 `{ account, snowlumaDir }`，从 `onebot_<account>.json` 读第一个 `wsServers`，`reconnect: true`。
   - `src/adapters/onebot/convert.ts`：OneBot 消息段 ⇄ `Segment` 双向转换（纯函数）；未知类型转为 `unknown`，发送时丢弃 `unknown`。
   - 过滤：`user_id === account` 的消息不分发。
@@ -315,6 +315,7 @@ AQUARIUM_PANEL_PASSWORD=
 | 2026-10-12 | 交接 | 骨架与 spike 已写好，SDK 打包缺陷待 T0 修复 |
 | 2026-10-12 | T0 | 新增仅修补 `@snowluma/sdk` 的幂等 postinstall 脚本与单测；离线安装后 typecheck 通过，SDK 导出数 53；真实 QQ 验收列入 MORNING.md |
 | 2026-10-12 | T1 | 增加 logger、依赖边界检查、项目脚本与精确依赖；`npm run check` 通过（5 项测试）；边界检查暂豁免 T0 spike，待 T2 适配器完成后收回 |
+| 2026-10-12 | T2 | 新增 Aquarium 事件模型、OneBot 双向段转换和 SDK 适配器；`npm run check` 通过（20 项测试）；真实 QQ 验收列入 MORNING.md，T0 旧 spike 的单文件 SDK 豁免暂保留 |
 
 ---
 
