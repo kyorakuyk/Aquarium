@@ -241,14 +241,14 @@ AQUARIUM_PANEL_PASSWORD=
   - 测试：继承解析、数组覆盖、非法配置被拒且旧配置保留、原子写。
   - 验收：`npm run check` 通过。
 
-- [ ] **T4 存储**
+- [x] **T4 存储**（夜间代码/单测完成）
   - `src/store/db.ts`：打开 `data/aquarium.db`（`node:sqlite`），`PRAGMA journal_mode=WAL`；简单迁移机制（`schema_version` 表 + 按序执行的迁移数组）。
   - 迁移 1 建表：
     - `messages(id INTEGER PK, session_id TEXT, message_id TEXT, sender_id INTEGER, sender_name TEXT, is_self INTEGER, plain_text TEXT, segments_json TEXT, time INTEGER)`，索引 `(session_id, time)`；`UNIQUE(session_id, message_id)`。
     - `usage(id INTEGER PK, time INTEGER, slot TEXT, provider TEXT, model TEXT, input_tokens INTEGER, cached_tokens INTEGER, output_tokens INTEGER, cost_cny REAL, latency_ms INTEGER, ok INTEGER)`。
     - `image_captions(key TEXT PK, caption TEXT, time INTEGER)`。
     - `decisions(id INTEGER PK, time INTEGER, session_id TEXT, message_id TEXT, replied INTEGER, reason TEXT, detail_json TEXT)`。
-  - 仓储函数：`saveMessage`、`recentMessages(sessionId, n)`（由旧到新）、`recordUsage`、`costToday()`（按本地时区的自然日）、`getCaption/setCaption`、`recordDecision`、`recentDecisions(n)`。
+  - 仓储函数放在 `src/store/repository.ts`，只依赖打开的数据库连接：`saveMessage`、`recentMessages(sessionId, n)`（由旧到新）、`recordUsage`、`costToday()`（按本地时区的自然日）、`getCaption/setCaption`、`recordDecision`、`recentDecisions(n)`。
   - 测试使用临时文件数据库。验收：`npm run check` 通过。
 
 - [ ] **T5 模型层**
@@ -317,6 +317,7 @@ AQUARIUM_PANEL_PASSWORD=
 | 2026-10-12 | T1 | 增加 logger、依赖边界检查、项目脚本与精确依赖；`npm run check` 通过（5 项测试）；边界检查暂豁免 T0 spike，待 T2 适配器完成后收回 |
 | 2026-10-12 | T2 | 新增 Aquarium 事件模型、OneBot 双向段转换和 SDK 适配器；`npm run check` 通过（20 项测试）；真实 QQ 验收列入 MORNING.md，T0 旧 spike 的单文件 SDK 豁免暂保留 |
 | 2026-10-12 | T3 | 完成 Zod 配置 schema、YAML 加载/继承、fs.watch 热重载与原子写；`npm run check` 通过（30 项测试） |
+| 2026-10-12 | T4 | 以 Node 内置 `node:sqlite` 完成 WAL、版本迁移和消息/用量/图片/决策仓储；`npm run check` 通过（36 项测试） |
 
 ---
 

@@ -5,6 +5,7 @@
 - T1 / 完成（夜间代码与单测；边界检查有临时豁免） / logger、依赖边界检查、配置示例与项目脚本完成；依赖按精确版本离线安装；`npm run check` 通过，5 项测试全过 / `checkpoint/night-t1-unverified`
 - T2 / 完成（夜间代码与单测；真实 SnowLuma/QQ 验收待用户） / 事件模型、双向段转换、账号校验和 OneBot 适配器完成；`npm run check` 通过，20 项测试全过；新增 `doc/BUILD-GUIDE.md` / `checkpoint/night-t2-unverified`
 - T3 / 完成 / 配置 schema、YAML load、deepMerge/resolve、fs.watch 防抖与原子写完成；`npm run check` 通过，30 项测试全过；初学者施工指南已加入 T3 / `checkpoint/night-t3-unverified`
+- T4 / 完成 / `node:sqlite` WAL/迁移及 repository CRUD、自然日成本汇总完成；`npm run check` 通过，36 项测试全过；Node 内置 SQLite 实测可用 / `checkpoint/night-t4-unverified`
 
 ## 需要用户操作的验证
 - T0：
@@ -35,3 +36,4 @@
 - T1 试跑裸 `node --test` 时，Node 自动发现了 `reference/` 下的只读参考项目测试并产生大量失败（包括缺少 Vitest）；已核对 SnowLuma、ai-bot-groupmate、qq-bridge、Tulpa 四个嵌套仓库的 Git 状态均干净，未再运行全仓自动发现。终端工具生成的完整输出缓存路径为 `D:\\Hermes\\cache\\terminal-output\\out-1791746637-57704-b490.log`，未访问或修改该文件。
 - T2 `npm run check`：typecheck 与依赖边界检查通过；Vitest-independent Node test runner 共 20 项通过、0 失败。真实 SnowLuma/QQ 未连接；只在 T0/T2 的 `MORNING.md` 步骤由用户手动验证。
 - T3 首次 `npm run check`：TypeScript 报 `src/config/resolve.ts(28,21): TS7053`，因为合并基对象被推断成 `{}`；为 record 显式标注 `Record<string, unknown>` 后通过。最终 `npm run check`：typecheck、依赖边界检查通过，30 项测试通过、0 失败。
+- T4 首次数据库测试在 after hook 删除目录时收到 Windows `EPERM`，原因是测试清理顺序没有先关闭 `DatabaseSync`。改为在 `finally` 中先关闭所有连接再删除仓库内临时 fixture；分别重跑 `node --test test/store.test.ts` 与 `node --test test/repository.test.ts` 均通过，临时目录已清空。
