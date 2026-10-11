@@ -1,0 +1,34 @@
+# 参考项目（各自带有独立的 git 仓库，只读参考，不纳入本仓库）
+/reference/
+
+# 依赖与构建产物
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# 运行时数据：聊天记录、数据库、日志、存档快照（含群友隐私，绝不提交）
+/data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+logs/
+*.log
+
+# 本地配置与密钥（API key、SnowLuma token 等）
+.env
+.env.*
+!.env.example
+config.local.*
+secrets/
+
+# 编辑器与系统文件
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
