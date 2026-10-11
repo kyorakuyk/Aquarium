@@ -221,7 +221,7 @@ AQUARIUM_PANEL_PASSWORD=
   - **【用户】** 验收：启动 SnowLuma → 在 WebUI 的进程列表里手动对小号 QQ 进程点“加载”→ 运行 `npm run spike:ping` → 看到“已连接：…(900000001)” → 用主号私聊小号发 `/aq ping`，收到 `pong 🐟 水族箱已连接`。
   - 完成后把当前所有未提交文件一并提交（含 `DESIGN.md` v0.4 与 `.gitignore` 的修改）。
 
-- [ ] **T1 项目骨架**
+- [x] **T1 项目骨架**（夜间代码/单测完成；Windows 上目录参数不可用，测试脚本改用显式文件模式；T0 spike 的 SDK 临时豁免见 MORNING.md）
   - 按 §3 建目录；安装 `yaml`、`zod`、`openai`、`hono`、`@hono/node-server`（精确版本，`--save-exact`）。
   - `src/core/logger.ts`：`createLogger(scope)` → `{ debug, info, warn, error }`，格式 `[HH:mm:ss] [LEVEL] [scope] msg`，同时追加写入 `data/logs/aquarium-YYYY-MM-DD.log`（目录不存在则创建）。
   - `scripts/check-boundaries.mjs`：扫描 `src/**/*.ts`，违反 §3 依赖方向或在 `src/adapters/onebot/` 外 import `@snowluma/sdk` 时以非零码退出并打印违规文件。
@@ -314,6 +314,7 @@ AQUARIUM_PANEL_PASSWORD=
 |---|---|---|
 | 2026-10-12 | 交接 | 骨架与 spike 已写好，SDK 打包缺陷待 T0 修复 |
 | 2026-10-12 | T0 | 新增仅修补 `@snowluma/sdk` 的幂等 postinstall 脚本与单测；离线安装后 typecheck 通过，SDK 导出数 53；真实 QQ 验收列入 MORNING.md |
+| 2026-10-12 | T1 | 增加 logger、依赖边界检查、项目脚本与精确依赖；`npm run check` 通过（5 项测试）；边界检查暂豁免 T0 spike，待 T2 适配器完成后收回 |
 
 ---
 

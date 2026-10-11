@@ -9,11 +9,19 @@
   },
   "scripts": {
     "postinstall": "node scripts/patch-snowluma-sdk.mjs",
+    "test": "node --test test/*.test.ts test/*.test.mjs",
+    "check": "npm run typecheck && node scripts/check-boundaries.mjs && npm test",
+    "start": "node --env-file-if-exists=.env src/app/main.ts",
     "spike:ping": "node --env-file-if-exists=.env src/spike/ping.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@snowluma/sdk": "1.14.22"
+    "@hono/node-server": "2.1.1",
+    "@snowluma/sdk": "1.14.22",
+    "hono": "4.13.9",
+    "openai": "6.40.0",
+    "yaml": "2.9.1",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

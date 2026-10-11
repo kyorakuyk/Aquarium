@@ -1,0 +1,26 @@
+owner: 0
+accounts:
+  - uin: 900000001
+    persona: default
+    snowlumaDir: 'E:\bot\SnowLuma-v1.14.22-win-x64-lite'
+providers:
+  deepseek: { baseUrl: 'https://api.deepseek.com', apiKeyEnv: DEEPSEEK_API_KEY }
+  mimo: { baseUrl: '<待用户填写>', apiKeyEnv: MIMO_API_KEY }
+slots:
+  reply: [ { provider: deepseek, model: deepseek-v4-pro }, { provider: deepseek, model: deepseek-flash } ]
+  judge: [ { provider: deepseek, model: deepseek-flash } ]
+  extract: [ { provider: deepseek, model: deepseek-flash } ]
+  vision: [ { provider: deepseek, model: deepseek-flash } ]
+pricing:
+  deepseek-v4-pro: { input: 4.8, cachedInput: 0.16, output: 14.4 }
+  deepseek-flash: { input: 1.1, cachedInput: 0.02, output: 4.3 }
+budget: { dailyCny: 5, warnRatio: 0.8 }
+defaults:
+  enabled: false
+  mode: mention_only
+  nicknames: []
+  contextMessages: 20
+  rate: { perUserPerMinute: 4, perSessionPerMinute: 8, minIntervalSec: 3 }
+  groupNote: ''
+sessions: {}
+panel: { host: 127.0.0.1, port: 5180, passwordEnv: AQUARIUM_PANEL_PASSWORD }
