@@ -214,7 +214,7 @@ AQUARIUM_PANEL_PASSWORD=
 
 ### 可用里程碑 U1：手动启动 SnowLuma 后，bot 能在启用的会话里被 @ 时回复
 
-- [ ] **T0 修复 SDK 并跑通 spike**
+- [x] **T0 修复 SDK 并跑通 spike**（夜间代码/单测完成；真实 SnowLuma 与 QQ 验收待用户）
   - 新建 `scripts/patch-snowluma-sdk.mjs`：移植 `reference/qq-bridge/scripts/patch-snowluma-sdk.mjs`（MIT，文件头注明出处与版权），**扩展为同时处理 `.d.ts` 文件**：对 `dist/**/*.js` 与 `dist/**/*.d.ts` 中 `from '<相对路径>'` 的导入，若目标 `<路径>.js`（对 `.d.ts` 检查 `<路径>.d.ts`）存在则补 `.js`；若 `<路径>/index.js` 存在则改成 `<路径>/index.js`。只处理 `@snowluma/sdk`。脚本幂等。
   - `package.json` 加 `"postinstall": "node scripts/patch-snowluma-sdk.mjs"`，然后执行一次 `npm install`。
   - 验收：`npm run typecheck` 无错误；`node -e "import('@snowluma/sdk').then(m=>console.log(Object.keys(m).length))"` 输出数字。
@@ -313,6 +313,7 @@ AQUARIUM_PANEL_PASSWORD=
 | 日期 | 任务 | 结果 / 备注 |
 |---|---|---|
 | 2026-10-12 | 交接 | 骨架与 spike 已写好，SDK 打包缺陷待 T0 修复 |
+| 2026-10-12 | T0 | 新增仅修补 `@snowluma/sdk` 的幂等 postinstall 脚本与单测；离线安装后 typecheck 通过，SDK 导出数 53；真实 QQ 验收列入 MORNING.md |
 
 ---
 

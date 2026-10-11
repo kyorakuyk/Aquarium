@@ -8,6 +8,7 @@
     "node": ">=22.18"
   },
   "scripts": {
+    "postinstall": "node scripts/patch-snowluma-sdk.mjs",
     "spike:ping": "node --env-file-if-exists=.env src/spike/ping.ts",
     "typecheck": "tsc --noEmit"
   },
