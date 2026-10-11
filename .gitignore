@@ -32,3 +32,6 @@ secrets/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# 个人成长笔记（私人，不纳入仓库）
+/doc/growth/

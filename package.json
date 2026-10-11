@@ -1,0 +1,21 @@
+{
+  "name": "aquarium",
+  "version": "0.0.1",
+  "private": true,
+  "description": "水族箱：会水群的 AI 群友",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "spike:ping": "node --env-file-if-exists=.env src/spike/ping.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@snowluma/sdk": "1.14.22"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "7.0.2"
+  }
+}
