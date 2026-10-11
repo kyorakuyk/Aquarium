@@ -236,7 +236,7 @@ AQUARIUM_PANEL_PASSWORD=
   - 测试：`test/onebot-convert.test.ts` 覆盖 text / at（含 all）/ image / reply / face / 未知类型，以及 `mentionsSelf`、`plainText` 的计算。
   - 验收：`npm run check` 通过；把 `src/spike/ping.ts` 复制为 `src/spike/adapter-ping.ts` 改用 `OneBotAdapter` 实现同样的行为，**【用户】** 用私聊 `/aq ping` 验证。
 
-- [ ] **T3 配置**
+- [x] **T3 配置**（夜间代码/单测完成）
   - `src/config/schema.ts`（zod）、`load.ts`（读 `data/config.yaml`；不存在时复制 `config.example.yaml` 过去并提示用户编辑）、`resolve.ts`（`resolveSession`、`deepMerge`，数组整体覆盖不合并）、`watch.ts`（`fs.watch` + 300ms 防抖；新配置校验失败则保留旧配置并记 error 日志；成功则发出 `changed` 事件）、`write.ts`（原子写：写 `*.tmp` 再 `rename`）。
   - 测试：继承解析、数组覆盖、非法配置被拒且旧配置保留、原子写。
   - 验收：`npm run check` 通过。
@@ -316,6 +316,7 @@ AQUARIUM_PANEL_PASSWORD=
 | 2026-10-12 | T0 | 新增仅修补 `@snowluma/sdk` 的幂等 postinstall 脚本与单测；离线安装后 typecheck 通过，SDK 导出数 53；真实 QQ 验收列入 MORNING.md |
 | 2026-10-12 | T1 | 增加 logger、依赖边界检查、项目脚本与精确依赖；`npm run check` 通过（5 项测试）；边界检查暂豁免 T0 spike，待 T2 适配器完成后收回 |
 | 2026-10-12 | T2 | 新增 Aquarium 事件模型、OneBot 双向段转换和 SDK 适配器；`npm run check` 通过（20 项测试）；真实 QQ 验收列入 MORNING.md，T0 旧 spike 的单文件 SDK 豁免暂保留 |
+| 2026-10-12 | T3 | 完成 Zod 配置 schema、YAML 加载/继承、fs.watch 热重载与原子写；`npm run check` 通过（30 项测试） |
 
 ---
 
