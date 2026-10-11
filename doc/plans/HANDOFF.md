@@ -251,12 +251,12 @@ AQUARIUM_PANEL_PASSWORD=
   - 仓储函数放在 `src/store/repository.ts`，只依赖打开的数据库连接：`saveMessage`、`recentMessages(sessionId, n)`（由旧到新）、`recordUsage`、`costToday()`（按本地时区的自然日）、`getCaption/setCaption`、`recordDecision`、`recentDecisions(n)`。
   - 测试使用临时文件数据库。验收：`npm run check` 通过。
 
-- [ ] **T5 模型层**
-  - `src/llm/client.ts`：按 provider 缓存 `new OpenAI({ baseURL, apiKey: process.env[apiKeyEnv] })`。
-  - `src/llm/slots.ts`：`callSlot(slot, messages, opts)` 按降级链依次尝试；HTTP 400/401/403/404 **不降级**直接抛出；超时（默认 30s）、429、5xx、网络错误则尝试下一个；每次尝试都 `recordUsage`（失败也记，`ok=0`）。token 用量取响应 `usage`，缓存命中取 `usage.prompt_cache_hit_tokens`（DeepSeek）或 `usage.prompt_tokens_details.cached_tokens`，都没有则记 0。
-  - `src/llm/budget.ts`：`budgetState()` → `'ok' | 'warn' | 'exceeded'`（基于 `costToday()` 与配置）；`exceeded` 时 `reply` 槽位只使用链中最后一项。
-  - 测试：用假的 fetch / 假客户端测降级逻辑与预算判断（不要发真实请求）。
-  - 验收：`npm run check` 通过；`src/spike/llm-ping.ts` 用 `reply` 槽位问一句“你好”并打印结果与用量，**【用户】** 填好 `.env` 后运行确认。
+- [x] **T5 模型层**（夜间代码/单测完成，真实模型调用待用户）
+  - `src/llm/client.ts`：按 provider 缓存 OpenAI-compatible 客户端；provider 的 base URL 或环境变量名变化时重建。SDK 内部重试关闭，由槽位降级链负责尝试和逐次记账。
+  - `src/llm/slots.ts`：`callSlot(slot, messages, opts)` 按降级链尝试；400/401/403/404 不降级；408/429/5xx、网络错误和超时（默认 30s）降级。每次尝试都 `recordUsage`，失败也写 `ok=0`。使用量读取响应字段，缓存 token 支持 DeepSeek 顶层字段和 OpenAI-compatible 嵌套字段。
+  - `src/llm/budget.ts`：纯函数 `budgetState(config, costToday)` 返回 `ok | warn | exceeded`；`exceeded` 时 `reply` 只调用链中最后一项。模型价格缺失时在请求前拒绝发送，避免把未知成本记成 0。
+  - 假客户端单测覆盖降级、错误分类、超时、用量与预算；未发真实请求。验收：`npm run check` 通过（47 项测试）。
+  - 用户验收：运行 `npm run spike:llm-ping`，以 `reply` 槽位询问“你好”并查看回复与用量；需用户配置 `.env`，**不要在夜间执行**。
 
 - [ ] **T6 回复管线（M1 只做“被叫必回”）**
   - `src/persona/load.ts`：读取人设 Markdown 原文（`data/personas/<id>.md` 优先，其次 `personas/<id>.md`）；新建 `personas/default.md`：一个简短、中性、口语化的群友人设（名字留空让用户填，用 `{{name}}` 占位，加载时若未替换则用账号昵称）。
