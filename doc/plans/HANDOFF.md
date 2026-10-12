@@ -210,6 +210,8 @@ AQUARIUM_PANEL_PASSWORD=
 
 ## 5. 任务清单（M1）
 
+> ⚠️ 本节任务清单已迁移到 doc/plans/PLAN.md，以 PLAN.md 为准；本节仅保留历史。
+
 > 每个任务都给出：要做什么 / 验收标准。验收标准里标 **【用户】** 的步骤需要用户在自己的电脑上操作，完成代码后请明确告诉用户要做什么。
 
 ### 可用里程碑 U1：手动启动 SnowLuma 后，bot 能在启用的会话里被 @ 时回复
@@ -273,6 +275,16 @@ AQUARIUM_PANEL_PASSWORD=
 - [ ] **T7 看图**：消息含 `image` 段且本次会触发回复时，对每张图调用 `vision` 槽位生成一句中文描述（缓存键：`file` 字段，没有则用 url 的 sha1），在上下文里把图片替换为 `[图片：描述]`。不触发回复的消息不识图（省钱）。单张识图失败则用 `[图片]` 占位，不影响回复。
 - [ ] **T8 离线补课**：适配器 `online` 时，对每个已启用会话拉取 `history(session, 50)`，与库中最后一条消息比对补齐入库；找出补齐部分里提到自己的消息，若最新一条的时间距今 ≤ 10 分钟，则只针对**最新那一条**走一次正常回复流程（上下文自然包含补齐的消息）；更早的只入库不回复。
 - [ ] **T9 管理指令**（仅 `owner` 发出时生效，其他人发出则当普通消息）：`/aq ping`（回复 pong）、`/aq mute [分钟]`（本会话闭嘴，默认 60 分钟，存内存）、`/aq unmute`、`/aq recall`（撤回本会话中 bot 最近发的一条）、`/aq status`（今日花费、预算状态、已启用会话数）。指令消息本身不进入回复流程。
+- [ ] **T9b 调试记录（精简版）**
+  - 配置新增（schema + `config.example.yaml`）：`debug: { enabled: false, sessions: {}, retainDays: 7 }`。`sessions` 的键为 sessionId、值为 `true/false`，覆盖总开关；随配置热重载立即生效。
+  - 迁移新增表 `debug_traces(id INTEGER PK, time INTEGER, session_id TEXT, message_id TEXT, slot TEXT, provider TEXT, model TEXT, prompt_json TEXT, response_text TEXT, prompt_hash TEXT, detail_json TEXT)`，索引 `(session_id, time)`。
+  - 当某会话的调试开启时，`callSlot` 的每次尝试（含失败）都写一条：完整 messages 数组、模型原始返回文本（失败则为空，`detail_json` 记错误名与状态码）、`prompt_hash` = messages 序列化后的 sha256 前 16 位。决策记录 `detail_json` 中同时写入该 `prompt_hash`。
+  - 调试关闭时**不写入**任何全文。
+  - 过期清理：启动时及之后每 6 小时删除 `time` 早于 `retainDays` 天的记录。
+  - 仓储函数：`recordDebugTrace`、`debugTracesFor(sessionId, messageId)`、`pruneDebugTraces(now)`。T10 控制台的决策追踪页在有调试记录时显示“查看完整提示词 / 原始返回”。
+  - 注意：M2 引入私密信息分级后，调试记录必须对 L0 内容脱敏（DESIGN §10.1）；M1 尚无此概念，在代码中留 TODO 注释指向该条。
+  - 测试：开关继承（总开关 / 会话覆盖）、关闭时不写入、过期清理、失败调用也有记录。
+
 - [ ] **T10 控制台**：
   - 后端 `src/panel-server/`（hono）：只监听配置中的 host/port；所有 `/api/*` 需要 `Authorization: Bearer <密码>`（与 `AQUARIUM_PANEL_PASSWORD` 比较，用常数时间比较）；密码未设置时**拒绝启动控制台**并打印提示。接口：`GET /api/status`、`GET /api/sessions`（合并 `listGroups`、`listFriends` 与配置中的启用状态）、`PATCH /api/sessions/:sessionId`（写入 `sessions` 覆盖项，原子写配置）、`GET/PUT /api/personas/:id`、`POST /api/personas/import`（上传 Markdown）、`GET /api/decisions?limit=`、`GET /api/usage/today`、`POST /api/sandbox/chat`（试聊：走完全相同的提示词组装与 `reply` 槽位，但不调用适配器发送、不入 `messages` 表）、`POST /api/recall/:messageId`。
   - 前端 `panel/`（Vite + React）：登录页、会话列表（按群 / 好友分组，勾选启用，可编辑 nicknames 与 groupNote）、人设编辑与导入、决策追踪列表、今日用量、试聊窗口。构建产物由 panel-server 静态托管。界面文案层级清晰：每页一个标题、每组设置一个小标题、每项一句说明。
@@ -316,4 +328,6 @@ AQUARIUM_PANEL_PASSWORD=
 
 ## 8. 待评估清单（想到但不在 M1 范围内的点子写这里）
 
-- （空）
+- （2026-10-12 审查）**`config` ↔ `core` 目录互相引用**：`config` 只用到 `core/logger.ts` 与 `core/events.ts`。将来把这两个文件移到 `src/shared/`，使依赖变为单向。
+- （2026-10-12 审查）**`core` 依赖 OpenAI 类型**：`core/pipeline.ts`、`core/prompt.ts` 直接使用 `openai` 包的消息类型。接入 CLI 后端（M4）前，在 `src/llm/` 定义自有的 `ChatMessage` 类型并替换。
+- （2026-10-12 审查）**适配器断线重连后不再校验登录账号**：只在首次 `connect` 时校验。
