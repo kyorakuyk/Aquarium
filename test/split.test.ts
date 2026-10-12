@@ -2,9 +2,58 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { splitReply } from '../src/core/split.ts';
 
-test('splitReply 保留短回复为一条并按中文标点拆分', () => {
-  assert.deepEqual(splitReply('  你好呀！  '), ['你好呀！']);
-  assert.deepEqual(splitReply('第一句。第二句！第三句？'), ['第一句。', '第二句！', '第三句？']);
+test('splitReply 总长度不超过 80 时原样保留为一条', () => {
+  assert.deepEqual(splitReply('你好呀！'), ['你好呀！']);
+  assert.deepEqual(splitReply('好啊！走吧。'), ['好啊！走吧。']);
+  assert.deepEqual(splitReply('哈哈哈。。。真的假的？？'), ['哈哈哈。。。真的假的？？']);
+  assert.deepEqual(splitReply('我昨天跑了3.5公里'), ['我昨天跑了3.5公里']);
+  assert.deepEqual(splitReply('!!!'), ['!!!']);
+});
+
+test('splitReply 连续终止标点必须整体保留且不能单独成条', () => {
+  for (const punctuation of ['。。。', '？？', '!?', '……']) {
+    const prefix = '甲'.repeat(81 - Array.from(punctuation).length);
+    const input = `${prefix}${punctuation}后续`;
+    const parts = splitReply(input);
+
+    assert.equal(parts.join(''), input);
+    assert.ok(parts.some((part) => part.includes(punctuation)));
+    assert.ok(parts.every((part) => !/^[。！？!?…]+$/u.test(part)));
+  }
+});
+
+test('splitReply 贪心合并可放入 80 字上限内的相邻短句', () => {
+  const first = `${'甲'.repeat(30)}。`;
+  const second = `${'乙'.repeat(30)}！`;
+  const third = `${'丙'.repeat(30)}？`;
+
+  assert.deepEqual(splitReply(first + second + third), [first + second, third]);
+});
+
+test('splitReply 先按换行拆分长回复', () => {
+  const firstLine = '甲'.repeat(50);
+  const secondLine = '乙'.repeat(40);
+
+  assert.deepEqual(splitReply(`${firstLine}\n${secondLine}`), [firstLine, secondLine]);
+});
+
+test('splitReply 不把半角句点当作切分点', () => {
+  const input = `我昨天跑了3.5公里${'甲'.repeat(100)}！后续`;
+  const parts = splitReply(input);
+
+  assert.equal(parts.join(''), input);
+  assert.ok(parts.some((part) => part.includes('3.5')));
+});
+
+test('splitReply 对 200 字多句文本最多输出三条且不丢字符', () => {
+  const input = `${'甲'.repeat(50)}。${'乙'.repeat(50)}！${'丙'.repeat(50)}？${'丁'.repeat(47)}`;
+  const parts = splitReply(input);
+
+  assert.equal(Array.from(input).length, 200);
+  assert.equal(parts.length, 3);
+  assert.ok(parts.slice(0, 2).every((part) => Array.from(part).length <= 80));
+  assert.equal(parts.join(''), input);
+  assert.ok(parts.every((part) => !/^[。！？!?…]+$/u.test(part)));
 });
 
 test('splitReply 对超长无标点文本按 Unicode 字符切分且每条不超过上限', () => {
