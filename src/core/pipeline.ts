@@ -9,6 +9,7 @@ import { cleanReply } from './text.ts';
 import { splitReply } from './split.ts';
 import { loadPersona } from '../persona/load.ts';
 import { sessionId, type IncomingMessage, type Segment } from './events.ts';
+import { captionIncomingImages, messageTextWithImageCaptions } from './images.ts';
 import { callSlot, type SlotCallOptions, type SlotResult } from '../llm/slots.ts';
 import type { StoreRepository } from '../store/repository.ts';
 
@@ -112,7 +113,25 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
       return recordDecision('persona_error', errorDetails(error));
     }
 
-    const context = options.repository.recentMessages(currentSessionId, settings.contextMessages);
+    const callOptions: SlotCallOptions = {
+      config,
+      costToday: () => options.repository.costToday(),
+      recordUsage: (usage) => options.repository.recordUsage(usage),
+    };
+    await captionIncomingImages({
+      message,
+      repository: options.repository,
+      callVision: (messages) => modelCall('vision', messages, callOptions),
+      ...(options.onError === undefined ? {} : { onError: options.onError }),
+      now,
+    });
+
+    const context = options.repository
+      .recentMessages(currentSessionId, settings.contextMessages)
+      .map((record) => ({
+        ...record,
+        plainText: messageTextWithImageCaptions(record, options.repository),
+      }));
     const prompt = buildPromptMessages({
       persona,
       ownerId: config.owner,
@@ -122,11 +141,6 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
 
     let result: SlotResult;
     try {
-      const callOptions: SlotCallOptions = {
-        config,
-        costToday: () => options.repository.costToday(),
-        recordUsage: (usage) => options.repository.recordUsage(usage),
-      };
       result = await modelCall('reply', prompt, callOptions);
     } catch (error) {
       options.onError?.(error, message);
