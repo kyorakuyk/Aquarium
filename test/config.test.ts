@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import test from 'node:test';
 import yaml from 'yaml';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
@@ -65,7 +66,7 @@ test('resolveSession 合并全局默认、会话覆盖和局部 rate', () => {
 });
 
 test('首次加载会复制示例配置并提示用户编辑', (t) => {
-  const root = fs.mkdtempSync(path.join(process.cwd(), '.tmp-config-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-config-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const configPath = path.join(root, 'data', 'config.yaml');
   const notices: unknown[][] = [];
@@ -82,7 +83,7 @@ test('首次加载会复制示例配置并提示用户编辑', (t) => {
 });
 
 test('非法配置会被拒绝而不会被示例内容覆盖', () => {
-  const root = fs.mkdtempSync(path.join(process.cwd(), '.tmp-config-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-config-'));
   try {
     const configPath = path.join(root, 'config.yaml');
     const invalidText = 'owner: -1\n';
@@ -100,7 +101,7 @@ test('非法配置会被拒绝而不会被示例内容覆盖', () => {
 });
 
 test('writeConfig 原子写入 YAML 并清理临时文件', (t) => {
-  const root = fs.mkdtempSync(path.join(process.cwd(), '.tmp-config-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-config-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const configPath = path.join(root, 'config.yaml');
   const config = AquariumConfigSchema.parse(exampleConfig);
@@ -112,7 +113,7 @@ test('writeConfig 原子写入 YAML 并清理临时文件', (t) => {
 });
 
 test('writeConfig 原子替换旧配置，校验失败时保留旧内容', (t) => {
-  const root = fs.mkdtempSync(path.join(process.cwd(), '.tmp-config-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-config-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const configPath = path.join(root, 'config.yaml');
   const oldText = 'owner: 12\n';

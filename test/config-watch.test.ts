@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { loadConfig } from '../src/config/load.ts';
@@ -9,7 +10,7 @@ import { writeConfig } from '../src/config/write.ts';
 const examplePath = path.resolve('config.example.yaml');
 
 function createConfigFixture(t: { after(callback: () => void): void }) {
-  const root = fs.mkdtempSync(path.join(process.cwd(), '.tmp-config-watch-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-config-watch-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const configPath = path.join(root, 'config.yaml');
   fs.copyFileSync(examplePath, configPath);

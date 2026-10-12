@@ -1,15 +1,14 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
 import { OneBotAdapter } from '../src/adapters/onebot/adapter.ts';
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const account = 900000001;
 
 function createFixture(t: { after(callback: () => void): void }, wsServers: unknown[]): string {
-  const root = fs.mkdtempSync(path.join(repoRoot, '.tmp-onebot-adapter-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-onebot-adapter-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const configDirectory = path.join(root, 'config');
   fs.mkdirSync(configDirectory, { recursive: true });

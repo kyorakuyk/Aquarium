@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
 
 function withRepository<T>(run: (repository: ReturnType<typeof createRepository>) => T): T {
-  const root = fs.mkdtempSync(path.join(process.cwd(), '.tmp-store-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-store-'));
   const database = openDatabase(path.join(root, 'aquarium.db'));
   try {
     return run(createRepository(database, () => new Date(2026, 9, 12, 12, 0, 0)));

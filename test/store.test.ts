@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import type { DatabaseSync } from 'node:sqlite';
 import { openDatabase } from '../src/store/db.ts';
 
 function createDatabaseFixture() {
-  const root = fs.mkdtempSync(path.join(process.cwd(), '.tmp-store-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-store-'));
   return { root, databasePath: path.join(root, 'aquarium.db') };
 }
 

@@ -40,7 +40,7 @@
 
 ## 2. 当前状态
 
-- 分支 `night/2026-10-12`：T0–T6 与阶段 B 的 R1–R5 代码及单元测试已完成（83 项测试通过）；真实环境验证尚未进行。
+- 分支 `night/2026-10-12`：T0–T6 与阶段 B 的 R1–R6 代码及单元测试已完成（83 项测试通过）；真实环境验证尚未进行。
 - A1 文档提交范围：`PLAN.md`、`DESIGN.md`、`HANDOFF.md`、`RESEARCH-maibot.md`、`REVIEW-2026-10-12.md`、`NIGHT-RUN.md`；`IDEA.md` 明确不纳入。
 - 已知问题：见 §3 阶段 B（R1–R6），来自 2026-10-12 的代码审查。
 
@@ -83,7 +83,7 @@
   - `src/app/main.ts` 中所有 `pipeline(message)` 都经 `queue.run(sessionId(message.session), …)`；关机时用 `queue.idle()` 等待在途任务。
   - 测试：同一会话两个任务不重叠且顺序正确；不同会话可并行；前一个失败后一个仍执行；`idle()` 行为正确。
 
-- [ ] **R6 测试临时目录**
+- [x] **R6 测试临时目录**
   - 所有测试中 `fs.mkdtempSync(path.join(<仓库根或 process.cwd()>, '.tmp-…'))` 改为 `fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-…'))`（用 `grep -rn "mkdtemp" test` 找全）。
   - 若某个测试**必须**位于仓库内（例如边界检查依赖仓库相对路径），保留，但在 `.gitignore` 加 `/.tmp-*/`，并在该测试文件顶部注释说明原因。
   - 验收：跑完 `npm test` 后，`git status` 不出现任何 `.tmp-*`。
@@ -249,6 +249,7 @@
 | 2026-10-12 | R3 | 提示词去除 owner QQ 号，按 senderId 标注主人发言，并区分昵称误导；`npm run check` 通过（78 项测试） |
 | 2026-10-12 | R4 | 消息插入幂等并返回新增标志；重复入站记录 `duplicate` 后立即停止，不再次调用模型或发送；`npm run check` 通过（79 项测试） |
 | 2026-10-12 | R5 | 新增会话级 FIFO 队列：同会话串行、异会话并行、失败隔离和 `idle()`；主程序经队列分发并在关机时等待；`npm run check` 通过（83 项测试） |
+| 2026-10-12 | R6 | 13 处测试临时目录改到 `os.tmpdir()`；`npm run check` 通过（83 项测试），测试后 `git status` 无 `.tmp-*` |
 
 ---
 

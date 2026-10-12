@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { loadPersona } from '../src/persona/load.ts';
 
 function createRoot(): string {
-  return fs.mkdtempSync(path.join(process.cwd(), '.tmp-persona-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-persona-'));
 }
 
 test('loadPersona 优先读取 data/personas 并替换 {{name}}', () => {

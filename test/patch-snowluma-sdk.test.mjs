@@ -12,7 +12,7 @@ const patchScript = path.join(repoRoot, 'scripts', 'patch-snowluma-sdk.mjs');
 test('补齐 SDK 的 JS 与声明文件相对导入且可重复运行', (t) => {
   assert.ok(fs.existsSync(patchScript), 'SDK 修补脚本应存在');
 
-  const fixtureRoot = fs.mkdtempSync(path.join(repoRoot, '.tmp-patch-sdk-'));
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-patch-sdk-'));
   t.after(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
 
   const scriptPath = path.join(fixtureRoot, 'scripts', 'patch-snowluma-sdk.mjs');

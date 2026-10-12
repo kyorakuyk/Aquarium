@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import yaml from 'yaml';
@@ -82,7 +83,7 @@ class FakeAdapter implements ProtocolAdapter {
 async function withRepository<T>(
   run: (repository: ReturnType<typeof createRepository>, personaRoot: string) => Promise<T>,
 ): Promise<T> {
-  const root = fs.mkdtempSync(path.join(process.cwd(), '.tmp-pipeline-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-pipeline-'));
   fs.mkdirSync(path.join(root, 'personas'), { recursive: true });
   fs.writeFileSync(path.join(root, 'personas', 'default.md'), '# {{name}}\n临时测试人设。', 'utf8');
   const database = openDatabase(path.join(root, 'aquarium.db'));
