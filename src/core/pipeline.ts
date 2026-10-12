@@ -8,7 +8,7 @@ import { replyDelayMs } from './pacing.ts';
 import { cleanReply } from './text.ts';
 import { splitReply } from './split.ts';
 import { loadPersona } from '../persona/load.ts';
-import { sessionId, type IncomingMessage, type Segment } from './events.ts';
+import { sessionId, type IncomingMessage, type Segment, type SessionKey } from './events.ts';
 import { captionIncomingImages, messageTextWithImageCaptions } from './images.ts';
 import { callSlot, type SlotCallOptions, type SlotResult } from '../llm/slots.ts';
 import type { StoreRepository } from '../store/repository.ts';
@@ -38,6 +38,7 @@ export interface MessagePipelineOptions {
   wait?: (milliseconds: number) => Promise<void>;
   random?: () => number;
   personaRoot?: string;
+  isMuted?: (session: SessionKey) => boolean;
   onError?: (error: unknown, message: IncomingMessage) => void;
 }
 
@@ -96,6 +97,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
     const config = options.getConfig();
     const settings = resolveSession(config, message.session);
 
+    if (options.isMuted?.(message.session)) return recordDecision('muted');
     if (!settings.enabled) return recordDecision('disabled', { enabled: false });
 
     const calledByNickname = settings.nicknames.some((nickname) => {

@@ -2,6 +2,7 @@ import type { ProtocolAdapter } from '../adapters/types.ts';
 import { resolveSession } from '../config/resolve.ts';
 import type { AquariumConfig } from '../config/schema.ts';
 import { sessionId, type IncomingMessage, type SessionKey } from './events.ts';
+import { listEnabledSessions } from './sessions.ts';
 import type { StoreRepository } from '../store/repository.ts';
 
 const HISTORY_LIMIT = 50;
@@ -17,56 +18,6 @@ type MessageProcessor = (
 ) => Promise<unknown>;
 
 type QueueTask = (sessionId: string, task: () => Promise<unknown>) => Promise<unknown>;
-
-function parseSessionId(value: string): SessionKey | undefined {
-  const parts = value.split(':');
-  if (parts.length !== 3) return undefined;
-  const account = Number(parts[0]);
-  const kind = parts[1];
-  const peer = Number(parts[2]);
-  if (!Number.isSafeInteger(account) || account <= 0 || !Number.isSafeInteger(peer) || peer <= 0) {
-    return undefined;
-  }
-  if (kind !== 'group' && kind !== 'private') return undefined;
-  const key: SessionKey = { account, kind, peer };
-  return sessionId(key) === value ? key : undefined;
-}
-
-async function enabledSessions(
-  adapter: ProtocolAdapter,
-  config: AquariumConfig,
-  onError?: (error: unknown) => void,
-): Promise<SessionKey[]> {
-  const candidates = new Map<string, SessionKey>();
-  const add = (key: SessionKey): void => {
-    if (key.account === adapter.account) candidates.set(sessionId(key), key);
-  };
-
-  if (config.defaults.enabled) {
-    try {
-      for (const group of await adapter.listGroups()) {
-        add({ account: adapter.account, kind: 'group', peer: group.groupId });
-      }
-    } catch (error) {
-      onError?.(error);
-    }
-    try {
-      for (const friend of await adapter.listFriends()) {
-        add({ account: adapter.account, kind: 'private', peer: friend.userId });
-      }
-    } catch (error) {
-      onError?.(error);
-    }
-  }
-
-  for (const [keyText, settings] of Object.entries(config.sessions)) {
-    if (settings.enabled !== true) continue;
-    const key = parseSessionId(keyText);
-    if (key) add(key);
-  }
-
-  return [...candidates.values()].filter((key) => resolveSession(config, key).enabled);
-}
 
 function isReplyTrigger(message: IncomingMessage, config: AquariumConfig): boolean {
   if (message.senderId === message.session.account) return false;
@@ -92,7 +43,7 @@ export function createHistoryCatchUp(options: {
 
   return async function catchUpHistory(): Promise<void> {
     const config = options.getConfig();
-    const sessions = await enabledSessions(
+    const sessions = await listEnabledSessions(
       options.adapter,
       config,
       (error) => options.onError?.(error),

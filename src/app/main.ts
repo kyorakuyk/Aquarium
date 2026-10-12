@@ -4,6 +4,7 @@ import { watchConfig } from '../config/watch.ts';
 import { createLogger } from '../core/logger.ts';
 import { createMessagePipeline } from '../core/pipeline.ts';
 import { createHistoryCatchUp } from '../core/history-catchup.ts';
+import { createManagementCommands } from '../core/management.ts';
 import { sessionId } from '../core/events.ts';
 import { createSessionQueue } from '../core/session-queue.ts';
 import { openDatabase } from '../store/db.ts';
@@ -76,11 +77,22 @@ for (const accountConfig of initialConfig.accounts) {
   }
 
   adapters.push(adapter);
+  const management = createManagementCommands({
+    getConfig: () => configWatcher.getConfig(),
+    repository,
+    adapter,
+    getAdapters: () => adapters,
+    getNickname: () => adapter.nickname || String(adapter.account),
+    onError: (error, message) => {
+      logger.error(`管理指令消息 ${message.messageId} 执行失败：${describeError(error)}`);
+    },
+  });
   const pipeline = createMessagePipeline({
     getConfig: () => configWatcher.getConfig(),
     repository,
     adapter,
     getNickname: () => adapter.nickname || String(adapter.account),
+    isMuted: management.isMuted,
     onError: (error, message) => {
       logger.error(`消息 ${message.messageId} 的辅助操作失败：${describeError(error)}`);
     },
@@ -105,7 +117,10 @@ for (const accountConfig of initialConfig.accounts) {
     }
   }));
   subscriptions.push(adapter.onMessage((message) => {
-    void sessionQueue.run(sessionId(message.session), () => pipeline(message))
+    void sessionQueue.run(sessionId(message.session), async () => {
+      if (await management.handle(message)) return;
+      await pipeline(message);
+    })
       .catch((error: unknown) => {
         logger.error(`消息 ${message.messageId} 处理失败：${describeError(error)}`);
       });

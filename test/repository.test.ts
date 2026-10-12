@@ -108,3 +108,15 @@ test('recentDecisions 返回最新决策并还原 detail JSON', () => {
     assert.deepEqual(decisions[0]?.detail, { model: 'fake' });
   });
 });
+
+test('lastSelfMessage 返回指定会话最近一条 bot 消息', () => {
+  withRepository((repository) => {
+    const sessionKey = '900000001:group:123456';
+    repository.saveMessage(messageRecord('incoming', 1000, false));
+    repository.saveMessage(messageRecord('self-old', 2000, true));
+    repository.saveMessage(messageRecord('self-new', 3000, true));
+
+    assert.equal(repository.lastSelfMessage(sessionKey)?.messageId, 'self-new');
+    assert.equal(repository.lastSelfMessage('900000001:private:42'), undefined);
+  });
+});
