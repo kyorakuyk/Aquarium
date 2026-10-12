@@ -3,6 +3,7 @@ import { loadConfig } from '../config/load.ts';
 import { watchConfig } from '../config/watch.ts';
 import { createLogger } from '../core/logger.ts';
 import { createMessagePipeline } from '../core/pipeline.ts';
+import { createHistoryCatchUp } from '../core/history-catchup.ts';
 import { sessionId } from '../core/events.ts';
 import { createSessionQueue } from '../core/session-queue.ts';
 import { openDatabase } from '../store/db.ts';
@@ -75,10 +76,6 @@ for (const accountConfig of initialConfig.accounts) {
   }
 
   adapters.push(adapter);
-  subscriptions.push(adapter.onStatus((status) => {
-    logger.info(`账号 ${adapter.account} 状态：${status}`);
-  }));
-
   const pipeline = createMessagePipeline({
     getConfig: () => configWatcher.getConfig(),
     repository,
@@ -88,6 +85,25 @@ for (const accountConfig of initialConfig.accounts) {
       logger.error(`消息 ${message.messageId} 的辅助操作失败：${describeError(error)}`);
     },
   });
+  const catchUpHistory = createHistoryCatchUp({
+    adapter,
+    getConfig: () => configWatcher.getConfig(),
+    repository,
+    processMessage: (message, processOptions) => pipeline(message, processOptions),
+    enqueue: (key, task) => sessionQueue.run(key, task),
+    onError: (error, session) => {
+      const context = session ? `会话 ${sessionId(session)}` : '联系人列表';
+      logger.error(`账号 ${adapter.account} 的离线补课（${context}）失败：${describeError(error)}`);
+    },
+  });
+  subscriptions.push(adapter.onStatus((status) => {
+    logger.info(`账号 ${adapter.account} 状态：${status}`);
+    if (status === 'online') {
+      void catchUpHistory().catch((error: unknown) => {
+        logger.error(`账号 ${adapter.account} 的离线补课启动失败：${describeError(error)}`);
+      });
+    }
+  }));
   subscriptions.push(adapter.onMessage((message) => {
     void sessionQueue.run(sessionId(message.session), () => pipeline(message))
       .catch((error: unknown) => {

@@ -217,6 +217,33 @@ test('pipeline 对重复消息记录 duplicate 且只回复一次', async () => 
   });
 });
 
+test('pipeline 能处理已由离线补课入库的消息而不重复插入', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const incoming = makeIncoming({ messageId: 'catch-up-already-saved' });
+    assert.equal(repository.saveMessage({
+      sessionId: sessionId(incoming.session),
+      messageId: incoming.messageId,
+      senderId: incoming.senderId,
+      senderName: incoming.senderName,
+      isSelf: false,
+      plainText: incoming.plainText,
+      segments: incoming.segments,
+      time: incoming.time,
+    }), true);
+    const harness = createHarness(repository, makeConfig(), personaRoot);
+
+    const result = await harness.pipeline(incoming, { alreadySaved: true });
+
+    assert.deepEqual(result, { replied: true, reason: 'replied' });
+    assert.equal(harness.modelRequests.length, 1);
+    assert.equal(
+      repository.recentMessages(sessionId(incoming.session), 10)
+        .filter((message) => message.messageId === incoming.messageId).length,
+      1,
+    );
+  });
+});
+
 test('pipeline 对未提及昵称的群消息记录 not_mentioned', async () => {
   await withRepository(async (repository, personaRoot) => {
     const harness = createHarness(repository, makeConfig(), personaRoot);

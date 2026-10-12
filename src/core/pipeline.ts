@@ -18,6 +18,10 @@ export interface PipelineResult {
   reason: string;
 }
 
+export interface ProcessMessageOptions {
+  alreadySaved?: boolean;
+}
+
 export type PipelineModelCall = (
   slot: string,
   messages: OpenAI.ChatCompletionMessageParam[],
@@ -56,7 +60,10 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
   const modelCall = options.callModel ?? callSlot;
   const rateLimiter = createRateLimiter(now);
 
-  return async function processMessage(message: IncomingMessage): Promise<PipelineResult> {
+  return async function processMessage(
+    message: IncomingMessage,
+    processOptions: ProcessMessageOptions = {},
+  ): Promise<PipelineResult> {
     const currentSessionId = sessionId(message.session);
     const recordDecision = (
       reason: string,
@@ -74,7 +81,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
       return { replied, reason };
     };
 
-    const inserted = options.repository.saveMessage({
+    const inserted = processOptions.alreadySaved === true || options.repository.saveMessage({
       sessionId: currentSessionId,
       messageId: message.messageId,
       senderId: message.senderId,
