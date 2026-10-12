@@ -37,6 +37,29 @@ test('splitReply 先按换行拆分长回复', () => {
   assert.deepEqual(splitReply(`${firstLine}\n${secondLine}`), [firstLine, secondLine]);
 });
 
+test('splitReply 合并跨段落片段时保留并计入换行', () => {
+  const firstParagraph = '甲'.repeat(100);
+  const secondParagraph = '第二段……';
+  const input = `${firstParagraph}\n${secondParagraph}`;
+  const characters = Array.from(firstParagraph);
+  const firstPart = characters.slice(0, 80).join('');
+  const remaining = characters.slice(80).join('');
+  const parts = splitReply(input);
+
+  assert.ok(Array.from(input).length > 80);
+  assert.deepEqual(parts, [firstPart, `${remaining}\n${secondParagraph}`]);
+  assert.ok(parts.every((part) => Array.from(part).length <= 80));
+});
+
+test('splitReply 把跨段落换行计入 80 字上限', () => {
+  const firstParagraph = '甲'.repeat(40);
+  const secondParagraph = '乙'.repeat(40);
+  const input = `${firstParagraph}\n${secondParagraph}`;
+
+  assert.equal(Array.from(input).length, 81);
+  assert.deepEqual(splitReply(input), [firstParagraph, secondParagraph]);
+});
+
 test('splitReply 不把半角句点当作切分点', () => {
   const input = `我昨天跑了3.5公里${'甲'.repeat(100)}！后续`;
   const parts = splitReply(input);

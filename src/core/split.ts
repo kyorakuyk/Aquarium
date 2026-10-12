@@ -18,6 +18,21 @@ function isPunctuationOnly(text: string): boolean {
   return /^[\p{P}\p{Z}\s]*$/u.test(text);
 }
 
+interface ReplyPart {
+  text: string;
+  firstParagraph: number;
+  lastParagraph: number;
+}
+
+function joinParts(first: ReplyPart, second: ReplyPart): ReplyPart {
+  const separator = first.lastParagraph === second.firstParagraph ? '' : '\n';
+  return {
+    text: first.text + separator + second.text,
+    firstParagraph: first.firstParagraph,
+    lastParagraph: second.lastParagraph,
+  };
+}
+
 function splitLongParagraph(paragraph: string): string[] {
   const characters = Array.from(paragraph);
   const sentences: string[] = [];
@@ -78,34 +93,73 @@ function limitPartLength(text: string): string[] {
   return parts;
 }
 
-function attachPunctuationOnlyParts(parts: string[]): string[] {
-  const result = [...parts];
+function attachPunctuationOnlyParts(parts: ReplyPart[]): ReplyPart[] {
+  const result = parts.map((part) => ({ ...part }));
   for (let index = 0; index < result.length; index += 1) {
-    const part = result[index] ?? '';
-    if (!part || !isPunctuationOnly(part)) continue;
+    const part = result[index];
+    if (!part || !part.text || !isPunctuationOnly(part.text)) continue;
 
     if (index + 1 < result.length) {
-      const nextCharacters = Array.from(result[index + 1] ?? '');
-      const available = Math.max(0, MAX_PART_LENGTH - characterCount(part));
+      const next = result[index + 1];
+      if (!next) continue;
+      const separatorLength = part.lastParagraph === next.firstParagraph ? 0 : 1;
+      const available = Math.max(
+        0,
+        MAX_PART_LENGTH - characterCount(part.text) - separatorLength,
+      );
+      const nextCharacters = Array.from(next.text);
       const prefixLength = Math.min(available, nextCharacters.length);
-      result[index] = part + nextCharacters.slice(0, prefixLength).join('');
-      result[index + 1] = nextCharacters.slice(prefixLength).join('');
+      if (prefixLength > 0) {
+        const prefix: ReplyPart = {
+          text: nextCharacters.slice(0, prefixLength).join(''),
+          firstParagraph: next.firstParagraph,
+          lastParagraph: next.firstParagraph,
+        };
+        result[index] = joinParts(part, prefix);
+        result[index + 1] = {
+          ...next,
+          text: nextCharacters.slice(prefixLength).join(''),
+        };
+      } else if (index > 0) {
+        attachToPrevious(result, index, part);
+      }
     } else if (index > 0) {
-      const previousCharacters = Array.from(result[index - 1] ?? '');
-      const moveLength = Math.min(characterCount(part), previousCharacters.length);
-      result[index - 1] = previousCharacters.slice(0, -moveLength).join('');
-      result[index] = previousCharacters.slice(-moveLength).join('') + part;
+      attachToPrevious(result, index, part);
     }
   }
-  return result.filter((part) => part !== '' && !isPunctuationOnly(part));
+  return result.filter((part) => part.text !== '' && !isPunctuationOnly(part.text));
 }
 
-function mergeAdjacentParts(parts: string[]): string[] {
-  const merged: string[] = [];
+function attachToPrevious(parts: ReplyPart[], index: number, part: ReplyPart): void {
+  const previous = parts[index - 1];
+  if (!previous) return;
+  const previousCharacters = Array.from(previous.text);
+  const moveLength = Math.min(Math.max(1, characterCount(part.text)), previousCharacters.length);
+  if (moveLength === 0) return;
+
+  const moved: ReplyPart = {
+    text: previousCharacters.slice(-moveLength).join(''),
+    firstParagraph: previous.lastParagraph,
+    lastParagraph: previous.lastParagraph,
+  };
+  parts[index - 1] = {
+    ...previous,
+    text: previousCharacters.slice(0, -moveLength).join(''),
+  };
+  parts[index] = joinParts(moved, part);
+}
+
+function mergeAdjacentParts(parts: ReplyPart[]): ReplyPart[] {
+  const merged: ReplyPart[] = [];
   for (const part of parts) {
     const previous = merged.at(-1);
-    if (previous && characterCount(previous) + characterCount(part) <= MAX_PART_LENGTH) {
-      merged[merged.length - 1] = previous + part;
+    if (previous) {
+      const combined = joinParts(previous, part);
+      if (characterCount(combined.text) <= MAX_PART_LENGTH) {
+        merged[merged.length - 1] = combined;
+        continue;
+      }
+      merged.push(part);
     } else {
       merged.push(part);
     }
@@ -116,12 +170,23 @@ function mergeAdjacentParts(parts: string[]): string[] {
 export function splitReply(text: string): string[] {
   if (characterCount(text) <= MAX_PART_LENGTH) return text === '' ? [] : [text];
 
-  const paragraphs = text.split(/\r\n|\r|\n/u).filter(Boolean);
-  const sentences = paragraphs.flatMap((paragraph) => (
-    characterCount(paragraph) > MAX_PART_LENGTH ? splitLongParagraph(paragraph) : [paragraph]
-  ));
-  const boundedParts = sentences.flatMap(limitPartLength);
-  const parts = mergeAdjacentParts(attachPunctuationOnlyParts(boundedParts));
-  if (parts.length <= MAX_PARTS) return parts;
-  return [...parts.slice(0, MAX_PARTS - 1), parts.slice(MAX_PARTS - 1).join('')];
+  const paragraphs = text.split(/\r\n|\r|\n/u);
+  const parts = paragraphs.flatMap((paragraph, paragraphIndex) => {
+    if (!paragraph) return [];
+    const sentences = characterCount(paragraph) > MAX_PART_LENGTH
+      ? splitLongParagraph(paragraph)
+      : [paragraph];
+    return sentences.flatMap((sentence) => limitPartLength(sentence).map((part): ReplyPart => ({
+      text: part,
+      firstParagraph: paragraphIndex,
+      lastParagraph: paragraphIndex,
+    })));
+  });
+  const merged = mergeAdjacentParts(attachPunctuationOnlyParts(parts));
+  if (merged.length <= MAX_PARTS) return merged.map((part) => part.text);
+
+  let last = merged[MAX_PARTS - 1];
+  if (!last) return merged.slice(0, MAX_PARTS).map((part) => part.text);
+  for (const extra of merged.slice(MAX_PARTS)) last = joinParts(last, extra);
+  return [...merged.slice(0, MAX_PARTS - 1), last].map((part) => part.text);
 }
