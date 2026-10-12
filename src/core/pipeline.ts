@@ -57,19 +57,6 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
 
   return async function processMessage(message: IncomingMessage): Promise<PipelineResult> {
     const currentSessionId = sessionId(message.session);
-    options.repository.saveMessage({
-      sessionId: currentSessionId,
-      messageId: message.messageId,
-      senderId: message.senderId,
-      senderName: message.senderName,
-      isSelf: false,
-      plainText: message.plainText,
-      segments: message.segments,
-      time: message.time,
-    });
-
-    const config = options.getConfig();
-    const settings = resolveSession(config, message.session);
     const recordDecision = (
       reason: string,
       detail: unknown = {},
@@ -85,6 +72,21 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
       });
       return { replied, reason };
     };
+
+    const inserted = options.repository.saveMessage({
+      sessionId: currentSessionId,
+      messageId: message.messageId,
+      senderId: message.senderId,
+      senderName: message.senderName,
+      isSelf: false,
+      plainText: message.plainText,
+      segments: message.segments,
+      time: message.time,
+    });
+    if (!inserted) return recordDecision('duplicate');
+
+    const config = options.getConfig();
+    const settings = resolveSession(config, message.session);
 
     if (!settings.enabled) return recordDecision('disabled', { enabled: false });
 

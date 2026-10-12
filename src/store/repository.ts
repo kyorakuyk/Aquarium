@@ -38,7 +38,7 @@ export interface StoredDecision extends DecisionRecord {
 }
 
 export interface StoreRepository {
-  saveMessage(message: MessageStorageRecord): void;
+  saveMessage(message: MessageStorageRecord): boolean;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
   recordUsage(usage: UsageRecord): void;
   costToday(): number;
@@ -71,7 +71,7 @@ export function createRepository(
   clock: () => Date = () => new Date(),
 ): StoreRepository {
   const insertMessage = database.prepare(`
-    INSERT INTO messages
+    INSERT OR IGNORE INTO messages
       (session_id, message_id, sender_id, sender_name, is_self, plain_text, segments_json, time)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
@@ -111,7 +111,7 @@ export function createRepository(
 
   return {
     saveMessage(message) {
-      insertMessage.run(
+      const result = insertMessage.run(
         message.sessionId,
         message.messageId,
         message.senderId,
@@ -121,6 +121,7 @@ export function createRepository(
         JSON.stringify(message.segments),
         message.time,
       );
+      return result.changes === 1 || result.changes === 1n;
     },
 
     recentMessages(sessionId, count) {

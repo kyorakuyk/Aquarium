@@ -31,15 +31,16 @@ function messageRecord(messageId: string, time: number, isSelf = false) {
 
 test('saveMessage 去重并让 recentMessages 由旧到新返回', () => {
   withRepository((repository) => {
-    repository.saveMessage(messageRecord('newer', 2000));
-    repository.saveMessage(messageRecord('older', 1000, true));
+    assert.equal(repository.saveMessage(messageRecord('newer', 2000)), true);
+    assert.equal(repository.saveMessage(messageRecord('older', 1000, true)), true);
+    assert.equal(repository.saveMessage(messageRecord('older', 3000)), false);
 
     const recent = repository.recentMessages('900000001:group:123456', 2);
 
     assert.deepEqual(recent.map((message) => message.messageId), ['older', 'newer']);
     assert.equal(recent[0]?.isSelf, true);
+    assert.equal(recent[0]?.time, 1000);
     assert.deepEqual(recent[1]?.segments, [{ type: 'text', text: '消息-newer' }]);
-    assert.throws(() => repository.saveMessage(messageRecord('older', 3000)), /UNIQUE/);
   });
 });
 

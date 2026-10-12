@@ -40,7 +40,7 @@
 
 ## 2. 当前状态
 
-- 分支 `night/2026-10-12`：T0–T6 与阶段 B 的 R1–R3 代码及单元测试已完成（78 项测试通过）；真实环境验证尚未进行。
+- 分支 `night/2026-10-12`：T0–T6 与阶段 B 的 R1–R4 代码及单元测试已完成（79 项测试通过）；真实环境验证尚未进行。
 - A1 文档提交范围：`PLAN.md`、`DESIGN.md`、`HANDOFF.md`、`RESEARCH-maibot.md`、`REVIEW-2026-10-12.md`、`NIGHT-RUN.md`；`IDEA.md` 明确不纳入。
 - 已知问题：见 §3 阶段 B（R1–R6），来自 2026-10-12 的代码审查。
 
@@ -73,7 +73,7 @@
   - **提示词中任何位置都不得出现主人的 QQ 号。**
   - 测试：system 与 user 内容都不包含 ownerId 的字符串形式；主人发言行带“（主人）”；他人昵称本身含“主人”二字时不被误判（判定只看 senderId）。
 
-- [ ] **R4 重复消息（`src/store/repository.ts`、`src/core/pipeline.ts`）**
+- [x] **R4 重复消息（`src/store/repository.ts`、`src/core/pipeline.ts`）**
   - `messages` 插入改为 `INSERT OR IGNORE`；`saveMessage` 返回 `boolean`（是否新插入）。
   - 管线中，入站消息 `saveMessage` 返回 `false` 时，记决策 `reason='duplicate'` 并直接结束，**不回复**。
   - 测试：同一消息保存两次不抛错、第二次返回 false；管线对重复消息只回复一次。
@@ -247,6 +247,7 @@
 | 2026-10-12 | R1 | 长度 ≤80 字原样保留（含纯标点，按用户澄清）；长文本按行和终止标点分段、贪心合并、最多三条；`npm run check` 通过（75 项测试） |
 | 2026-10-12 | R2 | 仅移除成对 Markdown 标记，保留单个 `*`、`_`、`~`；纯格式空回复仍清为空以维持 `empty_reply`；`npm run check` 通过（78 项测试） |
 | 2026-10-12 | R3 | 提示词去除 owner QQ 号，按 senderId 标注主人发言，并区分昵称误导；`npm run check` 通过（78 项测试） |
+| 2026-10-12 | R4 | 消息插入幂等并返回新增标志；重复入站记录 `duplicate` 后立即停止，不再次调用模型或发送；`npm run check` 通过（79 项测试） |
 
 ---
 

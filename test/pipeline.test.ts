@@ -195,6 +195,27 @@ test('pipeline 对未启用会话记录 disabled 且不调用模型', async () =
   });
 });
 
+test('pipeline 对重复消息记录 duplicate 且只回复一次', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const harness = createHarness(repository, makeConfig(), personaRoot);
+    const incoming = makeIncoming({ messageId: 'duplicate-1' });
+
+    const first = await harness.pipeline(incoming);
+    const duplicate = await harness.pipeline(incoming);
+
+    assert.deepEqual(first, { replied: true, reason: 'replied' });
+    assert.deepEqual(duplicate, { replied: false, reason: 'duplicate' });
+    assert.equal(harness.modelRequests.length, 1);
+    assert.equal(harness.adapter.sent.length, 1);
+    assert.equal(
+      repository.recentMessages(sessionId(groupSession), 20)
+        .filter((message) => message.messageId === 'duplicate-1').length,
+      1,
+    );
+    assert.equal(repository.recentDecisions(1)[0]?.reason, 'duplicate');
+  });
+});
+
 test('pipeline 对未提及昵称的群消息记录 not_mentioned', async () => {
   await withRepository(async (repository, personaRoot) => {
     const harness = createHarness(repository, makeConfig(), personaRoot);
