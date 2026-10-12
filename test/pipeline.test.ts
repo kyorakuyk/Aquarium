@@ -164,7 +164,7 @@ test('pipeline 从被叫消息到模型回复、引用发送、落库和 replied
     assert.equal(modelRequests[0]?.slot, 'reply');
     assert.match(String(modelRequests[0]?.messages[0]?.content), /# Aquarium/);
     assert.match(String(modelRequests[0]?.messages[0]?.content), /这是游戏群。/);
-    assert.match(String(modelRequests[0]?.messages[1]?.content), /\[09:05\] 小明: 小鱼，早上好/);
+    assert.match(String(modelRequests[0]?.messages[1]?.content), /\[09:05\] "小明": 小鱼，早上好/);
     assert.match(String(modelRequests[0]?.messages[1]?.content), /请回复最后一条提到你的消息。/);
     assert.deepEqual(adapter.calls, ['markRead', 'send']);
     assert.deepEqual(adapter.sent[0]?.segments, [
