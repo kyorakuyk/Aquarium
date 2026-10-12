@@ -3,6 +3,8 @@ import { loadConfig } from '../config/load.ts';
 import { watchConfig } from '../config/watch.ts';
 import { createLogger } from '../core/logger.ts';
 import { createMessagePipeline } from '../core/pipeline.ts';
+import { sessionId } from '../core/events.ts';
+import { createSessionQueue } from '../core/session-queue.ts';
 import { openDatabase } from '../store/db.ts';
 import { createRepository } from '../store/repository.ts';
 
@@ -13,7 +15,7 @@ const repository = createRepository(database);
 const configWatcher = watchConfig({ initialConfig });
 const adapters: OneBotAdapter[] = [];
 const subscriptions: Array<() => void> = [];
-const inFlightPipelines = new Set<Promise<void>>();
+const sessionQueue = createSessionQueue();
 let shuttingDown = false;
 
 function hasEnabledSession(config: typeof initialConfig): boolean {
@@ -41,7 +43,7 @@ async function shutdown(signal: string): Promise<void> {
   for (const unsubscribe of subscriptions) unsubscribe();
   for (const adapter of adapters) adapter.close();
   configWatcher.close();
-  await Promise.allSettled(inFlightPipelines);
+  await sessionQueue.idle();
   database.close();
   logger.info('Aquarium 已关闭。');
 }
@@ -87,14 +89,10 @@ for (const accountConfig of initialConfig.accounts) {
     },
   });
   subscriptions.push(adapter.onMessage((message) => {
-    let task: Promise<void>;
-    task = pipeline(message)
-      .then(() => undefined)
+    void sessionQueue.run(sessionId(message.session), () => pipeline(message))
       .catch((error: unknown) => {
         logger.error(`消息 ${message.messageId} 处理失败：${describeError(error)}`);
-      })
-      .finally(() => inFlightPipelines.delete(task));
-    inFlightPipelines.add(task);
+      });
   }));
 
   try {

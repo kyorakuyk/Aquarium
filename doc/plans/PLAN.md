@@ -40,7 +40,7 @@
 
 ## 2. 当前状态
 
-- 分支 `night/2026-10-12`：T0–T6 与阶段 B 的 R1–R4 代码及单元测试已完成（79 项测试通过）；真实环境验证尚未进行。
+- 分支 `night/2026-10-12`：T0–T6 与阶段 B 的 R1–R5 代码及单元测试已完成（83 项测试通过）；真实环境验证尚未进行。
 - A1 文档提交范围：`PLAN.md`、`DESIGN.md`、`HANDOFF.md`、`RESEARCH-maibot.md`、`REVIEW-2026-10-12.md`、`NIGHT-RUN.md`；`IDEA.md` 明确不纳入。
 - 已知问题：见 §3 阶段 B（R1–R6），来自 2026-10-12 的代码审查。
 
@@ -78,7 +78,7 @@
   - 管线中，入站消息 `saveMessage` 返回 `false` 时，记决策 `reason='duplicate'` 并直接结束，**不回复**。
   - 测试：同一消息保存两次不抛错、第二次返回 false；管线对重复消息只回复一次。
 
-- [ ] **R5 会话内串行（新文件 `src/core/session-queue.ts`）**
+- [x] **R5 会话内串行（新文件 `src/core/session-queue.ts`）**
   - `createSessionQueue()` → `{ run(sessionId, task), idle(): Promise<void> }`：同一 `sessionId` 的任务严格按到达顺序串行，不同会话并行；任务抛错不影响后续任务；某会话队列清空后释放其内部状态。`idle()` 在所有队列清空时 resolve，供关机等待。
   - `src/app/main.ts` 中所有 `pipeline(message)` 都经 `queue.run(sessionId(message.session), …)`；关机时用 `queue.idle()` 等待在途任务。
   - 测试：同一会话两个任务不重叠且顺序正确；不同会话可并行；前一个失败后一个仍执行；`idle()` 行为正确。
@@ -248,6 +248,7 @@
 | 2026-10-12 | R2 | 仅移除成对 Markdown 标记，保留单个 `*`、`_`、`~`；纯格式空回复仍清为空以维持 `empty_reply`；`npm run check` 通过（78 项测试） |
 | 2026-10-12 | R3 | 提示词去除 owner QQ 号，按 senderId 标注主人发言，并区分昵称误导；`npm run check` 通过（78 项测试） |
 | 2026-10-12 | R4 | 消息插入幂等并返回新增标志；重复入站记录 `duplicate` 后立即停止，不再次调用模型或发送；`npm run check` 通过（79 项测试） |
+| 2026-10-12 | R5 | 新增会话级 FIFO 队列：同会话串行、异会话并行、失败隔离和 `idle()`；主程序经队列分发并在关机时等待；`npm run check` 通过（83 项测试） |
 
 ---
 
