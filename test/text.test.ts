@@ -14,8 +14,15 @@ test('cleanReply 保留聊天文字中的单个波浪线和下划线', () => {
   assert.equal(cleanReply('~'), '~');
 });
 
-test('cleanReply 只移除成对的 Markdown 强调、代码和删除线标记', () => {
-  assert.equal(cleanReply('**重点** __强调__ `代码` ~~删除~~'), '重点 强调 代码 删除');
+test('cleanReply 只移除成对的粗体和行内代码标记', () => {
+  assert.equal(cleanReply('**重点** __强调__ `代码` ~~删除~~'), '重点 __强调__ 代码 ~~删除~~');
+});
+
+test('cleanReply 保留中文聊天中的双波浪线和双下划线', () => {
+  assert.equal(cleanReply('好呀~~那走吧~~'), '好呀~~那走吧~~');
+  assert.equal(cleanReply('冲冲冲~~ 今晚~~'), '冲冲冲~~ 今晚~~');
+  assert.equal(cleanReply('好__耶__'), '好__耶__');
+  assert.equal(cleanReply('(__) 趴下了'), '(__) 趴下了');
 });
 
 test('cleanReply 保留链接文字并移除标题、列表和行内代码标记', () => {

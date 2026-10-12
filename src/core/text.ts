@@ -12,11 +12,9 @@ export function cleanReply(text: string, nicknamePrefixes: readonly string[] = [
     .replace(/^[ \t]*>[ \t]?/gmu, '')
     .replace(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/gmu, '')
     .replace(/\*\*(.+?)\*\*/gu, '$1')
-    .replace(/__(.+?)__/gu, '$1')
     .replace(/`([^`\r\n]+)`/gu, '$1')
-    .replace(/~~(.+?)~~/gu, '$1')
     .trim();
-  if (/^(?:\*\*|__|~~|`)+$/u.test(cleaned)) cleaned = '';
+  if (/^(?:\*\*|`)+$/u.test(cleaned)) cleaned = '';
 
   const prefixes = nicknamePrefixes
     .map((nickname) => nickname.trim())
