@@ -109,6 +109,40 @@ test('recentDecisions 返回最新决策并还原 detail JSON', () => {
   });
 });
 
+test('回复统计按本地自然日和账号隔离', () => {
+  withRepository((repository) => {
+    const dayStart = new Date(2026, 9, 12).getTime();
+    repository.recordDecision({
+      time: dayStart,
+      sessionId: '900000001:group:123456',
+      messageId: 'reply-a',
+      replied: true,
+      reason: 'replied',
+      detail: {},
+    });
+    repository.recordDecision({
+      time: dayStart + 1,
+      sessionId: '99999:private:42',
+      messageId: 'reply-b',
+      replied: true,
+      reason: 'replied',
+      detail: {},
+    });
+    repository.recordDecision({
+      time: dayStart + 2,
+      sessionId: '900000001:group:123456',
+      messageId: 'skip-c',
+      replied: false,
+      reason: 'disabled',
+      detail: {},
+    });
+
+    assert.equal(repository.replyCountToday(), 2);
+    assert.equal(repository.replyCountTodayForAccount(900000001), 1);
+    assert.equal(repository.replyCountTodayForAccount(99999), 1);
+  });
+});
+
 test('lastSelfMessage 返回指定会话最近一条 bot 消息', () => {
   withRepository((repository) => {
     const sessionKey = '900000001:group:123456';
@@ -117,6 +151,7 @@ test('lastSelfMessage 返回指定会话最近一条 bot 消息', () => {
     repository.saveMessage(messageRecord('self-new', 3000, true));
 
     assert.equal(repository.lastSelfMessage(sessionKey)?.messageId, 'self-new');
+    assert.equal(repository.latestSelfMessageForAccount(900000001)?.messageId, 'self-new');
     assert.equal(repository.lastSelfMessage('900000001:private:42'), undefined);
   });
 });

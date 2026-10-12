@@ -1,20 +1,26 @@
+import path from 'node:path';
 import { OneBotAdapter } from '../adapters/onebot/adapter.ts';
+import type { AdapterStatus } from '../adapters/types.ts';
 import { loadConfig } from '../config/load.ts';
 import { watchConfig } from '../config/watch.ts';
+import { writeConfig } from '../config/write.ts';
 import { createLogger } from '../core/logger.ts';
 import { createMessagePipeline } from '../core/pipeline.ts';
 import { createHistoryCatchUp } from '../core/history-catchup.ts';
 import { createManagementCommands } from '../core/management.ts';
+import type { ManagementCommands } from '../core/management.ts';
 import { sessionId } from '../core/events.ts';
 import { createSessionQueue } from '../core/session-queue.ts';
 import { openDatabase } from '../store/db.ts';
 import { createRepository } from '../store/repository.ts';
+import { startPanelServer, type PanelAccountRuntime } from '../panel-server/server.ts';
 
 const logger = createLogger('app');
-const initialConfig = loadConfig();
+const configPath = path.join(process.cwd(), 'data', 'config.yaml');
+const initialConfig = loadConfig({ configPath });
 const database = openDatabase();
 const repository = createRepository(database);
-const configWatcher = watchConfig({ initialConfig });
+const configWatcher = watchConfig({ initialConfig, configPath });
 function pruneDebugTraces(): void {
   try {
     const config = configWatcher.getConfig();
@@ -28,8 +34,11 @@ pruneDebugTraces();
 const debugPruneTimer = setInterval(pruneDebugTraces, 6 * 60 * 60 * 1000);
 debugPruneTimer.unref();
 const adapters: OneBotAdapter[] = [];
+const panelAccounts: PanelAccountRuntime[] = [];
+const managementControllers: ManagementCommands[] = [];
 const subscriptions: Array<() => void> = [];
 const sessionQueue = createSessionQueue();
+let panelServer: ReturnType<typeof startPanelServer> | undefined;
 let shuttingDown = false;
 
 function hasEnabledSession(config: typeof initialConfig): boolean {
@@ -55,6 +64,7 @@ async function shutdown(signal: string): Promise<void> {
   shuttingDown = true;
   logger.info(`收到 ${signal}，正在关闭 Aquarium。`);
   for (const unsubscribe of subscriptions) unsubscribe();
+  panelServer?.close();
   for (const adapter of adapters) adapter.close();
   configWatcher.close();
   clearInterval(debugPruneTimer);
@@ -90,6 +100,12 @@ for (const accountConfig of initialConfig.accounts) {
   }
 
   adapters.push(adapter);
+  let currentStatus: AdapterStatus = 'connecting';
+  panelAccounts.push({
+    adapter,
+    getStatus: () => currentStatus,
+    getNickname: () => adapter.nickname || String(adapter.account),
+  });
   const management = createManagementCommands({
     getConfig: () => configWatcher.getConfig(),
     repository,
@@ -100,6 +116,7 @@ for (const accountConfig of initialConfig.accounts) {
       logger.error(`管理指令消息 ${message.messageId} 执行失败：${describeError(error)}`);
     },
   });
+  managementControllers.push(management);
   const pipeline = createMessagePipeline({
     getConfig: () => configWatcher.getConfig(),
     repository,
@@ -122,6 +139,7 @@ for (const accountConfig of initialConfig.accounts) {
     },
   });
   subscriptions.push(adapter.onStatus((status) => {
+    currentStatus = status;
     logger.info(`账号 ${adapter.account} 状态：${status}`);
     if (status === 'online') {
       void catchUpHistory().catch((error: unknown) => {
@@ -143,7 +161,40 @@ for (const accountConfig of initialConfig.accounts) {
     logger.info(`正在连接账号 ${accountConfig.uin} ...`);
     await adapter.connect();
   } catch (error) {
+    currentStatus = 'offline';
     logger.error(`账号 ${accountConfig.uin} 连接失败：${describeError(error)}`);
+  }
+}
+
+const panelConfig = configWatcher.getConfig();
+const panelPassword = process.env[panelConfig.panel.passwordEnv];
+if (!panelPassword) {
+  logger.warn('未设置控制台密码，跳过管理面板启动；Aquarium 机器人继续运行。');
+} else {
+  try {
+    panelServer = startPanelServer({
+      host: panelConfig.panel.host,
+      port: panelConfig.panel.port,
+      password: panelPassword,
+      getConfig: () => configWatcher.getConfig(),
+      saveConfig: (config) => {
+        writeConfig(config, configPath);
+        configWatcher.replaceConfig(config);
+      },
+      repository,
+      accounts: () => panelAccounts,
+      management: () => managementControllers,
+      root: process.cwd(),
+      onError: (error) => logger.error(`管理面板请求失败：${describeError(error)}`),
+    });
+    panelServer.once('listening', () => {
+      logger.info(`管理面板已启动：${panelConfig.panel.host}:${panelConfig.panel.port}`);
+    });
+    panelServer.on('error', (error: unknown) => {
+      logger.error(`管理面板监听失败；机器人继续运行：${describeError(error)}`);
+    });
+  } catch (error) {
+    logger.error(`管理面板启动失败；机器人继续运行：${describeError(error)}`);
   }
 }
 

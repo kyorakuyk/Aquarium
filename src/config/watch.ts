@@ -54,6 +54,12 @@ export class ConfigWatcher extends EventEmitter {
     return this.currentConfig;
   }
 
+  replaceConfig(config: AquariumConfig): void {
+    if (this.closed) throw new Error('配置监听器已经关闭');
+    this.currentConfig = config;
+    this.emit('changed', config);
+  }
+
   close(): void {
     if (this.closed) return;
     this.closed = true;
@@ -78,6 +84,7 @@ export class ConfigWatcher extends EventEmitter {
         examplePath: this.examplePath,
         logger: silentLogger,
       });
+      if (JSON.stringify(nextConfig) === JSON.stringify(this.currentConfig)) return;
       this.currentConfig = nextConfig;
       this.emit('changed', nextConfig);
     } catch (error) {

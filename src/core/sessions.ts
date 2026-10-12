@@ -3,7 +3,7 @@ import { resolveSession } from '../config/resolve.ts';
 import type { AquariumConfig } from '../config/schema.ts';
 import { sessionId, type SessionKey } from './events.ts';
 
-function parseSessionId(value: string): SessionKey | undefined {
+export function parseSessionId(value: string): SessionKey | undefined {
   const parts = value.split(':');
   if (parts.length !== 3) return undefined;
   const account = Number(parts[0]);

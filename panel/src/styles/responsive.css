@@ -1,0 +1,45 @@
+@media (max-width: 760px) {
+  .app-shell { display: block; }
+  .sidebar { position: relative; inset: auto; width: 100%; padding: 13px 14px 10px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .brand-lockup { padding: 0 7px 10px; }
+  .brand-fish { width: 35px; }
+  .main-nav { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; }
+  .nav-item { width: auto; min-width: max-content; min-height: 44px; padding: 0 12px; }
+  .coming-soon { display: flex; align-items: center; gap: 4px; margin-top: 7px; overflow-x: auto; }
+  .coming-soon .section-eyebrow { flex: none; padding: 0 6px; }
+  .coming-soon .nav-item { min-height: 44px; padding: 0 9px; font-size: 11px; }
+  .logout-button { position: absolute; top: 13px; right: 14px; min-height: 44px; padding: 0 11px; font-size: 12px; }
+  .main-content { width: 100%; margin-left: 0; }
+  .page { padding: 26px 18px 40px; }
+  .page-header-actions { flex-direction: column; gap: 12px; }
+  .header-actions { padding-top: 0; }
+  .header-actions .button { flex: 1; }
+  h1 { font-size: 28px; }
+  .tank-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats-grid { grid-template-columns: 1fr; }
+  .session-workspace, .persona-workspace, .sandbox-layout, .decision-records-layout { grid-template-columns: 1fr; }
+  .session-detail { order: -1; }
+  .persona-workspace { gap: 12px; }
+  .persona-library { order: 1; }
+  .editor-columns { grid-template-columns: 1fr; }
+  .markdown-input, .preview-surface { min-height: 260px; }
+  .chat-toolbar { grid-template-columns: 1fr 1fr; }
+  .chat-toolbar .button { grid-column: 1 / -1; }
+  .trace-card { min-height: 280px; }
+  .binding-row { grid-template-columns: 1fr; gap: 6px; }
+  .new-persona-row { flex-wrap: wrap; }
+  .new-persona-row input { flex: 1 1 180px; }
+}
+
+@media (max-width: 480px) {
+  .page { padding-right: 14px; padding-left: 14px; }
+  .tank-grid, .usage-grid { grid-template-columns: 1fr; }
+  .tank-card-placeholder { min-height: 130px; }
+  .session-list-card, .session-detail, .persona-library, .persona-editor, .chat-card, .trace-card { padding: 15px; }
+  .number-grid { grid-template-columns: 1fr; }
+  .decision-record { grid-template-columns: auto 1fr; }
+  .decision-record > :nth-child(n + 3) { grid-column: 2; }
+  .editor-heading { align-items: flex-start; flex-direction: column; }
+  .editor-footer { align-items: flex-start; flex-direction: column; }
+  .page-tabs { margin-top: -5px; }
+}

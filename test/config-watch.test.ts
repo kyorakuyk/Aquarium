@@ -60,3 +60,18 @@ test('有效热重载发出 changed 事件并更新当前配置', async (t) => {
   assert.equal(next.defaults.enabled, true);
   assert.equal(watcher.getConfig().defaults.enabled, true);
 });
+
+test('replaceConfig 立即应用已原子写入的配置', async (t) => {
+  const { configPath } = createConfigFixture(t);
+  const logger = { info: () => undefined, error: () => undefined };
+  const watcher = watchConfig({ configPath, examplePath, debounceMs: 30, logger });
+  t.after(() => watcher.close());
+  const current = watcher.getConfig();
+  const replacement = { ...current, defaults: { ...current.defaults, enabled: true } };
+  const changed = new Promise<typeof replacement>((resolve) => watcher.once('changed', resolve));
+
+  watcher.replaceConfig(replacement);
+
+  assert.equal(await changed, replacement);
+  assert.equal(watcher.getConfig(), replacement);
+});

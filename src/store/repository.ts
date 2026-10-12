@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { createPanelQueries } from './panel-queries.ts';
 
 export interface MessageStorageRecord {
   sessionId: string;
@@ -22,6 +23,17 @@ export interface UsageRecord {
   costCny: number;
   latencyMs: number;
   ok: boolean;
+}
+
+export interface UsageSummary {
+  requestCount: number;
+  successfulRequests: number;
+  failedRequests: number;
+  inputTokens: number;
+  cachedTokens: number;
+  outputTokens: number;
+  costCny: number;
+  averageLatencyMs: number;
 }
 
 export interface DecisionRecord {
@@ -58,12 +70,19 @@ export interface StoreRepository {
   saveMessage(message: MessageStorageRecord): boolean;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
   lastSelfMessage(sessionId: string): MessageStorageRecord | undefined;
+  latestSelfMessageForAccount(account: number): MessageStorageRecord | undefined;
+  selfMessagesById(messageId: string): MessageStorageRecord[];
   recordUsage(usage: UsageRecord): void;
   costToday(): number;
+  replyCountToday(): number;
+  replyCountTodayForAccount(account: number): number;
+  usageToday(): UsageSummary;
   getCaption(key: string): string | undefined;
   setCaption(key: string, caption: string, time?: number): void;
   recordDecision(decision: DecisionRecord): void;
   recentDecisions(count: number): StoredDecision[];
+  decisionById(id: number): StoredDecision | undefined;
+  hasDebugTrace(sessionId: string, messageId: string): boolean;
   recordDebugTrace(trace: DebugTraceRecord): void;
   debugTracesFor(sessionId: string, messageId: string): StoredDebugTrace[];
   pruneDebugTraces(now: number, retainDays?: number): number;
@@ -120,6 +139,7 @@ export function createRepository(
     FROM usage
     WHERE time >= ? AND time < ?
   `);
+
   const selectCaption = database.prepare('SELECT caption FROM image_captions WHERE key = ?');
   const upsertCaption = database.prepare(`
     INSERT INTO image_captions (key, caption, time)
@@ -136,6 +156,7 @@ export function createRepository(
     ORDER BY time DESC, id DESC
     LIMIT ?
   `);
+
   const insertDebugTrace = database.prepare(`
     INSERT INTO debug_traces
       (time, session_id, message_id, slot, provider, model, prompt_json, response_text, prompt_hash, detail_json)
@@ -151,6 +172,7 @@ export function createRepository(
   const deleteExpiredDebugTraces = database.prepare('DELETE FROM debug_traces WHERE time < ?');
 
   return {
+    ...createPanelQueries(database, clock),
     saveMessage(message) {
       const result = insertMessage.run(
         message.sessionId,

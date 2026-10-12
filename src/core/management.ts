@@ -43,6 +43,7 @@ function budgetLabel(state: ReturnType<typeof budgetState>): string {
 export interface ManagementCommands {
   handle(message: IncomingMessage): Promise<boolean>;
   isMuted(session: SessionKey): boolean;
+  isAllMuted(): boolean;
   muteAll(): void;
   unmuteAll(): void;
 }
@@ -201,6 +202,7 @@ export function createManagementCommands(options: {
   return {
     handle,
     isMuted,
+    isAllMuted: () => allMuted,
     muteAll() {
       allMuted = true;
     },

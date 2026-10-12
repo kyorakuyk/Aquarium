@@ -1,0 +1,20 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;700&display=swap');
+
+:root {
+  --bg: #F3F6F5;
+  --surface: #FFFFFF;
+  --surface-2: #EDF1F0;
+  --surface-accent: #EAF2F0;
+  --line: #D5DEDB;
+  --ink: #0F1E1D;
+  --ink-2: #3D4F4D;
+  --muted: #5B6B69;
+  --accent: #17605B;
+  --accent-soft: #DCEBE8;
+  --warn: #C2502A;
+  --warn-ink: #A8411F;
+  --warn-soft: #F8E3DA;
+  --serif: 'Noto Serif SC', 'Songti SC', serif;
+  --sans: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  --mono: 'IBM Plex Mono', 'Cascadia Code', monospace;
+}
