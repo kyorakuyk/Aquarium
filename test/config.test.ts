@@ -19,7 +19,19 @@ test('config.example.yaml 符合配置 schema 并默认关闭所有会话', () =
   if (!result.success) return;
   assert.equal(result.data.owner, 0);
   assert.equal(result.data.defaults.enabled, false);
+  assert.equal(result.data.debug.enabled, false);
+  assert.equal(result.data.debug.retainDays, 7);
   assert.equal(result.data.accounts.length, 1);
+});
+
+test('旧配置缺少 debug 时补入安全默认值', () => {
+  const legacyConfig = structuredClone(exampleConfig) as Record<string, unknown>;
+  delete legacyConfig.debug;
+  const parsed = AquariumConfigSchema.parse(legacyConfig);
+  const partial = AquariumConfigSchema.parse({ ...legacyConfig, debug: { enabled: true } });
+
+  assert.deepEqual(parsed.debug, { enabled: false, sessions: {}, retainDays: 7 });
+  assert.deepEqual(partial.debug, { enabled: true, sessions: {}, retainDays: 7 });
 });
 
 test('配置 schema 拒绝越界端口和负数 owner', () => {

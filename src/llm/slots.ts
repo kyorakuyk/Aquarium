@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import OpenAI from 'openai';
 import type { AquariumConfig } from '../config/schema.ts';
 import { getProviderClient } from './client.ts';
@@ -35,6 +36,28 @@ export interface SlotCallOptions {
   getClient?: (provider: string) => OpenAI;
   now?: () => number;
   timeoutMs?: number;
+  debugTrace?: SlotDebugTraceContext;
+}
+
+export interface SlotDebugTraceContext {
+  sessionId: string;
+  messageId: string;
+  record: (trace: SlotDebugTraceRecord) => void;
+  onPromptHash: (hash: string) => void;
+  onError?: (error: unknown) => void;
+}
+
+export interface SlotDebugTraceRecord {
+  time: number;
+  sessionId: string;
+  messageId: string;
+  slot: string;
+  provider: string;
+  model: string;
+  promptJson: string;
+  responseText: string;
+  promptHash: string;
+  detail: unknown;
 }
 
 export interface SlotUsage {
@@ -75,6 +98,39 @@ function canFallback(error: unknown): boolean {
   return typeof details.code === 'string' && retryableNetworkCodes.has(details.code);
 }
 
+function debugErrorDetails(error: unknown): Record<string, unknown> {
+  if (!error || typeof error !== 'object') return { errorName: 'UnknownError' };
+  const details = error as { name?: unknown; status?: unknown };
+  return {
+    errorName: typeof details.name === 'string' ? details.name : 'Error',
+    ...(typeof details.status === 'number' ? { status: details.status } : {}),
+  };
+}
+
+function recordDebugTrace(
+  context: SlotDebugTraceContext | undefined,
+  promptJson: string | undefined,
+  promptHash: string | undefined,
+  trace: Omit<SlotDebugTraceRecord, 'sessionId' | 'messageId' | 'promptJson' | 'promptHash'>,
+): void {
+  if (!context || promptJson === undefined || promptHash === undefined) return;
+  try {
+    context.record({
+      ...trace,
+      sessionId: context.sessionId,
+      messageId: context.messageId,
+      promptJson,
+      promptHash,
+    });
+  } catch (error) {
+    try {
+      context.onError?.(error);
+    } catch {
+      // 调试存储失败不能影响模型回复。
+    }
+  }
+}
+
 export async function callSlot(
   slot: string,
   messages: OpenAI.ChatCompletionMessageParam[],
@@ -89,6 +145,21 @@ export async function callSlot(
     ? [lastConfiguredEntry]
     : configuredChain;
   const now = options.now ?? Date.now;
+  const promptJson = options.debugTrace ? JSON.stringify(messages) : undefined;
+  const promptHash = promptJson === undefined
+    ? undefined
+    : createHash('sha256').update(promptJson).digest('hex').slice(0, 16);
+  if (promptHash && options.debugTrace) {
+    try {
+      options.debugTrace.onPromptHash(promptHash);
+    } catch (error) {
+      try {
+        options.debugTrace.onError?.(error);
+      } catch {
+        // 调试回调失败不能影响模型调用。
+      }
+    }
+  }
   const timeoutMs = options.timeoutMs ?? 30_000;
   let lastError: unknown;
 
@@ -130,12 +201,23 @@ export async function callSlot(
         latencyMs,
         ok: false,
       });
+      recordDebugTrace(options.debugTrace, promptJson, promptHash, {
+        time: completedAt,
+        slot,
+        provider: entry.provider,
+        model: entry.model,
+        responseText: '',
+        detail: debugErrorDetails(attemptError),
+      });
       lastError = attemptError;
       if (!canFallback(attemptError) || index === chain.length - 1) throw attemptError;
       continue;
     }
 
     if (!response) throw new Error(`模型 ${entry.model} 没有返回结果`);
+    const responseText = typeof response.choices[0]?.message.content === 'string'
+      ? response.choices[0].message.content
+      : '';
     const usage = response.usage;
     const inputTokens = tokenCount(usage?.prompt_tokens);
     const outputTokens = tokenCount(usage?.completion_tokens);
@@ -161,11 +243,17 @@ export async function callSlot(
       latencyMs,
       ok: true,
     });
+    recordDebugTrace(options.debugTrace, promptJson, promptHash, {
+      time: completedAt,
+      slot,
+      provider: entry.provider,
+      model: entry.model,
+      responseText,
+      detail: {},
+    });
 
     return {
-      text: typeof response.choices[0]?.message.content === 'string'
-        ? response.choices[0].message.content
-        : '',
+      text: responseText,
       provider: entry.provider,
       model: entry.model,
       usage: slotUsage,

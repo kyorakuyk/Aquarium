@@ -15,6 +15,18 @@ const initialConfig = loadConfig();
 const database = openDatabase();
 const repository = createRepository(database);
 const configWatcher = watchConfig({ initialConfig });
+function pruneDebugTraces(): void {
+  try {
+    const config = configWatcher.getConfig();
+    const deleted = repository.pruneDebugTraces(Date.now(), config.debug.retainDays);
+    if (deleted > 0) logger.info(`已清理过期调试记录：${deleted} 条。`);
+  } catch (error) {
+    logger.error(`清理过期调试记录失败：${describeError(error)}`);
+  }
+}
+pruneDebugTraces();
+const debugPruneTimer = setInterval(pruneDebugTraces, 6 * 60 * 60 * 1000);
+debugPruneTimer.unref();
 const adapters: OneBotAdapter[] = [];
 const subscriptions: Array<() => void> = [];
 const sessionQueue = createSessionQueue();
@@ -45,6 +57,7 @@ async function shutdown(signal: string): Promise<void> {
   for (const unsubscribe of subscriptions) unsubscribe();
   for (const adapter of adapters) adapter.close();
   configWatcher.close();
+  clearInterval(debugPruneTimer);
   await sessionQueue.idle();
   database.close();
   logger.info('Aquarium 已关闭。');

@@ -1,5 +1,6 @@
 import type OpenAI from 'openai';
 import type { ProtocolAdapter } from '../adapters/types.ts';
+import { isDebugEnabled } from '../config/debug.ts';
 import { resolveSession } from '../config/resolve.ts';
 import type { AquariumConfig } from '../config/schema.ts';
 import { buildPromptMessages } from './prompt.ts';
@@ -66,6 +67,14 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
     processOptions: ProcessMessageOptions = {},
   ): Promise<PipelineResult> {
     const currentSessionId = sessionId(message.session);
+    let promptHash: string | undefined;
+    const withPromptHash = (detail: unknown): unknown => {
+      if (!promptHash) return detail;
+      if (typeof detail === 'object' && detail !== null && !Array.isArray(detail)) {
+        return { ...detail, promptHash };
+      }
+      return { detail, promptHash };
+    };
     const recordDecision = (
       reason: string,
       detail: unknown = {},
@@ -77,7 +86,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
         messageId: message.messageId,
         replied,
         reason,
-        detail,
+        detail: withPromptHash(detail),
       });
       return { replied, reason };
     };
@@ -122,11 +131,22 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
       return recordDecision('persona_error', errorDetails(error));
     }
 
+    const debugEnabled = isDebugEnabled(config, currentSessionId);
     const callOptions: SlotCallOptions = {
       config,
       costToday: () => options.repository.costToday(),
       recordUsage: (usage) => options.repository.recordUsage(usage),
+      ...(debugEnabled ? {
+        debugTrace: {
+          sessionId: currentSessionId,
+          messageId: message.messageId,
+          record: (trace) => options.repository.recordDebugTrace(trace),
+          onPromptHash: (hash: string) => { promptHash = hash; },
+          onError: (error: unknown) => options.onError?.(error, message),
+        },
+      } : {}),
     };
+    // TODO(M2): 引入私密信息分级后，调试记录必须对 L0 内容脱敏（DESIGN §10.1）
     await captionIncomingImages({
       message,
       repository: options.repository,

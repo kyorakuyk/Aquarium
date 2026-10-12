@@ -40,6 +40,12 @@ const priceSchema = z.object({
   output: z.number().nonnegative(),
 }).strict();
 
+const debugSchema = z.object({
+  enabled: z.boolean().default(false),
+  sessions: z.record(z.string(), z.boolean()).default({}),
+  retainDays: z.number().int().positive().default(7),
+}).strict().default({ enabled: false, sessions: {}, retainDays: 7 });
+
 export const AquariumConfigSchema = z.object({
   owner: z.number().int().nonnegative(),
   accounts: z.array(z.object({
@@ -56,6 +62,7 @@ export const AquariumConfigSchema = z.object({
   }).strict(),
   defaults: sessionSettingsSchema,
   sessions: z.record(z.string(), sessionOverrideSchema),
+  debug: debugSchema,
   panel: z.object({
     host: z.string().min(1),
     port: z.number().int().min(1).max(65535),

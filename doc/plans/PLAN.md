@@ -146,7 +146,7 @@
   - 指令回复不经过拆条与节奏延迟，直接发送。
   - 测试：非主人发指令按普通消息处理；mute 期间被 @ 不回复；mute 到期自动恢复；recall 调用适配器的 `recall`。
 
-- [ ] **T9b 调试记录（精简版）**
+- [x] **T9b 调试记录（精简版）**
   - 配置新增（schema + `config.example.yaml`）：`debug: { enabled: false, sessions: {}, retainDays: 7 }`。`sessions` 的键为 sessionId、值为 `true/false`，覆盖总开关；随配置热重载立即生效。
   - 迁移新增表 `debug_traces(id INTEGER PK, time INTEGER, session_id TEXT, message_id TEXT, slot TEXT, provider TEXT, model TEXT, prompt_json TEXT, response_text TEXT, prompt_hash TEXT, detail_json TEXT)`，索引 `(session_id, time)`。
   - 某会话调试开启时，`callSlot` 的**每次尝试**（含失败）都写一条：完整 messages 数组、模型原始返回文本（失败则为空，`detail_json` 记错误名与状态码）、`prompt_hash` = messages 的 `JSON.stringify` 结果做 sha256 取前 16 位十六进制。该消息的决策记录 `detail_json` 同时写入 `promptHash`。
@@ -279,6 +279,7 @@
 | 2026-10-13 | T7 | 触发图像经 `vision` 槽位生成并缓存 ≤30 字描述；历史图片只读缓存；失败及不可访问 URL 降级占位；`npm run check` 通过（93 项测试） |
 | 2026-10-13 | T8 | online 时补齐每个启用会话的最近 50 条；只将 10 分钟内最新未入库触发消息送入会话队列；`npm run check` 通过（99 项测试） |
 | 2026-10-13 | T9 | 管理指令限主人与会话范围；闭嘴状态、到期恢复、撤回、预算/会话状态均有测试；`npm run check` 通过（107 项测试） |
+| 2026-10-13 | T9b | 新增 debug 配置继承、SQLite trace 表、每次模型尝试记录 prompt/hash/响应和失败细节、保留期清理；`npm run check` 通过（115 项测试） |
 ---
 
 ## 6. 待评估清单

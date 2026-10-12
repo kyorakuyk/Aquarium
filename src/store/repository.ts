@@ -37,6 +37,23 @@ export interface StoredDecision extends DecisionRecord {
   id: number;
 }
 
+export interface DebugTraceRecord {
+  time: number;
+  sessionId: string;
+  messageId: string;
+  slot: string;
+  provider: string;
+  model: string;
+  promptJson: string;
+  responseText: string;
+  promptHash: string;
+  detail: unknown;
+}
+
+export interface StoredDebugTrace extends DebugTraceRecord {
+  id: number;
+}
+
 export interface StoreRepository {
   saveMessage(message: MessageStorageRecord): boolean;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
@@ -47,6 +64,9 @@ export interface StoreRepository {
   setCaption(key: string, caption: string, time?: number): void;
   recordDecision(decision: DecisionRecord): void;
   recentDecisions(count: number): StoredDecision[];
+  recordDebugTrace(trace: DebugTraceRecord): void;
+  debugTracesFor(sessionId: string, messageId: string): StoredDebugTrace[];
+  pruneDebugTraces(now: number, retainDays?: number): number;
 }
 
 function limitValue(count: number): number {
@@ -116,6 +136,19 @@ export function createRepository(
     ORDER BY time DESC, id DESC
     LIMIT ?
   `);
+  const insertDebugTrace = database.prepare(`
+    INSERT INTO debug_traces
+      (time, session_id, message_id, slot, provider, model, prompt_json, response_text, prompt_hash, detail_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const selectDebugTraces = database.prepare(`
+    SELECT id, time, session_id, message_id, slot, provider, model,
+      prompt_json, response_text, prompt_hash, detail_json
+    FROM debug_traces
+    WHERE session_id = ? AND message_id = ?
+    ORDER BY time, id
+  `);
+  const deleteExpiredDebugTraces = database.prepare('DELETE FROM debug_traces WHERE time < ?');
 
   return {
     saveMessage(message) {
@@ -219,6 +252,47 @@ export function createRepository(
         reason: stringValue(row.reason, 'reason'),
         detail: JSON.parse(stringValue(row.detail_json, 'detail_json')) as unknown,
       }));
+    },
+
+    recordDebugTrace(trace) {
+      insertDebugTrace.run(
+        trace.time,
+        trace.sessionId,
+        trace.messageId,
+        trace.slot,
+        trace.provider,
+        trace.model,
+        trace.promptJson,
+        trace.responseText,
+        trace.promptHash,
+        JSON.stringify(trace.detail) ?? 'null',
+      );
+    },
+
+    debugTracesFor(sessionId, messageId) {
+      const rows = selectDebugTraces.all(sessionId, messageId) as Array<Record<string, unknown>>;
+      return rows.map((row) => ({
+        id: numberValue(row.id, 'id'),
+        time: numberValue(row.time, 'time'),
+        sessionId: stringValue(row.session_id, 'session_id'),
+        messageId: stringValue(row.message_id, 'message_id'),
+        slot: stringValue(row.slot, 'slot'),
+        provider: stringValue(row.provider, 'provider'),
+        model: stringValue(row.model, 'model'),
+        promptJson: stringValue(row.prompt_json, 'prompt_json'),
+        responseText: stringValue(row.response_text, 'response_text'),
+        promptHash: stringValue(row.prompt_hash, 'prompt_hash'),
+        detail: JSON.parse(stringValue(row.detail_json, 'detail_json')) as unknown,
+      }));
+    },
+
+    pruneDebugTraces(now, retainDays = 7) {
+      if (!Number.isFinite(now) || !Number.isSafeInteger(retainDays) || retainDays <= 0) {
+        throw new RangeError('调试记录清理参数无效');
+      }
+      const cutoff = now - retainDays * 24 * 60 * 60 * 1000;
+      const result = deleteExpiredDebugTraces.run(cutoff);
+      return numberValue(result.changes, 'changes');
     },
   };
 }

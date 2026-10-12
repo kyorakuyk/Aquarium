@@ -23,4 +23,5 @@ defaults:
   rate: { perUserPerMinute: 4, perSessionPerMinute: 8, minIntervalSec: 3 }
   groupNote: ''
 sessions: {}
+debug: { enabled: false, sessions: {}, retainDays: 7 } # 默认关闭；会话键可覆盖总开关
 panel: { host: 127.0.0.1, port: 5180, passwordEnv: AQUARIUM_PANEL_PASSWORD }
