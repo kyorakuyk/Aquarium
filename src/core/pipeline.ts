@@ -113,7 +113,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
     const context = options.repository.recentMessages(currentSessionId, settings.contextMessages);
     const prompt = buildPromptMessages({
       persona,
-      owner: config.owner,
+      ownerId: config.owner,
       groupNote: settings.groupNote,
       context,
     });
