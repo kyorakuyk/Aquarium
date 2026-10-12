@@ -11,8 +11,12 @@ export function cleanReply(text: string, nicknamePrefixes: readonly string[] = [
     .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gmu, '')
     .replace(/^[ \t]*>[ \t]?/gmu, '')
     .replace(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/gmu, '')
-    .replace(/[`*_~]/gu, '')
+    .replace(/\*\*(.+?)\*\*/gu, '$1')
+    .replace(/__(.+?)__/gu, '$1')
+    .replace(/`([^`\r\n]+)`/gu, '$1')
+    .replace(/~~(.+?)~~/gu, '$1')
     .trim();
+  if (/^(?:\*\*|__|~~|`)+$/u.test(cleaned)) cleaned = '';
 
   const prefixes = nicknamePrefixes
     .map((nickname) => nickname.trim())
