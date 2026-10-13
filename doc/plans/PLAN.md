@@ -338,7 +338,7 @@
 | 2026-10-13 | R10 | 决策 API 返回会话名、60 字消息摘要与可空费用；replied detail 保存实际费用；控制台改用中文原因标签；`npm run check` 通过（129 项测试），`npm run panel:build` 成功 |
 | 2026-10-13 | R11 | 视觉调用前下载 HTTP(S) 图片，限制 10 秒、允许的 MIME 与 5 MiB；失败使用占位且不发送原始链接；`npm run check` 通过（136 项测试），`npm run panel:build` 成功 |
 | 2026-10-13 | R12 | 清除英文页面分类标签、总览状态句按账号数动态展示、链路文案本地化并防止移动按钮换行；`npm run check` 通过（136 项测试），`npm run panel:build` 成功 |
-| 2026-10-14 | R13 | 图片下载只允许 HTTPS 腾讯域名，按点边界匹配并在拒绝时记录主机名、不记录完整 URL；fake fetch 测试覆盖允许/拒绝地址；`npm run check` 通过（137 项测试）/ SHA 将在提交后回填 |
+| 2026-10-14 | R13 | 图片下载只允许 HTTPS 腾讯域名，按点边界匹配并在拒绝时记录主机名、不记录完整 URL；fake fetch 测试覆盖允许/拒绝地址；`npm run check` 通过（137 项测试）/ `9a0626d836b5f9955f26d56ed5dc1faa19263acd` |
 ---
 
 ## 6. 待评估清单
