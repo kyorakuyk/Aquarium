@@ -1,6 +1,6 @@
 # Aquarium 施工计划书（唯一任务清单）
 
-> 写给接手编码的模型。最后更新：2026-10-12。
+> 写给接手编码的模型。最后更新：2026-10-14。
 > **本文是唯一的任务清单。**文档优先级：`PLAN.md` > `HANDOFF.md`（只作为架构、接口、环境的参考）> `DESIGN.md`（设计依据）。
 > `REVIEW-2026-10-12.md` 与 `NIGHT-RUN.md` 已并入本文，**作废，不再阅读**。`MORNING.md` 只作为历史记录。
 > 开工前按顺序读：本文全文 → `HANDOFF.md` §1、§3、§4 → `DESIGN.md`（需要时查阅）。
@@ -41,8 +41,8 @@
 
 ## 2. 当前状态
 
-- 阶段 A、B（R1–R9）已完成（86 项测试通过）；U1 真实环境验证已由用户完成并全部通过；代码已合并到 `main`（2026-10-13）。
-- 下一步：阶段 C（C0 → T10）。
+- 阶段 A–C（R1–R13、C0、T7–T10）已完成；U1、U2 真实环境验证已由用户完成，U2 反馈无重大问题；代码已在 `main`。
+- 阶段 D 的 T11 托管层调研已于 2026-10-14 在 `dev/host` 完成；当前停在停止点 3，等待用户确认方案；未开始 T12。
 
 ---
 
@@ -238,7 +238,7 @@
 
 ### 阶段 D：一键启动（U3）
 
-- [ ] **T11 托管层调研**（只调研、写结论，**不写正式代码**）：在 `doc/plans/HOST-RESEARCH.md` 回答：
+- [x] **T11 托管层调研**（只调研、写结论，**不写正式代码**）：已在 `doc/plans/HOST-RESEARCH.md` 记录来源、结论与待用户确认项：
   1. SnowLuma WebUI API 的鉴权方式（读 `reference/SnowLuma/packages/core/src/webui/server.ts` 及相关文件），以及如何调用 `POST /api/processes/:pid/load`；
   2. 如何无窗口启动 SnowLuma（`node index.mjs`，cwd 为其目录，`windowsHide: true`）及如何判断其已就绪；
   3. QQ.exe 的常见安装路径、如何启动并拿到 PID、如何区分小号与主号进程（若无法可靠区分，提出“只注入由我们启动的那个 PID”的方案并说明局限）；
@@ -339,6 +339,7 @@
 | 2026-10-13 | R11 | 视觉调用前下载 HTTP(S) 图片，限制 10 秒、允许的 MIME 与 5 MiB；失败使用占位且不发送原始链接；`npm run check` 通过（136 项测试），`npm run panel:build` 成功 |
 | 2026-10-13 | R12 | 清除英文页面分类标签、总览状态句按账号数动态展示、链路文案本地化并防止移动按钮换行；`npm run check` 通过（136 项测试），`npm run panel:build` 成功 |
 | 2026-10-14 | R13 | 图片下载只允许 HTTPS 腾讯域名，按点边界匹配并在拒绝时记录主机名、不记录完整 URL；fake fetch 测试覆盖允许/拒绝地址；`npm run check` 通过（137 项测试）/ `9a0626d836b5f9955f26d56ed5dc1faa19263acd` |
+| 2026-10-14 | T11 | 只读调研 SnowLuma WebUI auth/load、启动与 readiness、QQ PID/UIN、托盘候选和自启动；新增 `doc/plans/HOST-RESEARCH.md`；`npm run check` 通过（137 项测试）；停在停止点 3 等用户确认 |
 ---
 
 ## 6. 待评估清单
