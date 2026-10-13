@@ -8,11 +8,23 @@ const MAX_CAPTION_LENGTH = 30;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const IMAGE_DOWNLOAD_TIMEOUT_MS = 10_000;
 const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+const ALLOWED_IMAGE_HOST_SUFFIXES = ['qq.com.cn', 'qq.com', 'qpic.cn'];
 
 type ImageSegment = Extract<Segment, { type: 'image' }>;
 type VisionCall = (messages: OpenAI.ChatCompletionMessageParam[]) => Promise<SlotResult>;
 type ImageFetcher = (url: string, init: RequestInit) => Promise<Response>;
 export type ImageDownloader = (url: string) => Promise<string>;
+
+class ImageHostNotAllowedError extends Error {
+  readonly code = 'IMAGE_HOST_NOT_ALLOWED';
+  readonly hostname: string;
+
+  constructor(hostname: string) {
+    super(`图片下载主机不在允许范围：${hostname}`);
+    this.name = 'ImageHostNotAllowedError';
+    this.hostname = hostname;
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -48,6 +60,12 @@ function isSupportedImageUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function isAllowedTencentImageHost(hostname: string): boolean {
+  return ALLOWED_IMAGE_HOST_SUFFIXES.some((suffix) => (
+    hostname === suffix || hostname.endsWith(`.${suffix}`)
+  ));
 }
 
 async function readBoundedImageBody(response: Response): Promise<Uint8Array> {
@@ -95,8 +113,11 @@ export async function downloadImageAsDataUrl(
   } catch {
     throw new Error('图片链接不是有效的 http(s) 地址');
   }
-  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || !url.hostname || url.username || url.password) {
+  if (!url.hostname || url.username || url.password) {
     throw new Error('图片链接不是有效的 http(s) 地址');
+  }
+  if (url.protocol !== 'https:' || !isAllowedTencentImageHost(url.hostname)) {
+    throw new ImageHostNotAllowedError(url.hostname);
   }
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
     throw new RangeError('图片下载超时设置无效');

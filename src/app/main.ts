@@ -47,11 +47,12 @@ function hasEnabledSession(config: typeof initialConfig): boolean {
 
 function describeError(error: unknown): string {
   if (!error || typeof error !== 'object') return '未知错误';
-  const details = error as { name?: unknown; status?: unknown; code?: unknown };
+  const details = error as { name?: unknown; status?: unknown; code?: unknown; hostname?: unknown };
   return [
     typeof details.name === 'string' ? details.name : 'Error',
     ...(typeof details.status === 'number' ? [`status=${details.status}`] : []),
     ...(typeof details.code === 'string' ? [`code=${details.code}`] : []),
+    ...(typeof details.hostname === 'string' ? [`host=${details.hostname}`] : []),
   ].join(' ');
 }
 

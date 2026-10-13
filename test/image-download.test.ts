@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { downloadImageAsDataUrl } from '../src/core/images.ts';
 
-const imageUrl = 'https://images.example.test/cat.png';
+const imageUrl = 'https://multimedia.nt.qq.com.cn/cat.png';
 const maxImageBytes = 5 * 1024 * 1024;
 
-test('HTTP 图片下载后按响应类型转换为 data URL', async () => {
+test('HTTPS 腾讯图片下载后按响应类型转换为 data URL', async () => {
   const requested: Array<{ url: string; signal?: AbortSignal | null }> = [];
   const fetcher = async (url: string, init?: RequestInit): Promise<Response> => {
     requested.push({ url, signal: init?.signal });
@@ -20,6 +20,51 @@ test('HTTP 图片下载后按响应类型转换为 data URL', async () => {
   assert.equal(result, 'data:image/png;base64,AQID');
   assert.equal(requested[0]?.url, imageUrl);
   assert.ok(requested[0]?.signal instanceof AbortSignal);
+});
+
+test('只允许 HTTPS 腾讯域名并在拒绝时保留主机名、不保留完整 URL', async () => {
+  const allowedUrls = [
+    'https://multimedia.nt.qq.com.cn/cat.png',
+    'https://qq.com/cat.png',
+    'https://cdn.qq.com.cn/cat.png',
+    'https://qpic.cn/cat.png',
+    'https://img.qpic.cn/cat.png',
+  ];
+  for (const url of allowedUrls) {
+    const result = await downloadImageAsDataUrl(url, async () => new Response(Uint8Array.of(1), {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }));
+    assert.ok(result.startsWith('data:image/png;base64,'));
+  }
+
+  const rejectedUrls = [
+    'https://evil-qq.com/cat.png',
+    'https://qq.com.evil.cn/cat.png',
+    'http://multimedia.nt.qq.com.cn/cat.png',
+    'https://127.0.0.1/cat.png',
+  ];
+  for (const url of rejectedUrls) {
+    let fetchCalled = false;
+    await assert.rejects(
+      downloadImageAsDataUrl(url, async () => {
+        fetchCalled = true;
+        return new Response(Uint8Array.of(1), {
+          status: 200,
+          headers: { 'content-type': 'image/png' },
+        });
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        const details = error as Error & { code?: string; hostname?: string };
+        assert.equal(details.code, 'IMAGE_HOST_NOT_ALLOWED');
+        assert.equal(details.hostname, new URL(url).hostname);
+        assert.ok(!details.message.includes(url));
+        return true;
+      },
+    );
+    assert.equal(fetchCalled, false);
+  }
 });
 
 test('只接受 jpeg、png、gif 和 webp 响应类型', async () => {
