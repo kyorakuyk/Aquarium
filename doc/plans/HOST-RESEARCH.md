@@ -114,3 +114,11 @@ SnowLuma 当前进程枚举器只把 PID 映射成配置的显示名和空路径
 - `@trayjs/trayjs` 上游仓库与 npm 包页面：平台二进制、JSON-lines 通信、依赖和页面所示的包活跃度指标。citeturn5search0turn7search2
 - Microsoft WinForms `NotifyIcon` 与 .NET 单文件部署说明。citeturn8search4turn8search6turn8search8
 - Microsoft Windows 通知区 `Shell_NotifyIcon`、Startup 文件夹和 Task Scheduler 登录触发/交互式 token 文档。citeturn7search3turn8search0turn8search1turn8search2
+
+## T12a 结果（2026-10-14；离线检查，未运行托盘程序）
+
+- 固定安装 `@trayjs/trayjs@0.0.10`。Windows x64 实际安装 `node_modules/@trayjs/trayjs`（18,713 bytes）与 `node_modules/@trayjs/win32-x64`（174,478 bytes）；`du -sb node_modules/@trayjs` 实测总占用 **193,191 bytes**。当前 x64 环境没有安装 arm64 optional binary。
+- 包 README 描述 Node wrapper 通过 stdin/stdout JSON-lines 启动独立 Windows 原生 `tray.exe`；没有声明另需 .NET/Electron runtime，但也没有执行二进制验证其系统运行库依赖。
+- README/API 提供 icon、菜单、tooltip、quit 与 ready/close；**没有文档化的 Windows 系统通知/气泡提示 API**。因此 T12b 的扫码通知只能先更新托盘提示文字；不能把本 spike 当作系统通知支持的证明。
+- 图标为 `assets/tray/{teal,yellow,red}.ico`，每个包含 16×16 与 32×32 图像。`node --test test/tray-assets.test.ts test/tray-spike.test.ts` 通过 5 项；`npm run typecheck` 与完整 `npm run check` 通过，完整检查 142 项测试全绿。
+- `src/spike/tray.ts` 只有直接执行该文件时才动态导入 `Tray` 并启动 helper；单元测试注入 fake tray，**本次未运行 `node src/spike/tray.ts`、未创建真实托盘进程、未做用户 GUI 验收**。

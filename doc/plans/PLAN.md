@@ -42,7 +42,7 @@
 ## 2. 当前状态
 
 - 阶段 A–C（R1–R13、C0、T7–T10）已完成；U1、U2 真实环境验证已由用户完成，U2 反馈无重大问题；代码已在 `main`。
-- 阶段 D 的 T11 托管层调研已于 2026-10-14 在 `dev/host` 完成；当前停在停止点 3，等待用户确认方案；未开始 T12。
+- T11 托管层调研已由用户确认；当前在 `dev/host` 按 §7.1 夜间范围推进阶段 D。T12a 代码与离线质量门已完成，真实托盘验收未执行；T12b 与空托盘接口待完成。
 
 ---
 
@@ -247,7 +247,62 @@
 
 > **⛔ 停止点 3**：写完 `HOST-RESEARCH.md` 后停下，等用户确认方案。
 
-- [ ] **T12 Windows 托管实现**：按 T11 确认的方案实现 `src/host/types.ts`（`Host` 接口：`start()`、`stop()`、`status()`、`onStatus(cb)`）与 `src/host/windows/`：依次启动 SnowLuma → QQ → 注入指定 PID → 等待适配器 `online` 且登录账号校验通过；子进程退出按 1s→30s 指数退避重启；需要扫码时托盘变色并弹通知；托盘菜单：状态、打开控制台、全部闭嘴、重启、退出。具体细节在 T11 确认后补充到本文。
+> T11 结论已由用户确认（2026-10-14），见 `HOST-RESEARCH.md`。以下为确认后的规格，与研究报告冲突处以本文为准。
+
+- [x] **T12a 托盘 spike（限时验证，可丢弃；夜间仅完成代码部分）**
+  - 安装 `@trayjs/trayjs`（精确版本）。写 `src/spike/tray.ts`：显示小鱼托盘图标（图标文件放 `assets/tray/`，青色 / 黄色 / 红色三个 `.ico`，16×16 与 32×32），提示文字“水族箱”；右键菜单三项：“状态：测试中”（不可点）、“切换颜色”（依次切换三个图标）、“退出”。
+  - 退出时托盘辅助进程必须一并退出，不得残留。
+  - 在 `HOST-RESEARCH.md` 末尾追加“T12a 结果”一节：包安装后的磁盘占用、是否需要额外运行时、是否支持系统通知（气泡提示）。
+  - **【用户】验收**：`node src/spike/tray.ts` → 托盘出现小鱼 → 菜单可用、颜色能切换 → 点“退出”后，任务管理器中无残留进程。
+  - 夜间完成结果：固定 `@trayjs/trayjs@0.0.10`；三色双尺寸 ICO 与 fake-tray spike 已实现；`npm run check` 通过（142 项测试）。托盘程序与真实 GUI 未运行，人工验收仍待用户。
+> **⛔ 停止点 3b**：有人值守流程在 T12a 后停下等用户验收。夜间按 §7.1 不运行 spike、不做用户验收，继续完成本节指定的 T12b 与空托盘接口后结束。
+
+- [ ] **T12b Windows 托管实现**
+  - **配置**（schema + `config.example.yaml`）：
+    ```yaml
+    host:
+      enabled: true            # false 时行为与现在完全相同（手动启动 SnowLuma）
+      startSnowLuma: true      # 由 Aquarium 启动 SnowLuma 子进程
+      qqExePath: ''            # 用户手动填写 QQ.exe 完整路径；为空时托盘“打开 QQ”不可用
+      scanIntervalSec: 5
+    ```
+    `.env` / `.env.example` 新增 `SNOWLUMA_WEBUI_PASSWORD=`（注释：SnowLuma 网页控制台的登录密码）。
+  - **`src/host/types.ts`**：`Host` 接口 `start()`、`stop()`、`status()`、`onStatus(cb)`；状态枚举：`starting`、`waiting_qq_login`（等待小号登录）、`online`、`error`。
+  - **`src/host/windows/snowluma-process.ts`**：
+    - 启动前读取 `<snowlumaDir>/config/runtime.json`；若 `hookAutoLoad` 为 `true`，**拒绝启动托管**，状态设为 `error`，日志与托盘提示“请在 SnowLuma 中关闭自动注入”（fail-closed）。
+    - 以 `process.execPath` 运行 `<snowlumaDir>/index.mjs`，`cwd` 为 `snowlumaDir`，`windowsHide: true`；stdout / stderr 追加到 `data/logs/snowluma-YYYY-MM-DD.log`。
+    - 就绪判定：WebUI 地址取 `runtime.json` 的 `webuiHost` / `webuiPort`（缺省 `127.0.0.1:5099`）；每秒尝试一次登录，60 秒内成功即就绪，否则状态 `error`。
+    - 子进程意外退出：按 1s → 2s → 4s … 封顶 30s 指数退避重启；连续稳定运行 5 分钟后退避归零。
+  - **`src/host/windows/snowluma-webui.ts`**：WebUI 客户端，`fetch` 可注入。
+    - `login()`：`POST /api/login`，密码来自 `SNOWLUMA_WEBUI_PASSWORD`；token 只存内存，**不得写入日志或文件**。
+    - 任何请求返回 401 时重新登录一次后重试；再失败则状态 `error`。
+    - `listProcesses()`、`probeLogin(pid)`、`load(pid)`：路径与返回结构以 `reference/SnowLuma/packages/core/src/webui/server.ts` 为准，在代码注释中注明所依据的行号。
+  - **`src/host/windows/qq-watcher.ts`**（核心安全逻辑）：
+    - 每 `scanIntervalSec` 秒调用 `listProcesses()`。对每个尚未判定的 PID 调用 `probeLogin(pid)`：
+      - `identityKnown: true` 且 UIN **等于**配置的小号 → 调用 `load(pid)`，该 PID 记为“已注入”，以后不再处理；
+      - `identityKnown: true` 且 UIN 不等于小号 → 该 PID 记为“忽略”，以后不再探测、**永不注入**；
+      - 未知、超时、出错 → 下一轮再探测。
+    - 进程列表中消失的 PID 从记录中删除。
+    - 任何情况下都**不得**注入 UIN 不匹配或未知的进程。
+    - 有“已注入”的 PID 且适配器 `online` → 状态 `online`；否则 → `waiting_qq_login`。
+  - **托盘**（采用 T12a 验证通过的库）：
+    - 图标颜色：青 = `online`；黄 = `starting` / `waiting_qq_login`；红 = `error`。提示文字随状态变化，如“水族箱 · 等待小号登录”。
+    - 菜单：状态文字（不可点）、打开控制台（用默认浏览器打开 `http://127.0.0.1:<panel.port>`）、打开 QQ（以 `qqExePath` 分离启动，未配置时不可点）、全部闭嘴 / 恢复（复用 T9 的状态，文字随状态切换）、重启 SnowLuma、退出。
+    - 进入 `waiting_qq_login` 时，若库支持系统通知则弹一次“请登录小号 QQ”；不支持则只改提示文字。
+    - “退出”：停止 SnowLuma 子进程与 Aquarium；**不关闭任何 QQ 进程**。
+  - **开机自启**：`scripts/autostart.mjs`，npm 脚本 `autostart:install` / `autostart:uninstall`。
+    - install：在 `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\` 写入 `Aquarium.vbs`，内容为以隐藏窗口方式（`WScript.Shell` 的 `Run …, 0, False`）在仓库目录下运行 `"<process.execPath>" --env-file-if-exists=.env src\app\main.ts`；路径中的引号正确转义。
+    - uninstall：删除该文件。两者都打印执行结果。
+  - **`src/app/main.ts`**：`host.enabled` 为 true 时先启动托管，再创建适配器（适配器已有自动重连，SnowLuma 就绪前连接失败不影响）。`host.enabled` 为 false 时行为不变。
+  - 平台判断：非 Windows 平台且 `host.enabled` 为 true 时，打印 warn 并按 `host.enabled: false` 运行（`LinuxHost` 留待以后）。
+  - **测试**（不启动真实进程、不访问网络）：qq-watcher 只注入 UIN 匹配的 PID、永不注入不匹配或未知的 PID、同一 PID 不重复注入、消失的 PID 被清理；WebUI 客户端 401 重登一次、token 不出现在日志调用参数中；`hookAutoLoad: true` 时拒绝启动；退避时间序列；vbs 内容生成（含带空格与引号的路径）。
+  - **【用户】验收**：
+    1. `.env` 填 `SNOWLUMA_WEBUI_PASSWORD`；`data/config.yaml` 填 `host.qqExePath`。
+    2. 关掉手动开的 SnowLuma；主号 QQ 照常开着。
+    3. `npm start` → 托盘出现黄色小鱼，主号 QQ 没有被注入（SnowLuma 网页里看不到它被加载）。
+    4. 托盘“打开 QQ” → 登录小号 → 托盘几秒内变青色，小号能正常回复。
+    5. `npm run autostart:install` → 重启电脑 → 登录后**没有任何黑窗口**，托盘出现小鱼。
+    6. 托盘“退出” → 小鱼消失，两个 QQ 都还在运行。
 
 > **⛔ 停止点 4**：M1 结束。M2 的施工计划另行编写。
 
@@ -339,7 +394,8 @@
 | 2026-10-13 | R11 | 视觉调用前下载 HTTP(S) 图片，限制 10 秒、允许的 MIME 与 5 MiB；失败使用占位且不发送原始链接；`npm run check` 通过（136 项测试），`npm run panel:build` 成功 |
 | 2026-10-13 | R12 | 清除英文页面分类标签、总览状态句按账号数动态展示、链路文案本地化并防止移动按钮换行；`npm run check` 通过（136 项测试），`npm run panel:build` 成功 |
 | 2026-10-14 | R13 | 图片下载只允许 HTTPS 腾讯域名，按点边界匹配并在拒绝时记录主机名、不记录完整 URL；fake fetch 测试覆盖允许/拒绝地址；`npm run check` 通过（137 项测试）/ `9a0626d836b5f9955f26d56ed5dc1faa19263acd` |
-| 2026-10-14 | T11 | 只读调研 SnowLuma WebUI auth/load、启动与 readiness、QQ PID/UIN、托盘候选和自启动；新增 `doc/plans/HOST-RESEARCH.md`；`npm run check` 通过（137 项测试）；停在停止点 3 等用户确认 |
+| 2026-10-14 | T11 | 只读调研 SnowLuma WebUI auth/load、启动与 readiness、QQ PID/UIN、托盘候选和自启动；新增 `doc/plans/HOST-RESEARCH.md`；`npm run check` 通过（137 项测试）；用户确认方案 |
+| 2026-10-14 | T12a | 精确安装 `@trayjs/trayjs@0.0.10`；加入双尺寸三色 ICO 与仅 fake 测试的托盘 spike；`npm run check` 通过（142 项测试）；未运行托盘程序，人工验收待用户 |
 ---
 
 ## 6. 待评估清单
@@ -356,9 +412,13 @@
 
 > 适用：用户睡觉期间运行，无人能回答问题、无人能在 QQ 上做验证。
 
-### 7.1 范围
-- 本次继续执行用户追加的阶段 C 修复项：**R10 → R11 → R12 → R13**；完成 R13 后在停止点 2 结束，不做 T11 及以后。
-- 所有标 **【用户】** 的验收步骤**不执行**，改为写进早上检查清单（§7.4），然后继续下一个任务。
+### 7.1 范围（2026-10-14 凌晨：阶段 D）
+- 按顺序做：
+  1. **T12a** 的代码部分（`src/spike/tray.ts` 与图标文件、`HOST-RESEARCH.md` 的“T12a 结果”中能离线得出的部分：磁盘占用、是否需要额外运行时、文档中是否声明支持系统通知）。不运行托盘程序。
+  2. **T12b 中与托盘无关的全部内容**：配置项、`.env.example`、`src/host/types.ts`、`snowluma-process.ts`、`snowluma-webui.ts`、`qq-watcher.ts`、`scripts/autostart.mjs`、`main.ts` 接入、全部相关测试。
+  3. 托盘只定义接口 `src/host/tray.ts`（`setState(state, tooltip)`、`onMenu(handler)`、`notify(text)`、`dispose()`），并提供一个**空实现**（只写日志），由 `main.ts` 使用。真正接入托盘库留到用户完成 T12a 验收之后。
+- 完成以上后**结束本次运行**。所有【用户】验收步骤不执行，写进早上检查清单。
+- 夜间不运行 `npm run autostart:install`（会修改仓库外的文件）。
 
 ### 7.2 遇到问题时
 - §0 第 1 条“停下来问用户”在夜间改为：
@@ -376,10 +436,10 @@
 - T10 前端的依赖直接放在仓库根的 `package.json` 中，不另建 npm 工作区。
 
 ### 7.4 Git 与记录
-- 开始前：从 `main` 新建分支 `night/2026-10-13`（已存在则切换过去）。所有提交都在这个分支上，**每个任务一个提交**。
-- 新建并维护 `doc/plans/MORNING-2026-10-13.md`，结构固定为：
+- 开始前：切换到分支 `dev/host`。所有提交都在这个分支上，**每个任务一个提交**。
+- 新建并维护 `doc/plans/MORNING-2026-10-14.md`，结构固定为：
   ```
-  # 早上检查清单（2026-10-13）
+  # 早上检查清单（2026-10-14）
   ## 完成情况          （每个任务一行：编号 / 完成|跳过|失败 / 一句话说明 / 提交哈希）
   ## 需要用户操作的验证   （按任务列出【用户】步骤，写成可直接照做的编号步骤）
   ## 待确认问题          （问题 / 考虑过的选项 / 夜间采用的做法）
@@ -389,9 +449,9 @@
 
 ### 7.5 每个任务的完成标准
 - `npm run check` 通过；
-- T10 额外要求：`npm run panel:build` 成功，且构建产物 `panel/dist/` 已加入 `.gitignore`（不提交构建产物）。
+- 涉及前端时额外要求 `npm run panel:build` 成功。
 
 ### 7.6 结束条件（满足任一即结束，并做最后一次提交）
-- R13 完成；
+- 本次 §7.1 列出的阶段 D 夜间范围全部完成；
 - 剩余任务全部被跳过或失败；
 - 运行时间达到 9 小时。
