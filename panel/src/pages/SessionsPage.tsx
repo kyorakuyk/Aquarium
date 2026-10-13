@@ -89,7 +89,6 @@ export function SessionsPage() {
   return (
     <div className="page">
       <header className="page-header">
-        <div className="eyebrow">AQUARIUM / SESSIONS</div>
         <h1>会话</h1>
         <p className="page-description">打开开关的会话里，它才会说话。改动立刻生效，不用重启。</p>
       </header>
@@ -136,7 +135,7 @@ export function SessionsPage() {
           {!selected && <div className="empty-state">选择一个会话查看设置。</div>}
           {selected && <>
             <div className="detail-title-row">
-              <div><div className="eyebrow">{selected.kind === 'group' ? 'GROUP' : 'FRIEND'}</div><h2>{selected.name}</h2><span className={`result-pill ${selected.enabled ? 'result-positive' : 'result-neutral'}`}>{selected.enabled ? '已启用' : '已停用'}</span></div>
+              <div><div className="eyebrow">{selected.kind === 'group' ? '群聊' : '好友'}</div><h2>{selected.name}</h2><span className={`result-pill ${selected.enabled ? 'result-positive' : 'result-neutral'}`}>{selected.enabled ? '已启用' : '已停用'}</span></div>
               <button className={`switch switch-large ${selected.enabled ? 'is-on' : ''}`} type="button" role="switch" aria-checked={selected.enabled} aria-label="启用会话" disabled={busy} onClick={() => void update({ enabled: !selected.enabled })}><span /></button>
             </div>
 

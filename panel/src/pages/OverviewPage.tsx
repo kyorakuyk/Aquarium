@@ -65,14 +65,18 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const cacheRatio = usage && usage.inputTokens > 0
     ? Math.round((usage.cachedTokens / usage.inputTokens) * 100)
     : 0;
+  const accountCount = status.accounts.length;
+  const onlineAccountCount = status.accounts.filter((item) => item.connectionStatus === 'online').length;
+  const tankDescription = accountCount === 0
+    ? '缸里还没有鱼。'
+    : `缸里有 ${accountCount} 条鱼，${onlineAccountCount} 条在游动。`;
 
   return (
     <div className="page">
       <header className="page-header page-header-actions">
         <div>
-          <div className="eyebrow">AQUARIUM / CONTROL</div>
           <h1>总览</h1>
-          <p className="page-description">鱼缸状态清晰可见，重要决定都有迹可循。</p>
+          <p className="page-description">{tankDescription}</p>
         </div>
         <div className="header-actions">
           <button className="button button-secondary" type="button" onClick={() => onNavigate('sandbox')}>去试聊</button>
@@ -133,7 +137,7 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
         </article>
         <article className="panel-card stat-card chain-card">
           <div className="card-title">运行链路</div>
-          <div className="chain-step"><span className={`chain-dot ${status.accounts.some((item) => item.connectionStatus === 'online') ? 'dot-online' : ''}`} /><span>QQ Adapter</span><strong>{status.accounts.some((item) => item.connectionStatus === 'online') ? '在线' : '未连接'}</strong></div>
+          <div className="chain-step"><span className={`chain-dot ${onlineAccountCount > 0 ? 'dot-online' : ''}`} /><span>QQ（小号）</span><strong>{onlineAccountCount > 0 ? '在线' : '未连接'}</strong></div>
           <div className="chain-step"><span className={`chain-dot ${status.accounts.some((item) => item.snowlumaConfigured) ? 'dot-online' : ''}`} /><span>SnowLuma</span><strong>{status.accounts.some((item) => item.snowlumaConfigured) ? '已配置' : '未配置'}</strong></div>
           <div className="chain-step"><span className="chain-dot dot-online" /><span>Aquarium</span><strong className="mono">PID {status.runtime.pid} · :{status.runtime.port}</strong></div>
           <p className="stat-foot">运行 {Math.floor(status.runtime.uptimeSeconds / 60)} 分钟</p>

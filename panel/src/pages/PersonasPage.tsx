@@ -138,7 +138,7 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   return (
     <div className="page">
       <header className="page-header page-header-actions">
-        <div><div className="eyebrow">AQUARIUM / PERSONAS</div><h1>人设</h1><p className="page-description">把角色的语气、边界和背景写在这里。</p></div>
+        <div><h1>人设</h1><p className="page-description">把角色的语气、边界和背景写在这里。</p></div>
         <div className="header-actions">
           <button className="button button-secondary" type="button" onClick={() => fileInput.current?.click()}>导入 Markdown</button>
           <button className="button button-primary" type="button" onClick={() => setNewId(newId || 'new-persona')}>新建人设</button>

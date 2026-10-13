@@ -13,7 +13,7 @@
   .page { padding: 26px 18px 40px; }
   .page-header-actions { flex-direction: column; gap: 12px; }
   .header-actions { padding-top: 0; }
-  .header-actions .button { flex: 1; }
+  .header-actions .button { flex: 1; white-space: nowrap; }
   h1 { font-size: 28px; }
   .tank-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stats-grid { grid-template-columns: 1fr; }

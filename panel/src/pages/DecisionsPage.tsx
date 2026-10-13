@@ -117,7 +117,6 @@ export function DecisionsPage() {
   return (
     <div className="page">
       <header className="page-header">
-        <div className="eyebrow">AQUARIUM / TRACE</div>
         <h1>试聊与决策</h1>
         <p className="page-description">沿用真实会话的人设、提示词组装与 reply 槽位；试聊消息不会发到 QQ，也不会写入消息表。</p>
       </header>
@@ -157,7 +156,7 @@ export function DecisionsPage() {
         </section>
 
         <aside className="trace-card panel-card">
-          <div className="section-heading"><div><div className="eyebrow">OBSERVABILITY</div><h2>它为什么这么回</h2></div></div>
+          <div className="section-heading"><div><h2>它为什么这么回</h2></div></div>
           <p className="trace-explainer">手动消息直达提示词与 reply 槽位；真实触发判断、频率限制和适配器发送不在试聊中运行。</p>
           {steps.length ? <ol className="decision-timeline">
             {steps.map((step, index) => <li key={`${step.step}-${index}`}>

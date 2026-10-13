@@ -17,7 +17,7 @@ export function UsagePage() {
 
   return (
     <div className="page">
-      <header className="page-header"><div className="eyebrow">AQUARIUM / USAGE</div><h1>用量</h1><p className="page-description">按本机自然日统计模型调用与费用。</p></header>
+      <header className="page-header"><h1>用量</h1><p className="page-description">按本机自然日统计模型调用与费用。</p></header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
       {!usage && !error && <p className="muted">正在读取用量…</p>}
       {usage && <>
