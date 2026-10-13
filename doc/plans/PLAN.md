@@ -203,7 +203,7 @@
     标签映射写在前端一个独立文件 `panel/src/labels.ts` 中。
   - 测试：后端 `/api/decisions` 返回三个新字段（含查不到时为 `null`）；管线 `replied` 决策的 `detail.costCny` 正确。
 
-- [ ] **R11 图片先下载再交给视觉模型（`src/core/images.ts`）**
+- [x] **R11 图片先下载再交给视觉模型（`src/core/images.ts`）**
   - 现状风险：直接把 QQ 图片链接交给视觉模型，模型服务端不一定能访问 QQ 的图片服务器，也不是所有服务商都支持远程图片链接。
   - 改为：对 `http(s)` 图片链接，由 bot 自己先下载：超时 10 秒；只接受响应头 `content-type` 为 `image/jpeg`、`image/png`、`image/gif`、`image/webp`；大于 5 MB 则放弃；成功后转成 `data:<类型>;base64,…` 再交给 `vision` 槽位。
   - 下载失败（超时、类型不符、过大、非 2xx）：按现有规则降级为 `[图片]` 并记 error 日志，**不再**退回去把原始链接发给模型。
@@ -330,6 +330,7 @@
 | 2026-10-13 | T9b | 新增 debug 配置继承、SQLite trace 表、每次模型尝试记录 prompt/hash/响应和失败细节、保留期清理；`npm run check` 通过（115 项测试） |
 | 2026-10-13 | T10 | Hono 控制台 API（仅 loopback、请求体限额）、React 页面、认证、会话配置热更新、试聊与生产构建完成；`npm run check` 通过（126 项测试），`npm run panel:build` 成功 |
 | 2026-10-13 | R10 | 决策 API 返回会话名、60 字消息摘要与可空费用；replied detail 保存实际费用；控制台改用中文原因标签；`npm run check` 通过（129 项测试），`npm run panel:build` 成功 |
+| 2026-10-13 | R11 | 视觉调用前下载 HTTP(S) 图片，限制 10 秒、允许的 MIME 与 5 MiB；失败使用占位且不发送原始链接；`npm run check` 通过（136 项测试），`npm run panel:build` 成功 |
 ---
 
 ## 6. 待评估清单
@@ -338,6 +339,7 @@
   2. 把 `HANDOFF.md`、`PLAN.md`、`MORNING.md` 中的真实 QQ 号、Windows 用户名、本地路径移到被忽略的本地文件或改为占位；
   3. **历史提交里仍保留这些信息**，需要用 `git filter-repo` 重写历史后再推送，单纯改文件不够。
 - 见 `HANDOFF.md` §8（已有三条：`config` ↔ `core` 互相引用、`core` 依赖 OpenAI 类型、重连后不再校验账号）。新增条目写在这里。
+- （2026-10-13 审查）**R11 图片下载的 SSRF 边界待评估**：当前规格只限定 HTTP(S)、MIME、超时和大小，没有限制消息提供的 URL 是否指向 loopback/private/link-local 地址，也没有规定重定向策略；运行时 fetch 可能访问内网并把响应内容交给 vision。按本轮范围未添加额外网络机制。扩大真实使用前，应确定域名/解析地址与逐跳重定向策略，并补相应测试。
 
 ---
 

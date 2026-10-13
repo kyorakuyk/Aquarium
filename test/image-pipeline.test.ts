@@ -94,6 +94,7 @@ function createHarness(
     replyText?: string;
     visionText?: string;
     visionError?: Error;
+    downloadImage?: (url: string) => Promise<string>;
     onError?: (error: unknown, message: IncomingMessage) => void;
   } = {},
 ) {
@@ -105,6 +106,7 @@ function createHarness(
     adapter,
     getNickname: () => adapter.nickname,
     personaRoot,
+    downloadImage: options.downloadImage ?? (async () => 'data:image/png;base64,AQID'),
     onError: options.onError,
     wait: async () => {},
     random: () => 0.4,
@@ -136,7 +138,15 @@ test('触发消息中的图片调用 vision、按 URL 哈希缓存并替换上�
         { type: 'text', text: '可爱吗？' },
       ],
     });
-    const harness = createHarness(repository, personaRoot, { visionText: longCaption });
+    const downloaded: string[] = [];
+    const dataUrl = 'data:image/png;base64,AQID';
+    const harness = createHarness(repository, personaRoot, {
+      visionText: longCaption,
+      downloadImage: async (imageUrl) => {
+        downloaded.push(imageUrl);
+        return dataUrl;
+      },
+    });
 
     const result = await harness.pipeline(incoming);
 
@@ -144,6 +154,7 @@ test('触发消息中的图片调用 vision、按 URL 哈希缓存并替换上�
     const expectedCaption = Array.from(longCaption.trim()).slice(0, 30).join('');
     assert.deepEqual(result, { replied: true, reason: 'replied' });
     assert.deepEqual(harness.requests.map(({ slot }) => slot), ['vision', 'reply']);
+    assert.deepEqual(downloaded, [url]);
     assert.equal(repository.getCaption(key), expectedCaption);
     assert.equal(Array.from(expectedCaption).length, 30);
 
@@ -152,16 +163,17 @@ test('触发消息中的图片调用 vision、按 URL 哈希缓存并替换上�
     const imagePart = visionContent.find((part) => (
       typeof part === 'object' && part !== null && 'type' in part && part.type === 'image_url'
     )) as { image_url?: { url?: string } } | undefined;
-    assert.equal(imagePart?.image_url?.url, url);
+    assert.equal(imagePart?.image_url?.url, dataUrl);
 
     const replyPrompt = String(harness.requests[1]?.messages[1]?.content);
     assert.ok(replyPrompt.includes(`小鱼，看这个：[图片：${expectedCaption}]可爱吗？`));
   });
 });
 
-test('缓存命中的当前图片不调用 vision', async () => {
+test('缓存命中的当前图片不调用 vision 或下载', async () => {
   await withRepository(async (repository, personaRoot) => {
     repository.setCaption('cached-file-1', '一只趴着的小猫');
+    let downloads = 0;
     const incoming = makeIncoming({
       messageId: 'vision-cached-1',
       plainText: '小鱼，看图',
@@ -170,11 +182,17 @@ test('缓存命中的当前图片不调用 vision', async () => {
         { type: 'image', url: 'https://example.invalid/cached.png', file: 'cached-file-1' },
       ],
     });
-    const harness = createHarness(repository, personaRoot);
+    const harness = createHarness(repository, personaRoot, {
+      downloadImage: async () => {
+        downloads += 1;
+        return 'data:image/png;base64,AQID';
+      },
+    });
 
     const result = await harness.pipeline(incoming);
 
     assert.equal(result.reason, 'replied');
+    assert.equal(downloads, 0);
     assert.deepEqual(harness.requests.map(({ slot }) => slot), ['reply']);
     assert.ok(String(harness.requests[0]?.messages[1]?.content).includes('[图片：一只趴着的小猫]'));
   });
@@ -231,6 +249,32 @@ test('vision 失败时记录错误、使用图片占位并继续回复', async (
     assert.ok(String(harness.requests[1]?.messages[1]?.content).includes('小鱼，看看[图片]'));
     assert.equal(repository.getCaption('broken-file'), undefined);
     assert.equal(harness.adapter.sent.length, 1);
+  });
+});
+
+test('图片下载失败时不把原始链接交给 vision，并继续发送占位回复', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const errors: unknown[] = [];
+    const incoming = makeIncoming({
+      messageId: 'vision-download-error-1',
+      plainText: '小鱼，看这张图',
+      segments: [
+        { type: 'text', text: '小鱼，看这张图' },
+        { type: 'image', url: 'https://example.invalid/private.png', file: 'download-error' },
+      ],
+    });
+    const harness = createHarness(repository, personaRoot, {
+      downloadImage: async () => { throw new Error('download failed'); },
+      onError: (error) => errors.push(error),
+    });
+
+    const result = await harness.pipeline(incoming);
+
+    assert.deepEqual(result, { replied: true, reason: 'replied' });
+    assert.deepEqual(harness.requests.map(({ slot }) => slot), ['reply']);
+    assert.equal(errors.length, 1);
+    assert.ok(String(harness.requests[0]?.messages[1]?.content).includes('小鱼，看这张图[图片]'));
+    assert.equal(repository.getCaption('download-error'), undefined);
   });
 });
 

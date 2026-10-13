@@ -10,7 +10,7 @@ import { cleanReply } from './text.ts';
 import { splitReply } from './split.ts';
 import { loadPersona } from '../persona/load.ts';
 import { sessionId, type IncomingMessage, type Segment, type SessionKey } from './events.ts';
-import { captionIncomingImages, messageTextWithImageCaptions } from './images.ts';
+import { captionIncomingImages, messageTextWithImageCaptions, type ImageDownloader } from './images.ts';
 import { callSlot, type SlotCallOptions, type SlotResult } from '../llm/slots.ts';
 import type { StoreRepository } from '../store/repository.ts';
 
@@ -39,6 +39,7 @@ export interface MessagePipelineOptions {
   wait?: (milliseconds: number) => Promise<void>;
   random?: () => number;
   personaRoot?: string;
+  downloadImage?: ImageDownloader;
   isMuted?: (session: SessionKey) => boolean;
   onError?: (error: unknown, message: IncomingMessage) => void;
 }
@@ -151,6 +152,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
       message,
       repository: options.repository,
       callVision: (messages) => modelCall('vision', messages, callOptions),
+      ...(options.downloadImage === undefined ? {} : { downloadImage: options.downloadImage }),
       ...(options.onError === undefined ? {} : { onError: options.onError }),
       now,
     });

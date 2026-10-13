@@ -330,8 +330,14 @@ T10 后 `npm run check` 实测为 126 项测试通过、依赖边界检查通过
 
 `panel/src/labels.ts` 将已知 reason 映射为中文与正向/中性/警示样式；`command_ignored` 单独显示“指令已忽略”，其他 `command_*` 显示“管理指令”，未识别原因保留原值。总览和决策列表 UI 不再显示专门列出的原始会话/消息 ID；若联系人信息缺失，`sessionName` 会按设计回退为 `sessionId`。API 仍保留这两个 ID 供调试追踪使用。测试覆盖群名、好友备注优先、联系人查询失败回退、复合键不跨会话匹配、缺原消息/非法费用、Unicode 60 字截断、replied 成本写入及前端标签/语气。R10 后 `npm run check` 通过 129 项测试，`npm run panel:build` 成功。
 
+### 12.8 R11：把图片取回后再送视觉槽位
+
+`src/core/images.ts` 通过 `downloadImageAsDataUrl` 下载 HTTP(S) 图片，默认 fetch 使用 10 秒 `AbortSignal.timeout`；只接受 `image/jpeg`、`image/png`、`image/gif`、`image/webp`，并同时检查 `Content-Length` 与流式实际字节数，最大 5 MiB。成功后构造 `data:<mime>;base64,...` 交给 vision；原本已是图片 data URL 的输入保持不变。
+
+下载函数经 `MessagePipelineOptions.downloadImage` 注入，单测使用假的 `Response`/fetcher，不访问网络。超时、非 2xx、MIME 不支持、内容超限或下载异常都由现有图片错误路径记录，并让 vision 收不到原始链接、回复上下文只显示 `[图片]`。缓存命中在下载前短路。U2 还需用户确认真实 OneBot 图片 URL 可由本机下载，且配置的 vision 服务接受对应 data URL。R11 后 `npm run check` 通过 136 项测试，`npm run panel:build` 成功。
+
 ## 13. 之后的阶段
 
-T0–T10 与 R10 的代码和自动化检查均已完成；R11、R12 仍待执行。尚未执行的真实环境和浏览器验收仍由用户完成；单元测试不能代替这些步骤。T11 托管层调研尚未开始，需遵守 `doc/plans/PLAN.md` 的停止点，不要把计划写成已实现功能。
+T0–T10 与 R10–R11 的代码和自动化检查均已完成；R12 仍待执行。尚未执行的真实环境和浏览器验收仍由用户完成；单元测试不能代替这些步骤。T11 托管层调研尚未开始，需遵守 `doc/plans/PLAN.md` 的停止点，不要把计划写成已实现功能。
 
 每个章节都以实际代码和真实测试结果为准；还没实现的部分会明确标为“计划”，不把计划写成已完成事实。
