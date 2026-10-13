@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiRequest, post, type DecisionView, type PanelStatus, type SessionView, type UsageView } from '../api.ts';
 import type { PageId } from '../components/Sidebar.tsx';
 import { FishIcon } from '../components/FishIcon.tsx';
+import { decisionLabel, decisionTone } from '../labels.ts';
 
 function money(value: number): string {
   return `¥${value.toFixed(2)}`;
@@ -151,10 +152,10 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
               {decisions.map((decision) => (
                 <tr key={decision.id}>
                   <td className="mono">{fullTime(decision.time)}</td>
-                  <td>{decision.sessionId}</td>
-                  <td>{decision.messageId}</td>
-                  <td><span className={`result-pill ${decision.replied ? 'result-positive' : 'result-neutral'}`}>{decision.replied ? '已回复' : decision.reason}</span></td>
-                  <td className="mono muted">未关联</td>
+                  <td>{decision.sessionName}</td>
+                  <td>{decision.messageText ?? '—'}</td>
+                  <td><span className={`result-pill result-${decisionTone(decision.reason)}`}>{decisionLabel(decision.reason)}</span></td>
+                  <td className="mono muted">{decision.costCny === null ? '—' : `¥${decision.costCny.toFixed(4)}`}</td>
                 </tr>
               ))}
               {decisions.length === 0 && <tr><td className="empty-cell" colSpan={5}>暂时还没有决定记录。</td></tr>}

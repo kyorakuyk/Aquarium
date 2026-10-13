@@ -81,6 +81,12 @@ function parseJsonBody<T>(body: unknown, schema: z.ZodType<T>): T | undefined {
   return result.success ? result.data : undefined;
 }
 
+function decisionCostCny(detail: unknown): number | null {
+  if (typeof detail !== 'object' || detail === null || Array.isArray(detail)) return null;
+  const costCny = (detail as Record<string, unknown>).costCny;
+  return typeof costCny === 'number' && Number.isFinite(costCny) ? costCny : null;
+}
+
 export function createPanelApp(options: PanelServerOptions): Hono {
   if (!options.password) throw new Error('Panel password must not be empty');
   const root = options.root ?? process.cwd();
@@ -241,15 +247,39 @@ export function createPanelApp(options: PanelServerOptions): Hono {
   });
 
 
-  app.get('/api/decisions', (context) => {
+  app.get('/api/decisions', async (context) => {
     const rawLimit = context.req.query('limit');
     const requested = rawLimit === undefined ? 50 : Number(rawLimit);
     if (!Number.isSafeInteger(requested) || requested < 1) {
       return context.json({ error: 'Invalid limit' }, 400);
     }
     const decisions = options.repository.recentDecisions(Math.min(requested, 200));
+    const sessionNames = new Map<string, string>();
+    for (const runtime of options.accounts()) {
+      try {
+        const groups = await runtime.adapter.listGroups();
+        for (const group of groups) {
+          const id = sessionId({ account: runtime.adapter.account, kind: 'group', peer: group.groupId });
+          sessionNames.set(id, group.name || id);
+        }
+      } catch (error) {
+        options.onError?.(error);
+      }
+      try {
+        const friends = await runtime.adapter.listFriends();
+        for (const friend of friends) {
+          const id = sessionId({ account: runtime.adapter.account, kind: 'private', peer: friend.userId });
+          sessionNames.set(id, friend.remark || friend.nickname || id);
+        }
+      } catch (error) {
+        options.onError?.(error);
+      }
+    }
     return context.json(decisions.map((decision) => ({
       ...decision,
+      sessionName: sessionNames.get(decision.sessionId) ?? decision.sessionId,
+      messageText: options.repository.decisionMessageText(decision.sessionId, decision.messageId) ?? null,
+      costCny: decisionCostCny(decision.detail),
       hasDebugTrace: options.repository.hasDebugTrace(decision.sessionId, decision.messageId),
     })));
   });

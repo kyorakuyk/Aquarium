@@ -324,8 +324,14 @@ FakeAdapter 测试覆盖权限、闭嘴/恢复、撤回、状态和全局开关�
 
 T10 后 `npm run check` 实测为 126 项测试通过、依赖边界检查通过；`npm run panel:build` 成功。单测覆盖鉴权、loopback 限制、认证前请求体限额、PATCH 恢复继承和并发更新、真实临时配置读回、sandbox 无消息写入、owner=0、人设导入、决策 trace、全局闭嘴及 recall。夜间没有启动 `npm start` 或 Vite 服务，也没有浏览器人工验收；请按 `doc/plans/MORNING-2026-10-13.md` 操作。
 
+### 12.7 R10：让决策记录能直接读懂
+
+`GET /api/decisions` 为每条记录解析群名、好友备注/昵称；联系人查询失败或会话已不存在时退回 `sessionId`。仓储按 `(session_id, message_id)` 精确查找原消息，只返回前 60 个 Unicode 字符，未找到返回 `null`。`costCny` 只接受 `detail.costCny` 中的有限数字，否则是 `null`；`src/core/pipeline.ts` 在 `replied` 决策中记录本次 reply 槽位真实成本，因此零成本仍显示为 `¥0.0000`，缺失成本显示 `—`。
+
+`panel/src/labels.ts` 将已知 reason 映射为中文与正向/中性/警示样式；`command_ignored` 单独显示“指令已忽略”，其他 `command_*` 显示“管理指令”，未识别原因保留原值。总览和决策列表 UI 不再显示专门列出的原始会话/消息 ID；若联系人信息缺失，`sessionName` 会按设计回退为 `sessionId`。API 仍保留这两个 ID 供调试追踪使用。测试覆盖群名、好友备注优先、联系人查询失败回退、复合键不跨会话匹配、缺原消息/非法费用、Unicode 60 字截断、replied 成本写入及前端标签/语气。R10 后 `npm run check` 通过 129 项测试，`npm run panel:build` 成功。
+
 ## 13. 之后的阶段
 
-T0–T10 的代码和自动化检查均已完成。尚未执行的真实环境和浏览器验收仍由用户完成；单元测试不能代替这些步骤。下一项 T11 托管层调研还没开始，需遵守 `doc/plans/PLAN.md` 的停止点，不要把计划写成已实现功能。
+T0–T10 与 R10 的代码和自动化检查均已完成；R11、R12 仍待执行。尚未执行的真实环境和浏览器验收仍由用户完成；单元测试不能代替这些步骤。T11 托管层调研尚未开始，需遵守 `doc/plans/PLAN.md` 的停止点，不要把计划写成已实现功能。
 
 每个章节都以实际代码和真实测试结果为准；还没实现的部分会明确标为“计划”，不把计划写成已完成事实。

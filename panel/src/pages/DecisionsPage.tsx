@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { apiRequest, type DecisionStep, type DecisionView, type PanelStatus, type SessionView, type TraceView } from '../api.ts';
 import { FishIcon } from '../components/FishIcon.tsx';
+import { decisionLabel, decisionTone } from '../labels.ts';
 
 interface ChatEntry {
   id: number;
@@ -175,8 +176,10 @@ export function DecisionsPage() {
           <div className="section-heading"><div><h2>最近决策</h2><p className="muted">最多显示 200 条</p></div><button className="text-button" type="button" onClick={() => void apiRequest<DecisionView[]>('/api/decisions?limit=200').then(setDecisions)}>刷新</button></div>
           <div className="decision-record-list">
             {decisions.map((decision) => <button className={`decision-record ${selectedDecision?.id === decision.id ? 'is-selected' : ''}`} type="button" key={decision.id} onClick={() => void loadTrace(decision)}>
-              <span className={`result-pill ${decision.replied ? 'result-positive' : 'result-neutral'}`}>{decision.replied ? '已回复' : decision.reason}</span>
-              <span className="mono">{decision.sessionId}</span><span className="muted">{decision.messageId}</span>
+              <span className={`result-pill result-${decisionTone(decision.reason)}`}>{decisionLabel(decision.reason)}</span>
+              <span>{decision.sessionName}</span>
+              <span className="decision-message" title={decision.messageText ?? undefined}>{decision.messageText ?? '—'}</span>
+              <span className="mono muted">{decision.costCny === null ? '—' : `¥${decision.costCny.toFixed(4)}`}</span>
               <span className="mono muted">{formatTime(decision.time)}</span>
             </button>)}
             {!decisions.length && <div className="empty-state">尚无决策记录。</div>}

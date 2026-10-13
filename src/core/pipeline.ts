@@ -228,6 +228,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
       provider: result.provider,
       sentMessageIds,
       parts: parts.length,
+      costCny: result.usage.costCny,
     }, true);
   };
 }

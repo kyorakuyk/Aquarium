@@ -157,9 +157,10 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .page-tabs button.is-active { border-color: var(--line); background: var(--surface); color: var(--accent); font-weight: 700; }
 .page-tabs span { margin-left: 5px; font-size: 11px; }
 .decision-record-list { display: grid; gap: 5px; }
-.decision-record { display: grid; grid-template-columns: auto minmax(120px, 1fr) minmax(90px, .6fr) auto; align-items: center; gap: 9px; min-height: 54px; padding: 7px 9px; border: 1px solid transparent; border-radius: 9px; background: transparent; cursor: pointer; text-align: left; }
+.decision-record { display: grid; grid-template-columns: auto minmax(90px, .7fr) minmax(130px, 1.4fr) auto auto; align-items: center; gap: 9px; min-height: 54px; padding: 7px 9px; border: 1px solid transparent; border-radius: 9px; background: transparent; cursor: pointer; text-align: left; }
 .decision-record:hover, .decision-record.is-selected { border-color: var(--line); background: var(--surface-accent); }
 .decision-record .mono, .decision-record .muted { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.decision-message { min-width: 0; overflow: hidden; color: var(--ink-2); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 
 .usage-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .usage-note { margin-top: 18px; padding: 21px; }

@@ -47,7 +47,10 @@ export interface DecisionView {
   id: number;
   time: number;
   sessionId: string;
+  sessionName: string;
   messageId: string;
+  messageText: string | null;
+  costCny: number | null;
   replied: boolean;
   reason: string;
   detail: unknown;

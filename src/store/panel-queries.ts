@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { StoreRepository } from './repository.ts';
 
 export type PanelRepositoryQueries = Pick<StoreRepository,
-  'latestSelfMessageForAccount' | 'selfMessagesById' | 'replyCountToday' | 'replyCountTodayForAccount' | 'usageToday' | 'decisionById' | 'hasDebugTrace'
+  'latestSelfMessageForAccount' | 'selfMessagesById' | 'replyCountToday' | 'replyCountTodayForAccount' | 'usageToday' | 'decisionMessageText' | 'decisionById' | 'hasDebugTrace'
 >;
 
 function numberValue(value: unknown, field: string): number {
@@ -73,6 +73,12 @@ export function createPanelQueries(
     FROM decisions
     WHERE id = ?
   `);
+  const selectDecisionMessageText = database.prepare(`
+    SELECT plain_text
+    FROM messages
+    WHERE session_id = ? AND message_id = ?
+    LIMIT 1
+  `);
   const selectHasDebugTrace = database.prepare(
     'SELECT 1 AS found FROM debug_traces WHERE session_id = ? AND message_id = ? LIMIT 1',
   );
@@ -120,6 +126,12 @@ export function createPanelQueries(
         costCny: numberValue(row?.cost_cny ?? 0, 'cost_cny'),
         averageLatencyMs: numberValue(row?.average_latency_ms ?? 0, 'average_latency_ms'),
       };
+    },
+
+    decisionMessageText(sessionId, messageId) {
+      const row = selectDecisionMessageText.get(sessionId, messageId) as Record<string, unknown> | undefined;
+      if (!row) return undefined;
+      return Array.from(stringValue(row.plain_text, 'plain_text')).slice(0, 60).join('');
     },
 
     decisionById(id) {

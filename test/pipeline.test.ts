@@ -149,7 +149,7 @@ test('pipeline 从被叫消息到模型回复、引用发送、落库和 replied
           text: '**小鱼：** 你好呀！',
           provider: 'deepseek',
           model: 'deepseek-flash',
-          usage: { inputTokens: 12, cachedTokens: 0, outputTokens: 4, costCny: 0 },
+          usage: { inputTokens: 12, cachedTokens: 0, outputTokens: 4, costCny: 0.0042 },
         };
       },
       now: () => baseTime,
@@ -179,6 +179,7 @@ test('pipeline 从被叫消息到模型回复、引用发送、落库和 replied
     const decision = repository.recentDecisions(1)[0];
     assert.equal(decision?.replied, true);
     assert.equal(decision?.reason, 'replied');
+    assert.equal((decision?.detail as { costCny?: number }).costCny, 0.0042);
   });
 });
 

@@ -32,7 +32,9 @@ class FakeAdapter implements ProtocolAdapter {
   readonly sent: Array<{ session: SessionKey; segments: Segment[] }> = [];
   readonly recalled: string[] = [];
   groups: ContactGroup[] = [{ groupId: groupSession.peer, name: '测试群', memberCount: 9 }];
-  friends: ContactFriend[] = [{ userId: 42, nickname: '好友' }];
+  friends: ContactFriend[] = [{ userId: 42, nickname: '好友', remark: '好友备注' }];
+  groupListFails = false;
+  friendListFails = false;
 
   async connect(): Promise<void> {}
   close(): void {}
@@ -42,8 +44,14 @@ class FakeAdapter implements ProtocolAdapter {
     this.sent.push({ session, segments });
     return { messageId: `out-${this.sent.length}` };
   }
-  async listGroups(): Promise<ContactGroup[]> { return this.groups; }
-  async listFriends(): Promise<ContactFriend[]> { return this.friends; }
+  async listGroups(): Promise<ContactGroup[]> {
+    if (this.groupListFails) throw new Error('group contact lookup failed');
+    return this.groups;
+  }
+  async listFriends(): Promise<ContactFriend[]> {
+    if (this.friendListFails) throw new Error('friend contact lookup failed');
+    return this.friends;
+  }
   async history(): Promise<[]> { return []; }
   async markRead(): Promise<void> {}
   async setTyping(): Promise<void> {}
@@ -243,6 +251,100 @@ test('状态、会话覆盖、决策调试和撤回 API 返回仓储事实', asy
     const recall = await app.request('/api/recall/self-message-1', { method: 'POST', headers: authHeaders() });
     assert.equal(recall.status, 200);
     assert.deepEqual(adapter.recalled, ['self-message-1']);
+  });
+});
+
+test('决策 API 提供可读会话名、截断消息文本和可选费用', async () => {
+  await withPanel(async ({ app, repository }) => {
+    const longText = '鱼'.repeat(65);
+    repository.saveMessage({
+      sessionId: sessionId(groupSession),
+      messageId: 'readable-group-message',
+      senderId: 42,
+      senderName: '群友',
+      isSelf: false,
+      plainText: longText,
+      segments: [{ type: 'text', text: longText }],
+      time: now,
+    });
+    repository.recordDecision({
+      time: now,
+      sessionId: sessionId(groupSession),
+      messageId: 'readable-group-message',
+      replied: true,
+      reason: 'replied',
+      detail: { costCny: 0.01234 },
+    });
+
+    repository.saveMessage({
+      sessionId: sessionId(groupSession),
+      messageId: 'friend-message',
+      senderId: 42,
+      senderName: '群友',
+      isSelf: false,
+      plainText: '不能跨会话匹配的同名消息',
+      segments: [{ type: 'text', text: '不能跨会话匹配的同名消息' }],
+      time: now,
+    });
+    const friendSession: SessionKey = { account, kind: 'private', peer: 42 };
+    repository.recordDecision({
+      time: now,
+      sessionId: sessionId(friendSession),
+      messageId: 'friend-message',
+      replied: false,
+      reason: 'not_mentioned',
+      detail: { costCny: 0 },
+    });
+    const unknownSession: SessionKey = { account, kind: 'private', peer: 777 };
+    repository.recordDecision({
+      time: now,
+      sessionId: sessionId(unknownSession),
+      messageId: 'missing-message',
+      replied: false,
+      reason: 'disabled',
+      detail: { costCny: 'not-a-number' },
+    });
+
+    const response = await app.request('/api/decisions?limit=50', { headers: authHeaders() });
+    const decisions = await response.json() as Array<{
+      messageId: string;
+      sessionName: string;
+      messageText: string | null;
+      costCny: number | null;
+    }>;
+    const groupDecision = decisions.find((decision) => decision.messageId === 'readable-group-message');
+    assert.equal(groupDecision?.sessionName, '测试群');
+    assert.equal(groupDecision?.messageText, '鱼'.repeat(60));
+    assert.equal(Array.from(groupDecision?.messageText ?? '').length, 60);
+    assert.equal(groupDecision?.costCny, 0.01234);
+
+    const friendDecision = decisions.find((decision) => decision.messageId === 'friend-message');
+    assert.equal(friendDecision?.sessionName, '好友备注');
+    assert.equal(friendDecision?.messageText, null);
+    assert.equal(friendDecision?.costCny, 0);
+
+    const unknownDecision = decisions.find((decision) => decision.messageId === 'missing-message');
+    assert.equal(unknownDecision?.sessionName, sessionId(unknownSession));
+    assert.equal(unknownDecision?.messageText, null);
+    assert.equal(unknownDecision?.costCny, null);
+  });
+});
+
+test('决策 API 联系人列表读取失败时回退为 sessionId', async () => {
+  await withPanel(async ({ app, repository, adapter }) => {
+    adapter.groupListFails = true;
+    repository.recordDecision({
+      time: now,
+      sessionId: sessionId(groupSession),
+      messageId: 'group-contact-error',
+      replied: false,
+      reason: 'disabled',
+      detail: {},
+    });
+
+    const response = await app.request('/api/decisions', { headers: authHeaders() });
+    const decisions = await response.json() as Array<{ sessionId: string; sessionName: string }>;
+    assert.equal(decisions[0]?.sessionName, sessionId(groupSession));
   });
 });
 

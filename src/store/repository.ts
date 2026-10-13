@@ -81,6 +81,7 @@ export interface StoreRepository {
   setCaption(key: string, caption: string, time?: number): void;
   recordDecision(decision: DecisionRecord): void;
   recentDecisions(count: number): StoredDecision[];
+  decisionMessageText(sessionId: string, messageId: string): string | undefined;
   decisionById(id: number): StoredDecision | undefined;
   hasDebugTrace(sessionId: string, messageId: string): boolean;
   recordDebugTrace(trace: DebugTraceRecord): void;

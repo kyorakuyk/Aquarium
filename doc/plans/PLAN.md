@@ -181,7 +181,54 @@
   - **【用户】验收**：浏览器打开控制台，在会话页打开一个会话的开关，无需重启即生效。
   - 夜间把 T10 标为完成只表示代码、单元测试与 `panel:build` 通过；上面的浏览器步骤仍待用户完成，不代表人工验收已通过。
 
-> **⛔ 停止点 2**：T10 完成后停下，等用户实际使用并请 Claude 审查。
+- [x] **R10 决策记录要让人看得懂**（2026-10-13 审查发现）
+  - 现状问题：总览“最近的决定”和决策记录页直接显示 `900000001:group:100001`、`not_mentioned`、消息 ID、费用“未关联”。
+  - 后端：
+    - `GET /api/decisions` 的每一项增加 `sessionName`（群名 / 好友备注或昵称；查不到则为 sessionId）、`messageText`（从 `messages` 表按 `session_id + message_id` 取 `plain_text`，截断到 60 字，查不到为 `null`）、`costCny`（见下条，没有则 `null`）。
+    - `src/core/pipeline.ts` 记录 `replied` 决策时，在 `detail` 中写入 `costCny`（本次 `reply` 调用的 `result.usage.costCny`）；`costCny` 字段从 `detail.costCny` 读取。
+  - 前端：会话列显示 `sessionName`；消息列显示 `messageText`（`null` 时显示 `—`）；费用列显示 `¥0.0000` 格式（`null` 时显示 `—`）；结果列用中文标签，并按下表配色：
+    | reason | 标签 | 配色 |
+    |---|---|---|
+    | `replied` | 已回复 | 青色浅底 |
+    | `not_mentioned` | 没被叫到 | 灰底 |
+    | `disabled` | 未启用 | 灰底 |
+    | `duplicate` | 重复消息 | 灰底 |
+    | `command_ignored` | 指令已忽略 | 灰底 |
+    | `command_*`（其余） | 管理指令 | 青色浅底 |
+    | `rate_limited` | 限流 | 珊瑚橙浅底 |
+    | `muted` | 闭嘴中 | 珊瑚橙浅底 |
+    | `empty_reply` | 空回复 | 珊瑚橙浅底 |
+    | `llm_error` / `send_error` / `persona_error` / `command_error` | 出错 | 珊瑚橙浅底 |
+    | 其他 | 原样显示 reason | 灰底 |
+    标签映射写在前端一个独立文件 `panel/src/labels.ts` 中。
+  - 测试：后端 `/api/decisions` 返回三个新字段（含查不到时为 `null`）；管线 `replied` 决策的 `detail.costCny` 正确。
+
+- [ ] **R11 图片先下载再交给视觉模型（`src/core/images.ts`）**
+  - 现状风险：直接把 QQ 图片链接交给视觉模型，模型服务端不一定能访问 QQ 的图片服务器，也不是所有服务商都支持远程图片链接。
+  - 改为：对 `http(s)` 图片链接，由 bot 自己先下载：超时 10 秒；只接受响应头 `content-type` 为 `image/jpeg`、`image/png`、`image/gif`、`image/webp`；大于 5 MB 则放弃；成功后转成 `data:<类型>;base64,…` 再交给 `vision` 槽位。
+  - 下载失败（超时、类型不符、过大、非 2xx）：按现有规则降级为 `[图片]` 并记 error 日志，**不再**退回去把原始链接发给模型。
+  - 下载函数可注入（便于测试），测试中不访问网络。
+  - 测试：成功转 data URL；超时、类型不符、超过 5 MB 均降级为 `[图片]`；缓存命中时不下载。
+
+- [ ] **R12 控制台文案与小样式**
+  - 删除各页标题上方的英文小标签（`AQUARIUM / CONTROL`、`AQUARIUM / SESSIONS`、`OBSERVABILITY`、`GROUP` 等），界面只用中文。
+  - 总览副标题改为动态状态句：`缸里有 N 条鱼，M 条在游动。`（N = 账号数，M = 在线账号数；N 为 0 时显示 `缸里还没有鱼。`）。
+  - 总览“运行链路”中的 `QQ Adapter` 改为 `QQ（小号）`。
+  - “全部闭嘴”等按钮加 `white-space: nowrap`，手机宽度下不得折成两行。
+  - 前端不写测试；完成后 `npm run panel:build` 必须成功。
+
+> **⛔ 停止点 2**：R12 完成后停下，等用户做下方「U2 真实环境验证」并请 Claude 审查。
+
+#### U2 真实环境验证（由用户执行，接手模型不执行）
+1. `.env` 设置 `AQUARIUM_PANEL_PASSWORD`；启动 SnowLuma 并加载小号 → `npm run panel:build` → `npm start`。
+2. 浏览器打开 `http://127.0.0.1:5180`，用密码登录；总览显示小号在线。
+3. 会话页：打开一个测试群的开关 → 不重启，在该群 @ 小号能收到回复；关掉后不再回复。
+4. 看图：在启用的会话里发一张图并 @ 小号问“这是什么”，回复内容与图片相关；决策记录中能看到这条。
+5. 管理指令（主号发）：`/aq status`、`/aq mute 1`（1 分钟内 @ 不回复，之后恢复）、`/aq recall`。
+6. 离线补课：停掉 Aquarium，在启用的私聊里发一句话，3 分钟内重新 `npm start`，小号会补回一条回复。
+7. 调试记录：配置 `debug.sessions` 打开测试会话 → @ 小号 → 决策记录里能查看完整提示词与原始返回。
+8. 试聊：在“试聊与决策”页发一句话，能收到回复，且 QQ 里没有任何新消息。
+
 
 ### 阶段 D：一键启动（U3）
 
@@ -282,6 +329,7 @@
 | 2026-10-13 | T9 | 管理指令限主人与会话范围；闭嘴状态、到期恢复、撤回、预算/会话状态均有测试；`npm run check` 通过（107 项测试） |
 | 2026-10-13 | T9b | 新增 debug 配置继承、SQLite trace 表、每次模型尝试记录 prompt/hash/响应和失败细节、保留期清理；`npm run check` 通过（115 项测试） |
 | 2026-10-13 | T10 | Hono 控制台 API（仅 loopback、请求体限额）、React 页面、认证、会话配置热更新、试聊与生产构建完成；`npm run check` 通过（126 项测试），`npm run panel:build` 成功 |
+| 2026-10-13 | R10 | 决策 API 返回会话名、60 字消息摘要与可空费用；replied detail 保存实际费用；控制台改用中文原因标签；`npm run check` 通过（129 项测试），`npm run panel:build` 成功 |
 ---
 
 ## 6. 待评估清单
@@ -298,7 +346,7 @@
 > 适用：用户睡觉期间运行，无人能回答问题、无人能在 QQ 上做验证。
 
 ### 7.1 范围
-- 只做阶段 C：**C0 → T7 → T8 → T9 → T9b → T10**，按顺序。T10 完成后**结束本次运行**，不做 T11 及以后。
+- 本次继续执行用户追加的阶段 C 修复项：**R10 → R11 → R12**；完成 R12 后在停止点 2 结束，不做 T11 及以后。
 - 所有标 **【用户】** 的验收步骤**不执行**，改为写进早上检查清单（§7.4），然后继续下一个任务。
 
 ### 7.2 遇到问题时
