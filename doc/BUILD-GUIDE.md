@@ -350,8 +350,16 @@ T10 后 `npm run check` 实测为 126 项测试通过、依赖边界检查通过
 
 **边界仍需注意：** Node `fetch` 默认跟随重定向，R13 只校验初始 URL、不会逐跳复核跳转主机。该残余 SSRF/重定向风险已记入 PLAN §6，没有在本任务增加未约定的机制。R13 后 `npm run check` 通过 137 项测试。
 
+### 12.11 T12c：在 Windows host 接入真实托盘
+
+`src/host/tray.ts` 保留宿主稳定的 `Tray` 接口；真实 `@trayjs/trayjs@0.0.10` 实例放在 `src/host/windows/tray-worker.ts` 的 Worker 线程中，主线程通过 message bridge 转发 host 状态、动态闭嘴状态与菜单动作。这样 helper 的异步 spawn/通信错误进入 Worker 错误通道，不把 trayjs helper 的 ChildProcess 事件泄漏为主线程未处理错误；helper/worker 失败记录 error、保持 bot 运行且不自动重建。父端 MessagePort 关闭时，worker 清理 tray 并 settle 在途菜单状态请求。
+
+托盘使用已有青/黄/红双尺寸 ICO，菜单包含打开控制台、可选打开 QQ、全部闭嘴/恢复、重启 SnowLuma 与退出；无系统通知 API 时只更新 tooltip。显示 tooltip 与状态菜单文本分开管理，`ready` 时重新设置最新图标和当前显示文本。`bindHostTrayAfterLoad` 负责 shutdown race：延迟 worker 加载完成时若 host 已关闭则 dispose，不绑定回调。测试用 fake tray/worker 覆盖 helper ready、parent-port close、worker 错误、菜单动作及 shutdown queue。
+
+T12c 质量门：`npm run check` 通过 211 项（TypeScript、依赖边界检查、211 tests），`git diff --check` 通过；精确 staged review fingerprint `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b` 通过。代码提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df`，标签 `checkpoint/dev-host-t12c-code-2026-10-14-unverified`。本轮未运行真实 tray/helper、QQ、SnowLuma、GUI 或 `autostart:install`；Windows 用户验收步骤见 `doc/plans/MORNING-2026-10-14.md`。Reviewer 有一条非阻塞建议：异步菜单 refresh 与 dispose 并发还没有专项测试，留作用户集成验收观察项。
+
 ## 13. 之后的阶段
 
-T0–T10 与 R10–R13 的代码和自动化检查均已完成；U2 真实环境验收已由用户于 2026-10-14 完成，反馈无重大问题。T11 方案已由用户确认。当前 dev/host 分支已完成 PLAN §7.1 的 T12a 代码、T12b 非托盘实现及 log-only 空托盘接口；T12a 独立 tray spike 的四项用户 GUI 验收通过。T12b probe 超时已在 `aba7022` 修复（review fingerprint `d093c51c…e2b516`），最新 `npm run check` 190 项通过；完整日志显示 adapter/host online，用户确认测试账号可正常对话。真实托盘库尚未接入 Aquarium，autostart 安装未执行。
+T0–T10 与 R10–R13 的代码和自动化检查均已完成；U2 真实环境验收已由用户于 2026-10-14 完成，反馈无重大问题。T11 方案已由用户确认。dev/host 已完成 T12a spike、T12b host 及 T12c Aquarium trayjs worker 集成；T12a 四项 spike GUI 验收通过，T12b 测试账号可正常对话。T12c 代码快照复核通过、`npm run check` 211 项通过，但真实 Aquarium Windows 托盘/QQ 与自启动验收仍待用户；`autostart:install` 未执行。
 
 每个章节都以实际代码和真实测试结果为准；还没实现的部分会明确标为“计划”，不把计划写成已完成事实。

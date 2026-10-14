@@ -42,7 +42,7 @@
 ## 2. 当前状态
 
 - 阶段 A–C（R1–R13、C0、T7–T10）已完成；U1、U2 真实环境验证已由用户完成，U2 反馈无重大问题；代码已在 `main`。
-- T11 托管层调研已由用户确认；当前在 `dev/host` 按 §7.1 夜间范围推进阶段 D。T12a spike 的四项独立 GUI 验收已由用户确认通过；T12b 非托盘实现、空托盘接口及 `HOST-RESEARCH.md` 实施补充均已完成。T12b 请求超时修复已提交（`aba7022a1eb231497ba7666efb5392e5316553ab`，精确 review SHA-256 `d093c51c7773e694295d46b15e23be671a1129ce19b7dffc104033d667e2b516`），`npm run check` 通过 190 项；完整日志有 adapter/host `online`，用户确认测试账号可正常对话。真实托盘接入仍按计划延期，autostart 安装未执行；最新本地收尾标签为 `checkpoint/dev-host-night-final-tray-spike-pass-2026-10-14-unverified`。
+- T11 托管层调研已由用户确认；T12a spike 的四项独立 GUI 验收已由用户确认通过；T12b 非托盘实现与 probe-timeout 复测已完成。T12c 真实托盘代码现已完成：提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df`，精确 review SHA-256 `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`，`npm run check` 通过 211 项；本地标签 `checkpoint/dev-host-t12c-code-2026-10-14-unverified`。Aquarium 真实 Windows 托盘/QQ/autostart 用户验收仍待执行，`autostart:install` 未运行。
 
 ---
 
@@ -307,6 +307,15 @@
     5. `npm run autostart:install` → 重启电脑 → 登录后**没有任何黑窗口**，托盘出现小鱼。
     6. 托盘“退出” → 小鱼消失，两个 QQ 都还在运行。
 
+- [x] **T12c 接入真实托盘并收尾（白天有人值守；代码完成，用户验收待进行）**
+  - 用 `@trayjs/trayjs` 实现 `src/host/tray.ts` 接口，替换空实现；图标复用 T12a 的三色图标；菜单与行为严格按 T12b 的“托盘”小节。库不支持系统通知时，`notify` 只改提示文字。
+  - 托盘辅助进程意外退出时：记 error 日志，bot 继续运行，不自动重建托盘。
+  - `.gitignore` 增加 `/.hermes/`。
+  - 测试：托盘适配层用假的 trayjs 对象测试状态 → 图标 / 提示文字映射与菜单回调。
+  - **【用户】验收**：T12b 验收步骤 3–6（托盘变色、打开 QQ、开机自启无黑窗口、退出后两个 QQ 都在）。
+  - 已知限制（记入 §6，不在本任务处理）：同一个 QQ 进程若先被判定为“忽略”，之后在该进程内切换登录为小号，不会被注入，需要重新打开该 QQ。
+  - 代码收尾：`npm run check` 通过 211 项；`git diff --check` 通过；精确 staged review 通过（SHA-256 `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`）；提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df` / `checkpoint/dev-host-t12c-code-2026-10-14-unverified`。未运行真实托盘、QQ、SnowLuma 或 autostart；用户验收按 `MORNING-2026-10-14.md` 执行。
+
 > **⛔ 停止点 4**：M1 结束。M2 的施工计划另行编写。
 
 ---
@@ -403,6 +412,7 @@
 | 2026-10-14 | T12-空托盘 | 新增 `src/host/tray.ts` log-only tray interface/adapter，main 绑定 host 状态、等待登录通知、菜单回调与退出清理；2 项定向测试及完整 `npm run check`（189 项）通过；精确 staged review 通过，提交 `afbdaa1` / `checkpoint/dev-host-tray-null-2026-10-14-unverified`；未加载真实托盘库 |
 | 2026-10-14 | HOST-RESEARCH 补充 | 追加 T12b/空托盘离线实现结果、安全边界、审查证据及未验证项；未运行真实服务；提交 `2480368` / `checkpoint/dev-host-host-research-supplement-2026-10-14-unverified` |
 | 2026-10-14 | T12b probe-timeout follow-up | 用户首次手动运行观察到登录最终成功、进程列表 HTTP 200，但 `probe-login` 重复 network error；确认 host 默认请求超时 1s 短于 SnowLuma probe 最长 5s，增加至 7s；慢响应回归按预期 RED→GREEN；`npm run check` 通过（190 项）；精确 staged review 通过，提交 `aba7022` / `checkpoint/dev-host-probe-timeout-fix-2026-10-14-unverified`。后续 17:17 运行记录 adapter/host online，用户确认可正常对话；此前 17:00 初次运行未出现 online，但后续运行证明状态日志链可工作 |
+| 2026-10-14 | T12c | 将 trayjs 接入 Windows tray worker，增加 helper/worker 错误隔离、状态/提示/menu 映射与 shutdown 清理；`npm run check` 通过（211 项），精确 review 通过（SHA-256 `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`）；提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df` / `checkpoint/dev-host-t12c-code-2026-10-14-unverified`。真实 Windows 用户验收及 autostart install 待用户执行 |
 ---
 
 ## 6. 待评估清单
@@ -411,7 +421,8 @@
   2. 把 `HANDOFF.md`、`PLAN.md`、`MORNING.md` 中的真实 QQ 号、Windows 用户名、本地路径移到被忽略的本地文件或改为占位；
   3. **历史提交里仍保留这些信息**，需要用 `git filter-repo` 重写历史后再推送，单纯改文件不够。
 - 见 `HANDOFF.md` §8（已有三条：`config` ↔ `core` 互相引用、`core` 依赖 OpenAI 类型、重连后不再校验账号）。新增条目写在这里。
-- （2026-10-13 审查；R13 于 2026-10-14 增加初始 URL 域名白名单）**图片下载的 SSRF/重定向边界仍待评估**：R13 仅允许初始 URL 使用 HTTPS 且主机名精确匹配或点边界后缀匹配 `qq.com.cn`、`qq.com`、`qpic.cn`；不做 IP 解析或自定义 DNS。Node `fetch` 仍默认跟随重定向，且未逐跳复核主机名，所以允许域名可能重定向到白名单外或内网目标。当前按 R13 明确范围未增加重定向/IP 机制；扩大使用前需决定逐跳策略并补测试。
+- **（2026-10-13 审查；R13 于 2026-10-14 增加初始 URL 域名白名单）图片下载的 SSRF/重定向边界仍待评估**：R13 仅允许初始 URL 使用 HTTPS 且主机名精确匹配或点边界后缀匹配 `qq.com.cn`、`qq.com`、`qpic.cn`；不做 IP 解析或自定义 DNS。Node `fetch` 仍默认跟随重定向，且未逐跳复核主机名，所以允许域名可能重定向到白名单外或内网目标。当前按 R13 明确范围未增加重定向/IP 机制；扩大使用前需决定逐跳策略并补测试。
+- T12c 已知限制：同一个 QQ 进程若先被 watcher 判定为“忽略”，之后在该进程内切换登录为小号，不会重新注入；需要重新打开 QQ。此行为不在 T12c 范围处理。
 
 ---
 

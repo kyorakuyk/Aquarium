@@ -174,3 +174,14 @@ SnowLuma 当前进程枚举器只把 PID 映射成配置的显示名和空路径
 
 - 用户确认四项均通过：系统托盘出现图标；“状态：测试中”不可点击；“切换颜色”按青、黄、红循环；点击“退出”后 spike 与 tray helper 退出且图标清理。
 - 此结果只证明 `src/spike/tray.ts` 独立 spike 在该 Windows 用户环境可启动、操作和退出；不代表 `main.ts` 已接入真实托盘库。Aquarium 当前的 `createLogOnlyTray()` 仍只写日志，系统通知 API 也未获验证。
+
+## T12c 真实托盘接入结果（2026-10-14；代码复核通过，用户验收待进行）
+
+> 本节记录 Aquarium 集成代码和 fake/offline 验证，不表示本轮运行过真实 tray helper、QQ、SnowLuma、GUI 或自启动。
+
+- `src/host/tray.ts` 现以 `worker_threads` 承载 `@trayjs/trayjs@0.0.10`，主线程只持有 `Tray` 接口代理；helper 异步启动错误通过 Worker `error/exit` 通道记录，bot 继续运行且不自动重建。Worker 收到 parent port `close` 时会解决在途闭嘴状态请求并 dispose tray，避免 helper 因父端断开而遗留。
+- Host 状态映射青/黄/红 ICO 与状态 tooltip；系统通知 API 不存在时 `notify` 只更新 tooltip。显示中的通知 tooltip 与菜单状态行分开保存，helper `ready` 时重新应用最新图标和显示文字；后续状态变更会恢复状态 tooltip。
+- 菜单实现控制台、（需本地 QQ 路径时才启用的）打开 QQ、全局闭嘴/恢复、SnowLuma restart 与退出。SnowLuma restart 进入 host lifecycle queue；shutdown 等待在途 restart，并在 tray worker 延迟加载完成时 gate bind 或 dispose。
+- Fake tray/worker 测试覆盖状态与菜单、ready 延迟、helper 意外退出、Worker 启动/通信错误、parent-port close、延迟加载时 shutdown 与不重建。完整 `npm run check` 通过 211 项；`git diff --check` 通过。
+- 精确 staged snapshot review 通过：fingerprint `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`；security/logic findings 为空。代码提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df`，本地标签 `checkpoint/dev-host-t12c-code-2026-10-14-unverified`。标签保持 `unverified`，因为真实 Windows 用户验收仍待完成。
+- 非阻塞 reviewer 建议：异步菜单状态刷新与 dispose 并发时尚无专门回归；本轮未扩大范围。真实托盘/菜单关闭验收留给用户；未运行 `npm start`、tray、QQ、SnowLuma、GUI 或 `autostart:install`。
