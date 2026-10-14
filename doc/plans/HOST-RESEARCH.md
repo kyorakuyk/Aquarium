@@ -162,4 +162,10 @@ SnowLuma 当前进程枚举器只把 PID 映射成配置的显示名和空路径
 
 - 用户报告用测试账号登录后可以正常对话；随后 Ctrl+C 退出 Aquarium，QQ 仍运行。按用户可见端到端行为，这证明该测试账号的消息路径可用，且 host 退出没有关闭 QQ。
 - Aquarium 本机日志脱敏汇总：登录最终 HTTP 200；进程列表 56 次 HTTP 200；probe-login 4 次 HTTP 200、0 次 network error；load 1 次 HTTP 200、无加载失败 warning。日志中只有 `waiting_qq_login` 与初始 adapter `offline`，没有 `Windows 托管状态：online` 或 adapter `online` 行。
-- 因用户报告成功对话而日志缺少 `online` 状态行，功能验收以用户可见对话结果为通过证据；状态事件缺失单独记为可观察性差异，不反推功能失败，也不伪称日志记录了 online。真实托盘 GUI 与 autostart 未包含在这次测试中。
+- 上述日志统计只覆盖第一次 17:00–17:10 运行；当时确实没有 online 行，用户随后确认测试账号能正常对话并完成退出。
+
+### 完整日志窗口补查
+
+- 为核实是否需要修复 online 日志，随后补查 17:16–17:19 的完整本机 Aquarium 日志：第二次运行在 17:17:07 记录 adapter `online`，17:17:12 记录 host `online`；同一窗口还记录一次 load HTTP 200，之后 process polling 持续正常，没有 probe network error 或 load failure warning。
+- 因此不存在“online 日志始终不产生”的代码问题；第一次运行的日志缺少 online，与其当时的 adapter offline/waiting 状态一致。后续运行产生了预期状态事件，用户也确认测试账号可正常对话，无需为 online 日志另改代码。
+- 真实托盘 GUI 与 autostart 未包含在这次测试中。
