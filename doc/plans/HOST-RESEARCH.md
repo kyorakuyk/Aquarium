@@ -147,3 +147,13 @@ SnowLuma 当前进程枚举器只把 PID 映射成配置的显示名和空路径
 - 最终 `npm run check` 通过：TypeScript、依赖边界检查及 **189 项测试**均通过；`git diff --check` 与 staged production additions 静态扫描通过。T12b 精确代码快照提交 `d5378fe370799c61269d70ec85d056ec410f3ef4`，独立 review fingerprint `91b51c187fc793be3b7d54bb3640c25f163b4776bb7af19d0c9d11a29853b9c7`；空托盘快照提交 `afbdaa152dc3ef4ce601dcf9f111bb4797951386`，独立 review fingerprint `85d1fb8211092322b11e90e6589639ad5021c0ae5aebaff075ea48ef30d88103`。
 - Review 留下两条非阻塞建议：并发重复 `Host.stop()` 时后续调用可能早于首次清理完成返回；watcher 停止后在途的最终 401 仍可能让 host 状态转为 `error`。当前不因此重启扫描或进程；这两项未纳入本轮夜间修复。
 - 未运行 `npm start`、真实 SnowLuma/QQ、tray spike/helper、GUI 或 `autostart:install`；未验证 WebUI TOTP、自签名 TLS 信任和真实 Windows helper/杀软/退出兼容。相应验收留在 `MORNING-2026-10-14.md`。
+
+## T12b 用户验收后续：probe 请求超时边界（2026-10-14）
+
+> 以下仅记录用户手动运行后提供的脱敏日志现象与仓库内复现；不保存账号 UIN、PID、路径或凭据。用户报告按 Ctrl+C 后 Aquarium 正常退出。
+
+- 现场表现：WebUI 登录首次请求记录 network error，紧接着重试得到 HTTP 200；后续 `/api/processes` 多次 HTTP 200，但 `/api/processes/<pid>/probe-login` 持续 network error，host 保持 `waiting_qq_login`。这证明登录/列表路径已通，但不证明该 PID 已成功识别或注入；此时不得把 T12b 真实验收判为通过。
+- Aquarium 代码的 `createSnowLumaProcess()` 默认 WebUI 请求预算原为 1,000ms，并传给 login、process list、probe 与 load；只读参考 SnowLuma 的 `probeQqLoginInfo()` 自身最长等待 5,000ms。WebUI client 将 fetch-level 拒绝统一记成 network error，现场日志未保留底层异常，因此超时不匹配是高概率解释，不是对当次 OS/network 异常的唯一证明。
+- 已将托管默认请求预算提高到 7,000ms，为 SnowLuma 5 秒探测及 HTTP 返回留出余量。新 `test/snowluma-probe-timeout.test.ts` 用可取消的 fake fetch 模拟 5.1 秒响应：旧 1 秒默认下测试在约 1.035 秒失败且没有 load；调整后约 5.13 秒通过，身份匹配、load 一次并进入 online。该测试不连接真实服务。
+- 修复快照独立 review 通过，fingerprint `d093c51c7773e694295d46b15e23be671a1129ce19b7dffc104033d667e2b516`；`npm run check` 的 TypeScript、依赖边界检查及 190 项测试通过；代码提交 `aba7022a1eb231497ba7666efb5392e5316553ab`，标签 `checkpoint/dev-host-probe-timeout-fix-2026-10-14-unverified`。
+- Reviewer 的非阻塞建议：7 秒预算也作用于 login、process list 和 load；本轮保留单一有界请求时限，若以后要求这些快路径更快失败，可拆为 probe 专用超时。**真实 QQ/UIN 路径必须由用户使用修复后的版本重新验收；旧运行日志只作为发现记录，不作为通过证据。**
