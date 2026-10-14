@@ -15,6 +15,7 @@ import { openDatabase } from '../store/db.ts';
 import { createRepository } from '../store/repository.ts';
 import { startPanelServer, type PanelAccountRuntime } from '../panel-server/server.ts';
 import { bootstrapHost, runStartupTasks } from '../host/bootstrap.ts';
+import { startPanelWhileAccountStartupRuns } from './startup-order.ts';
 import type { Host } from '../host/types.ts';
 import { bindHostTrayAfterLoad, createWindowsTray } from '../host/tray.ts';
 import { createWindowsHost } from '../host/windows/host.ts';
@@ -165,7 +166,7 @@ if (initialConfig.host.enabled && initialConfig.accounts.length === 0) {
   }
 }
 
-await runStartupTasks(initialConfig.accounts, () => !shuttingDown, async (accountConfig) => {
+const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDown, async (accountConfig) => {
   let adapter: OneBotAdapter;
   try {
     adapter = new OneBotAdapter({
@@ -247,37 +248,39 @@ await runStartupTasks(initialConfig.accounts, () => !shuttingDown, async (accoun
   }
 });
 
-if (!shuttingDown) {
-  const panelConfig = configWatcher.getConfig();
-  const panelPassword = process.env[panelConfig.panel.passwordEnv];
-  if (!panelPassword) {
-    logger.warn('未设置控制台密码，跳过管理面板启动；Aquarium 机器人继续运行。');
-  } else {
-    try {
-      panelServer = startPanelServer({
-        host: panelConfig.panel.host,
-        port: panelConfig.panel.port,
-        password: panelPassword,
-        getConfig: () => configWatcher.getConfig(),
-        saveConfig: (config) => {
-          writeConfig(config, configPath);
-          configWatcher.replaceConfig(config);
-        },
-        repository,
-        accounts: () => panelAccounts,
-        management: () => managementControllers,
-        root: process.cwd(),
-        onError: (error) => logger.error(`管理面板请求失败：${describeError(error)}`),
-      });
-      panelServer.once('listening', () => {
-        logger.info(`管理面板已启动：${panelConfig.panel.host}:${panelConfig.panel.port}`);
-      });
-      panelServer.on('error', (error: unknown) => {
-        logger.error(`管理面板监听失败；机器人继续运行：${describeError(error)}`);
-      });
-    } catch (error) {
-      logger.error(`管理面板启动失败；机器人继续运行：${describeError(error)}`);
+await startPanelWhileAccountStartupRuns(accountStartup, () => {
+  if (!shuttingDown) {
+    const panelConfig = configWatcher.getConfig();
+    const panelPassword = process.env[panelConfig.panel.passwordEnv];
+    if (!panelPassword) {
+      logger.warn('未设置控制台密码，跳过管理面板启动；Aquarium 机器人继续运行。');
+    } else {
+      try {
+        panelServer = startPanelServer({
+          host: panelConfig.panel.host,
+          port: panelConfig.panel.port,
+          password: panelPassword,
+          getConfig: () => configWatcher.getConfig(),
+          saveConfig: (config) => {
+            writeConfig(config, configPath);
+            configWatcher.replaceConfig(config);
+          },
+          repository,
+          accounts: () => panelAccounts,
+          management: () => managementControllers,
+          root: process.cwd(),
+          onError: (error) => logger.error(`管理面板请求失败：${describeError(error)}`),
+        });
+        panelServer.once('listening', () => {
+          logger.info(`管理面板已启动：${panelConfig.panel.host}:${panelConfig.panel.port}`);
+        });
+        panelServer.on('error', (error: unknown) => {
+          logger.error(`管理面板监听失败；机器人继续运行：${describeError(error)}`);
+        });
+      } catch (error) {
+        logger.error(`管理面板启动失败；机器人继续运行：${describeError(error)}`);
+      }
     }
+    logger.info('Aquarium 已启动。Ctrl+C 可安全退出。');
   }
-  logger.info('Aquarium 已启动。Ctrl+C 可安全退出。');
-}
+});
