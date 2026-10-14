@@ -14,6 +14,8 @@
     "panel:dev": "vite --config panel/vite.config.ts",
     "panel:build": "tsc -p panel/tsconfig.json && vite build --config panel/vite.config.ts",
     "start": "node --env-file-if-exists=.env src/app/main.ts",
+    "autostart:install": "node scripts/autostart.mjs install",
+    "autostart:uninstall": "node scripts/autostart.mjs uninstall",
     "spike:ping": "node --env-file-if-exists=.env src/spike/ping.ts",
     "spike:adapter-ping": "node --env-file-if-exists=.env src/spike/adapter-ping.ts",
     "spike:llm-ping": "node --env-file-if-exists=.env src/spike/llm-ping.ts",

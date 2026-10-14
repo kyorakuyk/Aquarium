@@ -1,4 +1,9 @@
 owner: 0
+host:
+  enabled: true
+  startSnowLuma: true
+  qqExePath: ''
+  scanIntervalSec: 5
 accounts:
   - uin: 900000001
     persona: default

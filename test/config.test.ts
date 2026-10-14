@@ -34,6 +34,36 @@ test('旧配置缺少 debug 时补入安全默认值', () => {
   assert.deepEqual(partial.debug, { enabled: true, sessions: {}, retainDays: 7 });
 });
 
+test('host 示例与旧配置都得到明确的托管默认值', () => {
+  const expected = {
+    enabled: true,
+    startSnowLuma: true,
+    qqExePath: '',
+    scanIntervalSec: 5,
+  };
+  const legacyConfig = structuredClone(exampleConfig) as Record<string, unknown>;
+  delete legacyConfig.host;
+
+  assert.deepEqual(AquariumConfigSchema.parse(exampleConfig).host, expected);
+  assert.deepEqual(AquariumConfigSchema.parse(legacyConfig).host, expected);
+  assert.deepEqual(AquariumConfigSchema.parse({
+    ...legacyConfig,
+    host: { enabled: false },
+  }).host, { ...expected, enabled: false });
+});
+
+test('host 扫描间隔必须为正整数', () => {
+  const invalidConfig = {
+    ...exampleConfig,
+    host: { enabled: true, startSnowLuma: true, qqExePath: '', scanIntervalSec: 0 },
+  };
+  const result = AquariumConfigSchema.safeParse(invalidConfig);
+
+  assert.equal(result.success, false);
+  if (result.success) return;
+  assert.ok(result.error.issues.some((issue) => issue.path.join('.') === 'host.scanIntervalSec'));
+});
+
 test('配置 schema 拒绝越界端口和负数 owner', () => {
   const invalidPort = structuredClone(exampleConfig) as Record<string, any>;
   invalidPort.panel.port = 70000;

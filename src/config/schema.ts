@@ -46,6 +46,18 @@ const debugSchema = z.object({
   retainDays: z.number().int().positive().default(7),
 }).strict().default({ enabled: false, sessions: {}, retainDays: 7 });
 
+const hostSchema = z.object({
+  enabled: z.boolean().default(true),
+  startSnowLuma: z.boolean().default(true),
+  qqExePath: z.string().default(''),
+  scanIntervalSec: z.number().int().positive().default(5),
+}).strict().default({
+  enabled: true,
+  startSnowLuma: true,
+  qqExePath: '',
+  scanIntervalSec: 5,
+});
+
 export const AquariumConfigSchema = z.object({
   owner: z.number().int().nonnegative(),
   accounts: z.array(z.object({
@@ -63,6 +75,7 @@ export const AquariumConfigSchema = z.object({
   defaults: sessionSettingsSchema,
   sessions: z.record(z.string(), sessionOverrideSchema),
   debug: debugSchema,
+  host: hostSchema,
   panel: z.object({
     host: z.string().min(1),
     port: z.number().int().min(1).max(65535),

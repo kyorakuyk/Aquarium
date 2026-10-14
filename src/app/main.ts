@@ -14,6 +14,9 @@ import { createSessionQueue } from '../core/session-queue.ts';
 import { openDatabase } from '../store/db.ts';
 import { createRepository } from '../store/repository.ts';
 import { startPanelServer, type PanelAccountRuntime } from '../panel-server/server.ts';
+import { bootstrapHost, runStartupTasks } from '../host/bootstrap.ts';
+import type { Host } from '../host/types.ts';
+import { createWindowsHost } from '../host/windows/host.ts';
 
 const logger = createLogger('app');
 const configPath = path.join(process.cwd(), 'data', 'config.yaml');
@@ -37,8 +40,10 @@ const adapters: OneBotAdapter[] = [];
 const panelAccounts: PanelAccountRuntime[] = [];
 const managementControllers: ManagementCommands[] = [];
 const subscriptions: Array<() => void> = [];
+const adapterStatuses = new Map<number, AdapterStatus>();
 const sessionQueue = createSessionQueue();
 let panelServer: ReturnType<typeof startPanelServer> | undefined;
+let managedHost: Host | undefined;
 let shuttingDown = false;
 
 function hasEnabledSession(config: typeof initialConfig): boolean {
@@ -69,6 +74,11 @@ async function shutdown(signal: string): Promise<void> {
   for (const adapter of adapters) adapter.close();
   configWatcher.close();
   clearInterval(debugPruneTimer);
+  try {
+    await managedHost?.stop();
+  } catch (error) {
+    logger.error(`Windows 托管关闭失败：${describeError(error)}`);
+  }
   await sessionQueue.idle();
   database.close();
   logger.info('Aquarium 已关闭。');
@@ -88,7 +98,34 @@ configWatcher.on('changed', (config) => {
 if (!hasEnabledSession(initialConfig)) logger.warn('当前没有启用任何会话。');
 if (initialConfig.accounts.length === 0) logger.warn('配置中没有账号，当前不会连接 OneBot。');
 
-for (const accountConfig of initialConfig.accounts) {
+if (initialConfig.host.enabled && initialConfig.accounts.length === 0) {
+  logger.warn('host.enabled=true 但没有配置账号，跳过 Windows 托管。');
+} else {
+  managedHost = await bootstrapHost({
+    enabled: initialConfig.host.enabled,
+    platform: process.platform,
+    onHostCreated: (host) => { managedHost = host; },
+    shouldContinue: () => !shuttingDown,
+    createWindowsHost: () => createWindowsHost({
+      accounts: initialConfig.accounts,
+      settings: initialConfig.host,
+      password: process.env.SNOWLUMA_WEBUI_PASSWORD ?? '',
+      logDirectory: path.join(process.cwd(), 'data', 'logs'),
+      getAdapterStatus: (uin) => adapterStatuses.get(uin),
+      log: (level, message) => logger[level](message),
+    }),
+    onWarning: (message) => logger.warn(message),
+    onStartError: (error) => logger.error(`Windows 托管启动失败；Aquarium 继续运行：${describeError(error)}`),
+    onStopError: (error) => logger.error(`Windows 托管启动取消后的清理失败：${describeError(error)}`),
+  });
+  if (!shuttingDown && managedHost) {
+    subscriptions.push(managedHost.onStatus((status, message) => {
+      logger.info(`Windows 托管状态：${status}${message ? `；${message}` : ''}`);
+    }));
+  }
+}
+
+await runStartupTasks(initialConfig.accounts, () => !shuttingDown, async (accountConfig) => {
   let adapter: OneBotAdapter;
   try {
     adapter = new OneBotAdapter({
@@ -97,11 +134,12 @@ for (const accountConfig of initialConfig.accounts) {
     });
   } catch (error) {
     logger.error(`账号 ${accountConfig.uin} 的 OneBot 适配器初始化失败：${describeError(error)}`);
-    continue;
+    return;
   }
 
   adapters.push(adapter);
   let currentStatus: AdapterStatus = 'connecting';
+  adapterStatuses.set(accountConfig.uin, currentStatus);
   panelAccounts.push({
     adapter,
     getStatus: () => currentStatus,
@@ -141,6 +179,7 @@ for (const accountConfig of initialConfig.accounts) {
   });
   subscriptions.push(adapter.onStatus((status) => {
     currentStatus = status;
+    adapterStatuses.set(accountConfig.uin, status);
     logger.info(`账号 ${adapter.account} 状态：${status}`);
     if (status === 'online') {
       void catchUpHistory().catch((error: unknown) => {
@@ -163,40 +202,42 @@ for (const accountConfig of initialConfig.accounts) {
     await adapter.connect();
   } catch (error) {
     currentStatus = 'offline';
+    adapterStatuses.set(accountConfig.uin, currentStatus);
     logger.error(`账号 ${accountConfig.uin} 连接失败：${describeError(error)}`);
   }
-}
+});
 
-const panelConfig = configWatcher.getConfig();
-const panelPassword = process.env[panelConfig.panel.passwordEnv];
-if (!panelPassword) {
-  logger.warn('未设置控制台密码，跳过管理面板启动；Aquarium 机器人继续运行。');
-} else {
-  try {
-    panelServer = startPanelServer({
-      host: panelConfig.panel.host,
-      port: panelConfig.panel.port,
-      password: panelPassword,
-      getConfig: () => configWatcher.getConfig(),
-      saveConfig: (config) => {
-        writeConfig(config, configPath);
-        configWatcher.replaceConfig(config);
-      },
-      repository,
-      accounts: () => panelAccounts,
-      management: () => managementControllers,
-      root: process.cwd(),
-      onError: (error) => logger.error(`管理面板请求失败：${describeError(error)}`),
-    });
-    panelServer.once('listening', () => {
-      logger.info(`管理面板已启动：${panelConfig.panel.host}:${panelConfig.panel.port}`);
-    });
-    panelServer.on('error', (error: unknown) => {
-      logger.error(`管理面板监听失败；机器人继续运行：${describeError(error)}`);
-    });
-  } catch (error) {
-    logger.error(`管理面板启动失败；机器人继续运行：${describeError(error)}`);
+if (!shuttingDown) {
+  const panelConfig = configWatcher.getConfig();
+  const panelPassword = process.env[panelConfig.panel.passwordEnv];
+  if (!panelPassword) {
+    logger.warn('未设置控制台密码，跳过管理面板启动；Aquarium 机器人继续运行。');
+  } else {
+    try {
+      panelServer = startPanelServer({
+        host: panelConfig.panel.host,
+        port: panelConfig.panel.port,
+        password: panelPassword,
+        getConfig: () => configWatcher.getConfig(),
+        saveConfig: (config) => {
+          writeConfig(config, configPath);
+          configWatcher.replaceConfig(config);
+        },
+        repository,
+        accounts: () => panelAccounts,
+        management: () => managementControllers,
+        root: process.cwd(),
+        onError: (error) => logger.error(`管理面板请求失败：${describeError(error)}`),
+      });
+      panelServer.once('listening', () => {
+        logger.info(`管理面板已启动：${panelConfig.panel.host}:${panelConfig.panel.port}`);
+      });
+      panelServer.on('error', (error: unknown) => {
+        logger.error(`管理面板监听失败；机器人继续运行：${describeError(error)}`);
+      });
+    } catch (error) {
+      logger.error(`管理面板启动失败；机器人继续运行：${describeError(error)}`);
+    }
   }
+  logger.info('Aquarium 已启动。Ctrl+C 可安全退出。');
 }
-
-logger.info('Aquarium 已启动。Ctrl+C 可安全退出。');

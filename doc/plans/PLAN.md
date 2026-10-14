@@ -42,7 +42,7 @@
 ## 2. 当前状态
 
 - 阶段 A–C（R1–R13、C0、T7–T10）已完成；U1、U2 真实环境验证已由用户完成，U2 反馈无重大问题；代码已在 `main`。
-- T11 托管层调研已由用户确认；当前在 `dev/host` 按 §7.1 夜间范围推进阶段 D。T12a 代码与离线质量门已完成，真实托盘验收未执行；T12b 与空托盘接口待完成。
+- T11 托管层调研已由用户确认；当前在 `dev/host` 按 §7.1 夜间范围推进阶段 D。T12a 代码与离线质量门、T12b 非托盘托管实现均已完成；`npm run check` 通过 187 项。空托盘接口是最后一项；真实托盘、SnowLuma/QQ 与 autostart 验收均未执行。
 
 ---
 
@@ -257,7 +257,7 @@
   - 夜间完成结果：固定 `@trayjs/trayjs@0.0.10`；三色双尺寸 ICO 与 fake-tray spike 已实现；`npm run check` 通过（142 项测试）。托盘程序与真实 GUI 未运行，人工验收仍待用户。
 > **⛔ 停止点 3b**：有人值守流程在 T12a 后停下等用户验收。夜间按 §7.1 不运行 spike、不做用户验收，继续完成本节指定的 T12b 与空托盘接口后结束。
 
-- [ ] **T12b Windows 托管实现**
+- [x] **T12b Windows 托管实现**（夜间 §7.1 仅完成非托盘部分；真实托盘及 GUI 验收待用户）
   - **配置**（schema + `config.example.yaml`）：
     ```yaml
     host:
@@ -271,9 +271,11 @@
   - **`src/host/windows/snowluma-process.ts`**：
     - 启动前读取 `<snowlumaDir>/config/runtime.json`；若 `hookAutoLoad` 为 `true`，**拒绝启动托管**，状态设为 `error`，日志与托盘提示“请在 SnowLuma 中关闭自动注入”（fail-closed）。
     - 以 `process.execPath` 运行 `<snowlumaDir>/index.mjs`，`cwd` 为 `snowlumaDir`，`windowsHide: true`；stdout / stderr 追加到 `data/logs/snowluma-YYYY-MM-DD.log`。
-    - 就绪判定：WebUI 地址取 `runtime.json` 的 `webuiHost` / `webuiPort`（缺省 `127.0.0.1:5099`）；每秒尝试一次登录，60 秒内成功即就绪，否则状态 `error`。
-    - 子进程意外退出：按 1s → 2s → 4s … 封顶 30s 指数退避重启；连续稳定运行 5 分钟后退避归零。
-  - **`src/host/windows/snowluma-webui.ts`**：WebUI 客户端，`fetch` 可注入。
+    - SnowLuma 的环境变量优先于 `runtime.json`；spawn 环境必须去除继承的 hookAutoLoad / WebUI listener override 与 WebUI 密码，再显式固定 `hookAutoLoad=false` 及已校验的 WebUI host / port / TLS，避免继承环境绕过 fail-closed 检查。
+    - `startSnowLuma: false` 是 unmanaged attach：拒绝 Aquarium 当前环境中可见的 auto-load/wildcard override 并打印警告，但无法读取已运行外部进程的有效环境；仅在用户确认该进程 `hookAutoLoad=false` 且 listener 为 loopback 时使用。
+    - 就绪判定：WebUI 地址取 `runtime.json` 的 `webuiHost` / `webuiPort`（缺省 `127.0.0.1:5099`）；仅接受 loopback host，通配或远端绑定在启动子进程前 fail-closed（改写客户端目标不会改变服务端监听）；每秒尝试一次登录，60 秒内成功即就绪，否则状态 `error`。
+    - 子进程意外退出（包括 WebUI 首次就绪前）：按 1s → 2s → 4s … 封顶 30s 指数退避重启；host 保留重试并在恢复 ready 后启动 watcher；连续稳定运行 5 分钟后退避归零。
+  - **`src/host/windows/snowluma-webui.ts`**：loopback-only WebUI 客户端，`fetch` 可注入；禁止跟随 redirect，request timeout 覆盖 response body 解析；若 Node env-proxy 或 global proxy agent 已启用，则在发认证请求前 fail-closed，不依赖 `NO_PROXY`；每次请求读取当前 global agent，覆盖运行期 `setGlobalProxyFromEnv()` 切换。
     - `login()`：`POST /api/login`，密码来自 `SNOWLUMA_WEBUI_PASSWORD`；token 只存内存，**不得写入日志或文件**。
     - 任何请求返回 401 时重新登录一次后重试；再失败则状态 `error`。
     - `listProcesses()`、`probeLogin(pid)`、`load(pid)`：路径与返回结构以 `reference/SnowLuma/packages/core/src/webui/server.ts` 为准，在代码注释中注明所依据的行号。
@@ -291,13 +293,14 @@
     - 进入 `waiting_qq_login` 时，若库支持系统通知则弹一次“请登录小号 QQ”；不支持则只改提示文字。
     - “退出”：停止 SnowLuma 子进程与 Aquarium；**不关闭任何 QQ 进程**。
   - **开机自启**：`scripts/autostart.mjs`，npm 脚本 `autostart:install` / `autostart:uninstall`。
-    - install：在 `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\` 写入 `Aquarium.vbs`，内容为以隐藏窗口方式（`WScript.Shell` 的 `Run …, 0, False`）在仓库目录下运行 `"<process.execPath>" --env-file-if-exists=.env src\app\main.ts`；路径中的引号正确转义。
-    - uninstall：删除该文件。两者都打印执行结果。
-  - **`src/app/main.ts`**：`host.enabled` 为 true 时先启动托管，再创建适配器（适配器已有自动重连，SnowLuma 就绪前连接失败不影响）。`host.enabled` 为 false 时行为不变。
+    - install：在 `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\` 写入 `Aquarium.vbs`，内容为以隐藏窗口方式（`WScript.Shell` 的 `Run …, 0, False`）在仓库目录下运行 `"<process.execPath>" --env-file-if-exists=.env src\app\main.ts`；路径中的引号正确转义。若同名文件不是带 Aquarium 所有权标记的普通文件，拒绝覆盖。
+    - uninstall：只删除带 Aquarium 所有权标记的普通文件；不删除同名用户文件或符号链接。两者都打印执行结果。
+  - **`src/app/main.ts`**：`host.enabled` 为 true 时先启动托管，再创建适配器（适配器已有自动重连，SnowLuma 就绪前连接失败不影响）。SIGINT/SIGTERM 在 host.start 期间到达时，host 先登记以便 shutdown 停止；关闭后不继续启动 watcher、adapter 或面板。`host.enabled` 为 false 时行为不变。
   - 平台判断：非 Windows 平台且 `host.enabled` 为 true 时，打印 warn 并按 `host.enabled: false` 运行（`LinuxHost` 留待以后）。
-  - **测试**（不启动真实进程、不访问网络）：qq-watcher 只注入 UIN 匹配的 PID、永不注入不匹配或未知的 PID、同一 PID 不重复注入、消失的 PID 被清理；WebUI 客户端 401 重登一次、token 不出现在日志调用参数中；`hookAutoLoad: true` 时拒绝启动；退避时间序列；vbs 内容生成（含带空格与引号的路径）。
-  - **【用户】验收**：
-    1. `.env` 填 `SNOWLUMA_WEBUI_PASSWORD`；`data/config.yaml` 填 `host.qqExePath`。
+  - **测试**（不启动真实进程、不访问网络）：qq-watcher 只注入 UIN 匹配的 PID、永不注入不匹配或未知的 PID、同一 PID 不重复注入、消失的 PID 被清理；WebUI 客户端 401 重登一次、token 不出现在日志调用参数中、proxy mode 下不认证（含 client 创建后的运行期代理启用）；`hookAutoLoad: true` 时拒绝启动；fake spawn 断言继承环境不能打开自动注入或 wildcard WebUI listener；unmanaged attach 的已知危险 override 拒绝并 warning；SIGINT/SIGTERM 与延迟 host.start 竞态下停止 host、禁止 watcher/adapter 继续启动；退避时间序列；vbs 内容生成（含带空格与引号的路径）。
+  - 夜间完成结果（按 §7.1 排除托盘）：配置兼容、WebUI、进程生命周期、QQ watcher、自启动 VBS 生成和 main 接入均有 fake/offline 覆盖；`npm run check` 通过（187 项测试）。未启动 SnowLuma/QQ、未运行 `npm start`、未执行 autostart install，也未接入真实托盘库。
+  - **【用户】验收（真实托盘接入后执行；当前夜间空托盘实现不提供这些交互）**：
+    1. `.env` 填 `SNOWLUMA_WEBUI_PASSWORD`；`data/config.yaml` 确认 `host.enabled` / `host.startSnowLuma`。只有要使用托盘“打开 QQ”时才需要填 `host.qqExePath`。
     2. 关掉手动开的 SnowLuma；主号 QQ 照常开着。
     3. `npm start` → 托盘出现黄色小鱼，主号 QQ 没有被注入（SnowLuma 网页里看不到它被加载）。
     4. 托盘“打开 QQ” → 登录小号 → 托盘几秒内变青色，小号能正常回复。
@@ -396,6 +399,7 @@
 | 2026-10-14 | R13 | 图片下载只允许 HTTPS 腾讯域名，按点边界匹配并在拒绝时记录主机名、不记录完整 URL；fake fetch 测试覆盖允许/拒绝地址；`npm run check` 通过（137 项测试）/ `9a0626d836b5f9955f26d56ed5dc1faa19263acd` |
 | 2026-10-14 | T11 | 只读调研 SnowLuma WebUI auth/load、启动与 readiness、QQ PID/UIN、托盘候选和自启动；新增 `doc/plans/HOST-RESEARCH.md`；`npm run check` 通过（137 项测试）；用户确认方案 |
 | 2026-10-14 | T12a | 精确安装 `@trayjs/trayjs@0.0.10`；加入双尺寸三色 ICO 与仅 fake 测试的托盘 spike；`npm run check` 通过（142 项测试）；未运行托盘程序，人工验收待用户 |
+| 2026-10-14 | T12b | 完成 host 配置、loopback WebUI 客户端、受控 SnowLuma 子进程、UIN fail-closed watcher、自启动 VBS 生成及 main 接入；`npm run check` 通过（187 项测试）；未运行真实服务或安装自启动 |
 ---
 
 ## 6. 待评估清单
