@@ -8,6 +8,9 @@ dist/
 build/
 *.tsbuildinfo
 
+# Hermes local plans and session state (not project source)
+/.hermes/
+
 # 运行时数据：聊天记录、数据库、日志、存档快照（含群友隐私，绝不提交）
 /data/
 *.db

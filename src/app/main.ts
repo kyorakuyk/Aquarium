@@ -16,8 +16,13 @@ import { createRepository } from '../store/repository.ts';
 import { startPanelServer, type PanelAccountRuntime } from '../panel-server/server.ts';
 import { bootstrapHost, runStartupTasks } from '../host/bootstrap.ts';
 import type { Host } from '../host/types.ts';
-import { bindHostTray, createLogOnlyTray } from '../host/tray.ts';
+import { bindHostTrayAfterLoad, createWindowsTray } from '../host/tray.ts';
 import { createWindowsHost } from '../host/windows/host.ts';
+import {
+  createHostLifecycleQueue,
+  createSnowLumaRestartHandler,
+  createTrayMenuActionHandler,
+} from '../host/windows/tray-actions.ts';
 
 const logger = createLogger('app');
 const configPath = path.join(process.cwd(), 'data', 'config.yaml');
@@ -46,6 +51,12 @@ const sessionQueue = createSessionQueue();
 let panelServer: ReturnType<typeof startPanelServer> | undefined;
 let managedHost: Host | undefined;
 let shuttingDown = false;
+const hostLifecycle = createHostLifecycleQueue();
+const restartSnowLuma = createSnowLumaRestartHandler({
+  lifecycle: hostLifecycle,
+  getHost: () => managedHost,
+  isShuttingDown: () => shuttingDown,
+});
 
 function hasEnabledSession(config: typeof initialConfig): boolean {
   return config.defaults.enabled || Object.values(config.sessions).some((session) => session.enabled === true);
@@ -76,6 +87,7 @@ async function shutdown(signal: string): Promise<void> {
   configWatcher.close();
   clearInterval(debugPruneTimer);
   try {
+    await hostLifecycle.idle();
     await managedHost?.stop();
   } catch (error) {
     logger.error(`Windows 托管关闭失败：${describeError(error)}`);
@@ -120,15 +132,36 @@ if (initialConfig.host.enabled && initialConfig.accounts.length === 0) {
     onStopError: (error) => logger.error(`Windows 托管启动取消后的清理失败：${describeError(error)}`),
   });
   if (!shuttingDown && managedHost) {
-    subscriptions.push(managedHost.onStatus((status, message) => {
+    const hostForTray = managedHost;
+    subscriptions.push(hostForTray.onStatus((status, message) => {
       logger.info(`Windows 托管状态：${status}${message ? `；${message}` : ''}`);
     }));
-    const tray = createLogOnlyTray((message) => logger.info(message));
-    subscriptions.push(bindHostTray(
-      managedHost,
-      tray,
-      (action) => logger.info(`托盘菜单动作尚未实现：${action}`),
-    ));
+    const onTrayMenu = createTrayMenuActionHandler({
+      panelPort: initialConfig.panel.port,
+      qqExePath: initialConfig.host.qqExePath,
+      restartSnowLuma,
+      getManagement: () => managementControllers,
+      isShuttingDown: () => shuttingDown,
+      quit: () => shutdown('托盘'),
+      logError: (message) => logger.error(message),
+    });
+    try {
+      const trayBinding = await bindHostTrayAfterLoad({
+        host: hostForTray,
+        loadTray: () => createWindowsTray({
+          assetsDirectory: path.join(process.cwd(), 'assets', 'tray'),
+          qqExePath: initialConfig.host.qqExePath,
+          isAllMuted: () => managementControllers.length > 0
+            && managementControllers.every((management) => management.isAllMuted()),
+          logError: (message) => logger.error(message),
+        }),
+        shouldContinue: () => !shuttingDown && managedHost === hostForTray,
+        onMenu: onTrayMenu,
+      });
+      if (trayBinding) subscriptions.push(trayBinding);
+    } catch (error) {
+      if (!shuttingDown) logger.error(`系统托盘启动失败；Aquarium 继续运行：${describeError(error)}`);
+    }
   }
 }
 

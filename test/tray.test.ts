@@ -1,57 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Host, HostStatus } from '../src/host/types.ts';
+import { bindHostTray, type Tray, type TrayMenuAction, type TrayMenuHandler } from '../src/host/tray.ts';
 
-test('空托盘只记录接口调用，不触发菜单行为，并在 dispose 后静默', async () => {
-  const imported = await import('../src/host/tray.ts').catch(() => undefined);
-  assert.ok(imported, 'host tray module should exist');
-  const api = imported as unknown as {
-    createLogOnlyTray?: (log: (message: string) => void) => {
-      setState: (state: HostStatus, tooltip: string) => void;
-      onMenu: (handler: (action: string) => void) => void;
-      notify: (text: string) => void;
-      dispose: () => void;
-    };
-  };
-  assert.equal(typeof api.createLogOnlyTray, 'function');
-
-  const logs: string[] = [];
-  let menuCalls = 0;
-  const tray = api.createLogOnlyTray?.((message) => logs.push(message));
-  assert.ok(tray);
-  tray.setState('online', '水族箱 · 在线');
-  tray.onMenu(() => { menuCalls += 1; });
-  tray.notify('请登录小号 QQ');
-  tray.dispose();
-  tray.dispose();
-  tray.setState('error', '水族箱 · 出错');
-
-  assert.deepEqual(logs, [
-    '托盘状态：online；水族箱 · 在线',
-    '托盘菜单回调已注册（空实现）。',
-    '托盘通知（空实现）：请登录小号 QQ',
-    '托盘空实现已释放。',
-  ]);
-  assert.equal(menuCalls, 0);
-});
-
-test('host 状态绑定更新 tooltip，仅在进入等待登录态时通知一次并可清理', async () => {
-  const imported = await import('../src/host/tray.ts').catch(() => undefined);
-  assert.ok(imported, 'host tray module should exist');
-  const api = imported as unknown as {
-    bindHostTray?: (
-      host: Host,
-      tray: {
-        setState: (state: HostStatus, tooltip: string) => void;
-        onMenu: (handler: (action: string) => void) => void;
-        notify: (text: string) => void;
-        dispose: () => void;
-      },
-      onMenu: (action: string) => void,
-    ) => () => void;
-  };
-  assert.equal(typeof api.bindHostTray, 'function');
-
+test('host 状态绑定更新 tooltip，仅在进入等待登录态时通知一次并可清理', () => {
   let currentStatus: HostStatus = 'starting';
   const listeners = new Set<(status: HostStatus, message?: string) => void>();
   const host: Host = {
@@ -65,19 +17,26 @@ test('host 状态绑定更新 tooltip，仅在进入等待登录态时通知一�
     },
   };
   const events: string[] = [];
-  let menuHandler: ((action: string) => void) | undefined;
-  const tray = {
-    setState: (status: HostStatus, tooltip: string) => events.push(`state:${status}:${tooltip}`),
-    onMenu: (handler: (action: string) => void) => {
+  let menuHandler: TrayMenuHandler | undefined;
+  const tray: Tray = {
+    setState(status, tooltip) {
+      events.push(`state:${status}:${tooltip}`);
+    },
+    onMenu(handler) {
       events.push('menu:registered');
       menuHandler = handler;
     },
-    notify: (text: string) => events.push(`notify:${text}`),
-    dispose: () => events.push('dispose'),
+    notify(text) {
+      events.push(`notify:${text}`);
+    },
+    dispose() {
+      events.push('dispose');
+    },
   };
   const actions: string[] = [];
-  const dispose = api.bindHostTray?.(host, tray, (action) => actions.push(action));
-  assert.ok(dispose);
+  const dispose = bindHostTray(host, tray, (action: TrayMenuAction) => {
+    actions.push(action);
+  });
 
   const publish = (status: HostStatus): void => {
     currentStatus = status;
@@ -105,4 +64,51 @@ test('host 状态绑定更新 tooltip，仅在进入等待登录态时通知一�
   ]);
   assert.equal(beforeLateStatus, events.length);
   assert.deepEqual(actions, ['open-qq']);
+});
+
+test('shutdown during lazy tray loading disposes the tray without binding host callbacks', async () => {
+  const module = await import('../src/host/tray.ts');
+  const bindHostTrayAfterLoad = (module as unknown as {
+    bindHostTrayAfterLoad?: (options: {
+      host: Host;
+      loadTray: () => Promise<Tray>;
+      shouldContinue: () => boolean;
+      onMenu: TrayMenuHandler;
+    }) => Promise<(() => void) | undefined>;
+  }).bindHostTrayAfterLoad;
+  assert.equal(typeof bindHostTrayAfterLoad, 'function');
+  if (!bindHostTrayAfterLoad) return;
+
+  let statusSubscriptions = 0;
+  const host: Host = {
+    async start() {},
+    async stop() {},
+    status: () => 'starting',
+    onStatus() {
+      statusSubscriptions += 1;
+      return () => {};
+    },
+  };
+  let disposeCalls = 0;
+  const tray: Tray = {
+    setState() {},
+    onMenu() {},
+    notify() {},
+    dispose() { disposeCalls += 1; },
+  };
+  let releaseTray: ((value: Tray) => void) | undefined;
+  let shouldContinue = true;
+  const pendingBinding = bindHostTrayAfterLoad({
+    host,
+    loadTray: () => new Promise((resolve) => { releaseTray = resolve; }),
+    shouldContinue: () => shouldContinue,
+    onMenu: () => {},
+  });
+
+  shouldContinue = false;
+  releaseTray?.(tray);
+
+  assert.equal(await pendingBinding, undefined);
+  assert.equal(disposeCalls, 1);
+  assert.equal(statusSubscriptions, 0);
 });
