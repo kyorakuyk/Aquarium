@@ -360,6 +360,20 @@ T12c 质量门：`npm run check` 通过 211 项（TypeScript、依赖边界检�
 
 **面板启动 follow-up：**用户验收发现小号在启动时离线会使 `adapter.connect()` 等待，从而阻挡原先排在所有账号连接之后的管理面板启动。`main.ts` 现在先启动账号任务，随后立即启动面板，再继续 await 账号任务；面板仍有独立的密码环境变量 gate。Deferred-promise regression 验证账号连接未完成时面板启动回调已运行。`npm run check` 通过 212 项；精确 review fingerprint `9a7982774c5da99984a93647a8d3b88b664356c0cb752eea3b2fa9b1bcc9ea64` 通过；提交 `1f0f2b7668e5ffbaee08824de10b7527aa78bbfa`，标签 `checkpoint/dev-host-panel-startup-fix-2026-10-14-unverified`。还需用户在小号离线时实测面板端口先行监听。
 
+### 12.12 阶段 D：区分宿主接口、空实现与真实托盘
+
+PLAN §7.1 的托盘工作分成三个不同层次：先离线检查 T12a spike 和图标，再完成不含托盘的 T12b host，最后只给主程序接入一个 log-only `Tray` 实现。`src/host/tray.ts` 是接口边界；`createLogOnlyTray()` 让 `main.ts` 可以接上状态和生命周期，而不启动 helper 或改变桌面环境。这个阶段验证的是“宿主怎样调用托盘能力”，不是“Windows 托盘已经可见”。
+
+后来的 T12c 才把真实 trayjs helper 放进 Worker；Worker/假托盘测试证明通信、错误隔离和关闭路径，但仍不能替代真实 Aquarium GUI 验收。对照阅读 `doc/plans/HOST-RESEARCH.md` 的阶段 D 证据表，再按 `doc/plans/MORNING-2026-10-14.md` 执行用户步骤：T12a 独立 spike 的四项 GUI 检查已经由用户确认；T12c 集成托盘和 autostart 仍待用户验收。
+
+| 证据 | 能说明什么 | 不能说明什么 |
+|---|---|---|
+| `npm run check` 的 189 项结果 | 当时的 TypeScript、依赖边界和自动化测试通过；log-only 接线可由 fake 验证 | 不证明真实 helper、QQ、SnowLuma 或 Startup 文件夹行为 |
+| T12c 的 211 项检查与独立 review | 被审代码快照的自动化行为和静态审查通过 | 不证明托盘图标在当前 Windows 用户会话出现；review tag 仍为 `unverified` |
+| 面板启动 follow-up 的 212 项检查 | 延迟账号连接期间，启动编排已允许管理面板先启动 | 不证明用户本机密码配置正确或真实端口已由用户复测 |
+
+计划与证据索引：`doc/plans/PLAN.md` §7.1/§7.6、`doc/plans/HOST-RESEARCH.md`、`doc/plans/MORNING-2026-10-14.md`。阅读测试数字时应保留它们各自对应的提交，不把不同时间的 gate 相加或当成一次运行。
+
 ## 13. 之后的阶段
 
 T0–T10 与 R10–R13 的代码和自动化检查均已完成；U2 真实环境验收已由用户于 2026-10-14 完成，反馈无重大问题。T11 方案已由用户确认。dev/host 已完成 T12a spike、T12b host、T12c Aquarium trayjs worker 集成及面板启动 follow-up；T12a 四项 spike GUI 验收通过，T12b 测试账号可正常对话。最新 `npm run check` 通过 212 项，startup follow-up 精确复核通过；真实 Aquarium Windows 托盘/QQ 与自启动验收仍待用户，`autostart:install` 未执行。

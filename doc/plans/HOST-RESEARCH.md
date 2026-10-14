@@ -148,6 +148,18 @@ SnowLuma 当前进程枚举器只把 PID 映射成配置的显示名和空路径
 - Review 留下两条非阻塞建议：并发重复 `Host.stop()` 时后续调用可能早于首次清理完成返回；watcher 停止后在途的最终 401 仍可能让 host 状态转为 `error`。当前不因此重启扫描或进程；这两项未纳入本轮夜间修复。
 - 未运行 `npm start`、真实 SnowLuma/QQ、tray spike/helper、GUI 或 `autostart:install`；未验证 WebUI TOTP、自签名 TLS 信任和真实 Windows helper/杀软/退出兼容。相应验收留在 `MORNING-2026-10-14.md`。
 
+## 阶段 D §7.1 范围与证据对照（2026-10-15）
+
+> 本表把计划范围、代码切片和验收边界对齐；测试数字对应各自历史提交，不能相加为一次测试运行。
+
+| §7.1 内容 | 代码与记录 | 已有证据 | 不能据此推断 |
+|---|---|---|---|
+| T12a 离线核对与 spike | `src/spike/tray.ts`、`assets/tray/`；本文件“T12a 结果” | 安装占用实测 193,191 bytes；完整 `npm run check` 142 项；用户后来确认独立 spike 的图标、菜单禁用、颜色循环和退出清理 | 不证明 Aquarium 主程序已接入托盘；阶段 D 夜间没有启动 tray spike/helper |
+| T12b 非托盘 host | `src/host/windows/`、`src/app/main.ts`、`scripts/autostart.mjs`；本文件“阶段 D 补充”与“probe 请求超时边界” | T12b 实现质量门 187 项；probe-timeout follow-up 190 项；用户后续报告测试账号可对话，后续日志记录 host/adapter online | 不证明已安装 autostart，也不覆盖 TOTP、自签名 TLS 和所有真实 Windows 进程情形 |
+| 空托盘接口 | `src/host/tray.ts` 与 `createLogOnlyTray()`；本文件“空托盘接口范围” | `npm run check` 189 项；独立 review fingerprint `85d1fb8211092322b11e90e6589639ad5021c0ae5aebaff075ea48ef30d88103`；提交 `afbdaa152dc3ef4ce601dcf9f111bb4797951386` | 只证明接口、log-only wiring 和 fake 行为；不加载 trayjs、不创建真实托盘或系统通知 |
+
+后续 T12c 才把 trayjs helper 接入 Worker；代码提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df` 与面板启动 follow-up `1f0f2b7668e5ffbaee08824de10b7527aa78bbfa` 均有独立记录，但真实 Aquarium 托盘验收仍按 `MORNING-2026-10-14.md` 留给用户。阶段 D 的“空实现”与后来的“真实托盘代码”是不同验收层级，不要用后者的 fake 测试代替用户 GUI 验收。
+
 ## T12b 用户验收后续：probe 请求超时边界（2026-10-14）
 
 > 以下仅记录用户手动运行后提供的脱敏日志现象与仓库内复现；不保存账号 UIN、PID、路径或凭据。用户报告按 Ctrl+C 后 Aquarium 正常退出。
