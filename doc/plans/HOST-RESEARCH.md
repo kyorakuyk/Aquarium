@@ -169,3 +169,8 @@ SnowLuma 当前进程枚举器只把 PID 映射成配置的显示名和空路径
 - 为核实是否需要修复 online 日志，随后补查 17:16–17:19 的完整本机 Aquarium 日志：第二次运行在 17:17:07 记录 adapter `online`，17:17:12 记录 host `online`；同一窗口还记录一次 load HTTP 200，之后 process polling 持续正常，没有 probe network error 或 load failure warning。
 - 因此不存在“online 日志始终不产生”的代码问题；第一次运行的日志缺少 online，与其当时的 adapter offline/waiting 状态一致。后续运行产生了预期状态事件，用户也确认测试账号可正常对话，无需为 online 日志另改代码。
 - 真实托盘 GUI 与 autostart 未包含在这次测试中。
+
+## T12a 独立托盘 spike 用户 GUI 验收（2026-10-14）
+
+- 用户确认四项均通过：系统托盘出现图标；“状态：测试中”不可点击；“切换颜色”按青、黄、红循环；点击“退出”后 spike 与 tray helper 退出且图标清理。
+- 此结果只证明 `src/spike/tray.ts` 独立 spike 在该 Windows 用户环境可启动、操作和退出；不代表 `main.ts` 已接入真实托盘库。Aquarium 当前的 `createLogOnlyTray()` 仍只写日志，系统通知 API 也未获验证。

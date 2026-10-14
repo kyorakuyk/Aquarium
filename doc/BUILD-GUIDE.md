@@ -352,6 +352,6 @@ T10 后 `npm run check` 实测为 126 项测试通过、依赖边界检查通过
 
 ## 13. 之后的阶段
 
-T0–T10 与 R10–R13 的代码和自动化检查均已完成；U2 真实环境验收已由用户于 2026-10-14 完成，反馈无重大问题。T11 方案已由用户确认。当前 dev/host 分支已完成 PLAN §7.1 的 T12a 代码、T12b 非托盘实现及 log-only 空托盘接口；用户实测发现的 probe 超时已在 `aba7022` 修复（review fingerprint `d093c51c…e2b516`），最新 `npm run check` 190 项通过。完整日志的后续运行显示 adapter/host online，用户确认测试账号可正常对话；无需再改 online 日志代码。真实托盘 GUI 与 autostart 验收仍未完成。
+T0–T10 与 R10–R13 的代码和自动化检查均已完成；U2 真实环境验收已由用户于 2026-10-14 完成，反馈无重大问题。T11 方案已由用户确认。当前 dev/host 分支已完成 PLAN §7.1 的 T12a 代码、T12b 非托盘实现及 log-only 空托盘接口；T12a 独立 tray spike 的四项用户 GUI 验收通过。T12b probe 超时已在 `aba7022` 修复（review fingerprint `d093c51c…e2b516`），最新 `npm run check` 190 项通过；完整日志显示 adapter/host online，用户确认测试账号可正常对话。真实托盘库尚未接入 Aquarium，autostart 安装未执行。
 
 每个章节都以实际代码和真实测试结果为准；还没实现的部分会明确标为“计划”，不把计划写成已完成事实。

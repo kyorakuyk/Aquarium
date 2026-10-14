@@ -42,7 +42,7 @@
 ## 2. 当前状态
 
 - 阶段 A–C（R1–R13、C0、T7–T10）已完成；U1、U2 真实环境验证已由用户完成，U2 反馈无重大问题；代码已在 `main`。
-- T11 托管层调研已由用户确认；当前在 `dev/host` 按 §7.1 夜间范围推进阶段 D。T12a、T12b 非托盘实现、空托盘接口及 `HOST-RESEARCH.md` 实施补充均已完成。T12b 请求超时修复已提交（`aba7022a1eb231497ba7666efb5392e5316553ab`，精确 review SHA-256 `d093c51c7773e694295d46b15e23be671a1129ce19b7dffc104033d667e2b516`），`npm run check` 通过 190 项。完整日志复查发现 17:17 的后续运行记录了 adapter `online` 与 host `online`；用户也确认测试账号可正常对话。无需为 online 日志另改代码。真实托盘 GUI 与 autostart 验收仍待用户；最新本地收尾标签为 `checkpoint/dev-host-night-final-t12b-online-2026-10-14-unverified`。
+- T11 托管层调研已由用户确认；当前在 `dev/host` 按 §7.1 夜间范围推进阶段 D。T12a spike 的四项独立 GUI 验收已由用户确认通过；T12b 非托盘实现、空托盘接口及 `HOST-RESEARCH.md` 实施补充均已完成。T12b 请求超时修复已提交（`aba7022a1eb231497ba7666efb5392e5316553ab`，精确 review SHA-256 `d093c51c7773e694295d46b15e23be671a1129ce19b7dffc104033d667e2b516`），`npm run check` 通过 190 项；完整日志有 adapter/host `online`，用户确认测试账号可正常对话。真实托盘接入仍按计划延期，autostart 安装未执行；最新本地收尾标签为 `checkpoint/dev-host-night-final-tray-spike-pass-2026-10-14-unverified`。
 
 ---
 
@@ -398,7 +398,7 @@
 | 2026-10-13 | R12 | 清除英文页面分类标签、总览状态句按账号数动态展示、链路文案本地化并防止移动按钮换行；`npm run check` 通过（136 项测试），`npm run panel:build` 成功 |
 | 2026-10-14 | R13 | 图片下载只允许 HTTPS 腾讯域名，按点边界匹配并在拒绝时记录主机名、不记录完整 URL；fake fetch 测试覆盖允许/拒绝地址；`npm run check` 通过（137 项测试）/ `9a0626d836b5f9955f26d56ed5dc1faa19263acd` |
 | 2026-10-14 | T11 | 只读调研 SnowLuma WebUI auth/load、启动与 readiness、QQ PID/UIN、托盘候选和自启动；新增 `doc/plans/HOST-RESEARCH.md`；`npm run check` 通过（137 项测试）；用户确认方案 |
-| 2026-10-14 | T12a | 精确安装 `@trayjs/trayjs@0.0.10`；加入双尺寸三色 ICO 与仅 fake 测试的托盘 spike；`npm run check` 通过（142 项测试）；未运行托盘程序，人工验收待用户 |
+| 2026-10-14 | T12a | 精确安装 `@trayjs/trayjs@0.0.10`；加入双尺寸三色 ICO 与仅 fake 测试的托盘 spike；`npm run check` 通过（142 项测试）；用户后续独立 GUI 验收四项通过（图标、禁用状态项、颜色循环、退出清理）；Aquarium 真实托盘接入仍延期 |
 | 2026-10-14 | T12b | 完成 host 配置、loopback WebUI 客户端、受控 SnowLuma 子进程、UIN fail-closed watcher、自启动 VBS 生成及 main 接入；`npm run check` 通过（187 项测试）；精确 staged review 通过，提交 `d5378fe` / `checkpoint/dev-host-t12b-2026-10-14-unverified`；未运行真实服务或安装自启动 |
 | 2026-10-14 | T12-空托盘 | 新增 `src/host/tray.ts` log-only tray interface/adapter，main 绑定 host 状态、等待登录通知、菜单回调与退出清理；2 项定向测试及完整 `npm run check`（189 项）通过；精确 staged review 通过，提交 `afbdaa1` / `checkpoint/dev-host-tray-null-2026-10-14-unverified`；未加载真实托盘库 |
 | 2026-10-14 | HOST-RESEARCH 补充 | 追加 T12b/空托盘离线实现结果、安全边界、审查证据及未验证项；未运行真实服务；提交 `2480368` / `checkpoint/dev-host-host-research-supplement-2026-10-14-unverified` |
