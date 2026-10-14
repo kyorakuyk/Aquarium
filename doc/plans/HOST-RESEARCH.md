@@ -185,3 +185,11 @@ SnowLuma 当前进程枚举器只把 PID 映射成配置的显示名和空路径
 - Fake tray/worker 测试覆盖状态与菜单、ready 延迟、helper 意外退出、Worker 启动/通信错误、parent-port close、延迟加载时 shutdown 与不重建。完整 `npm run check` 通过 211 项；`git diff --check` 通过。
 - 精确 staged snapshot review 通过：fingerprint `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`；security/logic findings 为空。代码提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df`，本地标签 `checkpoint/dev-host-t12c-code-2026-10-14-unverified`。标签保持 `unverified`，因为真实 Windows 用户验收仍待完成。
 - 非阻塞 reviewer 建议：异步菜单状态刷新与 dispose 并发时尚无专门回归；本轮未扩大范围。真实托盘/菜单关闭验收留给用户；未运行 `npm start`、tray、QQ、SnowLuma、GUI 或 `autostart:install`。
+
+## T12c 用户验收 follow-up：面板启动不再依赖 QQ 登录（2026-10-14）
+
+- 用户实测发现：若 `npm start` 时小号 QQ 尚未登录，随后手动登录也不会让 5180 端口开始监听；只有启动时 QQ 已在线才可访问。源码追踪确认 `main.ts` 先 await 串行 `runStartupTasks()`，每个任务又 await `adapter.connect()`，而面板在全部账号任务后才启动；连接等待会挡住面板初始化。
+- 修复后主程序先启动账号任务，再在其 `adapter.connect()` 仍等待时立即启动面板；主流程仍 await 原 startup promise，保留原账号启动/错误处理顺序。面板原有 `panel.passwordEnv` 非空门槛和 shutdown guard 不变。
+- 新增 deferred-promise regression：账号连接仍 pending 时，面板启动回调必须已经运行。测试先因 ordering helper 缺失按预期 RED，修复后 GREEN。
+- `npm run check` 通过 212 项（TypeScript、依赖边界检查及测试）；精确 staged review 通过，fingerprint `9a7982774c5da99984a93647a8d3b88b664356c0cb752eea3b2fa9b1bcc9ea64`。代码提交 `1f0f2b7668e5ffbaee08824de10b7527aa78bbfa`，标签 `checkpoint/dev-host-panel-startup-fix-2026-10-14-unverified`。
+- 未运行 `npm start`、真实 QQ/SnowLuma、浏览器或 panel server；待用户复测“小号启动时离线、先打开 panel、再登录小号”。Reviewer 非阻塞建议：`Aquarium 已启动` 日志可能出现在账号连接完成前；新增回归验证 helper ordering，但未直接实例化 main composition。

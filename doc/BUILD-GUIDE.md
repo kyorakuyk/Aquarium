@@ -358,8 +358,10 @@ T10 后 `npm run check` 实测为 126 项测试通过、依赖边界检查通过
 
 T12c 质量门：`npm run check` 通过 211 项（TypeScript、依赖边界检查、211 tests），`git diff --check` 通过；精确 staged review fingerprint `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b` 通过。代码提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df`，标签 `checkpoint/dev-host-t12c-code-2026-10-14-unverified`。本轮未运行真实 tray/helper、QQ、SnowLuma、GUI 或 `autostart:install`；Windows 用户验收步骤见 `doc/plans/MORNING-2026-10-14.md`。Reviewer 有一条非阻塞建议：异步菜单 refresh 与 dispose 并发还没有专项测试，留作用户集成验收观察项。
 
+**面板启动 follow-up：**用户验收发现小号在启动时离线会使 `adapter.connect()` 等待，从而阻挡原先排在所有账号连接之后的管理面板启动。`main.ts` 现在先启动账号任务，随后立即启动面板，再继续 await 账号任务；面板仍有独立的密码环境变量 gate。Deferred-promise regression 验证账号连接未完成时面板启动回调已运行。`npm run check` 通过 212 项；精确 review fingerprint `9a7982774c5da99984a93647a8d3b88b664356c0cb752eea3b2fa9b1bcc9ea64` 通过；提交 `1f0f2b7668e5ffbaee08824de10b7527aa78bbfa`，标签 `checkpoint/dev-host-panel-startup-fix-2026-10-14-unverified`。还需用户在小号离线时实测面板端口先行监听。
+
 ## 13. 之后的阶段
 
-T0–T10 与 R10–R13 的代码和自动化检查均已完成；U2 真实环境验收已由用户于 2026-10-14 完成，反馈无重大问题。T11 方案已由用户确认。dev/host 已完成 T12a spike、T12b host 及 T12c Aquarium trayjs worker 集成；T12a 四项 spike GUI 验收通过，T12b 测试账号可正常对话。T12c 代码快照复核通过、`npm run check` 211 项通过，但真实 Aquarium Windows 托盘/QQ 与自启动验收仍待用户；`autostart:install` 未执行。
+T0–T10 与 R10–R13 的代码和自动化检查均已完成；U2 真实环境验收已由用户于 2026-10-14 完成，反馈无重大问题。T11 方案已由用户确认。dev/host 已完成 T12a spike、T12b host、T12c Aquarium trayjs worker 集成及面板启动 follow-up；T12a 四项 spike GUI 验收通过，T12b 测试账号可正常对话。最新 `npm run check` 通过 212 项，startup follow-up 精确复核通过；真实 Aquarium Windows 托盘/QQ 与自启动验收仍待用户，`autostart:install` 未执行。
 
 每个章节都以实际代码和真实测试结果为准；还没实现的部分会明确标为“计划”，不把计划写成已完成事实。

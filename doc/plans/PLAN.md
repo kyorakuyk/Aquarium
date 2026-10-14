@@ -42,7 +42,7 @@
 ## 2. 当前状态
 
 - 阶段 A–C（R1–R13、C0、T7–T10）已完成；U1、U2 真实环境验证已由用户完成，U2 反馈无重大问题；代码已在 `main`。
-- T11 托管层调研已由用户确认；T12a spike 的四项独立 GUI 验收已由用户确认通过；T12b 非托盘实现与 probe-timeout 复测已完成。T12c 真实托盘代码现已完成：提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df`，精确 review SHA-256 `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`，`npm run check` 通过 211 项；本地标签 `checkpoint/dev-host-t12c-code-2026-10-14-unverified`。Aquarium 真实 Windows 托盘/QQ/autostart 用户验收仍待执行，`autostart:install` 未运行。
+- T11 托管层调研已由用户确认；T12a spike 的四项独立 GUI 验收已由用户确认通过；T12b 非托盘实现与 probe-timeout 复测已完成。T12c 真实托盘代码提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df`（review SHA-256 `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`）；用户实测后新增面板启动顺序修复提交 `1f0f2b7668e5ffbaee08824de10b7527aa78bbfa`（review SHA-256 `9a7982774c5da99984a93647a8d3b88b664356c0cb752eea3b2fa9b1bcc9ea64`）。最新 `npm run check` 通过 212 项；follow-up 标签为 `checkpoint/dev-host-panel-startup-fix-2026-10-14-unverified`。真实 Windows 托盘/QQ/autostart 用户验收仍待执行，`autostart:install` 未运行。
 
 ---
 
@@ -315,6 +315,7 @@
   - **【用户】验收**：T12b 验收步骤 3–6（托盘变色、打开 QQ、开机自启无黑窗口、退出后两个 QQ 都在）。
   - 已知限制（记入 §6，不在本任务处理）：同一个 QQ 进程若先被判定为“忽略”，之后在该进程内切换登录为小号，不会被注入，需要重新打开该 QQ。
   - 代码收尾：`npm run check` 通过 211 项；`git diff --check` 通过；精确 staged review 通过（SHA-256 `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`）；提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df` / `checkpoint/dev-host-t12c-code-2026-10-14-unverified`。未运行真实托盘、QQ、SnowLuma 或 autostart；用户验收按 `MORNING-2026-10-14.md` 执行。
+  - 面板启动 follow-up：先启动账号任务，再启动本地管理面板，不等待 `adapter.connect()` 完成；启动 promise 仍被 await，保留原有账号连接顺序。复核通过（SHA-256 `9a7982774c5da99984a93647a8d3b88b664356c0cb752eea3b2fa9b1bcc9ea64`），`npm run check` 通过 212 项；提交 `1f0f2b7668e5ffbaee08824de10b7527aa78bbfa` / `checkpoint/dev-host-panel-startup-fix-2026-10-14-unverified`。管理面板仍要求本机配置的密码环境变量非空；真实登录前访问验收待用户复测。
 
 > **⛔ 停止点 4**：M1 结束。M2 的施工计划另行编写。
 
@@ -413,6 +414,7 @@
 | 2026-10-14 | HOST-RESEARCH 补充 | 追加 T12b/空托盘离线实现结果、安全边界、审查证据及未验证项；未运行真实服务；提交 `2480368` / `checkpoint/dev-host-host-research-supplement-2026-10-14-unverified` |
 | 2026-10-14 | T12b probe-timeout follow-up | 用户首次手动运行观察到登录最终成功、进程列表 HTTP 200，但 `probe-login` 重复 network error；确认 host 默认请求超时 1s 短于 SnowLuma probe 最长 5s，增加至 7s；慢响应回归按预期 RED→GREEN；`npm run check` 通过（190 项）；精确 staged review 通过，提交 `aba7022` / `checkpoint/dev-host-probe-timeout-fix-2026-10-14-unverified`。后续 17:17 运行记录 adapter/host online，用户确认可正常对话；此前 17:00 初次运行未出现 online，但后续运行证明状态日志链可工作 |
 | 2026-10-14 | T12c | 将 trayjs 接入 Windows tray worker，增加 helper/worker 错误隔离、状态/提示/menu 映射与 shutdown 清理；`npm run check` 通过（211 项），精确 review 通过（SHA-256 `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`）；提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df` / `checkpoint/dev-host-t12c-code-2026-10-14-unverified`。真实 Windows 用户验收及 autostart install 待用户执行 |
+| 2026-10-14 | T12c panel-startup follow-up | 用户确认小号离线启动时管理面板端口未开启；根因是主流程等待串行 `adapter.connect()` 后才启动 panel。现先启动账号任务，再立刻启动 panel，同时仍 await 账号任务；`npm run check` 通过（212 项），精确 review 通过（SHA-256 `9a7982774c5da99984a93647a8d3b88b664356c0cb752eea3b2fa9b1bcc9ea64`）；提交 `1f0f2b7668e5ffbaee08824de10b7527aa78bbfa` / `checkpoint/dev-host-panel-startup-fix-2026-10-14-unverified`。待用户复测启动时小号未登录的情形 |
 ---
 
 ## 6. 待评估清单
