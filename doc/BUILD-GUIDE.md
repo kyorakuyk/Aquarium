@@ -352,6 +352,6 @@ T10 后 `npm run check` 实测为 126 项测试通过、依赖边界检查通过
 
 ## 13. 之后的阶段
 
-T0–T10 与 R10–R13 的代码和自动化检查均已完成；U2 真实环境验收已由用户于 2026-10-14 完成，反馈无重大问题。T11 方案已由用户确认。当前 dev/host 分支已完成 PLAN §7.1 的 T12a 代码、T12b 非托盘实现及 log-only 空托盘接口，完整 `npm run check` 为 189 项通过；T12b 与空托盘接口的精确暂存快照均已独立复核并提交，标签分别为 `checkpoint/dev-host-t12b-2026-10-14-unverified`、`checkpoint/dev-host-tray-null-2026-10-14-unverified`。没有启动真实托盘、SnowLuma、QQ，也没有安装自启动；所有真实 GUI/QQ/autostart 验收仍待用户。
+T0–T10 与 R10–R13 的代码和自动化检查均已完成；U2 真实环境验收已由用户于 2026-10-14 完成，反馈无重大问题。T11 方案已由用户确认。当前 dev/host 分支已完成 PLAN §7.1 的 T12a 代码、T12b 非托盘实现及 log-only 空托盘接口，完整 `npm run check` 为 189 项通过；`HOST-RESEARCH.md` 已追加实现结果/离线证据与未验证边界。没有启动真实托盘、SnowLuma、QQ，也没有安装自启动；所有真实 GUI/QQ/autostart 验收仍待用户。
 
 每个章节都以实际代码和真实测试结果为准；还没实现的部分会明确标为“计划”，不把计划写成已完成事实。

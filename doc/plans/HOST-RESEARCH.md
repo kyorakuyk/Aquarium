@@ -122,3 +122,28 @@ SnowLuma 当前进程枚举器只把 PID 映射成配置的显示名和空路径
 - README/API 提供 icon、菜单、tooltip、quit 与 ready/close；**没有文档化的 Windows 系统通知/气泡提示 API**。因此 T12b 的扫码通知只能先更新托盘提示文字；不能把本 spike 当作系统通知支持的证明。
 - 图标为 `assets/tray/{teal,yellow,red}.ico`，每个包含 16×16 与 32×32 图像。`node --test test/tray-assets.test.ts test/tray-spike.test.ts` 通过 5 项；`npm run typecheck` 与完整 `npm run check` 通过，完整检查 142 项测试全绿。
 - `src/spike/tray.ts` 只有直接执行该文件时才动态导入 `Tray` 并启动 helper；单元测试注入 fake tray，**本次未运行 `node src/spike/tray.ts`、未创建真实托盘进程、未做用户 GUI 验收**。
+
+## 阶段 D 补充：T12b 与空托盘实现的离线结果（2026-10-14）
+
+> 本节补充 T11 研究经用户确认后形成的阶段 D 实现证据与剩余边界；不改变前文对 SnowLuma/QQ 真实环境未启动、未调用 API、未注入的记录。以下结论来自代码检查和 fake/offline 自动化测试，不等同于 Windows 用户环境验收。
+
+### T12b 实施对原研究结论的落实
+
+- Aquarium 托管子进程启动前读取 `runtime.json`；若 `hookAutoLoad=true` 则 fail-closed。由于 SnowLuma 进程环境变量可覆盖该文件，受控 spawn 会移除继承的 auto-load、WebUI listener/TLS/password overrides，再显式固定 `SNOWLUMA_HOOK_AUTOLOAD=false` 与已校验的 loopback host/port/TLS；Aquarium 的 `SNOWLUMA_WEBUI_PASSWORD` 不传给子进程。
+- `startSnowLuma=false` 是对外部手动进程的 unmanaged attach。宿主会拒绝 Aquarium 当前环境中可见的 auto-load 或非 loopback override 并记录警告，但不能读取另一个已运行进程的有效环境；使用该模式仍须由用户确认实际服务关闭 auto-load 且只绑定 loopback。
+- WebUI 认证只使用 loopback URL，禁止 redirect，密码和 Bearer token 不写入日志；401 只重登一次，最终认证失败会停止 watcher。JSON body 解析也在请求 timeout 内，未消费的错误响应 body 会取消。
+- QQ 注入保持 fail-closed：只有 `probe-login` 返回 `identityKnown=true` 且 UIN 精确匹配配置账号时才调用 load。身份未知、非匹配、PID 消失或探测失败均不放宽为自动注入。
+- Node env-proxy 不应把 loopback 登录密码或 Bearer token 转交给代理。客户端在每次认证请求前检查环境、启动参数、Node 配置旗标及当前 `node:http`/`node:https` global agent；包括客户端创建后由 `setGlobalProxyFromEnv()` 动态切换的情形。回归使用替身 fetch 验证请求被拒绝，未发出网络请求。
+- SIGINT/SIGTERM 与异步 host startup 的竞态已加门禁：host 在 `start()` 前交给 shutdown 管理；收到 shutdown 后停止 host、避免启动 watcher，且 adapter/panel 启动路径在关闭后不再继续。该边界由延迟 fake startup 覆盖。
+- 开机自启 VBS 使用 Aquarium 所有权标记；临时目录测试验证不覆盖或删除未归 Aquarium 所有的同名文件。**没有运行真实 Startup install/uninstall。**
+
+### 空托盘接口范围
+
+- `src/host/tray.ts` 定义 HostStatus、tooltip、菜单 action、notify 与 dispose 接口；当前由 `createLogOnlyTray()` 提供空实现，所有方法只记录日志。`bindHostTray()` 把宿主状态映射为 tooltip，并在进入 `waiting_qq_login` 时记录一次通知；菜单 callback 仅登记，不执行打开 QQ、控制台、闭嘴、重启或退出动作。
+- 本实现不导入 `@trayjs/trayjs`，不创建 helper，不显示系统通知，也没有真实托盘 UI；真实库接入和 T12a spike 用户 GUI 验收仍待白天进行。
+
+### 离线验证、审查与残余
+
+- 最终 `npm run check` 通过：TypeScript、依赖边界检查及 **189 项测试**均通过；`git diff --check` 与 staged production additions 静态扫描通过。T12b 精确代码快照提交 `d5378fe370799c61269d70ec85d056ec410f3ef4`，独立 review fingerprint `91b51c187fc793be3b7d54bb3640c25f163b4776bb7af19d0c9d11a29853b9c7`；空托盘快照提交 `afbdaa152dc3ef4ce601dcf9f111bb4797951386`，独立 review fingerprint `85d1fb8211092322b11e90e6589639ad5021c0ae5aebaff075ea48ef30d88103`。
+- Review 留下两条非阻塞建议：并发重复 `Host.stop()` 时后续调用可能早于首次清理完成返回；watcher 停止后在途的最终 401 仍可能让 host 状态转为 `error`。当前不因此重启扫描或进程；这两项未纳入本轮夜间修复。
+- 未运行 `npm start`、真实 SnowLuma/QQ、tray spike/helper、GUI 或 `autostart:install`；未验证 WebUI TOTP、自签名 TLS 信任和真实 Windows helper/杀软/退出兼容。相应验收留在 `MORNING-2026-10-14.md`。
