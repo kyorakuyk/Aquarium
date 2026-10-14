@@ -60,7 +60,8 @@ export function createSnowLumaProcess(options: SnowLumaProcessOptions) {
   const sleep = options.sleep ?? ((milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
   const readinessTimeoutMs = options.readinessTimeoutMs ?? 60_000;
   const retryIntervalMs = options.retryIntervalMs ?? 1_000;
-  const requestTimeoutMs = options.requestTimeoutMs ?? 1_000;
+  // SnowLuma's QQ login probe can take up to 5 seconds; leave transport margin.
+  const requestTimeoutMs = options.requestTimeoutMs ?? 7_000;
   const setTimer = options.setTimer ?? globalThis.setTimeout;
   const clearTimer = options.clearTimer ?? globalThis.clearTimeout;
   const backoff = createRestartBackoff();
