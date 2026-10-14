@@ -16,6 +16,7 @@ import { createRepository } from '../store/repository.ts';
 import { startPanelServer, type PanelAccountRuntime } from '../panel-server/server.ts';
 import { bootstrapHost, runStartupTasks } from '../host/bootstrap.ts';
 import type { Host } from '../host/types.ts';
+import { bindHostTray, createLogOnlyTray } from '../host/tray.ts';
 import { createWindowsHost } from '../host/windows/host.ts';
 
 const logger = createLogger('app');
@@ -122,6 +123,12 @@ if (initialConfig.host.enabled && initialConfig.accounts.length === 0) {
     subscriptions.push(managedHost.onStatus((status, message) => {
       logger.info(`Windows 托管状态：${status}${message ? `；${message}` : ''}`);
     }));
+    const tray = createLogOnlyTray((message) => logger.info(message));
+    subscriptions.push(bindHostTray(
+      managedHost,
+      tray,
+      (action) => logger.info(`托盘菜单动作尚未实现：${action}`),
+    ));
   }
 }
 
