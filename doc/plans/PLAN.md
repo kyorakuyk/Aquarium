@@ -42,7 +42,7 @@
 ## 2. 当前状态
 
 - 阶段 A–C（R1–R13、C0、T7–T10）已完成；U1、U2 真实环境验证已由用户完成，U2 反馈无重大问题；代码已在 `main`。
-- T11 托管层调研已由用户确认；当前在 `dev/host` 按 §7.1 夜间范围推进阶段 D。T12a、T12b 非托盘实现、空托盘接口及 `HOST-RESEARCH.md` 实施补充均已完成。用户首次手动验收发现重复 `probe-login network error`；T12b 的请求超时后续修复已提交（`aba7022a1eb231497ba7666efb5392e5316553ab`，精确 review SHA-256 `d093c51c7773e694295d46b15e23be671a1129ce19b7dffc104033d667e2b516`），`npm run check` 通过 190 项。真实 QQ/UIN 复测、托盘 GUI 与 autostart 验收仍待用户；最新本地收尾标签为 `checkpoint/dev-host-night-final-probe-timeout-2026-10-14-unverified`。
+- T11 托管层调研已由用户确认；当前在 `dev/host` 按 §7.1 夜间范围推进阶段 D。T12a、T12b 非托盘实现、空托盘接口及 `HOST-RESEARCH.md` 实施补充均已完成。用户首次手动验收发现重复 `probe-login network error`；请求超时修复已提交（`aba7022a1eb231497ba7666efb5392e5316553ab`，精确 review SHA-256 `d093c51c7773e694295d46b15e23be671a1129ce19b7dffc104033d667e2b516`），`npm run check` 通过 190 项。修复后用户确认测试账号可正常对话、Ctrl+C 后 QQ 仍运行；本机运行日志未出现 host/adapter `online` 行，作为可观察性差异记录。真实托盘 GUI 与 autostart 验收仍待用户；最新本地收尾标签为 `checkpoint/dev-host-night-final-t12b-smoke-2026-10-14-unverified`。
 
 ---
 
@@ -402,7 +402,7 @@
 | 2026-10-14 | T12b | 完成 host 配置、loopback WebUI 客户端、受控 SnowLuma 子进程、UIN fail-closed watcher、自启动 VBS 生成及 main 接入；`npm run check` 通过（187 项测试）；精确 staged review 通过，提交 `d5378fe` / `checkpoint/dev-host-t12b-2026-10-14-unverified`；未运行真实服务或安装自启动 |
 | 2026-10-14 | T12-空托盘 | 新增 `src/host/tray.ts` log-only tray interface/adapter，main 绑定 host 状态、等待登录通知、菜单回调与退出清理；2 项定向测试及完整 `npm run check`（189 项）通过；精确 staged review 通过，提交 `afbdaa1` / `checkpoint/dev-host-tray-null-2026-10-14-unverified`；未加载真实托盘库 |
 | 2026-10-14 | HOST-RESEARCH 补充 | 追加 T12b/空托盘离线实现结果、安全边界、审查证据及未验证项；未运行真实服务；提交 `2480368` / `checkpoint/dev-host-host-research-supplement-2026-10-14-unverified` |
-| 2026-10-14 | T12b probe-timeout follow-up | 用户首次手动运行观察到登录最终成功、进程列表 HTTP 200，但 `probe-login` 重复 network error；确认 host 默认请求超时 1s 短于 SnowLuma probe 最长 5s，增加至 7s；慢响应回归按预期 RED→GREEN；`npm run check` 通过（190 项）；精确 staged review 通过，提交 `aba7022` / `checkpoint/dev-host-probe-timeout-fix-2026-10-14-unverified`；用户真实复测待完成 |
+| 2026-10-14 | T12b probe-timeout follow-up | 用户首次手动运行观察到登录最终成功、进程列表 HTTP 200，但 `probe-login` 重复 network error；确认 host 默认请求超时 1s 短于 SnowLuma probe 最长 5s，增加至 7s；慢响应回归按预期 RED→GREEN；`npm run check` 通过（190 项）；精确 staged review 通过，提交 `aba7022` / `checkpoint/dev-host-probe-timeout-fix-2026-10-14-unverified`。用户修复后报告可正常对话且干净退出；保存日志未记录 `online` 状态，作为可观察性差异跟踪 |
 ---
 
 ## 6. 待评估清单

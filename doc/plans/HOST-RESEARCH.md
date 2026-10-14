@@ -156,4 +156,10 @@ SnowLuma 当前进程枚举器只把 PID 映射成配置的显示名和空路径
 - Aquarium 代码的 `createSnowLumaProcess()` 默认 WebUI 请求预算原为 1,000ms，并传给 login、process list、probe 与 load；只读参考 SnowLuma 的 `probeQqLoginInfo()` 自身最长等待 5,000ms。WebUI client 将 fetch-level 拒绝统一记成 network error，现场日志未保留底层异常，因此超时不匹配是高概率解释，不是对当次 OS/network 异常的唯一证明。
 - 已将托管默认请求预算提高到 7,000ms，为 SnowLuma 5 秒探测及 HTTP 返回留出余量。新 `test/snowluma-probe-timeout.test.ts` 用可取消的 fake fetch 模拟 5.1 秒响应：旧 1 秒默认下测试在约 1.035 秒失败且没有 load；调整后约 5.13 秒通过，身份匹配、load 一次并进入 online。该测试不连接真实服务。
 - 修复快照独立 review 通过，fingerprint `d093c51c7773e694295d46b15e23be671a1129ce19b7dffc104033d667e2b516`；`npm run check` 的 TypeScript、依赖边界检查及 190 项测试通过；代码提交 `aba7022a1eb231497ba7666efb5392e5316553ab`，标签 `checkpoint/dev-host-probe-timeout-fix-2026-10-14-unverified`。
-- Reviewer 的非阻塞建议：7 秒预算也作用于 login、process list 和 load；本轮保留单一有界请求时限，若以后要求这些快路径更快失败，可拆为 probe 专用超时。**真实 QQ/UIN 路径必须由用户使用修复后的版本重新验收；旧运行日志只作为发现记录，不作为通过证据。**
+- Reviewer 的非阻塞建议：7 秒预算也作用于 login、process list 和 load；本轮保留单一有界请求时限，若以后要求这些快路径更快失败，可拆为 probe 专用超时。
+
+## T12b 修复后用户功能冒烟结果（2026-10-14）
+
+- 用户报告用测试账号登录后可以正常对话；随后 Ctrl+C 退出 Aquarium，QQ 仍运行。按用户可见端到端行为，这证明该测试账号的消息路径可用，且 host 退出没有关闭 QQ。
+- Aquarium 本机日志脱敏汇总：登录最终 HTTP 200；进程列表 56 次 HTTP 200；probe-login 4 次 HTTP 200、0 次 network error；load 1 次 HTTP 200、无加载失败 warning。日志中只有 `waiting_qq_login` 与初始 adapter `offline`，没有 `Windows 托管状态：online` 或 adapter `online` 行。
+- 因用户报告成功对话而日志缺少 `online` 状态行，功能验收以用户可见对话结果为通过证据；状态事件缺失单独记为可观察性差异，不反推功能失败，也不伪称日志记录了 online。真实托盘 GUI 与 autostart 未包含在这次测试中。
