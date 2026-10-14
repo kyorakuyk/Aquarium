@@ -42,7 +42,7 @@
 ## 2. 当前状态
 
 - 阶段 A–C（R1–R13、C0、T7–T10）已完成；U1、U2 真实环境验证已由用户完成，U2 反馈无重大问题；代码已在 `main`。
-- T11 托管层调研已由用户确认；当前在 `dev/host` 按 §7.1 夜间范围推进阶段 D。T12a 代码与离线质量门、T12b 非托盘托管实现均已完成；`npm run check` 通过 187 项。空托盘接口是最后一项；真实托盘、SnowLuma/QQ 与 autostart 验收均未执行。
+- T11 托管层调研已由用户确认；当前在 `dev/host` 按 §7.1 夜间范围推进阶段 D。T12a 代码与离线质量门、T12b 非托盘托管实现均已完成；`npm run check` 通过 187 项；T12b 精确暂存快照独立复核通过并已提交（`d5378fe370799c61269d70ec85d056ec410f3ef4`，review SHA-256 `91b51c187fc793be3b7d54bb3640c25f163b4776bb7af19d0c9d11a29853b9c7`，标签保持 unverified）。空托盘接口是最后一项；真实托盘、SnowLuma/QQ 与 autostart 验收均未执行。
 
 ---
 
@@ -399,7 +399,7 @@
 | 2026-10-14 | R13 | 图片下载只允许 HTTPS 腾讯域名，按点边界匹配并在拒绝时记录主机名、不记录完整 URL；fake fetch 测试覆盖允许/拒绝地址；`npm run check` 通过（137 项测试）/ `9a0626d836b5f9955f26d56ed5dc1faa19263acd` |
 | 2026-10-14 | T11 | 只读调研 SnowLuma WebUI auth/load、启动与 readiness、QQ PID/UIN、托盘候选和自启动；新增 `doc/plans/HOST-RESEARCH.md`；`npm run check` 通过（137 项测试）；用户确认方案 |
 | 2026-10-14 | T12a | 精确安装 `@trayjs/trayjs@0.0.10`；加入双尺寸三色 ICO 与仅 fake 测试的托盘 spike；`npm run check` 通过（142 项测试）；未运行托盘程序，人工验收待用户 |
-| 2026-10-14 | T12b | 完成 host 配置、loopback WebUI 客户端、受控 SnowLuma 子进程、UIN fail-closed watcher、自启动 VBS 生成及 main 接入；`npm run check` 通过（187 项测试）；未运行真实服务或安装自启动 |
+| 2026-10-14 | T12b | 完成 host 配置、loopback WebUI 客户端、受控 SnowLuma 子进程、UIN fail-closed watcher、自启动 VBS 生成及 main 接入；`npm run check` 通过（187 项测试）；精确 staged review 通过，提交 `d5378fe` / `checkpoint/dev-host-t12b-2026-10-14-unverified`；未运行真实服务或安装自启动 |
 ---
 
 ## 6. 待评估清单
