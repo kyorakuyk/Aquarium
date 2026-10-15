@@ -42,7 +42,7 @@
 ## 2. 当前状态
 
 - 阶段 A–C（R1–R13、C0、T7–T10）已完成；U1、U2 真实环境验证已由用户完成，U2 反馈无重大问题；代码已在 `main`。
-- T11 托管层调研已由用户确认；T12a spike 的四项独立 GUI 验收已由用户确认通过；T12b 非托盘实现与 probe-timeout 复测已完成。T12c 真实托盘代码提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df`（review SHA-256 `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`）；用户实测后新增面板启动顺序修复提交 `1f0f2b7668e5ffbaee08824de10b7527aa78bbfa`（review SHA-256 `9a7982774c5da99984a93647a8d3b88b664356c0cb752eea3b2fa9b1bcc9ea64`）。最新 `npm run check` 通过 212 项；follow-up 标签为 `checkpoint/dev-host-panel-startup-fix-2026-10-14-unverified`。真实 Windows 托盘/QQ/autostart 用户验收仍待执行，`autostart:install` 未运行。
+- T11 托管层调研已由用户确认；T12a spike 的四项独立 GUI 验收已由用户确认通过；T12b 非托盘实现与 probe-timeout 复测已完成。T12c 真实托盘代码提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df`（review SHA-256 `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`）；用户实测后新增面板启动顺序修复提交 `1f0f2b7668e5ffbaee08824de10b7527aa78bbfa`（review SHA-256 `9a7982774c5da99984a93647a8d3b88b664356c0cb752eea3b2fa9b1bcc9ea64`，当时 `npm run check` 通过 212 项）。follow-up 标签为 `checkpoint/dev-host-panel-startup-fix-2026-10-14-unverified`。真实 Windows 托盘/QQ/autostart 用户验收仍待执行，`autostart:install` 未运行。
 
 ---
 
@@ -432,14 +432,9 @@
 
 > 适用：用户睡觉期间运行，无人能回答问题、无人能在 QQ 上做验证。
 
-### 7.1 范围（2026-10-14 凌晨：阶段 D）
-- 按顺序做：
-  1. **T12a** 的代码部分（`src/spike/tray.ts` 与图标文件、`HOST-RESEARCH.md` 的“T12a 结果”中能离线得出的部分：磁盘占用、是否需要额外运行时、文档中是否声明支持系统通知）。不运行托盘程序。
-  2. **T12b 中与托盘无关的全部内容**：配置项、`.env.example`、`src/host/types.ts`、`snowluma-process.ts`、`snowluma-webui.ts`、`qq-watcher.ts`、`scripts/autostart.mjs`、`main.ts` 接入、全部相关测试。
-  3. 托盘只定义接口 `src/host/tray.ts`（`setState(state, tooltip)`、`onMenu(handler)`、`notify(text)`、`dispose()`），并提供一个**空实现**（只写日志），由 `main.ts` 使用。真正接入托盘库留到用户完成 T12a 验收之后。
-  - 夜间完成结果：host 托盘接口与 log-only adapter 已由 main 使用；状态/tooltip 和等待小号登录通知只写日志，菜单动作无实际执行；两个 tray 回归测试通过，完整 `npm run check` 通过（189 项）。精确 staged review 通过，提交 `afbdaa1`；未接入或运行真实托盘库。
-- 完成以上后**结束本次运行**。所有【用户】验收步骤不执行，写进早上检查清单。
-- 夜间不运行 `npm run autostart:install`（会修改仓库外的文件）。
+### 7.1 范围（当前有效：§8 长程任务包）
+- **本次夜间运行的唯一范围是 §8 的 N0–N5**，按顺序执行。阶段 D 的 §7.1 旧范围已于 2026-10-15 完成，**不再执行、不再收尾**。
+- 所有【用户】验收步骤不执行，写进早上检查清单。
 
 ### 7.2 遇到问题时
 - §0 第 1 条“停下来问用户”在夜间改为：
@@ -476,3 +471,38 @@
 - 本次 §7.1 列出的阶段 D 夜间范围全部完成；
 - 剩余任务全部被跳过或失败；
 - 运行时间达到 9 小时。
+
+---
+
+## 8. 长程无人值守任务包（2026-10-15 夜，预计 6 小时以上）
+
+> 适用 §7 的夜间规则（遇问题记录后选保守做法、3 次失败跳过、不跑真实服务、不调真实模型）。
+> 分支：在 `dev/host` 上先完成 R14 的代码与测试，然后从 `dev/host` 新建 `night/m2-prep` 继续。早上检查清单写到 `doc/plans/MORNING-2026-10-16.md`。
+> 每项完成后 `npm run check` 必须通过；**所有任务都不得改变 M1 的对外行为**（现有测试必须原样通过，除非本节明确要求修改）。
+
+- [ ] **N0** 完成 R14 的代码与测试（真实验收留给用户）。
+- [ ] **N1 流水线分步重构**（DESIGN §14 M2 第一项）
+  - 把 `src/core/pipeline.ts` 拆为 `src/core/steps/` 下的独立步骤文件：`persist.ts`（入库 / 去重）、`gate.ts`（启用 / 闭嘴 / 触发 / 限流）、`context.ts`（人设、上下文、看图、提示词组装）、`generate.ts`（调用 `reply` 槽位与清洗）、`deliver.ts`（拆条、节奏、发送、记录）。
+  - 每个步骤签名统一：`(ctx: StepContext) => Promise<StepResult>`，`StepResult` 为 `{ next: true }` 或 `{ next: false, reason: string, detail?: unknown, replied?: boolean }`。`StepContext` 携带消息、配置快照、累积数据与一个 `trace: TraceEntry[]`（每步 push `{ step, startedAt, durationMs, summary }`）。
+  - `pipeline.ts` 只负责按顺序执行步骤、在第一个 `next: false` 处记录决策并返回。决策 `reason` 取值与现在**完全一致**。
+  - 每个步骤至少一个单元测试；原有 `test/pipeline.test.ts` 不改动且全部通过。
+- [ ] **N2 提示词模板化与指纹**（DESIGN §8.5）
+  - 新建 `prompts/reply-system.md`（固定规则段，用 `{{ownerRule}}`、`{{groupNote}}` 占位）与 `prompts/vision.md`；代码中的硬编码提示词全部改为读取模板（启动时读入并随配置热重载一起重新读取）。
+  - 模板渲染结果与当前硬编码文本**逐字一致**（用测试锁定）。
+  - 指纹：`templateVersion` = 模板文件内容 sha256 前 8 位；决策 `detail` 中写入 `templateVersion` 与已有的 `promptHash`。
+- [ ] **N3 完整调试追踪**（DESIGN §10.1，在 T9b 基础上扩展）
+  - 调试开启的会话中，把 N1 的 `trace` 数组完整写入新表 `pipeline_traces(id, time, session_id, message_id, trace_json)`；调试关闭时只写入决策，不写 trace。
+  - `summary` 中**不得**包含完整提示词（完整提示词仍只在 `debug_traces`）；最长 500 字。
+  - 过期清理与 `debug_traces` 共用 `retainDays`。
+  - 控制台决策记录页：有 trace 时显示“流水线步骤”时间线（步骤名、耗时、摘要），样式沿用 §4。
+- [ ] **N4 一键重放**（DESIGN §10.1）
+  - 后端 `POST /api/decisions/:id/replay`：取原消息与当时的会话上下文，用**当前**配置与模板重新跑 N1 流水线，但 `deliver` 步骤替换为“不发送、不入库”的空实现；返回新的步骤结果、回复文本，与原决策并排对比所需字段。计入花费。
+  - 前端决策详情增加“用当前配置重放”按钮与并排对比视图。
+  - 测试使用假模型与假适配器；夜间不调用真实模型。
+- [ ] **N5 离线评测 CLI 骨架**（DESIGN §13）
+  - `npm run eval -- --dataset <path.jsonl>`：数据集每行 `{ "sessionId", "messages": [...最近消息], "target": {...待判断消息}, "label": "reply" | "skip" }`。
+  - 对每个样本只运行 N1 的 `gate` 步骤（不调用模型），输出 Precision / Recall / F1 与混淆矩阵到终端，并写 `data/eval/<时间戳>.json`。
+  - 提供 `test/fixtures/eval-sample.jsonl`（10 条手写样本，**不含真实聊天内容**）与对应测试。
+  - 预留 `--with-judge` 参数：本任务只做参数解析并提示“将在 M2 实现”，不实现。
+
+完成 N0–N5 或满足 §7.6 结束条件即结束，做最后一次提交。
