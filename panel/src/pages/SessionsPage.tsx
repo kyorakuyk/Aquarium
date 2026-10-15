@@ -1,7 +1,19 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { apiRequest, patch, type SessionView } from '../api.ts';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { apiRequest, patch, type ModeScheduleEntry, type SessionView } from '../api.ts';
+import {
+  addModeScheduleEntry,
+  changeModeScheduleDraft,
+  discardModeScheduleDraft,
+  getModeScheduleDraft,
+  getModeScheduleRowKeys,
+  type ModeScheduleDrafts,
+  type ModeScheduleRowKeys,
+  removeModeScheduleEntry,
+  SESSION_MODE_OPTIONS,
+  updateModeScheduleEntry,
+} from '../session-mode.ts';
 
-type SessionField = 'enabled' | 'mode' | 'nicknames' | 'contextMessages' | 'rate' | 'groupNote';
+type SessionField = 'enabled' | 'mode' | 'modeSchedule' | 'nicknames' | 'contextMessages' | 'rate' | 'groupNote';
 type RateField = keyof SessionView['effective']['rate'];
 
 function FieldHeading({ title, fields, session, onReset }: {
@@ -31,12 +43,23 @@ export function SessionsPage() {
   const [kind, setKind] = useState<'group' | 'private'>('group');
   const [query, setQuery] = useState('');
   const [nicknames, setNicknames] = useState('');
+  const [modeScheduleDrafts, setModeScheduleDrafts] = useState<ModeScheduleDrafts>(() => new Map());
+  const [modeScheduleRowKeys, setModeScheduleRowKeys] = useState<ModeScheduleRowKeys>(() => new Map());
   const [groupNote, setGroupNote] = useState('');
   const [error, setError] = useState('');
   const [savedAt, setSavedAt] = useState('');
   const [busy, setBusy] = useState(false);
+  const nextScheduleRowKey = useRef(0);
 
   const selected = sessions.find((item) => item.sessionId === selectedId);
+  const scheduleEntries = selected
+    ? getModeScheduleDraft(modeScheduleDrafts, selected.sessionId, selected.effective.modeSchedule)
+    : [];
+  const scheduleRowKeys = selected
+    ? getModeScheduleRowKeys(modeScheduleRowKeys, selected.sessionId, scheduleEntries)
+    : [];
+  const scheduleIsDirty = selected !== undefined
+    && JSON.stringify(scheduleEntries) !== JSON.stringify(selected.effective.modeSchedule);
   const visible = useMemo(() => sessions.filter((item) => item.kind === kind
     && `${item.name} ${item.sessionId}`.toLowerCase().includes(query.trim().toLowerCase())), [sessions, kind, query]);
 
@@ -66,6 +89,9 @@ export function SessionsPage() {
     try {
       await patch(`/api/sessions/${encodeURIComponent(targetId)}`, values);
       await loadSessions(targetId);
+      if (Object.hasOwn(values, 'modeSchedule')) {
+        setModeScheduleDrafts((drafts) => discardModeScheduleDraft(drafts, targetId));
+      }
       setSavedAt(new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date()));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '保存失败');
@@ -76,6 +102,36 @@ export function SessionsPage() {
 
   function restore(fields: SessionField[]) {
     void update(Object.fromEntries(fields.map((field) => [field, null])));
+  }
+
+  function updateScheduleDraft(change: (entries: readonly ModeScheduleEntry[]) => ModeScheduleEntry[]) {
+    if (!selected) return;
+    setModeScheduleDrafts((drafts) => changeModeScheduleDraft(
+      drafts,
+      selected.sessionId,
+      selected.effective.modeSchedule,
+      change,
+    ));
+  }
+
+  function addScheduleEntry() {
+    if (!selected) return;
+    const rowKey = `${selected.sessionId}:new:${nextScheduleRowKey.current++}`;
+    updateScheduleDraft(addModeScheduleEntry);
+    setModeScheduleRowKeys((rowKeys) => new Map(rowKeys).set(
+      selected.sessionId,
+      [...getModeScheduleRowKeys(rowKeys, selected.sessionId, scheduleEntries), rowKey],
+    ));
+  }
+
+  function removeScheduleEntry(index: number) {
+    if (!selected) return;
+    updateScheduleDraft((entries) => removeModeScheduleEntry(entries, index));
+    setModeScheduleRowKeys((rowKeys) => new Map(rowKeys).set(
+      selected.sessionId,
+      getModeScheduleRowKeys(rowKeys, selected.sessionId, scheduleEntries)
+        .filter((_, currentIndex) => currentIndex !== index),
+    ));
   }
 
   async function setRate(field: RateField, rawValue: string) {
@@ -145,20 +201,73 @@ export function SessionsPage() {
             <SettingGroup>
               <FieldHeading title="什么时候说话" fields={['mode']} session={selected} onReset={restore} />
               <div className="mode-grid">
-                {[
-                  { id: 'mention_only', title: '只在被叫时', note: '可用', disabled: false },
-                  { id: 'natural', title: '自然', note: 'M2', disabled: true },
-                  { id: 'active', title: '积极', note: 'M2', disabled: true },
-                  { id: 'busy', title: '忙碌', note: 'M2', disabled: true },
-                ].map((option) => (
+                {SESSION_MODE_OPTIONS.map((option) => (
                   <button
-                    className={`mode-card ${selected.effective.mode === option.id ? 'is-current' : ''}`}
-                    key={option.id}
+                    className={`mode-card ${selected.effective.mode === option.mode ? 'is-current' : ''}`}
+                    key={option.mode}
                     type="button"
-                    disabled={option.disabled || busy}
-                    onClick={() => void update({ mode: option.id })}
+                    disabled={busy}
+                    onClick={() => void update({ mode: option.mode })}
                   ><strong>{option.title}</strong><span>{option.note}</span></button>
                 ))}
+              </div>
+            </SettingGroup>
+
+            <SettingGroup>
+              <FieldHeading title="按时间段切换" fields={['modeSchedule']} session={selected} onReset={restore} />
+              <p className="schedule-help">按列表顺序首个匹配项生效，支持跨午夜；没有匹配时使用上方默认模式。</p>
+              {scheduleEntries.length > 0
+                ? <div className="schedule-list">
+                  {scheduleEntries.map((entry, index) => (
+                    <div className="schedule-row" key={scheduleRowKeys[index]}>
+                      <label>
+                        <span>开始</span>
+                        <input
+                          type="time"
+                          value={entry.from}
+                          aria-label={`第 ${index + 1} 个时段开始时间`}
+                          disabled={busy}
+                          onChange={(event) => updateScheduleDraft((entries) => updateModeScheduleEntry(entries, index, { from: event.currentTarget.value }))}
+                        />
+                      </label>
+                      <label>
+                        <span>结束</span>
+                        <input
+                          type="time"
+                          value={entry.to}
+                          aria-label={`第 ${index + 1} 个时段结束时间`}
+                          disabled={busy}
+                          onChange={(event) => updateScheduleDraft((entries) => updateModeScheduleEntry(entries, index, { to: event.currentTarget.value }))}
+                        />
+                      </label>
+                      <label className="schedule-mode">
+                        <span>模式</span>
+                        <select
+                          value={entry.mode}
+                          aria-label={`第 ${index + 1} 个时段模式`}
+                          disabled={busy}
+                          onChange={(event) => updateScheduleDraft((entries) => updateModeScheduleEntry(entries, index, { mode: event.currentTarget.value as ModeScheduleEntry['mode'] }))}
+                        >
+                          {SESSION_MODE_OPTIONS.map((option) => <option value={option.mode} key={option.mode}>{option.title}</option>)}
+                        </select>
+                      </label>
+                      <button
+                        className="text-button schedule-remove"
+                        type="button"
+                        aria-label={`删除第 ${index + 1} 个时段`}
+                        disabled={busy}
+                        onClick={() => removeScheduleEntry(index)}
+                      >删除</button>
+                    </div>
+                  ))}
+                </div>
+                : <p className="empty-state schedule-empty">尚未设置时段，将始终使用上方默认模式。</p>}
+              <div className="schedule-actions">
+                <button className="text-button" type="button" disabled={busy} onClick={addScheduleEntry}>添加时段</button>
+                <div>
+                  {scheduleIsDirty && <span className="schedule-dirty" role="status">有未保存改动</span>}
+                  <button className="button button-secondary" type="button" disabled={busy || !scheduleIsDirty} onClick={() => void update({ modeSchedule: scheduleEntries })}>保存时段</button>
+                </div>
               </div>
             </SettingGroup>
 

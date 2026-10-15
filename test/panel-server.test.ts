@@ -420,6 +420,43 @@ test('PATCH 会话字段设为 null 时删除覆盖并恢复继承', async () =>
   });
 });
 
+test('PATCH 会话时间表后由会话 API 返回并支持恢复继承', async () => {
+  await withPanel(async ({ app, getConfig }) => {
+    const id = sessionId(groupSession);
+    const schedule = [
+      { from: '08:30', to: '12:00', mode: 'active' },
+      { from: '12:00', to: '18:00', mode: 'busy' },
+    ] as const;
+    const patchResponse = await app.request(`/api/sessions/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modeSchedule: schedule }),
+    });
+
+    assert.equal(patchResponse.status, 200);
+    assert.deepEqual(getConfig().sessions[id]?.modeSchedule, schedule);
+
+    const sessionResponse = await app.request('/api/sessions', { headers: authHeaders() });
+    const sessions = await sessionResponse.json() as Array<{
+      sessionId: string;
+      overrides: string[];
+      effective: { modeSchedule: unknown[] };
+    }>;
+    const group = sessions.find((session) => session.sessionId === id);
+    assert.deepEqual(group?.effective.modeSchedule, schedule);
+    assert.ok(group?.overrides.includes('modeSchedule'));
+
+    const restoreResponse = await app.request(`/api/sessions/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modeSchedule: null }),
+    });
+    assert.equal(restoreResponse.status, 200);
+    assert.equal(getConfig().sessions[id]?.modeSchedule, undefined);
+    assert.deepEqual(resolveSession(getConfig(), groupSession).modeSchedule, []);
+  });
+});
+
 test('并发 PATCH 保留彼此修改的会话字段', async () => {
   await withPanel(async ({ app, getConfig }) => {
     const url = `/api/sessions/${encodeURIComponent(sessionId(groupSession))}`;

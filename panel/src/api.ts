@@ -24,6 +24,14 @@ export interface PanelStatus {
   runtime: { pid: number; port: number; uptimeSeconds: number };
 }
 
+export type SessionMode = 'mention_only' | 'active' | 'natural' | 'busy';
+
+export interface ModeScheduleEntry {
+  from: string;
+  to: string;
+  mode: SessionMode;
+}
+
 export interface SessionView {
   sessionId: string;
   name: string;
@@ -33,7 +41,8 @@ export interface SessionView {
   enabled: boolean;
   overrides: string[];
   effective: {
-    mode: 'mention_only' | 'active' | 'natural' | 'busy';
+    mode: SessionMode;
+    modeSchedule: ModeScheduleEntry[];
     nicknames: string[];
     contextMessages: number;
     rate: {

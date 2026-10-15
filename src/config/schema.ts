@@ -16,12 +16,12 @@ const modeScheduleEntrySchema = z.object({
   message: '时间段起止时间不能相同',
   path: ['to'],
 });
-const modeScheduleSchema = z.array(modeScheduleEntrySchema);
+export const ModeScheduleSchema = z.array(modeScheduleEntrySchema);
 
 const sessionSettingsSchema = z.object({
   enabled: z.boolean(),
   mode: modeSchema,
-  modeSchedule: modeScheduleSchema.default([]),
+  modeSchedule: ModeScheduleSchema.default([]),
   nicknames: z.array(z.string()),
   contextMessages: z.number().int().positive(),
   rate: rateSchema,
@@ -31,7 +31,7 @@ const sessionSettingsSchema = z.object({
 const sessionOverrideSchema = z.object({
   enabled: z.boolean().optional(),
   mode: modeSchema.optional(),
-  modeSchedule: modeScheduleSchema.optional(),
+  modeSchedule: ModeScheduleSchema.optional(),
   nicknames: z.array(z.string()).optional(),
   contextMessages: z.number().int().positive().optional(),
   rate: rateSchema.partial().optional(),

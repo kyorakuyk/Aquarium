@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { apiRequest, replayDecision, type DecisionReplayView, type DecisionStep, type DecisionView, type PanelStatus, type PipelineStepTraceView, type SessionView, type TraceView } from '../api.ts';
 import { FishIcon } from '../components/FishIcon.tsx';
+import { activityDecisionMetrics } from '../decision-metrics.ts';
 import { decisionLabel, decisionTone } from '../labels.ts';
 
 interface ChatEntry {
@@ -162,6 +163,7 @@ export function DecisionsPage() {
   }
 
   const selectedSession = sessions.find((item) => item.sessionId === sessionId);
+  const selectedActivityMetrics = selectedDecision ? activityDecisionMetrics(selectedDecision.detail) : [];
 
   return (
     <div className="page">
@@ -236,6 +238,15 @@ export function DecisionsPage() {
         <aside className="panel-card trace-card">
           <h2>决策追踪</h2>
           {!selectedDecision && <p className="muted">选择一条决策查看详情。</p>}
+          {selectedDecision && selectedActivityMetrics.length > 0 && <section className="activity-metrics" aria-labelledby="activity-metrics-title">
+            <h3 id="activity-metrics-title">主动判断分值</h3>
+            <dl>
+              {selectedActivityMetrics.map((metric) => <div className="activity-metric" key={metric.key}>
+                <dt>{metric.label}</dt>
+                <dd>{metric.display}</dd>
+              </div>)}
+            </dl>
+          </section>}
           {selectedDecision && <div className="replay-toolbar">
             <button className="button button-secondary" type="button" onClick={() => void replaySelectedDecision()} disabled={replayBusy}>
               {replayBusy ? '重放中…' : '用当前配置重放'}

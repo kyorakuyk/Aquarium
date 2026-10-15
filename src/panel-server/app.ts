@@ -7,7 +7,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import type { AdapterStatus, ContactFriend, ContactGroup, ProtocolAdapter } from '../adapters/types.ts';
 import type { AquariumConfig } from '../config/schema.ts';
-import { AquariumConfigSchema } from '../config/schema.ts';
+import { AquariumConfigSchema, ModeScheduleSchema } from '../config/schema.ts';
 import { resolveSession } from '../config/resolve.ts';
 import { parseSessionId, listEnabledSessions } from '../core/sessions.ts';
 import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../core/events.ts';
@@ -53,6 +53,7 @@ const ratePatchSchema = z.object({
 const sessionPatchSchema = z.object({
   enabled: z.boolean().nullable().optional(),
   mode: z.enum(['mention_only', 'active', 'natural', 'busy']).nullable().optional(),
+  modeSchedule: ModeScheduleSchema.nullable().optional(),
   nicknames: z.array(z.string()).nullable().optional(),
   contextMessages: z.number().int().positive().nullable().optional(),
   rate: ratePatchSchema.nullable().optional(),
@@ -296,6 +297,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
         overrides: Object.keys(config.sessions[id] ?? {}),
         effective: {
           mode: effective.mode,
+          modeSchedule: effective.modeSchedule,
           nicknames: effective.nicknames,
           contextMessages: effective.contextMessages,
           rate: effective.rate,

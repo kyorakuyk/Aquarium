@@ -6,6 +6,15 @@ const decisionLabels: Record<string, string> = {
   disabled: '未启用',
   duplicate: '重复消息',
   command_ignored: '指令已忽略',
+  mode_mention_only: '只在被叫时',
+  batched: '合并处理',
+  backoff: '退避中',
+  prefilter: '粗筛跳过',
+  judge_skip: '判断不接',
+  judge_parse_error: '出错',
+  judge_error: '出错',
+  budget: '预算用尽',
+  proactive_cooldown: '主动冷却',
   rate_limited: '限流',
   muted: '闭嘴中',
   empty_reply: '空回复',
@@ -15,8 +24,14 @@ const decisionLabels: Record<string, string> = {
   command_error: '出错',
 };
 
-const neutralReasons = new Set(['not_mentioned', 'disabled', 'duplicate', 'command_ignored']);
-const warningReasons = new Set(['rate_limited', 'muted', 'empty_reply', 'llm_error', 'send_error', 'persona_error', 'command_error']);
+const neutralReasons = new Set([
+  'not_mentioned', 'disabled', 'duplicate', 'command_ignored', 'mode_mention_only',
+  'batched', 'backoff', 'prefilter', 'judge_skip', 'proactive_cooldown',
+]);
+const warningReasons = new Set([
+  'rate_limited', 'muted', 'empty_reply', 'llm_error', 'send_error', 'persona_error',
+  'command_error', 'judge_parse_error', 'judge_error', 'budget',
+]);
 
 export function decisionLabel(reason: string): string {
   const label = Object.hasOwn(decisionLabels, reason) ? decisionLabels[reason] : undefined;
