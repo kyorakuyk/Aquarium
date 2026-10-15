@@ -93,6 +93,9 @@ export function SessionsPage() {
         <p className="page-description">打开开关的会话里，它才会说话。改动立刻生效，不用重启。</p>
       </header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
+      {sessions.some((session) => session.degraded) && (
+        <div className="notice notice-warn" role="status">QQ 联系人数据暂未刷新；当前会话清单可能不完整。</div>
+      )}
       <div className="session-workspace">
         <section className="session-list-card panel-card">
           <div className="segmented-control" role="group" aria-label="会话类型">

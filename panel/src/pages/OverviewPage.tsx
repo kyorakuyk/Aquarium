@@ -20,7 +20,7 @@ function fullTime(value: number): string {
 function connectionLabel(status: PanelStatus['accounts'][number]['connectionStatus']): string {
   if (status === 'online') return '在线';
   if (status === 'connecting') return '连接中';
-  return '离线';
+  return '等待重连';
 }
 
 export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => void }) {
@@ -86,6 +86,9 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
         </div>
       </header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
+      {status.accounts.some((account) => account.degraded) && (
+        <div className="notice notice-warn" role="status">QQ 联系人数据暂未刷新；当前显示上次缓存或可能不完整。</div>
+      )}
 
       <section className="section-block">
         <div className="section-heading"><h2>鱼缸</h2><span className="muted">{status.accounts.length} 个账号</span></div>

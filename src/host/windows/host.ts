@@ -11,6 +11,7 @@ export interface WindowsHostOptions {
   password: string;
   logDirectory: string;
   getAdapterStatus: (uin: number) => AdapterStatus | undefined;
+  onAdapterInjected?: (uin: number) => void;
   fetch?: typeof globalThis.fetch;
   spawnProcess?: typeof nodeSpawn;
   now?: () => number;
@@ -77,6 +78,7 @@ export function createWindowsHost(options: WindowsHostOptions): Host {
     scanIntervalSec: options.settings.scanIntervalSec,
     getClient: processManager.webuiClient,
     onScan: recomputeStatus,
+    ...(options.onAdapterInjected ? { onInjected: options.onAdapterInjected } : {}),
     onFatalError: (error) => {
       stopWatcher();
       setStatus('error', `SnowLuma WebUI 重登录后仍返回 HTTP ${error.status ?? 401}，托管已停止扫描。`);

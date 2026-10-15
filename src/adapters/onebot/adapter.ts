@@ -20,6 +20,7 @@ import {
 } from './convert.ts';
 
 interface OneBotClient {
+  readonly isConnected: boolean;
   on(event: 'open', listener: () => void): () => void;
   on(event: 'close' | 'error', listener: (...args: unknown[]) => void): () => void;
   onMessage(listener: (event: OneBotMessageEvent) => void): () => void;
@@ -111,65 +112,248 @@ function numericMessageId(messageId: string): number {
   return parsed;
 }
 
+const INITIAL_RETRY_DELAY_MS = 2_000;
+const MAX_RETRY_DELAY_MS = 30_000;
+const ADAPTER_ACTION_TIMEOUT_MS = 10_000;
+
+class AccountMismatchError extends Error {}
+
+class AdapterTimeoutError extends Error {
+  constructor(action: string, timeoutMs: number) {
+    super(`OneBot action ${action} timed out after ${timeoutMs}ms`);
+    this.name = 'AdapterTimeoutError';
+  }
+}
+
+class AdapterOfflineError extends Error {
+  constructor(account: number) {
+    super(`OneBot adapter ${account} is not online`);
+    this.name = 'AdapterOfflineError';
+  }
+}
+
+interface OneBotAdapterRuntimeOptions {
+  setActionTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
+  clearActionTimer?: typeof globalThis.clearTimeout;
+  setRetryTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
+  clearRetryTimer?: typeof globalThis.clearTimeout;
+}
+
 const createClient: ClientFactory = (options) => new SnowLumaWebSocketClient(options);
 
 export class OneBotAdapter implements ProtocolAdapter {
   readonly account: number;
   nickname = '';
 
-  private readonly client: OneBotClient;
+  private client: OneBotClient;
+  private readonly clientFactory: ClientFactory;
+  private readonly clientOptions: SnowLumaWebSocketClientOptions;
+  private clientUnsubscribers: Array<() => void> = [];
+  private clientRequiresReplacement = false;
+  private accountVerified = false;
+  private readonly onConnectionError: ((error: unknown) => void) | undefined;
   private readonly messageListeners = new Set<(message: IncomingMessage) => void>();
   private readonly statusListeners = new Set<(status: AdapterStatus) => void>();
+  private readonly setActionTimer: NonNullable<OneBotAdapterRuntimeOptions['setActionTimer']>;
+  private readonly clearActionTimer: typeof globalThis.clearTimeout;
+  private readonly setRetryTimer: NonNullable<OneBotAdapterRuntimeOptions['setRetryTimer']>;
+  private readonly clearRetryTimer: typeof globalThis.clearTimeout;
   private status: AdapterStatus = 'offline';
-  private accountVerified = false;
+  private connectionInFlight: Promise<void> | undefined;
+  private retryAttemptInFlight: Promise<void> | undefined;
+  private retryTimer: ReturnType<typeof setTimeout> | undefined;
+  private retryAttempts = 0;
+  private connectionGeneration = 0;
+  private retryImmediatelyRequested = false;
+  private started = false;
 
   constructor(
-    options: { account: number; snowlumaDir: string },
+    options: { account: number; snowlumaDir: string; onConnectionError?: (error: unknown) => void },
     clientFactory: ClientFactory = createClient,
+    runtimeOptions: OneBotAdapterRuntimeOptions = {},
   ) {
     this.account = options.account;
+    this.clientFactory = clientFactory;
+    this.onConnectionError = options.onConnectionError;
+    this.setActionTimer = runtimeOptions.setActionTimer
+      ?? ((callback, delayMs) => globalThis.setTimeout(callback, delayMs));
+    this.clearActionTimer = runtimeOptions.clearActionTimer ?? globalThis.clearTimeout;
+    this.setRetryTimer = runtimeOptions.setRetryTimer
+      ?? ((callback, delayMs) => globalThis.setTimeout(callback, delayMs));
+    this.clearRetryTimer = runtimeOptions.clearRetryTimer ?? globalThis.clearTimeout;
     const ws = readWsServer(options.snowlumaDir, options.account);
-    this.client = clientFactory({
+    this.clientOptions = {
       url: `ws://${ws.host}:${ws.port}${ws.path}`,
       accessToken: ws.accessToken,
-      reconnect: true,
-    });
+      requestTimeoutMs: ADAPTER_ACTION_TIMEOUT_MS,
+      reconnect: false,
+    };
+    this.client = this.clientFactory(this.clientOptions);
+    this.bindClient(this.client);
+  }
 
-    this.client.on('open', () => {
-      if (this.accountVerified) this.setStatus('online');
-    });
-    this.client.on('close', () => this.setStatus('offline'));
-    this.client.on('error', () => this.setStatus('offline'));
-    this.client.onMessage((event) => {
-      if (!shouldDispatchMessage(event, this.account)) return;
-      const incoming = convertIncomingMessage(event, this.account);
-      for (const callback of this.messageListeners) callback(incoming);
-    });
+  private bindClient(client: OneBotClient): void {
+    this.clientUnsubscribers = [
+      client.on('open', () => {
+        if (client !== this.client) return;
+        this.setStatus('connecting');
+      }),
+      client.on('close', () => {
+        if (client !== this.client) return;
+        this.accountVerified = false;
+        this.connectionGeneration += 1;
+        this.nickname = '';
+        this.setStatus('offline');
+        if (this.started && !this.retryAttemptInFlight) this.scheduleRetry();
+      }),
+      client.on('error', (error) => {
+        if (client !== this.client) return;
+        this.accountVerified = false;
+        this.setStatus('offline');
+        if (this.started && !this.retryAttemptInFlight) this.scheduleRetry();
+        if (!this.retryAttemptInFlight) {
+          try { this.onConnectionError?.(error); } catch { /* do not let logging break reconnect */ }
+        }
+      }),
+      client.onMessage((event) => {
+        if (client !== this.client || !this.accountVerified || !shouldDispatchMessage(event, this.account)) return;
+        const incoming = convertIncomingMessage(event, this.account);
+        for (const callback of this.messageListeners) callback(incoming);
+      }),
+    ];
+  }
+
+  private replaceClient(): void {
+    const previous = this.client;
+    this.accountVerified = false;
+    const replacement = this.clientFactory(this.clientOptions);
+    this.clientRequiresReplacement = false;
+    if (replacement === previous) return;
+
+    const previousUnsubscribers = this.clientUnsubscribers;
+    this.client = replacement;
+    this.clientUnsubscribers = [];
+    this.bindClient(replacement);
+    for (const unsubscribe of previousUnsubscribers) unsubscribe();
+    try {
+      previous.close();
+    } catch (error) {
+      try { this.onConnectionError?.(error); } catch { /* preserve the active client */ }
+    }
   }
 
   async connect(): Promise<void> {
+    if (this.connectionInFlight) return this.connectionInFlight;
+    const generation = this.connectionGeneration;
+    const attempt = this.connectAndVerify(generation).finally(() => {
+      if (this.connectionInFlight === attempt) this.connectionInFlight = undefined;
+    });
+    this.connectionInFlight = attempt;
+    return attempt;
+  }
+
+  start(): void {
+    if (this.started) return;
+    this.started = true;
+    this.connectionGeneration += 1;
+    this.runRetryAttempt();
+  }
+
+  retryNow(): void {
+    if (!this.started) return;
+    if (this.status === 'online' && this.client.isConnected) return;
+    if (this.status === 'online') {
+      this.clientRequiresReplacement = true;
+      this.accountVerified = false;
+      this.nickname = '';
+      this.setStatus('offline');
+    }
+    this.clearRetry();
+    if (this.retryAttemptInFlight) {
+      this.retryImmediatelyRequested = true;
+      return;
+    }
+    this.runRetryAttempt();
+  }
+
+  private async connectAndVerify(generation: number): Promise<void> {
+    this.accountVerified = false;
+    if (this.clientRequiresReplacement) this.replaceClient();
+    const client = this.client;
     this.setStatus('connecting');
     try {
-      await this.client.connect();
-      const login = await this.client.getLoginInfo();
+      await this.withActionTimeout('connect', () => client.connect(), false);
+      if (client !== this.client || generation !== this.connectionGeneration) return;
+      const login = await this.withActionTimeout('get_login_info', () => client.getLoginInfo(), false);
+      if (client !== this.client || generation !== this.connectionGeneration) return;
       if (login.user_id !== this.account) {
-        throw new Error(`登录账号 ${login.user_id} 与配置账号 ${this.account} 不一致，拒绝工作`);
+        throw new AccountMismatchError(`登录账号 ${login.user_id} 与配置账号 ${this.account} 不一致，拒绝工作`);
       }
-      this.nickname = login.nickname;
       this.accountVerified = true;
+      this.nickname = login.nickname;
+      this.retryAttempts = 0;
+      this.clearRetry();
+      this.retryImmediatelyRequested = false;
       this.setStatus('online');
     } catch (error) {
-      this.accountVerified = false;
-      this.client.close();
-      this.setStatus('offline');
+      if (client === this.client && generation === this.connectionGeneration) {
+        this.accountVerified = false;
+        this.nickname = '';
+        this.setStatus('offline');
+        if (error instanceof AccountMismatchError) {
+          this.clientRequiresReplacement = true;
+          client.close();
+        }
+      }
       throw error;
     }
   }
 
   close(): void {
+    this.started = false;
+    this.retryImmediatelyRequested = false;
+    this.connectionGeneration += 1;
+    this.clearRetry();
+    this.clientRequiresReplacement = true;
     this.accountVerified = false;
     this.client.close();
     this.setStatus('offline');
+  }
+
+  private runRetryAttempt(): void {
+    if (!this.started || this.retryAttemptInFlight) return;
+    const attempt = this.connect()
+      .catch((error: unknown) => {
+        try { this.onConnectionError?.(error); } catch { /* do not let logging break reconnect */ }
+      })
+      .finally(() => {
+        if (this.retryAttemptInFlight === attempt) this.retryAttemptInFlight = undefined;
+        if (!this.started || this.status === 'online') return;
+        if (this.retryImmediatelyRequested) {
+          this.retryImmediatelyRequested = false;
+          this.clearRetry();
+          this.runRetryAttempt();
+          return;
+        }
+        this.scheduleRetry();
+      });
+    this.retryAttemptInFlight = attempt;
+  }
+
+  private scheduleRetry(): void {
+    if (!this.started || this.retryTimer !== undefined) return;
+    const delay = Math.min(INITIAL_RETRY_DELAY_MS * (2 ** this.retryAttempts), MAX_RETRY_DELAY_MS);
+    this.retryAttempts += 1;
+    this.retryTimer = this.setRetryTimer(() => {
+      this.retryTimer = undefined;
+      this.runRetryAttempt();
+    }, delay);
+  }
+
+  private clearRetry(): void {
+    if (this.retryTimer === undefined) return;
+    this.clearRetryTimer(this.retryTimer);
+    this.retryTimer = undefined;
   }
 
   onMessage(callback: (message: IncomingMessage) => void): () => void {
@@ -184,37 +368,51 @@ export class OneBotAdapter implements ProtocolAdapter {
 
   async send(session: SessionKey, segments: Segment[]): Promise<{ messageId: string }> {
     this.assertSessionAccount(session);
+    this.assertOnline();
     const messageSegments = toOneBotSegments(segments);
-    const result = session.kind === 'group'
-      ? await this.client.sendGroupMessage(session.peer, messageSegments)
-      : await this.client.sendPrivateMessage(session.peer, messageSegments);
-    return { messageId: String(result.message_id) };
+    return this.withActionTimeout('send_message', async () => {
+      const result = session.kind === 'group'
+        ? await this.client.sendGroupMessage(session.peer, messageSegments)
+        : await this.client.sendPrivateMessage(session.peer, messageSegments);
+      return { messageId: String(result.message_id) };
+    });
   }
 
   async listGroups(): Promise<ContactGroup[]> {
-    const groups = await this.client.getGroupList();
-    return groups.flatMap((group) => {
-      const groupId = numericField(group, 'group_id');
-      const name = stringField(group, 'group_name') ?? stringField(group, 'name');
-      if (groupId === undefined || name === undefined) return [];
-      const memberCount = numericField(group, 'member_count');
-      return [{ groupId, name, ...(memberCount === undefined ? {} : { memberCount }) }];
+    this.assertOnline();
+    return this.withActionTimeout('get_group_list', async () => {
+      const groups = await this.client.getGroupList();
+      return groups.flatMap((group) => {
+        const groupId = numericField(group, 'group_id');
+        const name = stringField(group, 'group_name') ?? stringField(group, 'name');
+        if (groupId === undefined || name === undefined) return [];
+        const memberCount = numericField(group, 'member_count');
+        return [{ groupId, name, ...(memberCount === undefined ? {} : { memberCount }) }];
+      });
     });
   }
 
   async listFriends(): Promise<ContactFriend[]> {
-    const friends = await this.client.getFriendList();
-    return friends.flatMap((friend) => {
-      const userId = numericField(friend, 'user_id');
-      const nickname = stringField(friend, 'nickname');
-      if (userId === undefined || nickname === undefined) return [];
-      const remark = stringField(friend, 'remark');
-      return [{ userId, nickname, ...(remark === undefined ? {} : { remark }) }];
+    this.assertOnline();
+    return this.withActionTimeout('get_friend_list', async () => {
+      const friends = await this.client.getFriendList();
+      return friends.flatMap((friend) => {
+        const userId = numericField(friend, 'user_id');
+        const nickname = stringField(friend, 'nickname');
+        if (userId === undefined || nickname === undefined) return [];
+        const remark = stringField(friend, 'remark');
+        return [{ userId, nickname, ...(remark === undefined ? {} : { remark }) }];
+      });
     });
   }
 
   async history(session: SessionKey, count: number): Promise<IncomingMessage[]> {
     this.assertSessionAccount(session);
+    this.assertOnline();
+    return this.withActionTimeout('get_message_history', () => this.loadHistory(session, count));
+  }
+
+  private async loadHistory(session: SessionKey, count: number): Promise<IncomingMessage[]> {
     const result = session.kind === 'group'
       ? await this.client.getGroupMessageHistory({ group_id: session.peer, count })
       : await this.client.getFriendMessageHistory({ user_id: session.peer, count });
@@ -229,30 +427,84 @@ export class OneBotAdapter implements ProtocolAdapter {
   }
 
   async markRead(session: SessionKey): Promise<void> {
-    const latest = await this.history(session, 1);
-    const lastMessage = latest.at(-1);
-    if (!lastMessage) return;
+    this.assertSessionAccount(session);
+    this.assertOnline();
+    await this.withActionTimeout('mark_read', async () => {
+      const latest = await this.loadHistory(session, 1);
+      const lastMessage = latest.at(-1);
+      if (!lastMessage) return;
 
-    const messageId = numericMessageId(lastMessage.messageId);
-    if (session.kind === 'group') {
-      await this.client.markGroupMessageAsRead(messageId, session.peer);
-    } else {
-      await this.client.markPrivateMessageAsRead(messageId, session.peer);
-    }
+      const messageId = numericMessageId(lastMessage.messageId);
+      if (session.kind === 'group') {
+        await this.client.markGroupMessageAsRead(messageId, session.peer);
+      } else {
+        await this.client.markPrivateMessageAsRead(messageId, session.peer);
+      }
+    });
   }
 
   async setTyping(session: SessionKey): Promise<void> {
     this.assertSessionAccount(session);
+    this.assertOnline();
     if (session.kind === 'group') return;
-    await this.client.raw('set_input_status', { user_id: session.peer, event_type: 1 });
+    await this.withActionTimeout('set_input_status', () => this.client.raw('set_input_status', {
+      user_id: session.peer,
+      event_type: 1,
+    }));
   }
 
   async recall(messageId: string): Promise<void> {
-    await this.client.deleteMessage(numericMessageId(messageId));
+    this.assertOnline();
+    await this.withActionTimeout('delete_message', () => this.client.deleteMessage(numericMessageId(messageId)));
   }
 
   private assertSessionAccount(session: SessionKey): void {
     if (session.account !== this.account) throw new Error('SessionKey account 与适配器账号不一致');
+  }
+
+  private assertOnline(): void {
+    if (this.status === 'online' && !this.client.isConnected) {
+      this.clientRequiresReplacement = true;
+      this.accountVerified = false;
+      this.nickname = '';
+      this.setStatus('offline');
+      this.scheduleRetry();
+    }
+    if (this.status !== 'online' || !this.client.isConnected) throw new AdapterOfflineError(this.account);
+  }
+
+  private async withActionTimeout<T>(action: string, run: () => Promise<T>, requireOnline = true): Promise<T> {
+    const client = this.client;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = this.setActionTimer(
+        () => reject(new AdapterTimeoutError(action, ADAPTER_ACTION_TIMEOUT_MS)),
+        ADAPTER_ACTION_TIMEOUT_MS,
+      );
+    });
+    try {
+      return await Promise.race([Promise.resolve().then(() => {
+        if (requireOnline) this.assertOnline();
+        return run();
+      }), timeout]);
+    } catch (error) {
+      if (error instanceof AdapterTimeoutError && client === this.client) {
+        this.clientRequiresReplacement = true;
+        this.accountVerified = false;
+        this.nickname = '';
+        this.setStatus('offline');
+        try {
+          // SDK reconnect is disabled; the application retry loop remains active.
+          client.close();
+        } catch (closeError) {
+          try { this.onConnectionError?.(closeError); } catch { /* preserve the timeout */ }
+        }
+        this.scheduleRetry();
+      }
+      throw error;
+    } finally {
+      if (timer !== undefined) this.clearActionTimer(timer);
+    }
   }
 
   private setStatus(status: AdapterStatus): void {

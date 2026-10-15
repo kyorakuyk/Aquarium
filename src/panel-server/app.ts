@@ -5,7 +5,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
-import type { AdapterStatus, ProtocolAdapter } from '../adapters/types.ts';
+import type { AdapterStatus, ContactFriend, ContactGroup, ProtocolAdapter } from '../adapters/types.ts';
 import type { AquariumConfig } from '../config/schema.ts';
 import { AquariumConfigSchema } from '../config/schema.ts';
 import { resolveSession } from '../config/resolve.ts';
@@ -38,6 +38,7 @@ export interface PanelServerOptions {
   root?: string;
   panelDist?: string;
   now?: () => number;
+  adapterTimeoutMs?: number;
   callModel?: PipelineModelCall;
   onError?: (error: unknown) => void;
 }
@@ -87,6 +88,21 @@ function decisionCostCny(detail: unknown): number | null {
   return typeof costCny === 'number' && Number.isFinite(costCny) ? costCny : null;
 }
 
+interface ContactCache {
+  groups?: ContactGroup[];
+  friends?: ContactFriend[];
+  groupsRequest?: Promise<ContactGroup[]>;
+  friendsRequest?: Promise<ContactFriend[]>;
+}
+
+interface ContactSnapshot {
+  groups: ContactGroup[];
+  friends: ContactFriend[];
+  degraded: boolean;
+}
+
+const DEFAULT_ADAPTER_TIMEOUT_MS = 3_000;
+
 export function createPanelApp(options: PanelServerOptions): Hono {
   if (!options.password) throw new Error('Panel password must not be empty');
   const root = options.root ?? process.cwd();
@@ -98,6 +114,94 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     const result = configWriteTail.then(task, task);
     configWriteTail = result.then(() => undefined, () => undefined);
     return result;
+  };
+  const adapterTimeoutMs = options.adapterTimeoutMs ?? DEFAULT_ADAPTER_TIMEOUT_MS;
+  if (!Number.isSafeInteger(adapterTimeoutMs) || adapterTimeoutMs <= 0) {
+    throw new TypeError('Panel adapter timeout must be a positive integer');
+  }
+  const contactCaches = new WeakMap<ProtocolAdapter, ContactCache>();
+  const contactCacheFor = (adapter: ProtocolAdapter): ContactCache => {
+    let cache = contactCaches.get(adapter);
+    if (!cache) {
+      cache = {};
+      contactCaches.set(adapter, cache);
+    }
+    return cache;
+  };
+  const requestGroups = (runtime: PanelAccountRuntime, cache: ContactCache): Promise<ContactGroup[]> => {
+    if (cache.groupsRequest) return cache.groupsRequest;
+    let request!: Promise<ContactGroup[]>;
+    request = Promise.resolve().then(() => {
+      if (runtime.getStatus() !== 'online') throw new Error('Adapter went offline before group contact lookup');
+      return runtime.adapter.listGroups();
+    }).then((groups) => {
+      cache.groups = groups;
+      return groups;
+    }).finally(() => {
+      if (cache.groupsRequest === request) delete cache.groupsRequest;
+    });
+    cache.groupsRequest = request;
+    return request;
+  };
+  const requestFriends = (runtime: PanelAccountRuntime, cache: ContactCache): Promise<ContactFriend[]> => {
+    if (cache.friendsRequest) return cache.friendsRequest;
+    let request!: Promise<ContactFriend[]>;
+    request = Promise.resolve().then(() => {
+      if (runtime.getStatus() !== 'online') throw new Error('Adapter went offline before friend contact lookup');
+      return runtime.adapter.listFriends();
+    }).then((friends) => {
+      cache.friends = friends;
+      return friends;
+    }).finally(() => {
+      if (cache.friendsRequest === request) delete cache.friendsRequest;
+    });
+    cache.friendsRequest = request;
+    return request;
+  };
+  const readContact = async <T>(
+    request: Promise<T>,
+    cached: T | undefined,
+    clearRequest: () => void,
+    label: string,
+  ): Promise<{ value: T | undefined; degraded: boolean }> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timedOut = false;
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        timedOut = true;
+        reject(new Error(`Panel ${label} contact lookup timed out after ${adapterTimeoutMs}ms`));
+      }, adapterTimeoutMs);
+    });
+    try {
+      return { value: await Promise.race([request, timeout]), degraded: false };
+    } catch (error) {
+      if (timedOut) clearRequest();
+      options.onError?.(error);
+      return { value: cached, degraded: true };
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  };
+  const loadContacts = async (runtime: PanelAccountRuntime): Promise<ContactSnapshot> => {
+    const cache = contactCacheFor(runtime.adapter);
+    if (runtime.getStatus() !== 'online') {
+      return { groups: cache.groups ?? [], friends: cache.friends ?? [], degraded: true };
+    }
+    const groupsRequest = requestGroups(runtime, cache);
+    const friendsRequest = requestFriends(runtime, cache);
+    const [groups, friends] = await Promise.all([
+      readContact(groupsRequest, cache.groups, () => {
+        if (cache.groupsRequest === groupsRequest) delete cache.groupsRequest;
+      }, 'group'),
+      readContact(friendsRequest, cache.friends, () => {
+        if (cache.friendsRequest === friendsRequest) delete cache.friendsRequest;
+      }, 'friend'),
+    ]);
+    return {
+      groups: groups.value ?? cache.groups ?? [],
+      friends: friends.value ?? cache.friends ?? [],
+      degraded: groups.degraded || friends.degraded || runtime.getStatus() !== 'online',
+    };
   };
 
   app.use('/api/*', bodyLimit({
@@ -115,19 +219,25 @@ export function createPanelApp(options: PanelServerOptions): Hono {
   app.get('/api/status', async (context) => {
     const config = options.getConfig();
     const accounts = options.accounts();
-    const enabled = await Promise.all(accounts.map((runtime) =>
-      listEnabledSessions(runtime.adapter, config)));
+    const contacts = await Promise.all(accounts.map(loadContacts));
+    const enabled = await Promise.all(accounts.map((runtime, index) => {
+      const snapshot = contacts[index] ?? { groups: [], friends: [], degraded: true };
+      return listEnabledSessions(runtime.adapter, config, options.onError, snapshot);
+    }));
     const todayCostCny = options.repository.costToday();
     return context.json({
-      accounts: accounts.map((runtime) => {
+      accounts: accounts.map((runtime, index) => {
         const accountConfig = config.accounts.find((candidate) => candidate.uin === runtime.adapter.account);
         const lastReply = options.repository.latestSelfMessageForAccount(runtime.adapter.account);
+        const currentStatus = runtime.getStatus();
+        const snapshot = contacts[index];
         return {
           account: runtime.adapter.account,
           name: runtime.getNickname(),
           persona: accountConfig?.persona ?? 'default',
           snowlumaConfigured: Boolean(accountConfig?.snowlumaDir),
-          connectionStatus: runtime.getStatus(),
+          connectionStatus: currentStatus,
+          degraded: !snapshot || snapshot.degraded || currentStatus !== 'online',
           todayReplyCount: options.repository.replyCountTodayForAccount(runtime.adapter.account),
           lastReplyAt: lastReply?.time ?? null,
           lastReplyText: lastReply?.plainText ?? null,
@@ -150,39 +260,36 @@ export function createPanelApp(options: PanelServerOptions): Hono {
   app.get('/api/sessions', async (context) => {
     const config = options.getConfig();
     const runtimes = options.accounts();
-    const rows = new Map<string, { key: SessionKey; name: string; memberCount?: number }>();
-    for (const runtime of runtimes) {
-      try {
-        const groups = await runtime.adapter.listGroups();
-        for (const group of groups) {
-          const key: SessionKey = { account: runtime.adapter.account, kind: 'group', peer: group.groupId };
-          rows.set(sessionId(key), { key, name: group.name, memberCount: group.memberCount });
-        }
-      } catch (error) {
-        options.onError?.(error);
+    const snapshots = await Promise.all(runtimes.map(loadContacts));
+    const rows = new Map<string, { key: SessionKey; name: string; memberCount?: number; degraded: boolean }>();
+    const degradedByAccount = new Map<number, boolean>();
+    for (const [index, runtime] of runtimes.entries()) {
+      const snapshot = snapshots[index] ?? { groups: [], friends: [], degraded: true };
+      const degraded = snapshot.degraded || runtime.getStatus() !== 'online';
+      degradedByAccount.set(runtime.adapter.account, degraded);
+      for (const group of snapshot.groups) {
+        const key: SessionKey = { account: runtime.adapter.account, kind: 'group', peer: group.groupId };
+        rows.set(sessionId(key), { key, name: group.name, memberCount: group.memberCount, degraded });
       }
-      try {
-        const friends = await runtime.adapter.listFriends();
-        for (const friend of friends) {
-          const key: SessionKey = { account: runtime.adapter.account, kind: 'private', peer: friend.userId };
-          rows.set(sessionId(key), { key, name: friend.remark || friend.nickname });
-        }
-      } catch (error) {
-        options.onError?.(error);
+      for (const friend of snapshot.friends) {
+        const key: SessionKey = { account: runtime.adapter.account, kind: 'private', peer: friend.userId };
+        rows.set(sessionId(key), { key, name: friend.remark || friend.nickname, degraded });
       }
     }
     for (const configuredId of Object.keys(config.sessions)) {
       const key = parseSessionId(configuredId);
       if (key && runtimes.some((runtime) => runtime.adapter.account === key.account) && !rows.has(configuredId)) {
-        rows.set(configuredId, { key, name: configuredId });
+        rows.set(configuredId, { key, name: configuredId, degraded: degradedByAccount.get(key.account) ?? true });
       }
     }
     const result = [...rows.entries()].map(([id, row]) => {
       const effective = resolveSession(config, row.key);
+      const runtime = runtimes.find((candidate) => candidate.adapter.account === row.key.account);
       return {
         sessionId: id,
         name: row.name,
         kind: row.key.kind,
+        degraded: row.degraded || !runtime || runtime.getStatus() !== 'online',
         ...(row.memberCount === undefined ? {} : { memberCount: row.memberCount }),
         enabled: effective.enabled,
         overrides: Object.keys(config.sessions[id] ?? {}),
@@ -255,24 +362,17 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     }
     const decisions = options.repository.recentDecisions(Math.min(requested, 200));
     const sessionNames = new Map<string, string>();
-    for (const runtime of options.accounts()) {
-      try {
-        const groups = await runtime.adapter.listGroups();
-        for (const group of groups) {
-          const id = sessionId({ account: runtime.adapter.account, kind: 'group', peer: group.groupId });
-          sessionNames.set(id, group.name || id);
-        }
-      } catch (error) {
-        options.onError?.(error);
+    const runtimes = options.accounts();
+    const snapshots = await Promise.all(runtimes.map(loadContacts));
+    for (const [index, runtime] of runtimes.entries()) {
+      const snapshot = snapshots[index] ?? { groups: [], friends: [], degraded: true };
+      for (const group of snapshot.groups) {
+        const id = sessionId({ account: runtime.adapter.account, kind: 'group', peer: group.groupId });
+        sessionNames.set(id, group.name || id);
       }
-      try {
-        const friends = await runtime.adapter.listFriends();
-        for (const friend of friends) {
-          const id = sessionId({ account: runtime.adapter.account, kind: 'private', peer: friend.userId });
-          sessionNames.set(id, friend.remark || friend.nickname || id);
-        }
-      } catch (error) {
-        options.onError?.(error);
+      for (const friend of snapshot.friends) {
+        const id = sessionId({ account: runtime.adapter.account, kind: 'private', peer: friend.userId });
+        sessionNames.set(id, friend.remark || friend.nickname || id);
       }
     }
     return context.json(decisions.map((decision) => ({

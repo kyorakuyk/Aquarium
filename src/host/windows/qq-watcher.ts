@@ -11,6 +11,7 @@ export interface QqWatcherOptions {
   scanIntervalSec: number;
   getClient: () => QqWatcherClient | undefined;
   onScan?: () => void;
+  onInjected?: (uin: number) => void;
   onFatalError?: (error: SnowLumaWebUIError) => void;
   log?: (message: string) => void;
   setInterval?: typeof globalThis.setInterval;
@@ -72,6 +73,11 @@ export function createQqWatcher(options: QqWatcherOptions) {
         if (stopRequested) return;
         if (result.success) {
           dispositions.set(process.pid, { kind: 'injected', uin: matchedUin });
+          try {
+            options.onInjected?.(matchedUin);
+          } catch {
+            options.log?.('QQ watcher 注入成功回调失败。');
+          }
         } else {
           options.log?.(`QQ 目标进程 PID ${process.pid} 加载失败；下一轮将重试。`);
         }

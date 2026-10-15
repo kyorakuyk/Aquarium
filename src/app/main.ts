@@ -126,6 +126,7 @@ if (initialConfig.host.enabled && initialConfig.accounts.length === 0) {
       password: process.env.SNOWLUMA_WEBUI_PASSWORD ?? '',
       logDirectory: path.join(process.cwd(), 'data', 'logs'),
       getAdapterStatus: (uin) => adapterStatuses.get(uin),
+      onAdapterInjected: (uin) => adapters.find((adapter) => adapter.account === uin)?.retryNow(),
       log: (level, message) => logger[level](message),
     }),
     onWarning: (message) => logger.warn(message),
@@ -172,6 +173,9 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     adapter = new OneBotAdapter({
       account: accountConfig.uin,
       snowlumaDir: accountConfig.snowlumaDir,
+      onConnectionError: (error) => {
+        logger.error(`OneBot 连接异常，将继续重试：${describeError(error)}`);
+      },
     });
   } catch (error) {
     logger.error(`账号 ${accountConfig.uin} 的 OneBot 适配器初始化失败：${describeError(error)}`);
@@ -238,14 +242,8 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
       });
   }));
 
-  try {
-    logger.info(`正在连接账号 ${accountConfig.uin} ...`);
-    await adapter.connect();
-  } catch (error) {
-    currentStatus = 'offline';
-    adapterStatuses.set(accountConfig.uin, currentStatus);
-    logger.error(`账号 ${accountConfig.uin} 连接失败：${describeError(error)}`);
-  }
+  logger.info(`正在连接账号 ${accountConfig.uin} ...`);
+  adapter.start();
 });
 
 await startPanelWhileAccountStartupRuns(accountStartup, () => {

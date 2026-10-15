@@ -7,6 +7,7 @@ export interface PanelAccount {
   persona: string;
   snowlumaConfigured: boolean;
   connectionStatus: 'connecting' | 'online' | 'offline';
+  degraded: boolean;
   todayReplyCount: number;
   lastReplyAt: number | null;
   lastReplyText: string | null;
@@ -27,6 +28,7 @@ export interface SessionView {
   sessionId: string;
   name: string;
   kind: 'group' | 'private';
+  degraded: boolean;
   memberCount?: number;
   enabled: boolean;
   overrides: string[];

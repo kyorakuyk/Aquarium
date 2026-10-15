@@ -1,4 +1,4 @@
-import type { ProtocolAdapter } from '../adapters/types.ts';
+import type { ContactFriend, ContactGroup, ProtocolAdapter } from '../adapters/types.ts';
 import { resolveSession } from '../config/resolve.ts';
 import type { AquariumConfig } from '../config/schema.ts';
 import { sessionId, type SessionKey } from './events.ts';
@@ -21,6 +21,7 @@ export async function listEnabledSessions(
   adapter: ProtocolAdapter,
   config: AquariumConfig,
   onError?: (error: unknown) => void,
+  contacts?: { groups: ContactGroup[]; friends: ContactFriend[] },
 ): Promise<SessionKey[]> {
   const candidates = new Map<string, SessionKey>();
   const add = (key: SessionKey): void => {
@@ -29,14 +30,14 @@ export async function listEnabledSessions(
 
   if (config.defaults.enabled) {
     try {
-      for (const group of await adapter.listGroups()) {
+      for (const group of contacts?.groups ?? await adapter.listGroups()) {
         add({ account: adapter.account, kind: 'group', peer: group.groupId });
       }
     } catch (error) {
       onError?.(error);
     }
     try {
-      for (const friend of await adapter.listFriends()) {
+      for (const friend of contacts?.friends ?? await adapter.listFriends()) {
         add({ account: adapter.account, kind: 'private', peer: friend.userId });
       }
     } catch (error) {

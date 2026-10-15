@@ -415,6 +415,7 @@
 | 2026-10-14 | T12b probe-timeout follow-up | 用户首次手动运行观察到登录最终成功、进程列表 HTTP 200，但 `probe-login` 重复 network error；确认 host 默认请求超时 1s 短于 SnowLuma probe 最长 5s，增加至 7s；慢响应回归按预期 RED→GREEN；`npm run check` 通过（190 项）；精确 staged review 通过，提交 `aba7022` / `checkpoint/dev-host-probe-timeout-fix-2026-10-14-unverified`。后续 17:17 运行记录 adapter/host online，用户确认可正常对话；此前 17:00 初次运行未出现 online，但后续运行证明状态日志链可工作 |
 | 2026-10-14 | T12c | 将 trayjs 接入 Windows tray worker，增加 helper/worker 错误隔离、状态/提示/menu 映射与 shutdown 清理；`npm run check` 通过（211 项），精确 review 通过（SHA-256 `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`）；提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df` / `checkpoint/dev-host-t12c-code-2026-10-14-unverified`。真实 Windows 用户验收及 autostart install 待用户执行 |
 | 2026-10-14 | T12c panel-startup follow-up | 用户确认小号离线启动时管理面板端口未开启；根因是主流程等待串行 `adapter.connect()` 后才启动 panel。现先启动账号任务，再立刻启动 panel，同时仍 await 账号任务；`npm run check` 通过（212 项），精确 review 通过（SHA-256 `9a7982774c5da99984a93647a8d3b88b664356c0cb752eea3b2fa9b1bcc9ea64`）；提交 `1f0f2b7668e5ffbaee08824de10b7527aa78bbfa` / `checkpoint/dev-host-panel-startup-fix-2026-10-14-unverified`。待用户复测启动时小号未登录的情形 |
+| 2026-10-15 | N0 / R14 | 新增 OneBot 应用层重试、每次连接重验账号、未验证消息隔离、整链 timeout 与超时 client 替换；QQ 注入成功后立即重试；面板离线联系人缓存、请求限时与 degraded 状态；`npm run check` 通过（230 项），`npm run panel:build` 成功，精确 staged review 通过（SHA-256 `4dbc238959683810e3468545e5d0350f214b2d648fbd13e01b3b521566e60dcd`）。真实 Windows/QQ 验收待用户；提交哈希待回填。reviewer 的两项非阻断建议保留为后续 panel 跟进 |
 ---
 
 ## 6. 待评估清单
@@ -480,7 +481,7 @@
 > 分支：在 `dev/host` 上先完成 R14 的代码与测试，然后从 `dev/host` 新建 `night/m2-prep` 继续。早上检查清单写到 `doc/plans/MORNING-2026-10-16.md`。
 > 每项完成后 `npm run check` 必须通过；**所有任务都不得改变 M1 的对外行为**（现有测试必须原样通过，除非本节明确要求修改）。
 
-- [ ] **N0** 完成 R14 的代码与测试（真实验收留给用户）。
+- [x] **N0** 完成 R14 的代码与测试（真实验收留给用户）。
 - [ ] **N1 流水线分步重构**（DESIGN §14 M2 第一项）
   - 把 `src/core/pipeline.ts` 拆为 `src/core/steps/` 下的独立步骤文件：`persist.ts`（入库 / 去重）、`gate.ts`（启用 / 闭嘴 / 触发 / 限流）、`context.ts`（人设、上下文、看图、提示词组装）、`generate.ts`（调用 `reply` 槽位与清洗）、`deliver.ts`（拆条、节奏、发送、记录）。
   - 每个步骤签名统一：`(ctx: StepContext) => Promise<StepResult>`，`StepResult` 为 `{ next: true }` 或 `{ next: false, reason: string, detail?: unknown, replied?: boolean }`。`StepContext` 携带消息、配置快照、累积数据与一个 `trace: TraceEntry[]`（每步 push `{ step, startedAt, durationMs, summary }`）。
