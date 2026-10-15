@@ -43,6 +43,7 @@
 
 - 阶段 A–C（R1–R13、C0、T7–T10）已完成；U1、U2 真实环境验证已由用户完成，U2 反馈无重大问题；代码已在 `main`。
 - T11 托管层调研已由用户确认；T12a spike 的四项独立 GUI 验收已由用户确认通过；T12b 非托盘实现与 probe-timeout 复测已完成。T12c 真实托盘代码提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df`（review SHA-256 `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`）；用户实测后新增面板启动顺序修复提交 `1f0f2b7668e5ffbaee08824de10b7527aa78bbfa`（review SHA-256 `9a7982774c5da99984a93647a8d3b88b664356c0cb752eea3b2fa9b1bcc9ea64`，当时 `npm run check` 通过 212 项）。follow-up 标签为 `checkpoint/dev-host-panel-startup-fix-2026-10-14-unverified`。真实 Windows 托盘/QQ/autostart 用户验收仍待执行，`autostart:install` 未运行。
+- §9.0 U1–U4 代码已提交到 `dev/m2-modes`（`638f1bcadd56af8f6988955f6d538af69241e073`）；当前停在停止点 U，等待用户在控制台确认四项体验，确认前不开始 A1。真实 QQ 调试日志未读取，U3 设备字段确认待用户执行。
 
 ---
 
@@ -428,6 +429,11 @@
 | 2026-10-15 | A5 | 将攒批、退避、prefilter、judge、动态阈值与决策 trace 接入 pipeline；`npm run check` 320/320、路由定向测试 3/3 通过；精确 review 通过（SHA-256 `dc1a73b040e2f746f7d2f66da90c488330b931de3cb9b117fab7d637bd3d9c14`）；提交 `1bb8c8e3a4ffe19f08a6e0168507a858d1ac1bc0` / `checkpoint/dev-m2-modes-a5-2026-10-15-unverified`；仅 fake/offline 验证 |
 | 2026-10-15 | A6 | 完成会话模式与时间表编辑、reason 中文标签及决策概率详情；`npm run check` 330/330、`npm run panel:build`（29 modules）、`git diff --check` 通过；精确 review 通过（SHA-256 `b8b303d8d483df6839ae91efdee1dcb90eb103ba4409822da3d7cdcb66d60441`，32,381 bytes，13 paths）；提交 `9c0c53f1a3acda1754f9b6c7c7befbf8e9377a05` / `checkpoint/dev-m2-modes-a6-2026-10-15-unverified`。两项非阻断建议（非法 schedule PATCH 路由负向测试、行内时间校验提示）保留后续；M2-A 真实小群验收待用户 |
 | 2026-10-15 | A6 schedule editor follow-up | 修复时间输入在延迟 state updater 中读取 `currentTarget` 导致编辑崩溃；未提交草稿按 session 存入 `sessionStorage`，刷新可恢复，成功 PATCH 后在刷新会话列表前清理对应草稿，失败 PATCH 保留；读取时拒绝格式错误时间与额外字段、保留空白编辑值。首轮 review 的两项逻辑问题均经 RED/GREEN 回归修复；`npm run check` 通过（336/336），`npm run panel:build` 成功（29 modules），`git diff --check` 通过；最终精确 review 通过（SHA-256 `ba661e5368015edcf33144291446190bfd0857001a12356786eaac854ecd660d`，21,264 bytes，3 paths，无 security concerns / logic errors）；提交 `3b7134902091c2168ea4a923b1fa7815ae989abf` / `checkpoint/dev-m2-schedule-editor-fix-2026-10-15-unverified`。Reviewer 的 mounted `SessionsPage` 回归测试建议为非阻断，未纳入本切片；未运行真实 GUI、QQ 或模型，M2-A 用户验收仍待执行 |
+| 2026-10-16 | U1 | 新增受保护的 `GET/PATCH /api/defaults`、严格部分更新与嵌套 rate 合并；生产 `writeConfig` 路径和 watcher 热更新经文件读回测试；全局默认入口固定显示并复用群聊设置项。`npm run check` 通过（340/340） |
+| 2026-10-16 | U2 | 按安全读写 `localStorage` 恢复会话/分组选择；`/api/sessions` 增加 SQLite `MAX(time)` 最近消息时间并按启用、活跃、名称排序；回归覆盖 null 活跃时间和名称平局，`npm run check` 通过（340/340） |
+| 2026-10-16 | U3 | 会话列表过滤 bot 自身及精确匹配设备昵称/备注，保留既有配置覆盖，并在联系人读取失败时仍隐藏自身私聊。未启动 QQ/GUI，未读取真实调试日志；按计划回退规则实现，已在当日早检清单注明待确认。`npm run check` 通过（340/340） |
+| 2026-10-16 | U4 | 私聊面板隐藏群模式/昵称配置，显示私聊说明并提供“对这个人的补充说明”；单一频率输入同步写入两个 rate 字段，群聊保留原有双限额输入，全局默认复用双限额输入。`npm run panel:build` 成功（30 modules）；总体验证 `npm run check` 340/340、`git diff --check` 通过。实现提交 `638f1bcadd56af8f6988955f6d538af69241e073`，tag `checkpoint/dev-m2-u1-u4-2026-10-16-unverified`；停在停止点 U，等待用户控制台确认，未开始 A1 |
+
 ---
 
 ## 6. 待评估清单
@@ -526,18 +532,18 @@
 
 ## 9.0 控制台会话页体验修复（在 §9 的 A1 之前完成，同一分支 `dev/m2-modes`）
 
-- [ ] **U1 全局默认设置**
+- [x] **U1 全局默认设置**
   - 后端新增 `GET /api/defaults`、`PATCH /api/defaults`（请求体为 `defaults` 的部分字段；校验、原子写配置、热重载，规则与 `PATCH /api/sessions/:id` 一致，但不支持 `null` 恢复继承）。
   - 前端：会话列表最上方固定一项“全局默认”（不随搜索与分组过滤消失，带“所有会话继承这里的设置”说明）。选中后右侧显示与会话相同的设置表单，但没有启用开关与“继承 / 覆盖”标注。
   - 会话详情中“继承全局”文字改为可点击，点击后切换到“全局默认”。
-- [ ] **U2 记住上次选择并优化排序**
+- [x] **U2 记住上次选择并优化排序**
   - 用 `localStorage`（读写包在 try/catch 中）记住上次选中的 sessionId 与“群聊 / 好友”分组；进入会话页时恢复；该会话已不存在时回落到列表第一项。
   - 列表排序：已启用在前；同组内按该会话最后一条消息时间倒序（后端 `/api/sessions` 每项新增 `lastMessageAt`，取 `messages` 表最大 `time`，没有则 `null` 排在后面）；再按名称。
-- [ ] **U3 过滤自己与设备会话**
+- [x] **U3 过滤自己与设备会话**
   - `/api/sessions` 的好友列表排除：`userId` 等于该 bot 账号；昵称或备注**完全等于**“我的电脑”“我的手机”“我的Pad”“我的平板”之一的条目。
   - 实现前先用 `npm start` 时的调试日志确认这些条目的真实字段（`userId`、`nickname`、`remark`）；若设备条目能用 `userId` 稳定识别，优先用 `userId` 规则，并在代码注释中写明依据。**此步骤需要真实数据，若无人值守则按名称规则实现并在早上检查清单中注明待确认。**
   - 配置中已存在的、指向被排除条目的 `sessions` 覆盖项保持原样，不删除。
-- [ ] **U4 私聊使用私聊的设置项**
+- [x] **U4 私聊使用私聊的设置项**
   - 选中私聊时，右侧表单：
     - 隐藏“什么时候说话”（改为一行说明：“私聊里每条消息都会回复。”）；
     - 隐藏“叫它的名字”；
