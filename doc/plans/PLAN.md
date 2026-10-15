@@ -416,7 +416,7 @@
 | 2026-10-14 | T12c | 将 trayjs 接入 Windows tray worker，增加 helper/worker 错误隔离、状态/提示/menu 映射与 shutdown 清理；`npm run check` 通过（211 项），精确 review 通过（SHA-256 `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`）；提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df` / `checkpoint/dev-host-t12c-code-2026-10-14-unverified`。真实 Windows 用户验收及 autostart install 待用户执行 |
 | 2026-10-14 | T12c panel-startup follow-up | 用户确认小号离线启动时管理面板端口未开启；根因是主流程等待串行 `adapter.connect()` 后才启动 panel。现先启动账号任务，再立刻启动 panel，同时仍 await 账号任务；`npm run check` 通过（212 项），精确 review 通过（SHA-256 `9a7982774c5da99984a93647a8d3b88b664356c0cb752eea3b2fa9b1bcc9ea64`）；提交 `1f0f2b7668e5ffbaee08824de10b7527aa78bbfa` / `checkpoint/dev-host-panel-startup-fix-2026-10-14-unverified`。待用户复测启动时小号未登录的情形 |
 | 2026-10-15 | N0 / R14 | 新增 OneBot 应用层重试、每次连接重验账号、未验证消息隔离、整链 timeout 与超时 client 替换；QQ 注入成功后立即重试；面板离线联系人缓存、请求限时与 degraded 状态；`npm run check` 通过（230 项），`npm run panel:build` 成功，精确 staged review 通过（SHA-256 `4dbc238959683810e3468545e5d0350f214b2d648fbd13e01b3b521566e60dcd`）。真实 Windows/QQ 验收待用户；提交 `cc0a204dbe4d76a4c3e0c32194169573bb6d1a61` / `checkpoint/dev-host-n0-r14-2026-10-15-unverified`。reviewer 的两项非阻断建议保留为后续 panel 跟进 |
-| 2026-10-15 | N1 | 将主流水线拆为 persist/gate/context/generate/deliver 五步，统一 StepContext/StepResult 并逐步收集安全摘要 trace；新增五项步骤单测，原 `test/pipeline.test.ts` 未改且通过；`npm run check` 通过（235 项）。提交哈希待回填 |
+| 2026-10-15 | N1 | 将主流水线拆为 persist/gate/context/generate/deliver 五步，统一 StepContext/StepResult 并逐步收集安全摘要 trace；新增五项步骤单测，原 `test/pipeline.test.ts` 未改且通过；`npm run check` 通过（235 项），精确 staged review 通过（SHA-256 `52c278e5d735cab82eefe5862de196111470d30b47e93fa5263d30fd9117f522`）；提交 `e1c4e174a8dea345a8886d4184b1f7f7554b52ab` / `checkpoint/night-m2-prep-n1-2026-10-15-unverified` |
 ---
 
 ## 6. 待评估清单
