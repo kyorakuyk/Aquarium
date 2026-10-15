@@ -3,18 +3,38 @@ import { apiRequest, patch, type ModeScheduleEntry, type SessionView } from '../
 import {
   addModeScheduleEntry,
   changeModeScheduleDraft,
+  createModeScheduleEntryChangeFromInput,
   discardModeScheduleDraft,
   getModeScheduleDraft,
   getModeScheduleRowKeys,
+  readModeScheduleDrafts,
+  saveModeScheduleDraft,
   type ModeScheduleDrafts,
   type ModeScheduleRowKeys,
   removeModeScheduleEntry,
   SESSION_MODE_OPTIONS,
   updateModeScheduleEntry,
+  writeModeScheduleDrafts,
 } from '../session-mode.ts';
 
 type SessionField = 'enabled' | 'mode' | 'modeSchedule' | 'nicknames' | 'contextMessages' | 'rate' | 'groupNote';
 type RateField = keyof SessionView['effective']['rate'];
+
+function readModeScheduleDraftSnapshot(): ModeScheduleDrafts {
+  try {
+    return readModeScheduleDrafts(window.sessionStorage);
+  } catch {
+    return new Map();
+  }
+}
+
+function writeModeScheduleDraftSnapshot(drafts: ModeScheduleDrafts): boolean {
+  try {
+    return writeModeScheduleDrafts(window.sessionStorage, drafts);
+  } catch {
+    return false;
+  }
+}
 
 function FieldHeading({ title, fields, session, onReset }: {
   title: string;
@@ -43,10 +63,12 @@ export function SessionsPage() {
   const [kind, setKind] = useState<'group' | 'private'>('group');
   const [query, setQuery] = useState('');
   const [nicknames, setNicknames] = useState('');
-  const [modeScheduleDrafts, setModeScheduleDrafts] = useState<ModeScheduleDrafts>(() => new Map());
+  const [modeScheduleDrafts, setModeScheduleDrafts] = useState<ModeScheduleDrafts>(readModeScheduleDraftSnapshot);
+  const modeScheduleDraftsRef = useRef(modeScheduleDrafts);
   const [modeScheduleRowKeys, setModeScheduleRowKeys] = useState<ModeScheduleRowKeys>(() => new Map());
   const [groupNote, setGroupNote] = useState('');
   const [error, setError] = useState('');
+  const [draftPersistenceError, setDraftPersistenceError] = useState('');
   const [savedAt, setSavedAt] = useState('');
   const [busy, setBusy] = useState(false);
   const nextScheduleRowKey = useRef(0);
@@ -87,10 +109,18 @@ export function SessionsPage() {
     setBusy(true);
     setError('');
     try {
-      await patch(`/api/sessions/${encodeURIComponent(targetId)}`, values);
-      await loadSessions(targetId);
       if (Object.hasOwn(values, 'modeSchedule')) {
-        setModeScheduleDrafts((drafts) => discardModeScheduleDraft(drafts, targetId));
+        await saveModeScheduleDraft(
+          () => patch(`/api/sessions/${encodeURIComponent(targetId)}`, values),
+          () => replaceModeScheduleDrafts(
+            discardModeScheduleDraft(modeScheduleDraftsRef.current, targetId),
+            '时段已保存，但无法清理当前标签页的草稿副本。',
+          ),
+          () => loadSessions(targetId),
+        );
+      } else {
+        await patch(`/api/sessions/${encodeURIComponent(targetId)}`, values);
+        await loadSessions(targetId);
       }
       setSavedAt(new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date()));
     } catch (reason) {
@@ -104,14 +134,20 @@ export function SessionsPage() {
     void update(Object.fromEntries(fields.map((field) => [field, null])));
   }
 
+  function replaceModeScheduleDrafts(drafts: ModeScheduleDrafts, storageError: string) {
+    modeScheduleDraftsRef.current = drafts;
+    setModeScheduleDrafts(drafts);
+    setDraftPersistenceError(writeModeScheduleDraftSnapshot(drafts) ? '' : storageError);
+  }
+
   function updateScheduleDraft(change: (entries: readonly ModeScheduleEntry[]) => ModeScheduleEntry[]) {
     if (!selected) return;
-    setModeScheduleDrafts((drafts) => changeModeScheduleDraft(
-      drafts,
+    replaceModeScheduleDrafts(changeModeScheduleDraft(
+      modeScheduleDraftsRef.current,
       selected.sessionId,
       selected.effective.modeSchedule,
       change,
-    ));
+    ), '当前标签页无法保留未提交的时段草稿；请点击“保存时段”。');
   }
 
   function addScheduleEntry() {
@@ -215,7 +251,8 @@ export function SessionsPage() {
 
             <SettingGroup>
               <FieldHeading title="按时间段切换" fields={['modeSchedule']} session={selected} onReset={restore} />
-              <p className="schedule-help">按列表顺序首个匹配项生效，支持跨午夜；没有匹配时使用上方默认模式。</p>
+              <p className="schedule-help">按列表顺序首个匹配项生效，支持跨午夜；没有匹配时使用上方默认模式。未提交草稿会在当前标签页刷新后保留，点击“保存时段”才写入配置。</p>
+              {draftPersistenceError && <p className="schedule-help" role="alert">{draftPersistenceError}</p>}
               {scheduleEntries.length > 0
                 ? <div className="schedule-list">
                   {scheduleEntries.map((entry, index) => (
@@ -227,7 +264,7 @@ export function SessionsPage() {
                           value={entry.from}
                           aria-label={`第 ${index + 1} 个时段开始时间`}
                           disabled={busy}
-                          onChange={(event) => updateScheduleDraft((entries) => updateModeScheduleEntry(entries, index, { from: event.currentTarget.value }))}
+                          onChange={(event) => updateScheduleDraft(createModeScheduleEntryChangeFromInput(event, index, 'from'))}
                         />
                       </label>
                       <label>
@@ -237,7 +274,7 @@ export function SessionsPage() {
                           value={entry.to}
                           aria-label={`第 ${index + 1} 个时段结束时间`}
                           disabled={busy}
-                          onChange={(event) => updateScheduleDraft((entries) => updateModeScheduleEntry(entries, index, { to: event.currentTarget.value }))}
+                          onChange={(event) => updateScheduleDraft(createModeScheduleEntryChangeFromInput(event, index, 'to'))}
                         />
                       </label>
                       <label className="schedule-mode">
@@ -246,7 +283,7 @@ export function SessionsPage() {
                           value={entry.mode}
                           aria-label={`第 ${index + 1} 个时段模式`}
                           disabled={busy}
-                          onChange={(event) => updateScheduleDraft((entries) => updateModeScheduleEntry(entries, index, { mode: event.currentTarget.value as ModeScheduleEntry['mode'] }))}
+                          onChange={(event) => updateScheduleDraft(createModeScheduleEntryChangeFromInput(event, index, 'mode'))}
                         >
                           {SESSION_MODE_OPTIONS.map((option) => <option value={option.mode} key={option.mode}>{option.title}</option>)}
                         </select>
@@ -285,13 +322,25 @@ export function SessionsPage() {
             <SettingGroup>
               <FieldHeading title="频率与上下文" fields={['rate', 'contextMessages']} session={selected} onReset={restore} />
               <div className="number-grid">
-                <label><span>每人每分钟最多</span><input type="number" min="1" value={selected.effective.rate.perUserPerMinute} onBlur={(event) => void setRate('perUserPerMinute', event.currentTarget.value)} onChange={(event) => setSessions((items) => items.map((item) => item.sessionId === selectedId ? { ...item, effective: { ...item.effective, rate: { ...item.effective.rate, perUserPerMinute: Number(event.currentTarget.value) } } } : item))} /></label>
-                <label><span>整个群每分钟最多</span><input type="number" min="1" value={selected.effective.rate.perSessionPerMinute} onBlur={(event) => void setRate('perSessionPerMinute', event.currentTarget.value)} onChange={(event) => setSessions((items) => items.map((item) => item.sessionId === selectedId ? { ...item, effective: { ...item.effective, rate: { ...item.effective.rate, perSessionPerMinute: Number(event.currentTarget.value) } } } : item))} /></label>
-                <label><span>两次回复至少间隔（秒）</span><input type="number" min="0.1" step="0.1" value={selected.effective.rate.minIntervalSec} onBlur={(event) => void setRate('minIntervalSec', event.currentTarget.value)} onChange={(event) => setSessions((items) => items.map((item) => item.sessionId === selectedId ? { ...item, effective: { ...item.effective, rate: { ...item.effective.rate, minIntervalSec: Number(event.currentTarget.value) } } } : item))} /></label>
-                <label><span>参考最近几条</span><input type="number" min="1" value={selected.effective.contextMessages} onBlur={(event) => void update({ contextMessages: Number(event.currentTarget.value) })} onChange={(event) => setSessions((items) => items.map((item) => item.sessionId === selectedId ? { ...item, effective: { ...item.effective, contextMessages: Number(event.currentTarget.value) } } : item))} /></label>
+                <label><span>每人每分钟最多</span><input type="number" min="1" value={selected.effective.rate.perUserPerMinute} onBlur={(event) => void setRate('perUserPerMinute', event.currentTarget.value)} onChange={(event) => {
+                  const value = Number(event.currentTarget.value);
+                  setSessions((items) => items.map((item) => item.sessionId === selectedId ? { ...item, effective: { ...item.effective, rate: { ...item.effective.rate, perUserPerMinute: value } } } : item));
+                }} /></label>
+                <label><span>整个群每分钟最多</span><input type="number" min="1" value={selected.effective.rate.perSessionPerMinute} onBlur={(event) => void setRate('perSessionPerMinute', event.currentTarget.value)} onChange={(event) => {
+                  const value = Number(event.currentTarget.value);
+                  setSessions((items) => items.map((item) => item.sessionId === selectedId ? { ...item, effective: { ...item.effective, rate: { ...item.effective.rate, perSessionPerMinute: value } } } : item));
+                }} /></label>
+                <label><span>两次回复至少间隔（秒）</span><input type="number" min="0.1" step="0.1" value={selected.effective.rate.minIntervalSec} onBlur={(event) => void setRate('minIntervalSec', event.currentTarget.value)} onChange={(event) => {
+                  const value = Number(event.currentTarget.value);
+                  setSessions((items) => items.map((item) => item.sessionId === selectedId ? { ...item, effective: { ...item.effective, rate: { ...item.effective.rate, minIntervalSec: value } } } : item));
+                }} /></label>
+                <label><span>参考最近几条</span><input type="number" min="1" value={selected.effective.contextMessages} onBlur={(event) => void update({ contextMessages: Number(event.currentTarget.value) })} onChange={(event) => {
+                  const value = Number(event.currentTarget.value);
+                  setSessions((items) => items.map((item) => item.sessionId === selectedId ? { ...item, effective: { ...item.effective, contextMessages: value } } : item));
+                }} /></label>
               </div>
             </SettingGroup>
-            <div className="save-state" aria-live="polite">{busy ? '正在保存…' : savedAt ? `已自动保存 · ${savedAt}` : '改动会自动保存'}</div>
+            <div className="save-state" aria-live="polite">{busy ? '正在保存…' : scheduleIsDirty ? '时间段尚未写入配置' : savedAt ? `已保存 · ${savedAt}` : '其他设置自动保存；时间段需点击“保存时段”'}</div>
           </>}
         </section>
       </div>

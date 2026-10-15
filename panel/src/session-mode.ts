@@ -43,6 +43,16 @@ export function discardModeScheduleDraft(drafts: ModeScheduleDrafts, sessionId: 
   return next;
 }
 
+export async function saveModeScheduleDraft(
+  save: () => Promise<unknown>,
+  discardDraft: () => void,
+  refresh: () => Promise<void>,
+): Promise<void> {
+  await save();
+  discardDraft();
+  await refresh();
+}
+
 export function addModeScheduleEntry(entries: readonly ModeScheduleEntry[]): ModeScheduleEntry[] {
   return [...entries, { from: '09:00', to: '17:00', mode: 'natural' }];
 }
@@ -53,6 +63,73 @@ export function updateModeScheduleEntry(
   changes: Partial<ModeScheduleEntry>,
 ): ModeScheduleEntry[] {
   return entries.map((entry, currentIndex) => currentIndex === index ? { ...entry, ...changes } : entry);
+}
+
+export function createModeScheduleEntryChangeFromInput(
+  event: { currentTarget: { value: string } },
+  index: number,
+  field: keyof ModeScheduleEntry,
+): (entries: readonly ModeScheduleEntry[]) => ModeScheduleEntry[] {
+  const value = event.currentTarget.value;
+  const changes: Partial<ModeScheduleEntry> = field === 'mode'
+    ? { mode: value as SessionMode }
+    : field === 'from' ? { from: value } : { to: value };
+  return (entries) => updateModeScheduleEntry(entries, index, changes);
+}
+
+export const MODE_SCHEDULE_DRAFTS_STORAGE_KEY = 'aquarium-panel-mode-schedule-drafts-v1';
+
+export interface ModeScheduleDraftStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+function isStoredModeScheduleEntry(value: unknown): value is ModeScheduleEntry {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const entry = value as Record<string, unknown>;
+  const keys = Object.keys(entry);
+  const isTimeValue = (time: unknown): time is string => typeof time === 'string'
+    && (time === '' || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time));
+  return keys.length === 3
+    && keys.every((key) => key === 'from' || key === 'to' || key === 'mode')
+    && isTimeValue(entry.from)
+    && isTimeValue(entry.to)
+    && SESSION_MODE_OPTIONS.some(({ mode }) => mode === entry.mode);
+}
+
+export function readModeScheduleDrafts(
+  storage: Pick<ModeScheduleDraftStorage, 'getItem'>,
+): Map<string, readonly ModeScheduleEntry[]> {
+  try {
+    const serialized = storage.getItem(MODE_SCHEDULE_DRAFTS_STORAGE_KEY);
+    if (!serialized) return new Map();
+    const value: unknown = JSON.parse(serialized);
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return new Map();
+
+    const drafts: Array<[string, readonly ModeScheduleEntry[]]> = [];
+    for (const [sessionId, entries] of Object.entries(value)) {
+      if (sessionId.length > 0 && Array.isArray(entries) && entries.every(isStoredModeScheduleEntry)) {
+        drafts.push([sessionId, entries]);
+      }
+    }
+    return new Map(drafts);
+  } catch {
+    return new Map();
+  }
+}
+
+export function writeModeScheduleDrafts(
+  storage: ModeScheduleDraftStorage,
+  drafts: ModeScheduleDrafts,
+): boolean {
+  try {
+    if (drafts.size === 0) storage.removeItem(MODE_SCHEDULE_DRAFTS_STORAGE_KEY);
+    else storage.setItem(MODE_SCHEDULE_DRAFTS_STORAGE_KEY, JSON.stringify(Object.fromEntries(drafts)));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function removeModeScheduleEntry(entries: readonly ModeScheduleEntry[], index: number): ModeScheduleEntry[] {
