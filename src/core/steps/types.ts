@@ -6,6 +6,7 @@ import type { IncomingMessage, Segment, SessionKey } from '../events.ts';
 import type { RateLimiter } from '../rate-limit.ts';
 import type { SlotCallOptions, SlotResult } from '../../llm/slots.ts';
 import type { StoreRepository } from '../../store/repository.ts';
+import type { PromptTemplateSet } from '../prompt-templates.ts';
 
 export interface PipelineResult {
   replied: boolean;
@@ -32,6 +33,7 @@ export interface MessagePipelineOptions {
   wait?: (milliseconds: number) => Promise<void>;
   random?: () => number;
   personaRoot?: string;
+  getPromptTemplates?: () => PromptTemplateSet;
   downloadImage?: ImageDownloader;
   isMuted?: (session: SessionKey) => boolean;
   onError?: (error: unknown, message: IncomingMessage) => void;
@@ -62,6 +64,14 @@ export interface PipelineState {
   parts?: string[];
   sentMessageIds: string[];
   promptHash?: string;
+  promptFingerprints: PromptFingerprint[];
+  promptTemplates: PromptTemplateSet;
+}
+
+export interface PromptFingerprint {
+  slot: string;
+  templateVersion: string;
+  promptHash: string;
 }
 
 export interface StepContext {

@@ -9,6 +9,7 @@ import { AquariumConfigSchema } from '../src/config/schema.ts';
 import { resolveSession } from '../src/config/resolve.ts';
 import { sessionId, type IncomingMessage, type SessionKey } from '../src/core/events.ts';
 import { createRateLimiter } from '../src/core/rate-limit.ts';
+import { promptTemplateStore } from '../src/core/prompt-templates.ts';
 import { contextStep } from '../src/core/steps/context.ts';
 import { deliverStep } from '../src/core/steps/deliver.ts';
 import { gateStep } from '../src/core/steps/gate.ts';
@@ -88,7 +89,7 @@ function makeContext(
     modelCall,
     rateLimiter: createRateLimiter(now),
     trace: [],
-    state: { sentMessageIds: [] },
+    state: { sentMessageIds: [], promptTemplates: promptTemplateStore.get(), promptFingerprints: [] },
   };
 }
 

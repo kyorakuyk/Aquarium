@@ -1,4 +1,6 @@
 import { createRateLimiter } from './rate-limit.ts';
+import { promptTemplateStore } from './prompt-templates.ts';
+import { hashPromptMessages } from './prompt.ts';
 import { callSlot } from '../llm/slots.ts';
 import { sessionId, type IncomingMessage } from './events.ts';
 import { contextStep } from './steps/context.ts';
@@ -6,12 +8,20 @@ import { deliverStep } from './steps/deliver.ts';
 import { gateStep } from './steps/gate.ts';
 import { generateStep } from './steps/generate.ts';
 import { persistStep } from './steps/persist.ts';
-import type { MessagePipelineOptions, PipelineResult, ProcessMessageOptions, StepContext, StepResult } from './steps/types.ts';
+import type {
+  MessagePipelineOptions,
+  PipelineModelCall,
+  PipelineResult,
+  ProcessMessageOptions,
+  StepContext,
+  StepResult,
+} from './steps/types.ts';
 
 export type {
   MessagePipelineOptions,
   PipelineModelCall,
   PipelineResult,
+  PromptFingerprint,
   ProcessMessageOptions,
   StepContext,
   StepResult,
@@ -40,6 +50,18 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
     processOptions: ProcessMessageOptions = {},
   ): Promise<PipelineResult> {
     const currentSessionId = sessionId(message.session);
+    const promptTemplates = options.getPromptTemplates?.() ?? promptTemplateStore.get();
+    const promptFingerprints: StepContext['state']['promptFingerprints'] = [];
+    const state: StepContext['state'] = { sentMessageIds: [], promptTemplates, promptFingerprints };
+    const trackedModelCall: PipelineModelCall = async (slot, messages, callOptions) => {
+      const templateVersion = slot === 'vision'
+        ? promptTemplates.vision.version
+        : promptTemplates.replySystem.version;
+      const promptHash = hashPromptMessages(messages);
+      promptFingerprints.push({ slot, templateVersion, promptHash });
+      state.promptHash = promptHash;
+      return modelCall(slot, messages, callOptions);
+    };
     const ctx: StepContext = {
       message,
       processOptions,
@@ -48,18 +70,24 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
       now,
       wait,
       random,
-      modelCall,
+      modelCall: trackedModelCall,
       rateLimiter,
       trace: [],
-      state: { sentMessageIds: [] },
+      state,
     };
-    const withPromptHash = (detail: unknown): unknown => {
-      const promptHash = ctx.state.promptHash;
-      if (!promptHash) return detail;
+    const withPromptFingerprint = (detail: unknown): unknown => {
+      const fingerprint = {
+        templateVersion: promptTemplates.replySystem.version,
+        visionTemplateVersion: promptTemplates.vision.version,
+        ...(ctx.state.promptHash ? { promptHash: ctx.state.promptHash } : {}),
+        ...(ctx.state.promptFingerprints.length > 0
+          ? { promptFingerprints: [...ctx.state.promptFingerprints] }
+          : {}),
+      };
       if (typeof detail === 'object' && detail !== null && !Array.isArray(detail)) {
-        return { ...detail, promptHash };
+        return { ...detail, ...fingerprint };
       }
-      return { detail, promptHash };
+      return detail === undefined ? fingerprint : { detail, ...fingerprint };
     };
     const recordDecision = (
       reason: string,
@@ -72,7 +100,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
         messageId: message.messageId,
         replied,
         reason,
-        detail: withPromptHash(detail),
+        detail: withPromptFingerprint(detail),
       });
       return { replied, reason };
     };

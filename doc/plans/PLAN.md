@@ -417,6 +417,7 @@
 | 2026-10-14 | T12c panel-startup follow-up | 用户确认小号离线启动时管理面板端口未开启；根因是主流程等待串行 `adapter.connect()` 后才启动 panel。现先启动账号任务，再立刻启动 panel，同时仍 await 账号任务；`npm run check` 通过（212 项），精确 review 通过（SHA-256 `9a7982774c5da99984a93647a8d3b88b664356c0cb752eea3b2fa9b1bcc9ea64`）；提交 `1f0f2b7668e5ffbaee08824de10b7527aa78bbfa` / `checkpoint/dev-host-panel-startup-fix-2026-10-14-unverified`。待用户复测启动时小号未登录的情形 |
 | 2026-10-15 | N0 / R14 | 新增 OneBot 应用层重试、每次连接重验账号、未验证消息隔离、整链 timeout 与超时 client 替换；QQ 注入成功后立即重试；面板离线联系人缓存、请求限时与 degraded 状态；`npm run check` 通过（230 项），`npm run panel:build` 成功，精确 staged review 通过（SHA-256 `4dbc238959683810e3468545e5d0350f214b2d648fbd13e01b3b521566e60dcd`）。真实 Windows/QQ 验收待用户；提交 `cc0a204dbe4d76a4c3e0c32194169573bb6d1a61` / `checkpoint/dev-host-n0-r14-2026-10-15-unverified`。reviewer 的两项非阻断建议保留为后续 panel 跟进 |
 | 2026-10-15 | N1 | 将主流水线拆为 persist/gate/context/generate/deliver 五步，统一 StepContext/StepResult 并逐步收集安全摘要 trace；新增五项步骤单测，原 `test/pipeline.test.ts` 未改且通过；`npm run check` 通过（235 项），精确 staged review 通过（SHA-256 `52c278e5d735cab82eefe5862de196111470d30b47e93fa5263d30fd9117f522`）；提交 `e1c4e174a8dea345a8886d4184b1f7f7554b52ab` / `checkpoint/night-m2-prep-n1-2026-10-15-unverified` |
+| 2026-10-15 | N2 | 新增 reply-system/vision 模板，启动加载并随配置热重载原子替换；逐字 golden 测试保持旧提示词输出；每次 vision/reply 调用将模板版本与渲染后 prompt hash 写入决策 detail；`npm run check` 通过（239 项）；初审非阻断建议（重复占位符仅替换首个）已按 RED/GREEN 补测试并修复；修订后精确 staged review 待审，review SHA 与提交哈希待回填 |
 ---
 
 ## 6. 待评估清单
@@ -488,7 +489,7 @@
   - 每个步骤签名统一：`(ctx: StepContext) => Promise<StepResult>`，`StepResult` 为 `{ next: true }` 或 `{ next: false, reason: string, detail?: unknown, replied?: boolean }`。`StepContext` 携带消息、配置快照、累积数据与一个 `trace: TraceEntry[]`（每步 push `{ step, startedAt, durationMs, summary }`）。
   - `pipeline.ts` 只负责按顺序执行步骤、在第一个 `next: false` 处记录决策并返回。决策 `reason` 取值与现在**完全一致**。
   - 每个步骤至少一个单元测试；原有 `test/pipeline.test.ts` 不改动且全部通过。
-- [ ] **N2 提示词模板化与指纹**（DESIGN §8.5）
+- [x] **N2 提示词模板化与指纹**（DESIGN §8.5）
   - 新建 `prompts/reply-system.md`（固定规则段，用 `{{ownerRule}}`、`{{groupNote}}` 占位）与 `prompts/vision.md`；代码中的硬编码提示词全部改为读取模板（启动时读入并随配置热重载一起重新读取）。
   - 模板渲染结果与当前硬编码文本**逐字一致**（用测试锁定）。
   - 指纹：`templateVersion` = 模板文件内容 sha256 前 8 位；决策 `detail` 中写入 `templateVersion` 与已有的 `promptHash`。

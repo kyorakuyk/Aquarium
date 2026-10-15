@@ -1,5 +1,5 @@
 import { isDebugEnabled } from '../../config/debug.ts';
-import { buildPromptMessages } from '../prompt.ts';
+import { buildPromptMessages, hashPromptMessages } from '../prompt.ts';
 import { captionIncomingImages, messageTextWithImageCaptions } from '../images.ts';
 import { loadPersona } from '../../persona/load.ts';
 import { errorDetails } from './errors.ts';
@@ -45,6 +45,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   await captionIncomingImages({
     message: ctx.message,
     repository: ctx.options.repository,
+    visionTemplate: ctx.state.promptTemplates.vision,
     callVision: (messages) => ctx.modelCall('vision', messages, callOptions),
     ...(ctx.options.downloadImage === undefined ? {} : { downloadImage: ctx.options.downloadImage }),
     ...(ctx.options.onError === undefined ? {} : { onError: ctx.options.onError }),
@@ -62,6 +63,8 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     ownerId: config.owner,
     groupNote: settings.groupNote,
     context,
+    replySystemTemplate: ctx.state.promptTemplates.replySystem,
   });
+  ctx.state.promptHash = hashPromptMessages(ctx.state.prompt);
   return { next: true };
 });

@@ -6,6 +6,7 @@ import { watchConfig } from '../config/watch.ts';
 import { writeConfig } from '../config/write.ts';
 import { createLogger } from '../core/logger.ts';
 import { createMessagePipeline } from '../core/pipeline.ts';
+import { bindPromptTemplateReload, promptTemplateStore } from '../core/prompt-templates.ts';
 import { createHistoryCatchUp } from '../core/history-catchup.ts';
 import { createManagementCommands } from '../core/management.ts';
 import type { ManagementCommands } from '../core/management.ts';
@@ -47,6 +48,9 @@ const adapters: OneBotAdapter[] = [];
 const panelAccounts: PanelAccountRuntime[] = [];
 const managementControllers: ManagementCommands[] = [];
 const subscriptions: Array<() => void> = [];
+subscriptions.push(bindPromptTemplateReload(configWatcher, promptTemplateStore, (error) => {
+  logger.error(`提示词模板热重载失败，继续使用上一份有效模板：${describeError(error)}`);
+}));
 const adapterStatuses = new Map<number, AdapterStatus>();
 const sessionQueue = createSessionQueue();
 let panelServer: ReturnType<typeof startPanelServer> | undefined;
@@ -203,6 +207,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
   managementControllers.push(management);
   const pipeline = createMessagePipeline({
     getConfig: () => configWatcher.getConfig(),
+    getPromptTemplates: () => promptTemplateStore.get(),
     repository,
     adapter,
     getNickname: () => adapter.nickname || String(adapter.account),

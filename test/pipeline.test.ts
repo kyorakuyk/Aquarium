@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 import yaml from 'yaml';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
@@ -180,6 +181,29 @@ test('pipeline 从被叫消息到模型回复、引用发送、落库和 replied
     assert.equal(decision?.replied, true);
     assert.equal(decision?.reason, 'replied');
     assert.equal((decision?.detail as { costCny?: number }).costCny, 0.0042);
+    const detail = decision?.detail as {
+      templateVersion?: string;
+      visionTemplateVersion?: string;
+      promptHash?: string;
+      promptFingerprints?: Array<{ slot: string; templateVersion: string; promptHash: string }>;
+    };
+    assert.equal(
+      detail.templateVersion,
+      createHash('sha256').update(fs.readFileSync(path.resolve('prompts/reply-system.md'))).digest('hex').slice(0, 8),
+    );
+    assert.equal(
+      detail.visionTemplateVersion,
+      createHash('sha256').update(fs.readFileSync(path.resolve('prompts/vision.md'))).digest('hex').slice(0, 8),
+    );
+    assert.equal(
+      detail.promptHash,
+      createHash('sha256').update(JSON.stringify(modelRequests[0]?.messages)).digest('hex').slice(0, 16),
+    );
+    assert.deepEqual(detail.promptFingerprints, [{
+      slot: 'reply',
+      templateVersion: detail.templateVersion,
+      promptHash: detail.promptHash,
+    }]);
   });
 });
 
@@ -193,7 +217,9 @@ test('pipeline 对未启用会话记录 disabled 且不调用模型', async () =
     assert.equal(harness.modelRequests.length, 0);
     assert.equal(harness.adapter.sent.length, 0);
     assert.equal(repository.recentMessages(sessionId(groupSession), 5).length, 1);
-    assert.equal(repository.recentDecisions(1)[0]?.reason, 'disabled');
+    const decision = repository.recentDecisions(1)[0];
+    assert.equal(decision?.reason, 'disabled');
+    assert.equal(typeof (decision?.detail as { templateVersion?: unknown }).templateVersion, 'string');
   });
 });
 
@@ -272,7 +298,9 @@ test('pipeline 对连续被叫消息执行会话最小间隔限制', async () =>
     assert.equal(first.reason, 'replied');
     assert.deepEqual(second, { replied: false, reason: 'rate_limited' });
     assert.equal(harness.modelRequests.length, 1);
-    assert.deepEqual(repository.recentDecisions(1)[0]?.detail, { limit: 'min_interval' });
+    const detail = repository.recentDecisions(1)[0]?.detail as { limit?: string; templateVersion?: string };
+    assert.equal(detail.limit, 'min_interval');
+    assert.equal(typeof detail.templateVersion, 'string');
   });
 });
 
@@ -337,6 +365,15 @@ test('pipeline 空回复不发送且模型错误有独立决策原因', async ()
     const failedResult = await failing.pipeline(makeIncoming({ messageId: 'error-1' }));
     assert.deepEqual(failedResult, { replied: false, reason: 'llm_error' });
     assert.equal(failing.adapter.sent.length, 0);
-    assert.deepEqual(repository.recentDecisions(1)[0]?.detail, { errorName: 'Error', status: 400 });
+    const detail = repository.recentDecisions(1)[0]?.detail as {
+      errorName?: string;
+      status?: number;
+      templateVersion?: string;
+      promptHash?: string;
+    };
+    assert.equal(detail.errorName, 'Error');
+    assert.equal(detail.status, 400);
+    assert.equal(typeof detail.templateVersion, 'string');
+    assert.equal(typeof detail.promptHash, 'string');
   });
 });

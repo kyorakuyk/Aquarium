@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildPromptMessages } from '../src/core/prompt.ts';
+import { promptTemplateStore } from '../src/core/prompt-templates.ts';
 
 test('buildPromptMessages 固定 system 前缀顺序并把上下文格式化成单条 user 消息', () => {
   const ownerId = 12345;
@@ -67,4 +68,34 @@ test('owner 未设置时提示不把任何人当作主人', () => {
   assert.match(String(messages[0]?.content), /当前没有主人，不要把任何人视为主人。/);
   assert.equal(String(messages[0]?.content).includes('主人 QQ 号'), false);
   assert.equal(messages[1]?.content, '[09:08] "昵称里有主人": 普通发言\n请回复最后一条提到你的消息。');
+});
+
+test('模板占位符不会递归解释群聊补充说明中的大括号', () => {
+  const messages = buildPromptMessages({
+    persona: '人设',
+    ownerId: 12345,
+    groupNote: '{{ownerRule}}',
+    context: [],
+  });
+
+  assert.ok(String(messages[0]?.content).endsWith('本会话补充说明：{{ownerRule}}'));
+});
+
+test('模板中的重复占位符都会被替换', () => {
+  const template = promptTemplateStore.get().replySystem;
+  const messages = buildPromptMessages({
+    persona: '人设',
+    ownerId: 12345,
+    groupNote: '群公告',
+    context: [],
+    replySystemTemplate: {
+      ...template,
+      system: `${template.system}\n{{ownerRule}}`,
+      groupNote: `${template.groupNote} / {{groupNote}}`,
+    },
+  });
+
+  const systemContent = String(messages[0]?.content);
+  assert.equal(systemContent.split('只有标注为（主人）').length - 1, 2);
+  assert.ok(systemContent.endsWith('本会话补充说明：群公告 / 群公告'));
 });
