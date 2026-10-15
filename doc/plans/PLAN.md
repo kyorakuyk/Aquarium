@@ -418,6 +418,7 @@
 | 2026-10-15 | N0 / R14 | 新增 OneBot 应用层重试、每次连接重验账号、未验证消息隔离、整链 timeout 与超时 client 替换；QQ 注入成功后立即重试；面板离线联系人缓存、请求限时与 degraded 状态；`npm run check` 通过（230 项），`npm run panel:build` 成功，精确 staged review 通过（SHA-256 `4dbc238959683810e3468545e5d0350f214b2d648fbd13e01b3b521566e60dcd`）。真实 Windows/QQ 验收待用户；提交 `cc0a204dbe4d76a4c3e0c32194169573bb6d1a61` / `checkpoint/dev-host-n0-r14-2026-10-15-unverified`。reviewer 的两项非阻断建议保留为后续 panel 跟进 |
 | 2026-10-15 | N1 | 将主流水线拆为 persist/gate/context/generate/deliver 五步，统一 StepContext/StepResult 并逐步收集安全摘要 trace；新增五项步骤单测，原 `test/pipeline.test.ts` 未改且通过；`npm run check` 通过（235 项），精确 staged review 通过（SHA-256 `52c278e5d735cab82eefe5862de196111470d30b47e93fa5263d30fd9117f522`）；提交 `e1c4e174a8dea345a8886d4184b1f7f7554b52ab` / `checkpoint/night-m2-prep-n1-2026-10-15-unverified` |
 | 2026-10-15 | N2 | 新增 reply-system/vision 模板，启动加载并随配置热重载原子替换；逐字 golden 测试保持旧提示词输出；每次 vision/reply 调用将模板版本与渲染后 prompt hash 写入决策 detail；重复占位符经 RED/GREEN 回归测试修复；`npm run check` 通过（239 项）；修订后精确 staged review 通过（SHA-256 `36beac126ec79f70396c14fc0b5e8488a3a9a10c067fb0282275dc5e05e45240`）；提交 `196271cd271509645f0f400cecf88064d142d856` / `checkpoint/night-m2-prep-n2-2026-10-15-unverified`；未执行真实模型/服务验收 |
+| 2026-10-15 | N3 | 新增 schema v3 `pipeline_traces`，仅 debug 启用时保存 N1 trace，按 `debug.retainDays` 清理；summary 使用逐 step allowlist，未知 reason 降为 `stopped`，并限制为 500 个 Unicode 字符；决策 API 增加受保护的 pipeline-trace endpoint，面板展示步骤时间线；`npm run check` 通过（248 项），`npm run panel:build` 成功（27 modules）；最终精确 staged review 通过（SHA-256 `cacf381bec7965bd9b047b745a0a97b34e66bd4fb4cb31034046962b7edbe0cb`）；提交 `e51f7a1d54d426672a8fc3ee55eb4d75b680d8ba` / `checkpoint/night-m2-prep-n3-2026-10-15-unverified`；仅 fake/offline 验证，未运行真实服务 |
 ---
 
 ## 6. 待评估清单
@@ -493,7 +494,7 @@
   - 新建 `prompts/reply-system.md`（固定规则段，用 `{{ownerRule}}`、`{{groupNote}}` 占位）与 `prompts/vision.md`；代码中的硬编码提示词全部改为读取模板（启动时读入并随配置热重载一起重新读取）。
   - 模板渲染结果与当前硬编码文本**逐字一致**（用测试锁定）。
   - 指纹：`templateVersion` = 模板文件内容 sha256 前 8 位；决策 `detail` 中写入 `templateVersion` 与已有的 `promptHash`。
-- [ ] **N3 完整调试追踪**（DESIGN §10.1，在 T9b 基础上扩展）
+- [x] **N3 完整调试追踪**（DESIGN §10.1，在 T9b 基础上扩展）
   - 调试开启的会话中，把 N1 的 `trace` 数组完整写入新表 `pipeline_traces(id, time, session_id, message_id, trace_json)`；调试关闭时只写入决策，不写 trace。
   - `summary` 中**不得**包含完整提示词（完整提示词仍只在 `debug_traces`）；最长 500 字。
   - 过期清理与 `debug_traces` 共用 `retainDays`。
