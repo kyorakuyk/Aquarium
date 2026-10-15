@@ -420,6 +420,7 @@
 | 2026-10-15 | N2 | 新增 reply-system/vision 模板，启动加载并随配置热重载原子替换；逐字 golden 测试保持旧提示词输出；每次 vision/reply 调用将模板版本与渲染后 prompt hash 写入决策 detail；重复占位符经 RED/GREEN 回归测试修复；`npm run check` 通过（239 项）；修订后精确 staged review 通过（SHA-256 `36beac126ec79f70396c14fc0b5e8488a3a9a10c067fb0282275dc5e05e45240`）；提交 `196271cd271509645f0f400cecf88064d142d856` / `checkpoint/night-m2-prep-n2-2026-10-15-unverified`；未执行真实模型/服务验收 |
 | 2026-10-15 | N3 | 新增 schema v3 `pipeline_traces`，仅 debug 启用时保存 N1 trace，按 `debug.retainDays` 清理；summary 使用逐 step allowlist，未知 reason 降为 `stopped`，并限制为 500 个 Unicode 字符；决策 API 增加受保护的 pipeline-trace endpoint，面板展示步骤时间线；`npm run check` 通过（248 项），`npm run panel:build` 成功（27 modules）；最终精确 staged review 通过（SHA-256 `cacf381bec7965bd9b047b745a0a97b34e66bd4fb4cb31034046962b7edbe0cb`）；提交 `e51f7a1d54d426672a8fc3ee55eb4d75b680d8ba` / `checkpoint/night-m2-prep-n3-2026-10-15-unverified`；仅 fake/offline 验证，未运行真实服务 |
 | 2026-10-15 | N4 | 增加受保护 replay endpoint 与决策详情对比；历史消息按原消息存储行 ID 截断，限流 preview 只读不消费额度，禁止发送及消息/决策/trace 持久化；reply 调用费用与重放总费用分列。`npm run check` 通过（253 项），`npm run panel:build` 成功（27 modules）；精确 review 通过（SHA-256 `3e34c8f3ff0232975b6c69461d80036f74fab3551763769e90364c5d17a12f66`，48,946 bytes，16 paths）；提交 `e668fb13afee9f3fbbcdeea34df2a9b2980fbea0` / `checkpoint/night-m2-prep-n4-2026-10-15-unverified`；仅 fake/offline 验证，真实模型/GUI 验收待用户 |
+| 2026-10-15 | N5 | 新增合成 JSONL 离线评测 CLI，只运行 N1 gate、不调用模型；10 条样例 precision 0.6667、recall 0.8000、F1 0.7273，TP=4/FP=2/TN=3/FN=1；`--with-judge` 仅解析并提示“将在 M2 实现”，样例 `messages` 校验但不消费；`npm run check` 通过（260 项）；精确 staged review 通过（SHA-256 `7ff522d83020d5930e5f390ef7fd953a1efa248d016e2dba938f9f6ddf0f5599`）；提交 `ad151ec07f43af4c409aad21546f34733b961244` / `checkpoint/night-m2-prep-n5-2026-10-15-unverified`；仅 synthetic/offline 验证 |
 ---
 
 ## 6. 待评估清单
@@ -505,10 +506,11 @@
   - 前端决策详情增加“用当前配置重放”按钮与并排对比视图。
   - 测试使用假模型与假适配器；夜间不调用真实模型。
   - 夜间完成结果：历史上下文以原消息存储行 ID 截断；重放查看当前限流状态但不消耗限流额度；不发送消息、不写消息/决策/追踪表；分别返回并展示与原决策可比的 reply 调用费用和包含 vision/reply 的重放总费用。`npm run check` 通过（253 项测试），`npm run panel:build` 成功（27 modules）；最终精确 staged review 通过（SHA-256 `3e34c8f3ff0232975b6c69461d80036f74fab3551763769e90364c5d17a12f66`，48,946 bytes，16 paths）；提交 `e668fb13afee9f3fbbcdeea34df2a9b2980fbea0`，tag `checkpoint/night-m2-prep-n4-2026-10-15-unverified`。仅 fake/offline 验证；真实模型调用与 GUI 验收留待用户。
-- [ ] **N5 离线评测 CLI 骨架**（DESIGN §13）
+- [x] **N5 离线评测 CLI 骨架**（DESIGN §13）
   - `npm run eval -- --dataset <path.jsonl>`：数据集每行 `{ "sessionId", "messages": [...最近消息], "target": {...待判断消息}, "label": "reply" | "skip" }`。
   - 对每个样本只运行 N1 的 `gate` 步骤（不调用模型），输出 Precision / Recall / F1 与混淆矩阵到终端，并写 `data/eval/<时间戳>.json`。
   - 提供 `test/fixtures/eval-sample.jsonl`（10 条手写样本，**不含真实聊天内容**）与对应测试。
   - 预留 `--with-judge` 参数：本任务只做参数解析并提示“将在 M2 实现”，不实现。
+  - 夜间完成结果：新增 JSONL 校验与离线 CLI；每行只调用 N1 gate，使用显式 `synthetic-gate-defaults`，不读取运行配置、不调用模型；`messages` 字段经校验但本切片不消费；报告只写汇总指标。10 条合成样例的结果为 precision 0.6667、recall 0.8000、F1 0.7273，混淆矩阵 TP=4/FP=2/TN=3/FN=1；`--with-judge` 只解析并提示“将在 M2 实现”。`npm run check` 通过（260 项测试），CLI 离线运行退出码 0；精确 staged review 通过（SHA-256 `7ff522d83020d5930e5f390ef7fd953a1efa248d016e2dba938f9f6ddf0f5599`，18,079 bytes）；提交 `ad151ec07f43af4c409aad21546f34733b961244` / `checkpoint/night-m2-prep-n5-2026-10-15-unverified`。仅 synthetic/offline 验证，不代表真实聊天或模型评估。
 
 完成 N0–N5 或满足 §7.6 结束条件即结束，做最后一次提交。
