@@ -19,8 +19,14 @@ export interface VisionPromptTemplate extends PromptTemplate {
   user: string;
 }
 
+export interface JudgePromptTemplate extends PromptTemplate {
+  system: string;
+  user: string;
+}
+
 export interface PromptTemplateSet {
   replySystem: ReplySystemTemplate;
+  judge: JudgePromptTemplate;
   vision: VisionPromptTemplate;
 }
 
@@ -86,6 +92,18 @@ function parseVisionTemplate(template: PromptTemplate): VisionPromptTemplate {
   return { ...template, system: fields.system, user: fields.user };
 }
 
+function parseJudgeTemplate(template: PromptTemplate): JudgePromptTemplate {
+  const fields = parseTemplateFields(template, 'judge.md');
+  if (typeof fields.system !== 'string' || fields.system.length === 0
+    || typeof fields.user !== 'string' || fields.user.length === 0) {
+    throw new Error('judge.md 必须包含非空 system 和 user 文本');
+  }
+  const judge = { ...template, system: fields.system, user: fields.user };
+  validatePlaceholders('judge.md', judge.system, [], []);
+  validatePlaceholders('judge.md', judge.user, ['context'], ['context']);
+  return judge;
+}
+
 function validatePlaceholders(
   fileName: string,
   source: string,
@@ -105,9 +123,11 @@ function validatePlaceholders(
 
 function readPromptTemplateSet(root: string): PromptTemplateSet {
   const replySystem = parseReplySystemTemplate(readTemplate(root, 'reply-system.md'));
+  const judge = parseJudgeTemplate(readTemplate(root, 'judge.md'));
   const vision = parseVisionTemplate(readTemplate(root, 'vision.md'));
   return Object.freeze({
     replySystem: Object.freeze(replySystem),
+    judge: Object.freeze(judge),
     vision: Object.freeze(vision),
   });
 }

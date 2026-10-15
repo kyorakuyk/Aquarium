@@ -51,6 +51,7 @@ function createEvaluationConfig(): AquariumConfig {
 function createUnusedTemplates(): PromptTemplateSet {
   return {
     replySystem: { source: '', version: '', system: '', groupNote: '', request: '' },
+    judge: { source: '', version: '', system: '', user: '' },
     vision: { source: '', version: '', system: '', user: '' },
   };
 }
