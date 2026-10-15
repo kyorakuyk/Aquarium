@@ -19,6 +19,7 @@
     "spike:ping": "node --env-file-if-exists=.env src/spike/ping.ts",
     "spike:adapter-ping": "node --env-file-if-exists=.env src/spike/adapter-ping.ts",
     "spike:llm-ping": "node --env-file-if-exists=.env src/spike/llm-ping.ts",
+    "eval": "node src/eval/cli.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

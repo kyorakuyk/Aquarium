@@ -1,0 +1,10 @@
+{"sessionId":"1:group:101","messages":[],"target":{"senderId":2,"plainText":"Bot, hello!","mentionsSelf":false},"label":"reply"}
+{"sessionId":"1:group:102","messages":[],"target":{"senderId":2,"plainText":"Hi Bot","mentionsSelf":false},"label":"reply"}
+{"sessionId":"1:private:103","messages":[],"target":{"senderId":2,"plainText":"hi","mentionsSelf":false},"label":"reply"}
+{"sessionId":"1:group:104","messages":[],"target":{"senderId":2,"plainText":"hello","mentionsSelf":false},"label":"skip"}
+{"sessionId":"1:group:105","messages":[],"target":{"senderId":2,"plainText":"question","mentionsSelf":false},"label":"skip"}
+{"sessionId":"1:group:106","messages":[],"target":{"senderId":2,"plainText":"please help","mentionsSelf":true},"label":"skip"}
+{"sessionId":"1:group:107","messages":[],"target":{"senderId":2,"plainText":"unaddressed request","mentionsSelf":false},"label":"reply"}
+{"sessionId":"1:group:108","messages":[],"target":{"senderId":2,"plainText":"Bot?","mentionsSelf":false},"label":"skip"}
+{"sessionId":"1:private:109","messages":[],"target":{"senderId":2,"plainText":"private message","mentionsSelf":false},"label":"reply"}
+{"sessionId":"1:group:110","messages":[],"target":{"senderId":2,"plainText":"unrelated chat","mentionsSelf":false},"label":"skip"}
