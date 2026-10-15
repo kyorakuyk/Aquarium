@@ -26,6 +26,7 @@
   .chat-toolbar { grid-template-columns: 1fr 1fr; }
   .chat-toolbar .button { grid-column: 1 / -1; }
   .trace-card { min-height: 280px; }
+  .replay-columns { grid-template-columns: 1fr; }
   .binding-row { grid-template-columns: 1fr; gap: 6px; }
   .new-persona-row { flex-wrap: wrap; }
   .new-persona-row input { flex: 1 1 180px; }

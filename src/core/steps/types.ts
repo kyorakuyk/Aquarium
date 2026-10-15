@@ -11,10 +11,24 @@ import type { PromptTemplateSet } from '../prompt-templates.ts';
 export interface PipelineResult {
   replied: boolean;
   reason: string;
+  replay?: ReplayOutcome;
+}
+
+export interface ReplayOutcome {
+  wouldReply: boolean;
+  reason: string;
+  replyText: string;
+  trace: TraceEntry[];
+  provider?: string;
+  model?: string;
+  replyCostCny?: number;
+  totalCostCny?: number;
+  parts?: string[];
 }
 
 export interface ProcessMessageOptions {
   alreadySaved?: boolean;
+  replay?: boolean;
 }
 
 export type PipelineModelCall = (
@@ -64,6 +78,8 @@ export interface PipelineState {
   parts?: string[];
   sentMessageIds: string[];
   promptHash?: string;
+  replayReplyCostCny?: number;
+  replayTotalCostCny?: number;
   promptFingerprints: PromptFingerprint[];
   promptTemplates: PromptTemplateSet;
 }
@@ -95,7 +111,7 @@ const safeTraceReasons: Record<PipelineStepName, readonly string[]> = {
   gate: ['muted', 'disabled', 'not_mentioned', 'rate_limited'],
   context: ['persona_error'],
   generate: ['llm_error', 'empty_reply'],
-  deliver: ['send_error', 'replied'],
+  deliver: ['send_error', 'replied', 'replay'],
 };
 
 export function boundedTraceSummary(value: string): string {

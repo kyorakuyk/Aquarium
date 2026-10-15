@@ -81,6 +81,27 @@ export interface PipelineStepTraceView {
   summary: string;
 }
 
+export interface DecisionReplayView {
+  decisionId: number;
+  original: {
+    replied: boolean;
+    reason: string;
+    replyCostCny: number | null;
+    trace: PipelineStepTraceView[];
+  };
+  replay: {
+    wouldReply: boolean;
+    reason: string;
+    replyText: string;
+    trace: PipelineStepTraceView[];
+    provider?: string;
+    model?: string;
+    replyCostCny?: number;
+    totalCostCny?: number;
+    parts?: string[];
+  };
+}
+
 export interface UsageView {
   requestCount: number;
   successfulRequests: number;
@@ -138,6 +159,10 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+export function replayDecision(id: number): Promise<DecisionReplayView> {
+  return apiRequest<DecisionReplayView>(`/api/decisions/${id}/replay`, { method: 'POST' });
 }
 
 export function post(path: string, body?: unknown): Promise<unknown> {

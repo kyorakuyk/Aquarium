@@ -5,7 +5,7 @@ import { isDebugEnabled } from '../config/debug.ts';
 import { callSlot } from '../llm/slots.ts';
 import { sessionId, type IncomingMessage } from './events.ts';
 import { contextStep } from './steps/context.ts';
-import { deliverStep } from './steps/deliver.ts';
+import { deliverStep, replayDeliverStep } from './steps/deliver.ts';
 import { gateStep } from './steps/gate.ts';
 import { generateStep } from './steps/generate.ts';
 import { persistStep } from './steps/persist.ts';
@@ -14,6 +14,7 @@ import type {
   PipelineModelCall,
   PipelineResult,
   ProcessMessageOptions,
+  ReplayOutcome,
   StepContext,
   StepResult,
 } from './steps/types.ts';
@@ -24,6 +25,7 @@ export type {
   PipelineResult,
   PromptFingerprint,
   ProcessMessageOptions,
+  ReplayOutcome,
   StepContext,
   StepResult,
   TraceEntry,
@@ -99,18 +101,41 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
         detail: unknown = {},
         replied = false,
       ): PipelineResult => {
-        options.repository.recordDecision({
-          time: now(),
-          sessionId: currentSessionId,
-          messageId: message.messageId,
-          replied,
-          reason,
-          detail: withPromptFingerprint(detail),
-        });
-        return { replied, reason };
+        if (!processOptions.replay) {
+          options.repository.recordDecision({
+            time: now(),
+            sessionId: currentSessionId,
+            messageId: message.messageId,
+            replied,
+            reason,
+            detail: withPromptFingerprint(detail),
+          });
+          return { replied, reason };
+        }
+        const replay: ReplayOutcome = {
+          wouldReply: reason === 'replay',
+          reason: reason === 'replay' ? 'replied' : reason,
+          replyText: runState?.replyText ?? '',
+          trace: [...trace],
+          ...(runState?.result ? {
+            provider: runState.result.provider,
+            model: runState.result.model,
+          } : {}),
+          ...(runState?.replayReplyCostCny !== undefined
+            ? { replyCostCny: runState.replayReplyCostCny }
+            : runState?.result ? { replyCostCny: runState.result.usage.costCny } : {}),
+          ...(runState?.replayTotalCostCny !== undefined
+            ? { totalCostCny: runState.replayTotalCostCny }
+            : runState?.result ? { totalCostCny: runState.result.usage.costCny } : {}),
+          ...(runState?.parts ? { parts: [...runState.parts] } : {}),
+        };
+        return { replied, reason, replay };
       };
 
-      for (const step of steps) {
+      const activeSteps = processOptions.replay
+        ? [...steps.slice(0, -1), replayDeliverStep]
+        : steps;
+      for (const step of activeSteps) {
         const result = await step(ctx);
         if (!result.next) return recordDecision(result.reason, result.detail, result.replied ?? false);
       }
@@ -118,7 +143,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
     } finally {
       try {
         const config = runState?.config ?? options.getConfig();
-        if (isDebugEnabled(config, currentSessionId)) {
+        if (!processOptions.replay && isDebugEnabled(config, currentSessionId)) {
           options.repository.recordPipelineTrace({
             time: now(),
             sessionId: currentSessionId,

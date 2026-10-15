@@ -162,6 +162,15 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .decision-record:hover, .decision-record.is-selected { border-color: var(--line); background: var(--surface-accent); }
 .decision-record .mono, .decision-record .muted { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .decision-message { min-width: 0; overflow: hidden; color: var(--ink-2); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.replay-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 14px 0; }
+.replay-toolbar .muted { font-size: 11px; }
+.replay-comparison { margin-top: 18px; padding-top: 15px; border-top: 1px solid var(--line); }
+.replay-comparison > h3 { margin-bottom: 11px; }
+.replay-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.replay-column { min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg); }
+.replay-column h4 { margin: 0 0 9px; font-size: 13px; }
+.replay-meta { margin: 8px 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.replay-generated-text { margin: 11px 0; padding: 10px; border-radius: 8px; background: var(--surface); color: var(--ink-2); font-size: 12px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .usage-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .usage-note { margin-top: 18px; padding: 21px; }

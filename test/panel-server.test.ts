@@ -9,7 +9,7 @@ import { AquariumConfigSchema } from '../src/config/schema.ts';
 import { resolveSession } from '../src/config/resolve.ts';
 import { watchConfig } from '../src/config/watch.ts';
 import { writeConfig } from '../src/config/write.ts';
-import { sessionId, type Segment, type SessionKey } from '../src/core/events.ts';
+import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../src/core/events.ts';
 import { createManagementCommands } from '../src/core/management.ts';
 import type { ProtocolAdapter, ContactFriend, ContactGroup } from '../src/adapters/types.ts';
 import { createPanelApp } from '../src/panel-server/app.ts';
@@ -64,6 +64,7 @@ async function withPanel<T>(
     repository: ReturnType<typeof createRepository>;
     adapter: FakeAdapter;
     modelSlots: string[];
+    replayedMessages: IncomingMessage[];
     getConfig: () => ReturnType<typeof AquariumConfigSchema.parse>;
     getSavedConfig: () => ReturnType<typeof AquariumConfigSchema.parse> | undefined;
   }) => Promise<T>,
@@ -88,6 +89,7 @@ async function withPanel<T>(
   let savedConfig: ReturnType<typeof AquariumConfigSchema.parse> | undefined;
   const adapter = new FakeAdapter();
   const modelSlots: string[] = [];
+  const replayedMessages: IncomingMessage[] = [];
   const management = createManagementCommands({
     getConfig: () => config,
     repository,
@@ -124,6 +126,23 @@ async function withPanel<T>(
         usage: { inputTokens: 10, cachedTokens: 0, outputTokens: 4, costCny: 0.001 },
       };
     },
+    replayMessage: async (message: IncomingMessage) => {
+      replayedMessages.push(message);
+      return {
+        replied: false,
+        reason: 'replay',
+        replay: {
+          wouldReply: true,
+          reason: 'replied',
+          replyText: '当前配置生成的新回复。',
+          trace: [{ step: 'gate', startedAt: now, durationMs: 2, summary: 'next' }],
+          provider: 'fake',
+          model: 'fake-model',
+          replyCostCny: 0.002,
+          totalCostCny: 0.005,
+        },
+      };
+    },
   });
   try {
     return await run({
@@ -131,6 +150,7 @@ async function withPanel<T>(
       repository,
       adapter,
       modelSlots,
+      replayedMessages,
       getConfig: () => config,
       getSavedConfig: () => savedConfig,
     });
@@ -539,5 +559,75 @@ test('人设导入校验路径 ID、写入后可读回，并拒绝冲突', async
       body: JSON.stringify({ filename: 'new-card.md', markdown: '# 覆盖' }),
     });
     assert.equal(conflict.status, 409);
+  });
+});
+
+test('decision replay endpoint authenticates, rebuilds the original message, and returns a comparison', async () => {
+  await withPanel(async ({ app, repository, replayedMessages, adapter }) => {
+    const key = sessionId(groupSession);
+    repository.saveMessage({
+      sessionId: key,
+      messageId: 'replay-source',
+      senderId: 42,
+      senderName: '好友',
+      isSelf: false,
+      plainText: '小鱼，帮我回放',
+      segments: [{ type: 'at', target: account }, { type: 'text', text: '小鱼，帮我回放' }],
+      time: now - 1_000,
+    });
+    repository.recordDecision({
+      time: now - 1_000,
+      sessionId: key,
+      messageId: 'replay-source',
+      replied: false,
+      reason: 'not_mentioned',
+      detail: { costCny: 0.004 },
+    });
+    const originalTrace = [{ step: 'gate', startedAt: now - 1_000, durationMs: 3, summary: 'not_mentioned' }];
+    repository.recordPipelineTrace({
+      time: now - 1_000,
+      sessionId: key,
+      messageId: 'replay-source',
+      trace: originalTrace,
+    });
+    const decisionId = repository.recentDecisions(1)[0]?.id;
+    assert.ok(decisionId);
+    const initialMessages = repository.recentMessages(key, 10).map((message) => message.messageId);
+
+    assert.equal((await app.request(`/api/decisions/${decisionId}/replay`, { method: 'POST' })).status, 401);
+    assert.equal((await app.request('/api/decisions/not-an-id/replay', {
+      method: 'POST', headers: authHeaders(),
+    })).status, 400);
+    assert.equal((await app.request('/api/decisions/999/replay', {
+      method: 'POST', headers: authHeaders(),
+    })).status, 404);
+    const response = await app.request(`/api/decisions/${decisionId}/replay`, {
+      method: 'POST', headers: authHeaders(),
+    });
+
+    assert.equal(response.status, 200);
+    const body = await response.json() as {
+      decisionId: number;
+      original: { reason: string; replied: boolean; replyCostCny: number | null; trace: unknown[] };
+      replay: { wouldReply: boolean; replyText: string; replyCostCny: number; totalCostCny: number; trace: unknown[] };
+    };
+    assert.equal(body.decisionId, decisionId);
+    assert.equal(body.original.reason, 'not_mentioned');
+    assert.equal(body.original.replied, false);
+    assert.equal(body.original.replyCostCny, 0.004);
+    assert.deepEqual(body.original.trace, originalTrace);
+    assert.equal(body.replay.wouldReply, true);
+    assert.equal(body.replay.replyText, '当前配置生成的新回复。');
+    assert.equal(body.replay.replyCostCny, 0.002);
+    assert.equal(body.replay.totalCostCny, 0.005);
+    assert.equal(replayedMessages.length, 1);
+    assert.deepEqual(replayedMessages[0]?.session, groupSession);
+    assert.equal(replayedMessages[0]?.messageId, 'replay-source');
+    assert.equal(replayedMessages[0]?.senderName, '好友');
+    assert.equal(replayedMessages[0]?.mentionsSelf, true);
+    assert.equal(replayedMessages[0]?.replyToSelf, false);
+    assert.deepEqual(repository.recentMessages(key, 10).map((message) => message.messageId), initialMessages);
+    assert.equal(repository.recentDecisions(10).length, 1);
+    assert.deepEqual(adapter.sent, []);
   });
 });

@@ -50,6 +50,7 @@ debugPruneTimer.unref();
 const adapters: OneBotAdapter[] = [];
 const panelAccounts: PanelAccountRuntime[] = [];
 const managementControllers: ManagementCommands[] = [];
+const pipelines = new Map<number, ReturnType<typeof createMessagePipeline>>();
 const subscriptions: Array<() => void> = [];
 subscriptions.push(bindPromptTemplateReload(configWatcher, promptTemplateStore, (error) => {
   logger.error(`提示词模板热重载失败，继续使用上一份有效模板：${describeError(error)}`);
@@ -219,6 +220,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
       logger.error(`消息 ${message.messageId} 的辅助操作失败：${describeError(error)}`);
     },
   });
+  pipelines.set(accountConfig.uin, pipeline);
   const catchUpHistory = createHistoryCatchUp({
     adapter,
     getConfig: () => configWatcher.getConfig(),
@@ -274,6 +276,11 @@ await startPanelWhileAccountStartupRuns(accountStartup, () => {
           repository,
           accounts: () => panelAccounts,
           management: () => managementControllers,
+          replayMessage: (message) => {
+            const pipeline = pipelines.get(message.session.account);
+            if (!pipeline) return Promise.resolve(undefined);
+            return sessionQueue.run(sessionId(message.session), () => pipeline(message, { replay: true }));
+          },
           root: process.cwd(),
           onError: (error) => logger.error(`管理面板请求失败：${describeError(error)}`),
         });

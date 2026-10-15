@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { apiRequest, type DecisionStep, type DecisionView, type PanelStatus, type PipelineStepTraceView, type SessionView, type TraceView } from '../api.ts';
+import { apiRequest, replayDecision, type DecisionReplayView, type DecisionStep, type DecisionView, type PanelStatus, type PipelineStepTraceView, type SessionView, type TraceView } from '../api.ts';
 import { FishIcon } from '../components/FishIcon.tsx';
 import { decisionLabel, decisionTone } from '../labels.ts';
 
@@ -38,6 +38,19 @@ function formatTime(value: number): string {
   return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(value);
 }
 
+function ReplayTraceList({ entries, emptyText }: { entries: PipelineStepTraceView[]; emptyText: string }) {
+  if (!entries.length) return <p className="muted">{emptyText}</p>;
+  return <ol className="decision-timeline pipeline-timeline">
+    {entries.map((entry, index) => <li key={`${entry.step}-${index}`}>
+      <span className="timeline-marker">{String(index + 1).padStart(2, '0')}</span>
+      <div className="timeline-content">
+        <div className="timeline-title"><strong>{pipelineStepLabel(entry.step)}</strong><span className="mono">{entry.durationMs.toFixed(1)} ms</span></div>
+        <p>{entry.summary}</p>
+      </div>
+    </li>)}
+  </ol>;
+}
+
 export function DecisionsPage() {
   const [view, setView] = useState<'sandbox' | 'records'>('sandbox');
   const [sessions, setSessions] = useState<SessionView[]>([]);
@@ -51,6 +64,8 @@ export function DecisionsPage() {
   const [selectedDecision, setSelectedDecision] = useState<DecisionView>();
   const [traces, setTraces] = useState<TraceView[]>([]);
   const [pipelineTrace, setPipelineTrace] = useState<PipelineStepTraceView[]>([]);
+  const [replayResult, setReplayResult] = useState<DecisionReplayView>();
+  const [replayBusy, setReplayBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const chatEnd = useRef<HTMLDivElement>(null);
@@ -113,6 +128,8 @@ export function DecisionsPage() {
     setSelectedDecision(decision);
     setTraces([]);
     setPipelineTrace([]);
+    setReplayResult(undefined);
+    setError('');
     if (!decision.hasDebugTrace && !decision.hasPipelineTrace) return;
     try {
       const [debugResult, pipelineResult] = await Promise.all([
@@ -127,6 +144,20 @@ export function DecisionsPage() {
       setPipelineTrace(pipelineResult.trace);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '读取调试记录失败');
+    }
+  }
+
+  async function replaySelectedDecision() {
+    if (!selectedDecision || replayBusy) return;
+    setReplayBusy(true);
+    setReplayResult(undefined);
+    setError('');
+    try {
+      setReplayResult(await replayDecision(selectedDecision.id));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '重放失败');
+    } finally {
+      setReplayBusy(false);
     }
   }
 
@@ -205,21 +236,39 @@ export function DecisionsPage() {
         <aside className="panel-card trace-card">
           <h2>决策追踪</h2>
           {!selectedDecision && <p className="muted">选择一条决策查看详情。</p>}
-          {selectedDecision && !selectedDecision.hasDebugTrace && !selectedDecision.hasPipelineTrace && <p className="notice">该会话当时没有开启调试记录。</p>}
-          {selectedDecision?.hasPipelineTrace && (pipelineTrace.length
+          {selectedDecision && <div className="replay-toolbar">
+            <button className="button button-secondary" type="button" onClick={() => void replaySelectedDecision()} disabled={replayBusy}>
+              {replayBusy ? '重放中…' : '用当前配置重放'}
+            </button>
+            <span className="muted">不发送消息；模型用量照常计费。</span>
+          </div>}
+          {selectedDecision && !selectedDecision.hasDebugTrace && !selectedDecision.hasPipelineTrace && <p className="notice">当时没有保存调试记录；仍可按原消息与当前配置重放。</p>}
+          {selectedDecision && selectedDecision.hasPipelineTrace && replayResult?.decisionId !== selectedDecision.id && (pipelineTrace.length
             ? <>
               <h3>流水线步骤</h3>
-              <ol className="decision-timeline pipeline-timeline">
-                {pipelineTrace.map((entry, index) => <li key={`${entry.step}-${index}`}>
-                  <span className="timeline-marker">{String(index + 1).padStart(2, '0')}</span>
-                  <div className="timeline-content">
-                    <div className="timeline-title"><strong>{pipelineStepLabel(entry.step)}</strong><span className="mono">{entry.durationMs.toFixed(1)} ms</span></div>
-                    <p>{entry.summary}</p>
-                  </div>
-                </li>)}
-              </ol>
+              <ReplayTraceList entries={pipelineTrace} emptyText="流水线追踪记录为空或已过期。" />
             </>
             : <p className="muted">流水线追踪记录为空或已过期。</p>)}
+          {selectedDecision && replayResult?.decisionId === selectedDecision.id && <section className="replay-comparison" aria-live="polite">
+            <h3>重放对比</h3>
+            <div className="replay-columns">
+              <article className="replay-column">
+                <h4>原始决策</h4>
+                <span className={`result-pill result-${decisionTone(replayResult.original.reason)}`}>{decisionLabel(replayResult.original.reason)}</span>
+                <p className="replay-meta">{replayResult.original.replied ? '当时已回复' : '当时未回复'} · 原因 {replayResult.original.reason} · 回复调用花费 {replayResult.original.replyCostCny === null ? '—' : `¥${replayResult.original.replyCostCny.toFixed(4)}`}</p>
+                <ReplayTraceList entries={replayResult.original.trace} emptyText="当时没有可用的流水线追踪。" />
+              </article>
+              <article className="replay-column">
+                <h4>当前配置</h4>
+                <span className={`result-pill ${replayResult.replay.wouldReply ? 'result-positive' : `result-${decisionTone(replayResult.replay.reason)}`}`}>
+                  {replayResult.replay.wouldReply ? '将回复' : `不会回复 · ${decisionLabel(replayResult.replay.reason)}`}
+                </span>
+                <p className="replay-meta">模型 {replayResult.replay.model ?? '—'} · 回复调用花费 {replayResult.replay.replyCostCny === undefined ? '—' : `¥${replayResult.replay.replyCostCny.toFixed(4)}`} · 重放总花费 {replayResult.replay.totalCostCny === undefined ? '—' : `¥${replayResult.replay.totalCostCny.toFixed(4)}`}{replayResult.replay.parts ? ` · 拆分 ${replayResult.replay.parts.length} 条` : ''}</p>
+                <div className="replay-generated-text">{replayResult.replay.replyText || '当前配置未生成回复。'}</div>
+                <ReplayTraceList entries={replayResult.replay.trace} emptyText="本次没有流水线步骤。" />
+              </article>
+            </div>
+          </section>}
           {traces.map((trace) => <details className="prompt-details" key={trace.id} open>
             <summary>{trace.slot} · {trace.provider}/{trace.model} · {trace.promptHash}</summary>
             <h3>发送给模型的内容</h3><pre>{trace.promptJson}</pre>

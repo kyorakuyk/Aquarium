@@ -17,7 +17,9 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
   const isCalled = ctx.message.session.kind === 'private' || ctx.message.mentionsSelf || calledByNickname;
   if (!isCalled) return { next: false, reason: 'not_mentioned', detail: { trigger: 'none' } };
 
-  const rate = ctx.rateLimiter.check(ctx.message.session, ctx.message.senderId, settings.rate);
+  const rate = ctx.processOptions.replay
+    ? ctx.rateLimiter.preview(ctx.message.session, ctx.message.senderId, settings.rate)
+    : ctx.rateLimiter.check(ctx.message.session, ctx.message.senderId, settings.rate);
   if (!rate.allowed) return { next: false, reason: 'rate_limited', detail: { limit: rate.reason } };
   return { next: true };
 });

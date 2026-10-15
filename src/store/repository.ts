@@ -80,6 +80,8 @@ export interface StoredPipelineTrace extends PipelineTraceRecord {
 export interface StoreRepository {
   saveMessage(message: MessageStorageRecord): boolean;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
+  messageBySessionAndId(sessionId: string, messageId: string): MessageStorageRecord | undefined;
+  recentMessagesThrough(sessionId: string, messageId: string, count: number): MessageStorageRecord[];
   lastSelfMessage(sessionId: string): MessageStorageRecord | undefined;
   latestSelfMessageForAccount(account: number): MessageStorageRecord | undefined;
   selfMessagesById(messageId: string): MessageStorageRecord[];
@@ -136,6 +138,24 @@ export function createRepository(
     FROM messages
     WHERE session_id = ?
     ORDER BY time DESC, id DESC
+    LIMIT ?
+  `);
+  const selectMessageBySessionAndId = database.prepare(`
+    SELECT session_id, message_id, sender_id, sender_name, is_self, plain_text, segments_json, time
+    FROM messages
+    WHERE session_id = ? AND message_id = ?
+    LIMIT 1
+  `);
+  const selectMessagesThroughMessage = database.prepare(`
+    WITH target AS (
+      SELECT id FROM messages WHERE session_id = ? AND message_id = ? LIMIT 1
+    )
+    SELECT m.session_id, m.message_id, m.sender_id, m.sender_name, m.is_self,
+      m.plain_text, m.segments_json, m.time
+    FROM messages AS m
+    CROSS JOIN target
+    WHERE m.session_id = ? AND m.id <= target.id
+    ORDER BY m.time DESC, m.id DESC
     LIMIT ?
   `);
   const selectLastSelfMessage = database.prepare(`
@@ -220,6 +240,37 @@ export function createRepository(
       const limit = limitValue(count);
       if (limit === 0) return [];
       const rows = selectRecentMessages.all(sessionId, limit) as Array<Record<string, unknown>>;
+      return rows.reverse().map((row) => ({
+        sessionId: stringValue(row.session_id, 'session_id'),
+        messageId: stringValue(row.message_id, 'message_id'),
+        senderId: numberValue(row.sender_id, 'sender_id'),
+        senderName: stringValue(row.sender_name, 'sender_name'),
+        isSelf: numberValue(row.is_self, 'is_self') === 1,
+        plainText: stringValue(row.plain_text, 'plain_text'),
+        segments: JSON.parse(stringValue(row.segments_json, 'segments_json')) as unknown[],
+        time: numberValue(row.time, 'time'),
+      }));
+    },
+
+    messageBySessionAndId(sessionId, messageId) {
+      const row = selectMessageBySessionAndId.get(sessionId, messageId) as Record<string, unknown> | undefined;
+      if (!row) return undefined;
+      return {
+        sessionId: stringValue(row.session_id, 'session_id'),
+        messageId: stringValue(row.message_id, 'message_id'),
+        senderId: numberValue(row.sender_id, 'sender_id'),
+        senderName: stringValue(row.sender_name, 'sender_name'),
+        isSelf: numberValue(row.is_self, 'is_self') === 1,
+        plainText: stringValue(row.plain_text, 'plain_text'),
+        segments: JSON.parse(stringValue(row.segments_json, 'segments_json')) as unknown[],
+        time: numberValue(row.time, 'time'),
+      };
+    },
+
+    recentMessagesThrough(sessionId, messageId, count) {
+      const limit = limitValue(count);
+      if (limit === 0) return [];
+      const rows = selectMessagesThroughMessage.all(sessionId, messageId, sessionId, limit) as Array<Record<string, unknown>>;
       return rows.reverse().map((row) => ({
         sessionId: stringValue(row.session_id, 'session_id'),
         messageId: stringValue(row.message_id, 'message_id'),

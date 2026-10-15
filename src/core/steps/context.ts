@@ -26,8 +26,16 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   const callOptions = {
     config,
     costToday: () => ctx.options.repository.costToday(),
-    recordUsage: (usage: Parameters<typeof ctx.options.repository.recordUsage>[0]) => ctx.options.repository.recordUsage(usage),
-    ...(debugEnabled ? {
+    recordUsage: (usage: Parameters<typeof ctx.options.repository.recordUsage>[0]) => {
+      ctx.options.repository.recordUsage(usage);
+      if (ctx.processOptions.replay) {
+        ctx.state.replayTotalCostCny = (ctx.state.replayTotalCostCny ?? 0) + usage.costCny;
+        if (usage.slot === 'reply') {
+          ctx.state.replayReplyCostCny = (ctx.state.replayReplyCostCny ?? 0) + usage.costCny;
+        }
+      }
+    },
+    ...(debugEnabled && !ctx.processOptions.replay ? {
       debugTrace: {
         sessionId: ctx.currentSessionId,
         messageId: ctx.message.messageId,
@@ -52,8 +60,9 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     now: ctx.now,
   });
 
-  const context = ctx.options.repository
-    .recentMessages(ctx.currentSessionId, settings.contextMessages)
+  const context = (ctx.processOptions.replay
+    ? ctx.options.repository.recentMessagesThrough(ctx.currentSessionId, ctx.message.messageId, settings.contextMessages)
+    : ctx.options.repository.recentMessages(ctx.currentSessionId, settings.contextMessages))
     .map((record) => ({
       ...record,
       plainText: messageTextWithImageCaptions(record, ctx.options.repository),

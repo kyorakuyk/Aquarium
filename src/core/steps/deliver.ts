@@ -4,6 +4,16 @@ import { splitReply } from '../split.ts';
 import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep } from './types.ts';
 
+export const replayDeliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'deliver', async () => {
+  const result = ctx.state.result;
+  const replyText = ctx.state.replyText;
+  if (!result || replyText === undefined) {
+    throw new Error('generate step must run before replay delivery');
+  }
+  ctx.state.parts = splitReply(replyText);
+  return { next: false, reason: 'replay', replied: false };
+});
+
 export const deliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'deliver', async () => {
   const result = ctx.state.result;
   const replyText = ctx.state.replyText;
