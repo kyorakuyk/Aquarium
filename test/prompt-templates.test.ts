@@ -63,3 +63,19 @@ test('配置变更重载模板且无效版本不会替换上一个有效快照',
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('reply-system 模板必须声明 modeHint 占位符', () => {
+  const root = copyPromptTemplates();
+  try {
+    const store = createPromptTemplateStore(root);
+    const valid = store.get();
+    const replyPath = path.join(root, 'reply-system.md');
+    const source = fs.readFileSync(replyPath, 'utf8');
+    fs.writeFileSync(replyPath, source.replace('{{modeHint}}', ''), 'utf8');
+
+    assert.throws(() => store.reload(), /缺少占位符 \{\{modeHint\}\}/);
+    assert.equal(store.get(), valid);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

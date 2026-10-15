@@ -8,6 +8,7 @@ import type { ProtocolAdapter } from '../src/adapters/types.ts';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
 import { resolveSession } from '../src/config/resolve.ts';
 import { sessionId, type IncomingMessage, type SessionKey } from '../src/core/events.ts';
+import { replyDelayMs } from '../src/core/pacing.ts';
 import { createRateLimiter } from '../src/core/rate-limit.ts';
 import { promptTemplateStore } from '../src/core/prompt-templates.ts';
 import { contextStep } from '../src/core/steps/context.ts';
@@ -146,6 +147,60 @@ test('gate step stops muted sessions before trigger and rate checks', async (t) 
   assert.equal(ctx.trace.at(-1)?.summary, 'muted');
 });
 
+test('gate step accepts called messages in all four modes and stores the effective mode', async (t) => {
+  for (const mode of ['mention_only', 'natural', 'active', 'busy'] as const) {
+    const ctx = makeContext(t);
+    const config = AquariumConfigSchema.parse({
+      ...exampleConfig,
+      defaults: { ...exampleConfig.defaults, enabled: true, mode },
+    });
+    ctx.options.getConfig = () => config;
+    ctx.message.mentionsSelf = true;
+
+    assert.deepEqual(await gateStep(ctx), { next: true });
+    assert.equal(ctx.state.settings?.mode, mode);
+  }
+});
+
+test('gate step uses mode_mention_only for an uncalled mention-only session', async (t) => {
+  const ctx = makeContext(t);
+  const config = AquariumConfigSchema.parse({
+    ...exampleConfig,
+    defaults: { ...exampleConfig.defaults, enabled: true, mode: 'mention_only' },
+  });
+  ctx.options.getConfig = () => config;
+
+  assert.deepEqual(await gateStep(ctx), {
+    next: false,
+    reason: 'mode_mention_only',
+    detail: { trigger: 'none' },
+  });
+  traceFor(ctx, 'gate');
+  assert.equal(ctx.trace.at(-1)?.summary, 'mode_mention_only');
+});
+
+test('gate step applies the scheduled mode before deciding whether an uncalled message is ignored', async (t) => {
+  const ctx = makeContext(t);
+  const config = AquariumConfigSchema.parse({
+    ...exampleConfig,
+    defaults: {
+      ...exampleConfig.defaults,
+      enabled: true,
+      mode: 'active',
+      modeSchedule: [{ from: '23:00', to: '07:00', mode: 'mention_only' }],
+    },
+  });
+  ctx.options.getConfig = () => config;
+  ctx.now = () => new Date(2026, 9, 15, 23, 30).getTime();
+
+  assert.deepEqual(await gateStep(ctx), {
+    next: false,
+    reason: 'mode_mention_only',
+    detail: { trigger: 'none' },
+  });
+  assert.equal(ctx.state.settings?.mode, 'mention_only');
+});
+
 test('context step loads the persona and assembles a prompt', async (t) => {
   const ctx = makeContext(t);
   ctx.state.config = exampleConfig;
@@ -155,6 +210,20 @@ test('context step loads the persona and assembles a prompt', async (t) => {
   assert.equal(ctx.state.persona?.includes('# Bot'), true);
   assert.equal(Array.isArray(ctx.state.prompt), true);
   traceFor(ctx, 'context');
+});
+
+test('context step adds the busy mode hint and leaves it out of other modes', async (t) => {
+  const busy = makeContext(t);
+  busy.state.config = exampleConfig;
+  busy.state.settings = { ...resolveSession(exampleConfig, session), mode: 'busy' };
+  assert.deepEqual(await contextStep(busy), { next: true });
+  assert.ok(String(busy.state.prompt?.[0]?.content).includes('你现在有点忙，回得简短随意。'));
+
+  const natural = makeContext(t);
+  natural.state.config = exampleConfig;
+  natural.state.settings = { ...resolveSession(exampleConfig, session), mode: 'natural' };
+  assert.deepEqual(await contextStep(natural), { next: true });
+  assert.equal(String(natural.state.prompt?.[0]?.content).includes('你现在有点忙，回得简短随意。'), false);
 });
 
 test('generate step records empty replies without continuing to delivery', async (t) => {
@@ -213,4 +282,23 @@ test('deliver step sends and stores each reply part before returning replied', a
   assert.equal(saved.length, 1);
   assert.deepEqual(ctx.state.sentMessageIds, ['step-sent']);
   traceFor(ctx, 'deliver');
+});
+
+test('deliver step multiplies each busy-mode reply delay by 2.5', async (t) => {
+  const ctx = makeContext(t);
+  const waits: number[] = [];
+  ctx.wait = async (milliseconds) => { waits.push(milliseconds); };
+  ctx.state.settings = { ...resolveSession(exampleConfig, session), mode: 'busy' };
+  ctx.state.nickname = 'Bot';
+  ctx.state.replyText = 'reply text';
+  ctx.state.result = {
+    text: 'reply text',
+    provider: 'fake',
+    model: 'fake-model',
+    usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 2, costCny: 0.01 },
+  };
+
+  await deliverStep(ctx);
+
+  assert.deepEqual(waits, [Math.round(replyDelayMs('reply text', ctx.random) * 2.5)]);
 });

@@ -71,6 +71,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     persona,
     ownerId: config.owner,
     groupNote: settings.groupNote,
+    modeHint: settings.mode === 'busy' ? '你现在有点忙，回得简短随意。' : '',
     context,
     replySystemTemplate: ctx.state.promptTemplates.replySystem,
   });

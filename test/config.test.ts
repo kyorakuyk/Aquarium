@@ -73,6 +73,36 @@ test('配置 schema 拒绝越界端口和负数 owner', () => {
   assert.equal(AquariumConfigSchema.safeParse(negativeOwner).success, false);
 });
 
+test('旧配置的 modeSchedule 默认为空，会话数组整体覆盖默认时间表', () => {
+  const legacyConfig = structuredClone(exampleConfig) as Record<string, any>;
+  delete legacyConfig.defaults.modeSchedule;
+  assert.deepEqual(AquariumConfigSchema.parse(legacyConfig).defaults.modeSchedule, []);
+
+  const defaultSchedule = [{ from: '09:00', to: '12:00', mode: 'active' }];
+  const sessionSchedule = [{ from: '23:00', to: '07:00', mode: 'busy' }];
+  const config = AquariumConfigSchema.parse({
+    ...exampleConfig,
+    defaults: { ...exampleConfig.defaults, modeSchedule: defaultSchedule },
+    sessions: { '7:group:9': { modeSchedule: sessionSchedule } },
+  });
+
+  assert.deepEqual(config.defaults.modeSchedule, defaultSchedule);
+  assert.deepEqual(resolveSession(config, { account: 7, kind: 'group', peer: 9 }).modeSchedule, sessionSchedule);
+});
+
+test('modeSchedule 拒绝非 HH:mm 时间和未知模式', () => {
+  const invalidTime = structuredClone(exampleConfig) as Record<string, any>;
+  invalidTime.defaults.modeSchedule = [{ from: '24:00', to: '07:00', mode: 'busy' }];
+  const invalidMode = structuredClone(exampleConfig) as Record<string, any>;
+  invalidMode.defaults.modeSchedule = [{ from: '09:00', to: '12:00', mode: 'quiet' }];
+  const equalEndpoints = structuredClone(exampleConfig) as Record<string, any>;
+  equalEndpoints.defaults.modeSchedule = [{ from: '09:00', to: '09:00', mode: 'busy' }];
+
+  assert.equal(AquariumConfigSchema.safeParse(invalidTime).success, false);
+  assert.equal(AquariumConfigSchema.safeParse(invalidMode).success, false);
+  assert.equal(AquariumConfigSchema.safeParse(equalEndpoints).success, false);
+});
+
 test('deepMerge 递归合并对象，但数组整体覆盖', () => {
   assert.deepEqual(deepMerge(
     { labels: ['default-a', 'default-b'], rate: { perUser: 4, perSession: 8 } },

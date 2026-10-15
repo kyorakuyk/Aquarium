@@ -6,9 +6,22 @@ const rateSchema = z.object({
   minIntervalSec: z.number().positive(),
 }).strict();
 
+const modeSchema = z.enum(['mention_only', 'active', 'natural', 'busy']);
+const scheduleTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
+const modeScheduleEntrySchema = z.object({
+  from: scheduleTimeSchema,
+  to: scheduleTimeSchema,
+  mode: modeSchema,
+}).strict().refine((schedule) => schedule.from !== schedule.to, {
+  message: '时间段起止时间不能相同',
+  path: ['to'],
+});
+const modeScheduleSchema = z.array(modeScheduleEntrySchema);
+
 const sessionSettingsSchema = z.object({
   enabled: z.boolean(),
-  mode: z.enum(['mention_only', 'active', 'natural', 'busy']),
+  mode: modeSchema,
+  modeSchedule: modeScheduleSchema.default([]),
   nicknames: z.array(z.string()),
   contextMessages: z.number().int().positive(),
   rate: rateSchema,
@@ -17,7 +30,8 @@ const sessionSettingsSchema = z.object({
 
 const sessionOverrideSchema = z.object({
   enabled: z.boolean().optional(),
-  mode: z.enum(['mention_only', 'active', 'natural', 'busy']).optional(),
+  mode: modeSchema.optional(),
+  modeSchedule: modeScheduleSchema.optional(),
   nicknames: z.array(z.string()).optional(),
   contextMessages: z.number().int().positive().optional(),
   rate: rateSchema.partial().optional(),

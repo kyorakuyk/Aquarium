@@ -271,15 +271,15 @@ test('pipeline 能处理已由离线补课入库的消息而不重复插入', as
   });
 });
 
-test('pipeline 对未提及昵称的群消息记录 not_mentioned', async () => {
+test('pipeline 对未提及昵称的 mention_only 会话记录 mode_mention_only', async () => {
   await withRepository(async (repository, personaRoot) => {
     const harness = createHarness(repository, makeConfig(), personaRoot);
 
     const result = await harness.pipeline(makeIncoming({ plainText: '今天晚饭吃什么？' }));
 
-    assert.deepEqual(result, { replied: false, reason: 'not_mentioned' });
+    assert.deepEqual(result, { replied: false, reason: 'mode_mention_only' });
     assert.equal(harness.modelRequests.length, 0);
-    assert.equal(repository.recentDecisions(1)[0]?.reason, 'not_mentioned');
+    assert.equal(repository.recentDecisions(1)[0]?.reason, 'mode_mention_only');
   });
 });
 

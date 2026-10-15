@@ -71,7 +71,7 @@ function parseReplySystemTemplate(template: PromptTemplate): ReplySystemTemplate
     groupNote: fields.groupNote,
     request: fields.request,
   };
-  validatePlaceholders('reply-system.md', replySystem.system, ['ownerRule'], ['ownerRule']);
+  validatePlaceholders('reply-system.md', replySystem.system, ['ownerRule', 'modeHint'], ['ownerRule', 'modeHint']);
   validatePlaceholders('reply-system.md', replySystem.groupNote, ['groupNote'], ['groupNote']);
   validatePlaceholders('reply-system.md', replySystem.request, [], []);
   return replySystem;

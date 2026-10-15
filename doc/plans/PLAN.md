@@ -420,7 +420,8 @@
 | 2026-10-15 | N2 | 新增 reply-system/vision 模板，启动加载并随配置热重载原子替换；逐字 golden 测试保持旧提示词输出；每次 vision/reply 调用将模板版本与渲染后 prompt hash 写入决策 detail；重复占位符经 RED/GREEN 回归测试修复；`npm run check` 通过（239 项）；修订后精确 staged review 通过（SHA-256 `36beac126ec79f70396c14fc0b5e8488a3a9a10c067fb0282275dc5e05e45240`）；提交 `196271cd271509645f0f400cecf88064d142d856` / `checkpoint/night-m2-prep-n2-2026-10-15-unverified`；未执行真实模型/服务验收 |
 | 2026-10-15 | N3 | 新增 schema v3 `pipeline_traces`，仅 debug 启用时保存 N1 trace，按 `debug.retainDays` 清理；summary 使用逐 step allowlist，未知 reason 降为 `stopped`，并限制为 500 个 Unicode 字符；决策 API 增加受保护的 pipeline-trace endpoint，面板展示步骤时间线；`npm run check` 通过（248 项），`npm run panel:build` 成功（27 modules）；最终精确 staged review 通过（SHA-256 `cacf381bec7965bd9b047b745a0a97b34e66bd4fb4cb31034046962b7edbe0cb`）；提交 `e51f7a1d54d426672a8fc3ee55eb4d75b680d8ba` / `checkpoint/night-m2-prep-n3-2026-10-15-unverified`；仅 fake/offline 验证，未运行真实服务 |
 | 2026-10-15 | N4 | 增加受保护 replay endpoint 与决策详情对比；历史消息按原消息存储行 ID 截断，限流 preview 只读不消费额度，禁止发送及消息/决策/trace 持久化；reply 调用费用与重放总费用分列。`npm run check` 通过（253 项），`npm run panel:build` 成功（27 modules）；精确 review 通过（SHA-256 `3e34c8f3ff0232975b6c69461d80036f74fab3551763769e90364c5d17a12f66`，48,946 bytes，16 paths）；提交 `e668fb13afee9f3fbbcdeea34df2a9b2980fbea0` / `checkpoint/night-m2-prep-n4-2026-10-15-unverified`；仅 fake/offline 验证，真实模型/GUI 验收待用户 |
-| 2026-10-15 | N5 | 新增合成 JSONL 离线评测 CLI，只运行 N1 gate、不调用模型；10 条样例 precision 0.6667、recall 0.8000、F1 0.7273，TP=4/FP=2/TN=3/FN=1；`--with-judge` 仅解析并提示“将在 M2 实现”，样例 `messages` 校验但不消费；`npm run check` 通过（260 项）；精确 staged review 通过（SHA-256 `7ff522d83020d5930e5f390ef7fd953a1efa248d016e2dba938f9f6ddf0f5599`）；提交 `ad151ec07f43af4c409aad21546f34733b961244` / `checkpoint/night-m2-prep-n5-2026-10-15-unverified`；仅 synthetic/offline 验证 |
+| 2026-10-15 | N5 | 新增合成 JSONL 离线评测 CLI，只运行 N1 gate、不调用模型；10 条样例 precision 0.6667、recall 0.8000、F1 0.7273，TP=4/FP=2/TN=3/FN=1；`--with-judge` 仅解析并提示“将在 M2 实现”，样例 `messages` 校验但不消费；`npm run check` 通过（260 项）；精确 staged review 通过（SHA-256 `7ff522d83020d5930e5f390ef7fd953a1efa248d016e2dba938f9f6ddf0f5599`，18,079 bytes）；提交 `ad151ec07f43af4c409aad21546f34733b961244` / `checkpoint/night-m2-prep-n5-2026-10-15-unverified`；仅 synthetic/offline 验证 |
+| 2026-10-15 | A1 | 新增 `modeSchedule`（本地 `HH:mm`、数组整体覆盖、旧配置默认空、相同起止时间拒绝）与首个命中优先的跨午夜 `resolveMode`；`mention_only` 未被叫时记录 `mode_mention_only`；忙碌模式回复延迟 ×2.5 并追加模式提示；`npm run check` 通过（272 项测试） |
 ---
 
 ## 6. 待评估清单
@@ -552,7 +553,7 @@
 
 ### 9.4 任务
 
-- [ ] **A1 模式与时间表**：schema 新增 `modeSchedule`；`resolveMode`；`gate` 步骤按 §9.1 处理被叫与 `mention_only`；忙碌模式节奏 ×2.5 与 `{{modeHint}}`。测试：时间段命中、跨午夜、无命中回落、四种模式的被叫行为。
+- [x] **A1 模式与时间表**：schema 新增 `modeSchedule`；`resolveMode`；`gate` 步骤按 §9.1 处理被叫与 `mention_only`；忙碌模式节奏 ×2.5 与 `{{modeHint}}`。测试：时间段命中、跨午夜、无命中回落、四种模式的被叫行为。
 - [ ] **A2 攒批与退避**：`src/core/activity/batcher.ts`、`backoff.ts`（时间可注入）。测试：8 秒重新计时、30 秒上限、被叫取消批次、退避时间序列、≥6 条忽略退避、回复后归零。
 - [ ] **A3 粗筛与精判**：`prefilter.ts`、`judge.ts`、`prompts/judge.md`；JSON 解析严格（只接受数字在 0–1 之间）。测试：特征计算、`p0` 数值、解析成功 / 失败 / 越界、调用失败。
 - [ ] **A4 动态阈值与硬上限**：`threshold.ts`（滑动窗口，时间可注入）。测试：数据不足用初始值、超额上调、不足下调、上下限、120 秒冷却。

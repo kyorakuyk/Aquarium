@@ -337,7 +337,7 @@ test('不为未触发消息识图', async () => {
 
     const result = await harness.pipeline(incoming);
 
-    assert.deepEqual(result, { replied: false, reason: 'not_mentioned' });
+    assert.deepEqual(result, { replied: false, reason: 'mode_mention_only' });
     assert.equal(harness.requests.length, 0);
     assert.equal(repository.getCaption(createHash('sha1').update(url).digest('hex')), undefined);
   });

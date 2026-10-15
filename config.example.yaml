@@ -23,6 +23,7 @@ budget: { dailyCny: 5, warnRatio: 0.8 }
 defaults:
   enabled: false
   mode: mention_only
+  modeSchedule: []
   nicknames: []
   contextMessages: 20
   rate: { perUserPerMinute: 4, perSessionPerMinute: 8, minIntervalSec: 3 }

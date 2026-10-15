@@ -70,6 +70,21 @@ test('owner 未设置时提示不把任何人当作主人', () => {
   assert.equal(messages[1]?.content, '[09:08] "昵称里有主人": 普通发言\n请回复最后一条提到你的消息。');
 });
 
+test('buildPromptMessages 插入忙碌提示并保持空提示为空', () => {
+  const options = {
+    persona: '人设',
+    ownerId: 0,
+    groupNote: '',
+    context: [],
+  };
+  const hint = '你现在有点忙，回得简短随意。';
+  const busy = buildPromptMessages({ ...options, modeHint: hint });
+  const normal = buildPromptMessages(options);
+
+  assert.ok(String(busy[0]?.content).includes(hint));
+  assert.equal(String(normal[0]?.content).includes(hint), false);
+});
+
 test('模板占位符不会递归解释群聊补充说明中的大括号', () => {
   const messages = buildPromptMessages({
     persona: '人设',

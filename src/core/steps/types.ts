@@ -108,7 +108,7 @@ export type PipelineStep = (ctx: StepContext) => Promise<StepResult>;
 
 const safeTraceReasons: Record<PipelineStepName, readonly string[]> = {
   persist: ['duplicate'],
-  gate: ['muted', 'disabled', 'not_mentioned', 'rate_limited'],
+  gate: ['muted', 'disabled', 'not_mentioned', 'mode_mention_only', 'rate_limited'],
   context: ['persona_error'],
   generate: ['llm_error', 'empty_reply'],
   deliver: ['send_error', 'replied', 'replay'],

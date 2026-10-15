@@ -1,9 +1,14 @@
 import { resolveSession } from '../../config/resolve.ts';
+import { resolveMode } from '../activity/mode.ts';
 import { traceStep, type PipelineStep } from './types.ts';
 
 export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', async () => {
   const config = ctx.options.getConfig();
-  const settings = resolveSession(config, ctx.message.session);
+  const resolvedSettings = resolveSession(config, ctx.message.session);
+  const settings = {
+    ...resolvedSettings,
+    mode: resolveMode(resolvedSettings, ctx.now()),
+  };
   ctx.state.config = config;
   ctx.state.settings = settings;
 
@@ -15,7 +20,13 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
     return normalized !== '' && ctx.message.plainText.includes(normalized);
   });
   const isCalled = ctx.message.session.kind === 'private' || ctx.message.mentionsSelf || calledByNickname;
-  if (!isCalled) return { next: false, reason: 'not_mentioned', detail: { trigger: 'none' } };
+  if (!isCalled) {
+    return {
+      next: false,
+      reason: settings.mode === 'mention_only' ? 'mode_mention_only' : 'not_mentioned',
+      detail: { trigger: 'none' },
+    };
+  }
 
   const rate = ctx.processOptions.replay
     ? ctx.rateLimiter.preview(ctx.message.session, ctx.message.senderId, settings.rate)

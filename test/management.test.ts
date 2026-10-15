@@ -163,7 +163,7 @@ test('主人 /aq ping 直接回复；非主人命令不被拦截', async () => {
       senderId: ownerId + 1,
     });
     assert.equal(await commands.handle(otherCommand), false);
-    assert.deepEqual(await pipeline(otherCommand), { replied: false, reason: 'not_mentioned' });
+    assert.deepEqual(await pipeline(otherCommand), { replied: false, reason: 'mode_mention_only' });
     assert.equal(modelCalls.length, 0);
     assert.equal(adapter.sent.length, 1);
   });
