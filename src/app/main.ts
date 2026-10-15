@@ -32,17 +32,20 @@ const initialConfig = loadConfig({ configPath });
 const database = openDatabase();
 const repository = createRepository(database);
 const configWatcher = watchConfig({ initialConfig, configPath });
-function pruneDebugTraces(): void {
+function pruneTraces(): void {
   try {
     const config = configWatcher.getConfig();
-    const deleted = repository.pruneDebugTraces(Date.now(), config.debug.retainDays);
-    if (deleted > 0) logger.info(`已清理过期调试记录：${deleted} 条。`);
+    const now = Date.now();
+    const deletedDebug = repository.pruneDebugTraces(now, config.debug.retainDays);
+    const deletedPipeline = repository.prunePipelineTraces(now, config.debug.retainDays);
+    const deleted = deletedDebug + deletedPipeline;
+    if (deleted > 0) logger.info(`已清理过期调试记录：${deleted} 条（模型 ${deletedDebug}，流水线 ${deletedPipeline}）。`);
   } catch (error) {
     logger.error(`清理过期调试记录失败：${describeError(error)}`);
   }
 }
-pruneDebugTraces();
-const debugPruneTimer = setInterval(pruneDebugTraces, 6 * 60 * 60 * 1000);
+pruneTraces();
+const debugPruneTimer = setInterval(pruneTraces, 6 * 60 * 60 * 1000);
 debugPruneTimer.unref();
 const adapters: OneBotAdapter[] = [];
 const panelAccounts: PanelAccountRuntime[] = [];

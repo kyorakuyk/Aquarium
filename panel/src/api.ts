@@ -57,6 +57,7 @@ export interface DecisionView {
   reason: string;
   detail: unknown;
   hasDebugTrace: boolean;
+  hasPipelineTrace: boolean;
 }
 
 export interface TraceView {
@@ -71,6 +72,13 @@ export interface TraceView {
   responseText: string;
   promptHash: string;
   detail: unknown;
+}
+
+export interface PipelineStepTraceView {
+  step: string;
+  startedAt: number;
+  durationMs: number;
+  summary: string;
 }
 
 export interface UsageView {

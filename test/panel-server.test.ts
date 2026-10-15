@@ -254,6 +254,40 @@ test('状态、会话覆盖、决策调试和撤回 API 返回仓储事实', asy
   });
 });
 
+test('pipeline trace API 受保护并返回决策的步骤时间线', async () => {
+  await withPanel(async ({ app, repository }) => {
+    const session = sessionId(groupSession);
+    const trace = [{ step: 'gate', startedAt: now, durationMs: 2.5, summary: 'disabled' }];
+    repository.recordDecision({
+      time: now,
+      sessionId: session,
+      messageId: 'pipeline-api-message',
+      replied: false,
+      reason: 'disabled',
+      detail: {},
+    });
+    repository.recordPipelineTrace({
+      time: now,
+      sessionId: session,
+      messageId: 'pipeline-api-message',
+      trace,
+    });
+
+    const decisionsResponse = await app.request('/api/decisions?limit=50', { headers: authHeaders() });
+    const decisions = await decisionsResponse.json() as Array<{ id: number; hasPipelineTrace: boolean }>;
+    assert.equal(decisions[0]?.hasPipelineTrace, true);
+    const decisionId = decisions[0]?.id;
+    assert.ok(decisionId);
+
+    assert.equal((await app.request(`/api/decisions/${decisionId}/pipeline-trace`)).status, 401);
+    const response = await app.request(`/api/decisions/${decisionId}/pipeline-trace`, { headers: authHeaders() });
+    assert.equal(response.status, 200);
+    const body = await response.json() as { decisionId: number; trace: unknown[] };
+    assert.equal(body.decisionId, decisionId);
+    assert.deepEqual(body.trace, trace);
+  });
+});
+
 test('决策 API 提供可读会话名、截断消息文本和可选费用', async () => {
   await withPanel(async ({ app, repository }) => {
     const longText = '鱼'.repeat(65);

@@ -140,6 +140,7 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .trace-card .section-heading { margin-bottom: 4px; }
 .trace-explainer { margin: 10px 0 18px; color: var(--muted); font-size: 11px; }
 .decision-timeline { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.pipeline-timeline { margin-top: 10px; }
 .decision-timeline li { position: relative; display: grid; grid-template-columns: 32px 1fr; gap: 9px; min-height: 73px; }
 .decision-timeline li:not(:last-child)::after { position: absolute; top: 27px; bottom: 0; left: 15px; width: 1px; background: var(--line); content: ''; }
 .timeline-marker { z-index: 1; display: grid; width: 31px; height: 31px; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--accent); font-family: var(--mono); font-size: 10px; }

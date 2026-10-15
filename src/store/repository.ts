@@ -66,6 +66,17 @@ export interface StoredDebugTrace extends DebugTraceRecord {
   id: number;
 }
 
+export interface PipelineTraceRecord {
+  time: number;
+  sessionId: string;
+  messageId: string;
+  trace: unknown[];
+}
+
+export interface StoredPipelineTrace extends PipelineTraceRecord {
+  id: number;
+}
+
 export interface StoreRepository {
   saveMessage(message: MessageStorageRecord): boolean;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
@@ -87,6 +98,10 @@ export interface StoreRepository {
   recordDebugTrace(trace: DebugTraceRecord): void;
   debugTracesFor(sessionId: string, messageId: string): StoredDebugTrace[];
   pruneDebugTraces(now: number, retainDays?: number): number;
+  hasPipelineTrace(sessionId: string, messageId: string): boolean;
+  recordPipelineTrace(trace: PipelineTraceRecord): void;
+  pipelineTraceFor(sessionId: string, messageId: string): StoredPipelineTrace | undefined;
+  prunePipelineTraces(now: number, retainDays?: number): number;
 }
 
 function limitValue(count: number): number {
@@ -171,6 +186,19 @@ export function createRepository(
     ORDER BY time, id
   `);
   const deleteExpiredDebugTraces = database.prepare('DELETE FROM debug_traces WHERE time < ?');
+  const insertPipelineTrace = database.prepare(`
+    INSERT INTO pipeline_traces (time, session_id, message_id, trace_json)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(session_id, message_id) DO UPDATE SET
+      time = excluded.time,
+      trace_json = excluded.trace_json
+  `);
+  const selectPipelineTrace = database.prepare(`
+    SELECT id, time, session_id, message_id, trace_json
+    FROM pipeline_traces
+    WHERE session_id = ? AND message_id = ?
+  `);
+  const deleteExpiredPipelineTraces = database.prepare('DELETE FROM pipeline_traces WHERE time < ?');
 
   return {
     ...createPanelQueries(database, clock),
@@ -315,6 +343,36 @@ export function createRepository(
       }
       const cutoff = now - retainDays * 24 * 60 * 60 * 1000;
       const result = deleteExpiredDebugTraces.run(cutoff);
+      return numberValue(result.changes, 'changes');
+    },
+
+    recordPipelineTrace(trace) {
+      insertPipelineTrace.run(
+        trace.time,
+        trace.sessionId,
+        trace.messageId,
+        JSON.stringify(trace.trace),
+      );
+    },
+
+    pipelineTraceFor(sessionId, messageId) {
+      const row = selectPipelineTrace.get(sessionId, messageId) as Record<string, unknown> | undefined;
+      if (!row) return undefined;
+      return {
+        id: numberValue(row.id, 'id'),
+        time: numberValue(row.time, 'time'),
+        sessionId: stringValue(row.session_id, 'session_id'),
+        messageId: stringValue(row.message_id, 'message_id'),
+        trace: JSON.parse(stringValue(row.trace_json, 'trace_json')) as unknown[],
+      };
+    },
+
+    prunePipelineTraces(now, retainDays = 7) {
+      if (!Number.isFinite(now) || !Number.isSafeInteger(retainDays) || retainDays <= 0) {
+        throw new RangeError('流水线追踪清理参数无效');
+      }
+      const cutoff = now - retainDays * 24 * 60 * 60 * 1000;
+      const result = deleteExpiredPipelineTraces.run(cutoff);
       return numberValue(result.changes, 'changes');
     },
   };

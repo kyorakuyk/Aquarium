@@ -381,6 +381,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
       messageText: options.repository.decisionMessageText(decision.sessionId, decision.messageId) ?? null,
       costCny: decisionCostCny(decision.detail),
       hasDebugTrace: options.repository.hasDebugTrace(decision.sessionId, decision.messageId),
+      hasPipelineTrace: options.repository.hasPipelineTrace(decision.sessionId, decision.messageId),
     })));
   });
 
@@ -393,6 +394,15 @@ export function createPanelApp(options: PanelServerOptions): Hono {
       decisionId: id,
       traces: options.repository.debugTracesFor(decision.sessionId, decision.messageId),
     });
+  });
+
+  app.get('/api/decisions/:id/pipeline-trace', (context) => {
+    const id = Number(context.req.param('id'));
+    if (!Number.isSafeInteger(id) || id < 1) return context.json({ error: 'Invalid decision ID' }, 400);
+    const decision = options.repository.decisionById(id);
+    if (!decision) return context.json({ error: 'Decision not found' }, 404);
+    const stored = options.repository.pipelineTraceFor(decision.sessionId, decision.messageId);
+    return context.json({ decisionId: id, trace: stored?.trace ?? [] });
   });
 
   app.get('/api/usage/today', (context) => context.json(options.repository.usageToday()));

@@ -243,6 +243,166 @@ test('pipeline 将启用调试时的 promptHash 写入决策 detail', async () =
   });
 });
 
+test('pipeline 模板初始化失败时仍为调试会话保存空 trace', async () => {
+  await withRepository(async (repository) => {
+    const key = sessionId(groupSession);
+    const config = makeConfig({ enabled: false, sessions: { [key]: true }, retainDays: 7 });
+    const message = makeIncoming('pipeline-template-load-error');
+    const pipeline = createMessagePipeline({
+      getConfig: () => config,
+      getPromptTemplates: () => { throw new Error('template loader failed'); },
+      repository,
+      adapter: new FakeAdapter(),
+      getNickname: () => 'Aquarium',
+    });
+
+    await assert.rejects(pipeline(message), /template loader failed/);
+
+    assert.equal(repository.hasPipelineTrace(key, message.messageId), true);
+    assert.deepEqual(repository.pipelineTraceFor(key, message.messageId)?.trace, []);
+  });
+});
+
+test('pipeline 将 N1 步骤 trace 保存到 pipeline_traces 且提示词全文只在 debug_traces', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const key = sessionId(groupSession);
+    const marker = 'TRACE_CANARY_ONLY_IN_DEBUG_TRACE';
+    const message = makeIncoming('pipeline-trace-message');
+    message.plainText = `小鱼，${marker}`;
+    message.segments = [{ type: 'text', text: message.plainText }];
+    const config = AquariumConfigSchema.parse({
+      ...exampleConfig,
+      defaults: { ...exampleConfig.defaults, enabled: true, nicknames: ['小鱼'] },
+      debug: { enabled: false, sessions: { [key]: true }, retainDays: 7 },
+    });
+    const adapter = new FakeAdapter();
+    const pipeline = createMessagePipeline({
+      getConfig: () => config,
+      repository,
+      adapter,
+      getNickname: () => adapter.nickname,
+      personaRoot,
+      now: () => now,
+      wait: async () => {},
+      random: () => 0.4,
+      callModel: async (slot, messages, options) => {
+        const promptJson = JSON.stringify(messages);
+        const promptHash = createHash('sha256').update(promptJson).digest('hex').slice(0, 16);
+        const debugTrace = options.debugTrace;
+        debugTrace?.onPromptHash(promptHash);
+        debugTrace?.record({
+          time: now,
+          sessionId: debugTrace.sessionId,
+          messageId: debugTrace.messageId,
+          slot,
+          provider: 'deepseek',
+          model: 'deepseek-flash',
+          promptJson,
+          responseText: '测试回复',
+          promptHash,
+          detail: {},
+        });
+        return {
+          text: '测试回复',
+          provider: 'deepseek',
+          model: 'deepseek-flash',
+          usage: { inputTokens: 10, cachedTokens: 0, outputTokens: 2, costCny: 0 },
+        };
+      },
+    });
+
+    await pipeline(message);
+
+    const trace = repository.pipelineTraceFor(key, message.messageId);
+    assert.ok(trace);
+    assert.deepEqual(trace.trace.map((entry) => (entry as { step: string }).step), [
+      'persist', 'gate', 'context', 'generate', 'deliver',
+    ]);
+    assert.equal(JSON.stringify(trace.trace).includes(marker), false);
+    assert.ok(trace.trace.every((entry) => Array.from((entry as { summary: string }).summary).length <= 500));
+    assert.equal(repository.hasPipelineTrace(key, message.messageId), true);
+    assert.ok(repository.debugTracesFor(key, message.messageId).some((entry) => entry.promptJson.includes(marker)));
+    assert.equal(repository.recentDecisions(1)[0]?.reason, 'replied');
+  });
+});
+
+test('pipeline 调试关闭时仍记录决策但不写 pipeline trace', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const key = sessionId(groupSession);
+    const config = AquariumConfigSchema.parse({
+      ...exampleConfig,
+      defaults: { ...exampleConfig.defaults, enabled: true, nicknames: ['小鱼'] },
+      debug: { enabled: false, sessions: {}, retainDays: 7 },
+    });
+    const adapter = new FakeAdapter();
+    const pipeline = createMessagePipeline({
+      getConfig: () => config,
+      repository,
+      adapter,
+      getNickname: () => adapter.nickname,
+      personaRoot,
+      now: () => now,
+      wait: async () => {},
+      random: () => 0.4,
+      callModel: async () => ({
+        text: '测试回复',
+        provider: 'deepseek',
+        model: 'deepseek-flash',
+        usage: { inputTokens: 10, cachedTokens: 0, outputTokens: 2, costCny: 0 },
+      }),
+    });
+
+    const result = await pipeline(makeIncoming('pipeline-debug-disabled'));
+
+    assert.deepEqual(result, { replied: true, reason: 'replied' });
+    assert.equal(repository.pipelineTraceFor(key, 'pipeline-debug-disabled'), undefined);
+    assert.equal(repository.hasPipelineTrace(key, 'pipeline-debug-disabled'), false);
+    assert.equal(repository.recentDecisions(1)[0]?.reason, 'replied');
+  });
+});
+
+test('pipeline trace 按会话与消息读写且按保留期清理', async () => {
+  await withRepository(async (repository) => {
+    const day = 24 * 60 * 60 * 1000;
+    const cutoff = now - 7 * day;
+    const trace = [{ step: 'persist', startedAt: now, durationMs: 1, summary: 'next' }];
+    repository.recordPipelineTrace({
+      time: cutoff - 1,
+      sessionId: sessionId(groupSession),
+      messageId: 'pipeline-expired',
+      trace,
+    });
+    repository.recordPipelineTrace({
+      time: cutoff,
+      sessionId: sessionId(groupSession),
+      messageId: 'pipeline-boundary',
+      trace,
+    });
+    repository.recordPipelineTrace({
+      time: now,
+      sessionId: 'another:group:9',
+      messageId: 'pipeline-other-session',
+      trace,
+    });
+
+    assert.equal(repository.hasPipelineTrace(sessionId(groupSession), 'pipeline-boundary'), true);
+    assert.deepEqual(repository.pipelineTraceFor(sessionId(groupSession), 'pipeline-boundary')?.trace, trace);
+    assert.equal(repository.prunePipelineTraces(now, 7), 1);
+    assert.equal(repository.pipelineTraceFor(sessionId(groupSession), 'pipeline-expired'), undefined);
+    assert.ok(repository.pipelineTraceFor(sessionId(groupSession), 'pipeline-boundary'));
+    assert.ok(repository.pipelineTraceFor('another:group:9', 'pipeline-other-session'));
+
+    const replacement = [{ step: 'gate', startedAt: now + 1, durationMs: 2, summary: 'disabled' }];
+    repository.recordPipelineTrace({
+      time: now + 1,
+      sessionId: sessionId(groupSession),
+      messageId: 'pipeline-boundary',
+      trace: replacement,
+    });
+    assert.deepEqual(repository.pipelineTraceFor(sessionId(groupSession), 'pipeline-boundary')?.trace, replacement);
+  });
+});
+
 test('debug trace 查询按会话与消息筛选，保留期清理早于阈值的记录', async () => {
   await withRepository(async (repository) => {
     const day = 24 * 60 * 60 * 1000;

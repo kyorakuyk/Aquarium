@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { StoreRepository } from './repository.ts';
 
 export type PanelRepositoryQueries = Pick<StoreRepository,
-  'latestSelfMessageForAccount' | 'selfMessagesById' | 'replyCountToday' | 'replyCountTodayForAccount' | 'usageToday' | 'decisionMessageText' | 'decisionById' | 'hasDebugTrace'
+  'latestSelfMessageForAccount' | 'selfMessagesById' | 'replyCountToday' | 'replyCountTodayForAccount' | 'usageToday' | 'decisionMessageText' | 'decisionById' | 'hasDebugTrace' | 'hasPipelineTrace'
 >;
 
 function numberValue(value: unknown, field: string): number {
@@ -82,6 +82,9 @@ export function createPanelQueries(
   const selectHasDebugTrace = database.prepare(
     'SELECT 1 AS found FROM debug_traces WHERE session_id = ? AND message_id = ? LIMIT 1',
   );
+  const selectHasPipelineTrace = database.prepare(
+    'SELECT 1 AS found FROM pipeline_traces WHERE session_id = ? AND message_id = ? LIMIT 1',
+  );
 
   const todayRange = (): [number, number] => {
     const current = clock();
@@ -151,6 +154,10 @@ export function createPanelQueries(
 
     hasDebugTrace(sessionId, messageId) {
       return selectHasDebugTrace.get(sessionId, messageId) !== undefined;
+    },
+
+    hasPipelineTrace(sessionId, messageId) {
+      return selectHasPipelineTrace.get(sessionId, messageId) !== undefined;
     },
   };
 }

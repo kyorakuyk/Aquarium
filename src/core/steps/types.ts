@@ -90,6 +90,24 @@ export interface StepContext {
 
 export type PipelineStep = (ctx: StepContext) => Promise<StepResult>;
 
+const safeTraceReasons: Record<PipelineStepName, readonly string[]> = {
+  persist: ['duplicate'],
+  gate: ['muted', 'disabled', 'not_mentioned', 'rate_limited'],
+  context: ['persona_error'],
+  generate: ['llm_error', 'empty_reply'],
+  deliver: ['send_error', 'replied'],
+};
+
+export function boundedTraceSummary(value: string): string {
+  return Array.from(value).slice(0, 500).join('');
+}
+
+function traceSummary(step: PipelineStepName, result: StepResult): string {
+  if (result.next) return 'next';
+  const reason = safeTraceReasons[step].includes(result.reason) ? result.reason : 'stopped';
+  return boundedTraceSummary(reason);
+}
+
 export async function traceStep(
   ctx: StepContext,
   step: PipelineStepName,
@@ -100,7 +118,7 @@ export async function traceStep(
   let summary = 'error';
   try {
     const result = await run();
-    summary = result.next ? 'next' : result.reason;
+    summary = traceSummary(step, result);
     return result;
   } finally {
     ctx.trace.push({

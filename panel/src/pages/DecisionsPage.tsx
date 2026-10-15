@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { apiRequest, type DecisionStep, type DecisionView, type PanelStatus, type SessionView, type TraceView } from '../api.ts';
+import { apiRequest, type DecisionStep, type DecisionView, type PanelStatus, type PipelineStepTraceView, type SessionView, type TraceView } from '../api.ts';
 import { FishIcon } from '../components/FishIcon.tsx';
 import { decisionLabel, decisionTone } from '../labels.ts';
 
@@ -26,6 +26,14 @@ function stepLabel(step: string): string {
   return labels[step] ?? step;
 }
 
+function pipelineStepLabel(step: string): string {
+  const labels: Record<string, string> = {
+    persist: '入库与去重', gate: '触发与守门', context: '上下文与提示词',
+    generate: '生成回复', deliver: '拆条与发送',
+  };
+  return labels[step] ?? step;
+}
+
 function formatTime(value: number): string {
   return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(value);
 }
@@ -42,6 +50,7 @@ export function DecisionsPage() {
   const [decisions, setDecisions] = useState<DecisionView[]>([]);
   const [selectedDecision, setSelectedDecision] = useState<DecisionView>();
   const [traces, setTraces] = useState<TraceView[]>([]);
+  const [pipelineTrace, setPipelineTrace] = useState<PipelineStepTraceView[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const chatEnd = useRef<HTMLDivElement>(null);
@@ -103,10 +112,19 @@ export function DecisionsPage() {
   async function loadTrace(decision: DecisionView) {
     setSelectedDecision(decision);
     setTraces([]);
-    if (!decision.hasDebugTrace) return;
+    setPipelineTrace([]);
+    if (!decision.hasDebugTrace && !decision.hasPipelineTrace) return;
     try {
-      const result = await apiRequest<{ traces: TraceView[] }>(`/api/decisions/${decision.id}/trace`);
-      setTraces(result.traces);
+      const [debugResult, pipelineResult] = await Promise.all([
+        decision.hasDebugTrace
+          ? apiRequest<{ traces: TraceView[] }>(`/api/decisions/${decision.id}/trace`)
+          : Promise.resolve({ traces: [] as TraceView[] }),
+        decision.hasPipelineTrace
+          ? apiRequest<{ trace: PipelineStepTraceView[] }>(`/api/decisions/${decision.id}/pipeline-trace`)
+          : Promise.resolve({ trace: [] as PipelineStepTraceView[] }),
+      ]);
+      setTraces(debugResult.traces);
+      setPipelineTrace(pipelineResult.trace);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '读取调试记录失败');
     }
@@ -185,9 +203,23 @@ export function DecisionsPage() {
           </div>
         </section>
         <aside className="panel-card trace-card">
-          <h2>调试记录</h2>
+          <h2>决策追踪</h2>
           {!selectedDecision && <p className="muted">选择一条决策查看详情。</p>}
-          {selectedDecision && !selectedDecision.hasDebugTrace && <p className="notice">该会话当时没有开启调试记录。</p>}
+          {selectedDecision && !selectedDecision.hasDebugTrace && !selectedDecision.hasPipelineTrace && <p className="notice">该会话当时没有开启调试记录。</p>}
+          {selectedDecision?.hasPipelineTrace && (pipelineTrace.length
+            ? <>
+              <h3>流水线步骤</h3>
+              <ol className="decision-timeline pipeline-timeline">
+                {pipelineTrace.map((entry, index) => <li key={`${entry.step}-${index}`}>
+                  <span className="timeline-marker">{String(index + 1).padStart(2, '0')}</span>
+                  <div className="timeline-content">
+                    <div className="timeline-title"><strong>{pipelineStepLabel(entry.step)}</strong><span className="mono">{entry.durationMs.toFixed(1)} ms</span></div>
+                    <p>{entry.summary}</p>
+                  </div>
+                </li>)}
+              </ol>
+            </>
+            : <p className="muted">流水线追踪记录为空或已过期。</p>)}
           {traces.map((trace) => <details className="prompt-details" key={trace.id} open>
             <summary>{trace.slot} · {trace.provider}/{trace.model} · {trace.promptHash}</summary>
             <h3>发送给模型的内容</h3><pre>{trace.promptJson}</pre>

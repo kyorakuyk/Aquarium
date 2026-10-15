@@ -15,7 +15,7 @@ import { deliverStep } from '../src/core/steps/deliver.ts';
 import { gateStep } from '../src/core/steps/gate.ts';
 import { generateStep } from '../src/core/steps/generate.ts';
 import { persistStep } from '../src/core/steps/persist.ts';
-import type { StepContext } from '../src/core/steps/types.ts';
+import { boundedTraceSummary, traceStep, type StepContext, type StepResult } from '../src/core/steps/types.ts';
 import type { StoreRepository } from '../src/store/repository.ts';
 import type { SlotResult } from '../src/llm/slots.ts';
 
@@ -114,6 +114,21 @@ test('persist step stores a new inbound message before continuing', async (t) =>
   traceFor(ctx, 'persist');
 });
 
+test('trace summary is capped at 500 Unicode characters', async (t) => {
+  assert.equal(Array.from(boundedTraceSummary('鱼'.repeat(600))).length, 500);
+});
+
+test('trace summary does not persist an unrecognized private reason', async (t) => {
+  const ctx = makeContext(t);
+  const privateMarker = 'L0_PRIVATE_CANARY';
+  const result = { next: false, reason: privateMarker } as unknown as StepResult;
+
+  await traceStep(ctx, 'gate', async () => result);
+
+  assert.equal(ctx.trace[0]?.summary, 'stopped');
+  assert.equal(JSON.stringify(ctx.trace).includes(privateMarker), false);
+});
+
 test('gate step stops muted sessions before trigger and rate checks', async (t) => {
   let rateChecks = 0;
   const ctx = makeContext(t, { isMuted: () => true });
@@ -128,6 +143,7 @@ test('gate step stops muted sessions before trigger and rate checks', async (t) 
   assert.deepEqual(await gateStep(ctx), { next: false, reason: 'muted' });
   assert.equal(rateChecks, 0);
   traceFor(ctx, 'gate');
+  assert.equal(ctx.trace.at(-1)?.summary, 'muted');
 });
 
 test('context step loads the persona and assembles a prompt', async (t) => {
