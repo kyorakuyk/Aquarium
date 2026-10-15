@@ -558,8 +558,10 @@
 - [x] **A1 模式与时间表**：schema 新增 `modeSchedule`；`resolveMode`；`gate` 步骤按 §9.1 处理被叫与 `mention_only`；忙碌模式节奏 ×2.5 与 `{{modeHint}}`。测试：时间段命中、跨午夜、无命中回落、四种模式的被叫行为。
 - [x] **A2 攒批与退避**：`src/core/activity/batcher.ts`、`backoff.ts`（时间可注入）。测试：8 秒重新计时、30 秒上限、被叫取消批次、退避时间序列、≥6 条忽略退避、回复后归零。
 - [x] **A3 粗筛与精判**：`prefilter.ts`、`judge.ts`、`prompts/judge.md`；JSON 解析严格（只接受数字在 0–1 之间）。测试：特征计算、`p0` 数值、解析成功 / 失败 / 越界、调用失败。
-- [ ] **A4 动态阈值与硬上限**：`threshold.ts`（滑动窗口，时间可注入）。测试：数据不足用初始值、超额上调、不足下调、上下限、120 秒冷却。
+- [x] **A4 动态阈值与硬上限**：`threshold.ts`（滑动窗口，时间可注入）。测试：数据不足用初始值、超额上调、不足下调、上下限、120 秒冷却。
+  - 进度：新增 `src/core/activity/threshold.ts` 与 `test/activity-threshold.test.ts`；8/8 定向测试通过，`npm run check` 的 typecheck、依赖边界检查及 298/298 全量测试通过，`git diff --check` 通过。当前判断先读取 `getThreshold`，`recordJudgment` 只更新后续判断的阈值；补测了恰好 60 分钟窗口边界及实际回复数等于目标频率时不调阈值。
 - [ ] **A5 接入流水线**：把 A1–A4 接到 N1 的 `gate` 步骤；预算判断；决策 `detail` 字段；N3 追踪中记录 `p0`、`probability`、`threshold`、退避状态。测试：用假 judge 跑完整主动回复路径，以及每个 `reason` 至少一条；提示词 fingerprint 按 slot 匹配（`judge` → `judge.version`、`vision` → `vision.version`、`reply` → `replySystem.version`）；攒批静默等待不得占住 per-session `sessionQueue` task，确保等待期间新消息仍能重置计时器。
+  - 集成约束：接入 A4 时先保存用于当前决定的 `getThreshold` 值，再记录 `recordJudgment`（只更新后续判断阈值）。A5 按 §9.2 的“固定 p0 粗筛 → judge → 动态阈值”顺序实现；开工时核对并修订 DESIGN §5.2 中“p0 与动态阈值比较后才交 judge”的表述，若产品意图仍不明确则先请求决策，不得静默混用。
 - [ ] **A6 控制台**：会话页去掉三个模式的“M2”灰显，可选择；新增“按时间段切换”编辑器（增删行，每行 from / to / 模式）；`panel/src/labels.ts` 增加新 `reason` 的中文标签：`mode_mention_only` 只在被叫时、`batched` 合并处理、`backoff` 退避中、`prefilter` 粗筛跳过、`judge_skip` 判断不接、`judge_parse_error` / `judge_error` 出错、`budget` 预算用尽、`proactive_cooldown` 主动冷却；决策详情显示 `p0` / `probability` / `threshold`。完成后 `npm run panel:build` 成功。
 
 > **⛔ 停止点 M2-A**：A6 完成后停下。
