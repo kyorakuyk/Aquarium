@@ -499,10 +499,11 @@
   - `summary` 中**不得**包含完整提示词（完整提示词仍只在 `debug_traces`）；最长 500 字。
   - 过期清理与 `debug_traces` 共用 `retainDays`。
   - 控制台决策记录页：有 trace 时显示“流水线步骤”时间线（步骤名、耗时、摘要），样式沿用 §4。
-- [ ] **N4 一键重放**（DESIGN §10.1）
+- [x] **N4 一键重放**（DESIGN §10.1）
   - 后端 `POST /api/decisions/:id/replay`：取原消息与当时的会话上下文，用**当前**配置与模板重新跑 N1 流水线，但 `deliver` 步骤替换为“不发送、不入库”的空实现；返回新的步骤结果、回复文本，与原决策并排对比所需字段。计入花费。
   - 前端决策详情增加“用当前配置重放”按钮与并排对比视图。
   - 测试使用假模型与假适配器；夜间不调用真实模型。
+  - 夜间完成结果：历史上下文以原消息存储行 ID 截断；重放查看当前限流状态但不消耗限流额度；不发送消息、不写消息/决策/追踪表；分别返回并展示与原决策可比的 reply 调用费用和包含 vision/reply 的重放总费用。`npm run check` 通过（253 项测试），`npm run panel:build` 成功（27 modules）；最终精确 staged review 通过（SHA-256 `3e34c8f3ff0232975b6c69461d80036f74fab3551763769e90364c5d17a12f66`，48,946 bytes，16 paths）；提交 `e668fb13afee9f3fbbcdeea34df2a9b2980fbea0`，tag `checkpoint/night-m2-prep-n4-2026-10-15-unverified`。仅 fake/offline 验证；真实模型调用与 GUI 验收留待用户。
 - [ ] **N5 离线评测 CLI 骨架**（DESIGN §13）
   - `npm run eval -- --dataset <path.jsonl>`：数据集每行 `{ "sessionId", "messages": [...最近消息], "target": {...待判断消息}, "label": "reply" | "skip" }`。
   - 对每个样本只运行 N1 的 `gate` 步骤（不调用模型），输出 Precision / Recall / F1 与混淆矩阵到终端，并写 `data/eval/<时间戳>.json`。
