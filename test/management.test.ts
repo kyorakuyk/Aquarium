@@ -7,7 +7,7 @@ import yaml from 'yaml';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
 import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../src/core/events.ts';
 import { createMessagePipeline } from '../src/core/pipeline.ts';
-import { createManagementCommands } from '../src/core/management.ts';
+import { createManagementCommands, isManagementCommand } from '../src/core/management.ts';
 import type { ProtocolAdapter, ContactFriend, ContactGroup } from '../src/adapters/types.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
@@ -167,6 +167,19 @@ test('主人 /aq ping 直接回复；非主人命令不被拦截', async () => {
     assert.equal(modelCalls.length, 0);
     assert.equal(adapter.sent.length, 1);
   });
+});
+
+test('only a recognized command from the configured owner bypasses activity batching', () => {
+  const ownerCommand = makeMessage({ messageId: 'owner-command-check', plainText: '/aq ping' });
+  const nonOwnerCommand = makeMessage({
+    messageId: 'non-owner-command-check', plainText: '/aq ping', senderId: ownerId + 1,
+  });
+  const unknownCommand = makeMessage({ messageId: 'unknown-command-check', plainText: '/aq unknown' });
+
+  assert.equal(isManagementCommand(ownerCommand, ownerId), true);
+  assert.equal(isManagementCommand(nonOwnerCommand, ownerId), false);
+  assert.equal(isManagementCommand(unknownCommand, ownerId), false);
+  assert.equal(isManagementCommand(ownerCommand, 0), false);
 });
 
 test('闭嘴期间被 @ 的消息记录 muted；到期后自动恢复回复', async () => {

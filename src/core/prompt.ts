@@ -9,6 +9,7 @@ export interface BuildPromptOptions {
   groupNote: string;
   context: MessageStorageRecord[];
   modeHint?: string;
+  request?: string;
   replySystemTemplate?: ReplySystemTemplate;
 }
 
@@ -46,7 +47,7 @@ export function buildPromptMessages(
   });
   const userContent = [
     ...contextLines,
-    template.request,
+    options.request ?? template.request,
   ].join('\n');
 
   return [

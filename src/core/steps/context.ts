@@ -1,7 +1,7 @@
-import { isDebugEnabled } from '../../config/debug.ts';
 import { buildPromptMessages, hashPromptMessages } from '../prompt.ts';
 import { captionIncomingImages, messageTextWithImageCaptions } from '../images.ts';
 import { loadPersona } from '../../persona/load.ts';
+import { createSlotCallOptions } from './call-options.ts';
 import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep } from './types.ts';
 
@@ -22,32 +22,10 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     return { next: false, reason: 'persona_error', detail: errorDetails(error) };
   }
 
-  const debugEnabled = isDebugEnabled(config, ctx.currentSessionId);
-  const callOptions = {
-    config,
-    costToday: () => ctx.options.repository.costToday(),
-    recordUsage: (usage: Parameters<typeof ctx.options.repository.recordUsage>[0]) => {
-      ctx.options.repository.recordUsage(usage);
-      if (ctx.processOptions.replay) {
-        ctx.state.replayTotalCostCny = (ctx.state.replayTotalCostCny ?? 0) + usage.costCny;
-        if (usage.slot === 'reply') {
-          ctx.state.replayReplyCostCny = (ctx.state.replayReplyCostCny ?? 0) + usage.costCny;
-        }
-      }
-    },
-    ...(debugEnabled && !ctx.processOptions.replay ? {
-      debugTrace: {
-        sessionId: ctx.currentSessionId,
-        messageId: ctx.message.messageId,
-        record: (trace: Parameters<typeof ctx.options.repository.recordDebugTrace>[0]) => ctx.options.repository.recordDebugTrace(trace),
-        onPromptHash: (hash: string) => { ctx.state.promptHash = hash; },
-        onError: (error: unknown) => ctx.options.onError?.(error, ctx.message),
-      },
-    } : {}),
-  };
+  const callOptions = ctx.state.callOptions ?? createSlotCallOptions(ctx, config);
+  ctx.state.callOptions = callOptions;
   ctx.state.nickname = nickname;
   ctx.state.persona = persona;
-  ctx.state.callOptions = callOptions;
 
   // TODO(M2): 引入私密信息分级后，调试记录必须对 L0 内容脱敏（DESIGN §10.1）
   await captionIncomingImages({
@@ -60,9 +38,10 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     now: ctx.now,
   });
 
+  const contextCount = ctx.state.proactiveMode ? 8 : settings.contextMessages;
   const context = (ctx.processOptions.replay
-    ? ctx.options.repository.recentMessagesThrough(ctx.currentSessionId, ctx.message.messageId, settings.contextMessages)
-    : ctx.options.repository.recentMessages(ctx.currentSessionId, settings.contextMessages))
+    ? ctx.options.repository.recentMessagesThrough(ctx.currentSessionId, ctx.message.messageId, contextCount)
+    : ctx.options.repository.recentMessages(ctx.currentSessionId, contextCount))
     .map((record) => ({
       ...record,
       plainText: messageTextWithImageCaptions(record, ctx.options.repository),
@@ -72,6 +51,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     ownerId: config.owner,
     groupNote: settings.groupNote,
     modeHint: settings.mode === 'busy' ? '你现在有点忙，回得简短随意。' : '',
+    request: ctx.state.proactiveMode ? '请自然回应最近的群聊，不要要求别人提到你。' : undefined,
     context,
     replySystemTemplate: ctx.state.promptTemplates.replySystem,
   });

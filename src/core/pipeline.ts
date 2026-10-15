@@ -2,6 +2,8 @@ import { createRateLimiter } from './rate-limit.ts';
 import { promptTemplateStore } from './prompt-templates.ts';
 import { hashPromptMessages } from './prompt.ts';
 import { isDebugEnabled } from '../config/debug.ts';
+import { createIdleBackoff } from './activity/backoff.ts';
+import { createActivityThreshold } from './activity/threshold.ts';
 import { callSlot } from '../llm/slots.ts';
 import { sessionId, type IncomingMessage } from './events.ts';
 import { contextStep } from './steps/context.ts';
@@ -40,6 +42,11 @@ const steps: Array<(ctx: StepContext) => Promise<StepResult>> = [
 ];
 
 export function createMessagePipeline(options: MessagePipelineOptions) {
+  const pipelineOptions: MessagePipelineOptions = {
+    ...options,
+    idleBackoff: options.idleBackoff ?? createIdleBackoff(),
+    activityThreshold: options.activityThreshold ?? createActivityThreshold(),
+  };
   const now = options.now ?? Date.now;
   const wait = options.wait ?? ((milliseconds: number) => new Promise<void>((resolve) => {
     setTimeout(resolve, milliseconds);
@@ -61,9 +68,9 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
       const state: StepContext['state'] = { sentMessageIds: [], promptTemplates, promptFingerprints };
       runState = state;
       const trackedModelCall: PipelineModelCall = async (slot, messages, callOptions) => {
-        const templateVersion = slot === 'vision'
-          ? promptTemplates.vision.version
-          : promptTemplates.replySystem.version;
+        const templateVersion = slot === 'judge'
+          ? promptTemplates.judge.version
+          : slot === 'vision' ? promptTemplates.vision.version : promptTemplates.replySystem.version;
         const promptHash = hashPromptMessages(messages);
         promptFingerprints.push({ slot, templateVersion, promptHash });
         state.promptHash = promptHash;
@@ -73,7 +80,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
         message,
         processOptions,
         currentSessionId,
-        options,
+        options: pipelineOptions,
         now,
         wait,
         random,
@@ -86,6 +93,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
         const fingerprint = {
           templateVersion: promptTemplates.replySystem.version,
           visionTemplateVersion: promptTemplates.vision.version,
+          judgeTemplateVersion: promptTemplates.judge.version,
           ...(ctx.state.promptHash ? { promptHash: ctx.state.promptHash } : {}),
           ...(ctx.state.promptFingerprints.length > 0
             ? { promptFingerprints: [...ctx.state.promptFingerprints] }
@@ -101,6 +109,14 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
         detail: unknown = {},
         replied = false,
       ): PipelineResult => {
+        const decisionDetail = runState?.activityDecisionDetail
+          ? {
+            ...runState.activityDecisionDetail,
+            ...(typeof detail === 'object' && detail !== null && !Array.isArray(detail)
+              ? detail as Record<string, unknown>
+              : detail === undefined ? {} : { detail }),
+          }
+          : detail;
         if (!processOptions.replay) {
           options.repository.recordDecision({
             time: now(),
@@ -108,7 +124,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
             messageId: message.messageId,
             replied,
             reason,
-            detail: withPromptFingerprint(detail),
+            detail: withPromptFingerprint(decisionDetail),
           });
           return { replied, reason };
         }
@@ -141,6 +157,16 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
       }
       return recordDecision('replied', {}, true);
     } finally {
+      if (!processOptions.replay && runState && runState.sentMessageIds.length > 0) {
+        pipelineOptions.idleBackoff?.recordReply(currentSessionId);
+        if (runState.proactiveMode) {
+          pipelineOptions.activityThreshold?.recordProactiveReply(
+            currentSessionId,
+            runState.proactiveMode,
+            now(),
+          );
+        }
+      }
       try {
         const config = runState?.config ?? options.getConfig();
         if (!processOptions.replay && isDebugEnabled(config, currentSessionId)) {

@@ -155,3 +155,15 @@ test('lastSelfMessage 返回指定会话最近一条 bot 消息', () => {
     assert.equal(repository.lastSelfMessage('900000001:private:42'), undefined);
   });
 });
+
+test('lastMessageBefore 只返回批次首条消息之前的最近会话消息', () => {
+  withRepository((repository) => {
+    const sessionKey = '900000001:group:123456';
+    repository.saveMessage(messageRecord('older', 1_000));
+    repository.saveMessage(messageRecord('same-time', 2_000));
+    repository.saveMessage(messageRecord('newer', 3_000));
+
+    assert.equal(repository.lastMessageBefore(sessionKey, 2_000)?.messageId, 'older');
+    assert.equal(repository.lastMessageBefore(sessionKey, 1_000), undefined);
+  });
+});

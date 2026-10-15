@@ -80,6 +80,7 @@ export interface StoredPipelineTrace extends PipelineTraceRecord {
 export interface StoreRepository {
   saveMessage(message: MessageStorageRecord): boolean;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
+  lastMessageBefore(sessionId: string, beforeTime: number): MessageStorageRecord | undefined;
   messageBySessionAndId(sessionId: string, messageId: string): MessageStorageRecord | undefined;
   recentMessagesThrough(sessionId: string, messageId: string, count: number): MessageStorageRecord[];
   lastSelfMessage(sessionId: string): MessageStorageRecord | undefined;
@@ -162,6 +163,13 @@ export function createRepository(
     SELECT session_id, message_id, sender_id, sender_name, is_self, plain_text, segments_json, time
     FROM messages
     WHERE session_id = ? AND is_self = 1
+    ORDER BY time DESC, id DESC
+    LIMIT 1
+  `);
+  const selectLastMessageBefore = database.prepare(`
+    SELECT session_id, message_id, sender_id, sender_name, is_self, plain_text, segments_json, time
+    FROM messages
+    WHERE session_id = ? AND time < ?
     ORDER BY time DESC, id DESC
     LIMIT 1
   `);
@@ -250,6 +258,22 @@ export function createRepository(
         segments: JSON.parse(stringValue(row.segments_json, 'segments_json')) as unknown[],
         time: numberValue(row.time, 'time'),
       }));
+    },
+
+    lastMessageBefore(sessionId, beforeTime) {
+      if (!Number.isFinite(beforeTime)) throw new RangeError('查询时间必须是有限数字');
+      const row = selectLastMessageBefore.get(sessionId, beforeTime) as Record<string, unknown> | undefined;
+      if (!row) return undefined;
+      return {
+        sessionId: stringValue(row.session_id, 'session_id'),
+        messageId: stringValue(row.message_id, 'message_id'),
+        senderId: numberValue(row.sender_id, 'sender_id'),
+        senderName: stringValue(row.sender_name, 'sender_name'),
+        isSelf: numberValue(row.is_self, 'is_self') === 1,
+        plainText: stringValue(row.plain_text, 'plain_text'),
+        segments: JSON.parse(stringValue(row.segments_json, 'segments_json')) as unknown[],
+        time: numberValue(row.time, 'time'),
+      };
     },
 
     messageBySessionAndId(sessionId, messageId) {

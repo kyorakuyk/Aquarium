@@ -21,6 +21,7 @@ export interface ActivityBatcherOptions<T, Timer> {
 export interface ActivityBatcher<T> {
   add(sessionId: string, message: T): void;
   cancel(sessionId: string): ActivityBatch<T> | undefined;
+  cancelAll(): ActivityBatch<T>[];
 }
 
 interface PendingBatch<T, Timer> {
@@ -96,6 +97,18 @@ export function createActivityBatcher<T, Timer>(
       pending.delete(sessionId);
       cancelTimer(batch);
       return snapshot(batch);
+    },
+
+    cancelAll() {
+      const batches: ActivityBatch<T>[] = [];
+      for (const sessionId of [...pending.keys()]) {
+        const batch = pending.get(sessionId);
+        if (!batch) continue;
+        pending.delete(sessionId);
+        cancelTimer(batch);
+        batches.push(snapshot(batch));
+      }
+      return batches;
     },
   };
 }

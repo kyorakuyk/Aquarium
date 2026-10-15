@@ -20,6 +20,7 @@ import { startPanelWhileAccountStartupRuns } from './startup-order.ts';
 import type { Host } from '../host/types.ts';
 import { bindHostTrayAfterLoad, createWindowsTray } from '../host/tray.ts';
 import { createWindowsHost } from '../host/windows/host.ts';
+import { createAccountActivityRouter } from './activity-routing.ts';
 import {
   createHostLifecycleQueue,
   createSnowLumaRestartHandler,
@@ -242,15 +243,21 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
       });
     }
   }));
-  subscriptions.push(adapter.onMessage((message) => {
-    void sessionQueue.run(sessionId(message.session), async () => {
-      if (await management.handle(message)) return;
-      await pipeline(message);
-    })
-      .catch((error: unknown) => {
-        logger.error(`消息 ${message.messageId} 处理失败：${describeError(error)}`);
-      });
-  }));
+  const activityRouter = createAccountActivityRouter({
+    now: Date.now,
+    setTimer: (callback, delayMs) => setTimeout(callback, delayMs),
+    clearTimer: (timer) => clearTimeout(timer),
+    queue: sessionQueue,
+    getConfig: () => configWatcher.getConfig(),
+    management,
+    costToday: () => repository.costToday(),
+    processMessage: (message, processOptions) => pipeline(message, processOptions),
+    onError: (error, message) => {
+      logger.error(`消息 ${message.messageId} 处理失败：${describeError(error)}`);
+    },
+  });
+  subscriptions.push(() => activityRouter.close());
+  subscriptions.push(adapter.onMessage(activityRouter.route));
 
   logger.info(`正在连接账号 ${accountConfig.uin} ...`);
   adapter.start();
