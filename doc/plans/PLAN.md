@@ -514,3 +514,50 @@
   - 夜间完成结果：新增 JSONL 校验与离线 CLI；每行只调用 N1 gate，使用显式 `synthetic-gate-defaults`，不读取运行配置、不调用模型；`messages` 字段经校验但本切片不消费；报告只写汇总指标。10 条合成样例的结果为 precision 0.6667、recall 0.8000、F1 0.7273，混淆矩阵 TP=4/FP=2/TN=3/FN=1；`--with-judge` 只解析并提示“将在 M2 实现”。`npm run check` 通过（260 项测试），CLI 离线运行退出码 0；精确 staged review 通过（SHA-256 `7ff522d83020d5930e5f390ef7fd953a1efa248d016e2dba938f9f6ddf0f5599`，18,079 bytes）；提交 `ad151ec07f43af4c409aad21546f34733b961244` / `checkpoint/night-m2-prep-n5-2026-10-15-unverified`。仅 synthetic/offline 验证，不代表真实聊天或模型评估。
 
 完成 N0–N5 或满足 §7.6 结束条件即结束，做最后一次提交。
+
+---
+
+## 9. M2-A：四种活跃模式（2026-10-15 编写）
+
+> 前置：M1 已合并到 `main`（含 §8 的 N1 分步流水线、N2 模板、N3 追踪）。从 `main` 新建分支 `dev/m2-modes`。
+> 有人值守时按 §0 规则；无人值守时按 §7 规则（§7.1 范围视为本节 A1–A6）。每项一个提交，`npm run check` 必须通过。
+> 设计依据：DESIGN §5.1、§5.2、`RESEARCH-maibot.md` §1.1–1.3。**不得复制 MaiBot 代码。**
+
+### 9.1 行为定义（所有任务以此为准）
+
+| 模式 | 被叫（私聊 / @ / 叫名字） | 未被叫的群消息 | 目标频率系数 `t` | 初始阈值 |
+|---|---|---|---|---|
+| `mention_only` 只在被叫时 | 回复 | 一律不回，`reason='mode_mention_only'` | — | — |
+| `natural` 自然 | 回复 | 走 §9.2 主动判断 | 0.5 | 0.5 |
+| `active` 积极 | 回复 | 走 §9.2 主动判断 | 1.0 | 0.35 |
+| `busy` 忙碌 | 回复，节奏延迟 ×2.5 | 走 §9.2 主动判断 | 0.2 | 0.7 |
+
+- 忙碌模式下所有回复的提示词追加一句：`你现在有点忙，回得简短随意。`（放在 `prompts/reply-system.md` 中以 `{{modeHint}}` 占位，其他模式为空）。
+- **本节不做**：积极模式冷场时主动开话题（依赖 M2 的记忆）；忙碌模式用贴表情代替回复（需新增适配器动作）。两项写入 §6。
+
+### 9.2 主动判断流程（未被叫的群消息，模式非 `mention_only`）
+按顺序，任一步不通过即记决策并结束：
+1. **预算**：`budgetState` 为 `exceeded` 时不做主动判断，`reason='budget'`。
+2. **攒批**：同一会话收到未被叫的消息后等待 8 秒；8 秒内又有新消息则重新计时，最长等待 30 秒。到时只对**最后一条**做判断，期间其余消息记 `reason='batched'`。被叫的消息不攒批、立即处理，并取消该会话正在等待的批次。
+3. **空闲退避**：该会话连续“判断为不回”的次数为 `n`。`n ≥ 2` 时，距上次判断不足 `min(300, 15 × 2^(n−2))` 秒则跳过，`reason='backoff'`；但本批消息条数 ≥ 6 时忽略退避。bot 在该会话发出任何回复后 `n` 归零。
+4. **规则粗筛**（零成本）：`p0 = sigmoid(−0.6 + 1.2·active − 0.8·cold + 0.5·question − 1.0·mediaOnly − 0.9·atOther)`，其中 `active` = bot 在本会话最近 30 分钟内发过言；`cold` = 本批第一条消息之前该会话已沉默 ≥ 20 分钟；`question` = 文本含 `?` 或 `？`；`mediaOnly` = 只有图片或表情；`atOther` = @ 了别人。`p0 < 0.15` 则跳过，`reason='prefilter'`。权重写在独立文件 `src/core/activity/prefilter-weights.ts`，以便日后替换为拟合值。
+5. **模型精判**：用 `judge` 槽位与新模板 `prompts/judge.md`，上下文为最近 8 条消息。要求模型只输出 JSON：`{"probability": 0到1的数字, "reason": "不超过20字"}`。解析失败记 `reason='judge_parse_error'`；调用失败记 `reason='judge_error'`；两者都按“不回”计入退避。
+6. **动态阈值**：`probability ≥ 当前阈值` 才回复，否则 `reason='judge_skip'`（`n` 加 1）。每个会话在内存中维护过去 60 分钟的 `expected`（`probability ≥ 0.5` 的批次数）与 `actual`（实际主动回复数）。每次判断后：若 `expected ≥ 4` 且 `actual > expected × t`，阈值 +0.05；若 `actual < expected × t`，阈值 −0.05；限制在 [0.2, 0.9]。`expected < 4` 时使用 §9.1 的初始阈值。重启后重置。
+7. **硬上限**：同一会话两次主动回复间隔不得少于 120 秒，否则 `reason='proactive_cooldown'`。原有频率限制仍然生效。
+8. 通过后进入原有生成与发送步骤，上下文条数用 8（被叫时仍用 `contextMessages`），决策 `detail` 写入 `trigger: 'proactive'`、`p0`、`probability`、`threshold`。
+
+### 9.3 按时间段切换模式
+- 会话配置新增 `modeSchedule: [{ from: 'HH:mm', to: 'HH:mm', mode }]`（本地时间，支持跨午夜如 `23:00`–`07:00`），按顺序取第一个命中项，都不命中用 `mode`。继承规则与其他字段相同（数组整体覆盖）。
+- 纯函数 `resolveMode(settings, now): Mode`，放在 `src/core/activity/mode.ts`。
+
+### 9.4 任务
+
+- [ ] **A1 模式与时间表**：schema 新增 `modeSchedule`；`resolveMode`；`gate` 步骤按 §9.1 处理被叫与 `mention_only`；忙碌模式节奏 ×2.5 与 `{{modeHint}}`。测试：时间段命中、跨午夜、无命中回落、四种模式的被叫行为。
+- [ ] **A2 攒批与退避**：`src/core/activity/batcher.ts`、`backoff.ts`（时间可注入）。测试：8 秒重新计时、30 秒上限、被叫取消批次、退避时间序列、≥6 条忽略退避、回复后归零。
+- [ ] **A3 粗筛与精判**：`prefilter.ts`、`judge.ts`、`prompts/judge.md`；JSON 解析严格（只接受数字在 0–1 之间）。测试：特征计算、`p0` 数值、解析成功 / 失败 / 越界、调用失败。
+- [ ] **A4 动态阈值与硬上限**：`threshold.ts`（滑动窗口，时间可注入）。测试：数据不足用初始值、超额上调、不足下调、上下限、120 秒冷却。
+- [ ] **A5 接入流水线**：把 A1–A4 接到 N1 的 `gate` 步骤；预算判断；决策 `detail` 字段；N3 追踪中记录 `p0`、`probability`、`threshold`、退避状态。测试：用假 judge 跑完整主动回复路径，以及每个 `reason` 至少一条。
+- [ ] **A6 控制台**：会话页去掉三个模式的“M2”灰显，可选择；新增“按时间段切换”编辑器（增删行，每行 from / to / 模式）；`panel/src/labels.ts` 增加新 `reason` 的中文标签：`mode_mention_only` 只在被叫时、`batched` 合并处理、`backoff` 退避中、`prefilter` 粗筛跳过、`judge_skip` 判断不接、`judge_parse_error` / `judge_error` 出错、`budget` 预算用尽、`proactive_cooldown` 主动冷却；决策详情显示 `p0` / `probability` / `threshold`。完成后 `npm run panel:build` 成功。
+
+> **⛔ 停止点 M2-A**：A6 完成后停下。
+> **【用户】验收**：选一个测试小群设为 `active` → 群里正常聊天（不 @）半小时，bot 偶尔自然接话且两次间隔 ≥ 2 分钟 → 改为 `busy`，接话明显变少、变短 → 设置时间表让当前时段为 `mention_only`，不 @ 就完全不说话 → 控制台决策记录里能看到各种中文原因与概率数值 → 当天花费仍在预算内。
