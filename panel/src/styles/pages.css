@@ -48,6 +48,7 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .session-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 3px 10px; padding: 9px 9px 7px; border-left: 3px solid transparent; border-radius: 9px; }
 .session-row.is-selected { border-left-color: var(--accent); background: var(--surface-accent); }
 .session-row-main { display: flex; min-width: 0; min-height: 45px; align-items: center; gap: 10px; border: 0; background: transparent; cursor: pointer; text-align: left; }
+.session-row-global .session-row-main { grid-column: 1 / -1; width: 100%; }
 .avatar-initial { display: grid; width: 36px; height: 36px; flex: none; place-items: center; border-radius: 50%; background: var(--surface-2); color: var(--ink-2); font-family: var(--serif); font-size: 15px; }
 .session-row-copy { display: grid; min-width: 0; }
 .session-row-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -66,6 +67,7 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .detail-title-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
 .detail-title-row .eyebrow { margin-bottom: 2px; }
 .detail-title-row h2 { margin-bottom: 8px; }
+.private-mode-note p { margin: 0; color: var(--muted); font-size: 12px; }
 .setting-group { padding: 18px 0; border-bottom: 1px solid var(--surface-2); }
 .setting-group:last-of-type { border-bottom: 0; }
 .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

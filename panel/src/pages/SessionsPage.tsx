@@ -1,178 +1,145 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { apiRequest, patch, type ModeScheduleEntry, type SessionView } from '../api.ts';
+import { useEffect, useMemo, useState } from 'react';
+import { apiRequest, patch, type DefaultsView, type SessionView } from '../api.ts';
 import {
-  addModeScheduleEntry,
-  changeModeScheduleDraft,
-  createModeScheduleEntryChangeFromInput,
-  discardModeScheduleDraft,
-  getModeScheduleDraft,
-  getModeScheduleRowKeys,
-  readModeScheduleDrafts,
-  saveModeScheduleDraft,
-  type ModeScheduleDrafts,
-  type ModeScheduleRowKeys,
-  removeModeScheduleEntry,
-  SESSION_MODE_OPTIONS,
-  updateModeScheduleEntry,
-  writeModeScheduleDrafts,
-} from '../session-mode.ts';
+  createDefaultsSettingsTarget,
+  createSessionSettingsTarget,
+  GLOBAL_DEFAULT_ID,
+  SessionSettingsPanel,
+  type SessionSettingsTarget,
+} from './SessionSettingsPanel.tsx';
 
-type SessionField = 'enabled' | 'mode' | 'modeSchedule' | 'nicknames' | 'contextMessages' | 'rate' | 'groupNote';
-type RateField = keyof SessionView['effective']['rate'];
+const SESSION_SELECTION_STORAGE_KEY = 'aquarium-session-selection';
 
-function readModeScheduleDraftSnapshot(): ModeScheduleDrafts {
+interface SavedSessionSelection {
+  sessionId: string;
+  kind: 'group' | 'private';
+}
+
+function readSavedSessionSelection(): SavedSessionSelection | undefined {
   try {
-    return readModeScheduleDrafts(window.sessionStorage);
+    const serialized = window.localStorage.getItem(SESSION_SELECTION_STORAGE_KEY);
+    if (!serialized) return undefined;
+    const value: unknown = JSON.parse(serialized);
+    if (typeof value !== 'object' || value === null) return undefined;
+    const record = value as Record<string, unknown>;
+    if (typeof record.sessionId !== 'string' || record.sessionId.trim() === '') return undefined;
+    if (record.kind !== 'group' && record.kind !== 'private') return undefined;
+    return { sessionId: record.sessionId, kind: record.kind };
   } catch {
-    return new Map();
+    return undefined;
   }
 }
 
-function writeModeScheduleDraftSnapshot(drafts: ModeScheduleDrafts): boolean {
+function writeSavedSessionSelection(sessionId: string, kind: SavedSessionSelection['kind']): void {
   try {
-    return writeModeScheduleDrafts(window.sessionStorage, drafts);
+    window.localStorage.setItem(SESSION_SELECTION_STORAGE_KEY, JSON.stringify({ sessionId, kind }));
   } catch {
-    return false;
+    // Selection persistence is best-effort; the current page remains usable.
   }
 }
 
-function FieldHeading({ title, fields, session, onReset }: {
-  title: string;
-  fields: SessionField[];
-  session: SessionView;
-  onReset: (fields: SessionField[]) => void;
-}) {
-  const overridden = fields.some((field) => session.overrides.includes(field));
-  return (
-    <div className="field-heading">
-      <h3>{title}</h3>
-      {overridden
-        ? <button className="inherit-button is-overridden" type="button" onClick={() => onReset(fields)}>本群覆盖 · 恢复继承</button>
-        : <span className="inherit-label">继承全局</span>}
-    </div>
-  );
-}
-
-function SettingGroup({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <section className={`setting-group ${className}`}>{children}</section>;
+function compareSessions(first: SessionView, second: SessionView): number {
+  if (first.enabled !== second.enabled) return first.enabled ? -1 : 1;
+  if (first.lastMessageAt !== second.lastMessageAt) {
+    if (first.lastMessageAt === null) return 1;
+    if (second.lastMessageAt === null) return -1;
+    return second.lastMessageAt - first.lastMessageAt;
+  }
+  return first.name.localeCompare(second.name, 'zh-CN');
 }
 
 export function SessionsPage() {
+  const [savedSelection] = useState(readSavedSessionSelection);
   const [sessions, setSessions] = useState<SessionView[]>([]);
-  const [selectedId, setSelectedId] = useState('');
-  const [kind, setKind] = useState<'group' | 'private'>('group');
+  const [defaults, setDefaults] = useState<DefaultsView | null>(null);
+  const [selectedId, setSelectedId] = useState(savedSelection?.sessionId ?? GLOBAL_DEFAULT_ID);
+  const [kind, setKind] = useState<SavedSessionSelection['kind']>(savedSelection?.kind ?? 'group');
   const [query, setQuery] = useState('');
-  const [nicknames, setNicknames] = useState('');
-  const [modeScheduleDrafts, setModeScheduleDrafts] = useState<ModeScheduleDrafts>(readModeScheduleDraftSnapshot);
-  const modeScheduleDraftsRef = useRef(modeScheduleDrafts);
-  const [modeScheduleRowKeys, setModeScheduleRowKeys] = useState<ModeScheduleRowKeys>(() => new Map());
-  const [groupNote, setGroupNote] = useState('');
   const [error, setError] = useState('');
-  const [draftPersistenceError, setDraftPersistenceError] = useState('');
-  const [savedAt, setSavedAt] = useState('');
   const [busy, setBusy] = useState(false);
-  const nextScheduleRowKey = useRef(0);
 
-  const selected = sessions.find((item) => item.sessionId === selectedId);
-  const scheduleEntries = selected
-    ? getModeScheduleDraft(modeScheduleDrafts, selected.sessionId, selected.effective.modeSchedule)
-    : [];
-  const scheduleRowKeys = selected
-    ? getModeScheduleRowKeys(modeScheduleRowKeys, selected.sessionId, scheduleEntries)
-    : [];
-  const scheduleIsDirty = selected !== undefined
-    && JSON.stringify(scheduleEntries) !== JSON.stringify(selected.effective.modeSchedule);
+  const selectedSession = sessions.find((item) => item.sessionId === selectedId);
+  const selected: SessionSettingsTarget | undefined = selectedId === GLOBAL_DEFAULT_ID
+    ? defaults ? createDefaultsSettingsTarget(defaults) : undefined
+    : selectedSession ? createSessionSettingsTarget(selectedSession) : undefined;
   const visible = useMemo(() => sessions.filter((item) => item.kind === kind
-    && `${item.name} ${item.sessionId}`.toLowerCase().includes(query.trim().toLowerCase())), [sessions, kind, query]);
+    && `${item.name} ${item.sessionId}`.toLowerCase().includes(query.trim().toLowerCase()))
+    .sort(compareSessions), [sessions, kind, query]);
 
   async function loadSessions(preferredId?: string) {
     const result = await apiRequest<SessionView[]>('/api/sessions');
     setSessions(result);
     const nextId = preferredId ?? selectedId;
-    if (!result.some((item) => item.sessionId === nextId)) {
-      setSelectedId(result.find((item) => item.kind === kind)?.sessionId ?? result[0]?.sessionId ?? '');
+    if (nextId === GLOBAL_DEFAULT_ID) return;
+    const selectedSession = result.find((item) => item.sessionId === nextId);
+    if (selectedSession) {
+      setKind(selectedSession.kind);
+      return;
     }
+    const fallback = result[0];
+    setSelectedId(fallback?.sessionId ?? GLOBAL_DEFAULT_ID);
+    if (fallback) setKind(fallback.kind);
+  }
+
+  async function loadDefaults() {
+    setDefaults(await apiRequest<DefaultsView>('/api/defaults'));
   }
 
   useEffect(() => {
-    void loadSessions().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : '读取会话失败'));
+    void Promise.all([loadSessions(), loadDefaults()]).catch((reason: unknown) => {
+      setError(reason instanceof Error ? reason.message : '读取会话设置失败');
+    });
   }, []);
 
   useEffect(() => {
-    if (!selected) return;
-    setNicknames(selected.effective.nicknames.join(', '));
-    setGroupNote(selected.effective.groupNote);
-  }, [selectedId, sessions]);
+    writeSavedSessionSelection(selectedId, kind);
+  }, [selectedId, kind]);
 
-  async function update(values: Record<string, unknown>, targetId = selected?.sessionId) {
-    if (!targetId) return;
+  function selectKind(nextKind: SavedSessionSelection['kind']) {
+    setKind(nextKind);
+    if (selectedId === GLOBAL_DEFAULT_ID) return;
+    if (sessions.some((item) => item.sessionId === selectedId && item.kind === nextKind)) return;
+    setSelectedId(sessions.find((item) => item.kind === nextKind)?.sessionId ?? GLOBAL_DEFAULT_ID);
+  }
+
+  async function patchSettings(target: SessionSettingsTarget, values: Record<string, unknown>) {
     setBusy(true);
     setError('');
+    const endpoint = target.kind === 'global'
+      ? '/api/defaults'
+      : `/api/sessions/${encodeURIComponent(target.id)}`;
     try {
-      if (Object.hasOwn(values, 'modeSchedule')) {
-        await saveModeScheduleDraft(
-          () => patch(`/api/sessions/${encodeURIComponent(targetId)}`, values),
-          () => replaceModeScheduleDrafts(
-            discardModeScheduleDraft(modeScheduleDraftsRef.current, targetId),
-            '时段已保存，但无法清理当前标签页的草稿副本。',
-          ),
-          () => loadSessions(targetId),
-        );
-      } else {
-        await patch(`/api/sessions/${encodeURIComponent(targetId)}`, values);
-        await loadSessions(targetId);
-      }
-      setSavedAt(new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date()));
+      await patch(endpoint, values);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '保存失败');
+      throw reason;
     } finally {
       setBusy(false);
     }
   }
 
-  function restore(fields: SessionField[]) {
-    void update(Object.fromEntries(fields.map((field) => [field, null])));
+  async function refreshSettings(target: SessionSettingsTarget) {
+    try {
+      if (target.kind === 'global') await loadDefaults();
+      else await loadSessions(target.id);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '刷新设置失败');
+      throw reason;
+    }
   }
 
-  function replaceModeScheduleDrafts(drafts: ModeScheduleDrafts, storageError: string) {
-    modeScheduleDraftsRef.current = drafts;
-    setModeScheduleDrafts(drafts);
-    setDraftPersistenceError(writeModeScheduleDraftSnapshot(drafts) ? '' : storageError);
+  function reportError(reason: unknown) {
+    setError(reason instanceof Error ? reason.message : '保存失败');
   }
 
-  function updateScheduleDraft(change: (entries: readonly ModeScheduleEntry[]) => ModeScheduleEntry[]) {
-    if (!selected) return;
-    replaceModeScheduleDrafts(changeModeScheduleDraft(
-      modeScheduleDraftsRef.current,
-      selected.sessionId,
-      selected.effective.modeSchedule,
-      change,
-    ), '当前标签页无法保留未提交的时段草稿；请点击“保存时段”。');
-  }
-
-  function addScheduleEntry() {
-    if (!selected) return;
-    const rowKey = `${selected.sessionId}:new:${nextScheduleRowKey.current++}`;
-    updateScheduleDraft(addModeScheduleEntry);
-    setModeScheduleRowKeys((rowKeys) => new Map(rowKeys).set(
-      selected.sessionId,
-      [...getModeScheduleRowKeys(rowKeys, selected.sessionId, scheduleEntries), rowKey],
-    ));
-  }
-
-  function removeScheduleEntry(index: number) {
-    if (!selected) return;
-    updateScheduleDraft((entries) => removeModeScheduleEntry(entries, index));
-    setModeScheduleRowKeys((rowKeys) => new Map(rowKeys).set(
-      selected.sessionId,
-      getModeScheduleRowKeys(rowKeys, selected.sessionId, scheduleEntries)
-        .filter((_, currentIndex) => currentIndex !== index),
-    ));
-  }
-
-  async function setRate(field: RateField, rawValue: string) {
-    const value = rawValue.trim() === '' ? null : Number(rawValue);
-    await update({ rate: { [field]: value } });
+  async function updateSession(session: SessionView, values: Record<string, unknown>) {
+    const target = createSessionSettingsTarget(session);
+    try {
+      await patchSettings(target, values);
+      await refreshSettings(target);
+    } catch {
+      // The failed request or refresh is already shown in the page notice.
+    }
   }
 
   const groupCount = sessions.filter((item) => item.kind === 'group').length;
@@ -191,14 +158,25 @@ export function SessionsPage() {
       <div className="session-workspace">
         <section className="session-list-card panel-card">
           <div className="segmented-control" role="group" aria-label="会话类型">
-            <button className={kind === 'group' ? 'is-selected' : ''} type="button" onClick={() => setKind('group')}>群聊 <span>{groupCount}</span></button>
-            <button className={kind === 'private' ? 'is-selected' : ''} type="button" onClick={() => setKind('private')}>好友 <span>{friendCount}</span></button>
+            <button className={kind === 'group' ? 'is-selected' : ''} type="button" onClick={() => selectKind('group')}>群聊 <span>{groupCount}</span></button>
+            <button className={kind === 'private' ? 'is-selected' : ''} type="button" onClick={() => selectKind('private')}>好友 <span>{friendCount}</span></button>
           </div>
           <label className="search-field">
             <span className="visually-hidden">搜索会话</span>
             <input type="search" placeholder="搜索名称或号码" value={query} onChange={(event) => setQuery(event.currentTarget.value)} />
           </label>
           <div className="session-list">
+            <div className={`session-row session-row-global ${selectedId === GLOBAL_DEFAULT_ID ? 'is-selected' : ''}`}>
+              <button
+                className="session-row-main"
+                type="button"
+                onClick={() => setSelectedId(GLOBAL_DEFAULT_ID)}
+                aria-pressed={selectedId === GLOBAL_DEFAULT_ID}
+              >
+                <span className="avatar-initial">全</span>
+                <span className="session-row-copy"><strong>全局默认</strong><span className="muted">所有会话继承此处设置</span></span>
+              </button>
+            </div>
             {visible.map((item) => (
               <div className={`session-row ${selectedId === item.sessionId ? 'is-selected' : ''}`} key={item.sessionId}>
                 <button
@@ -217,9 +195,9 @@ export function SessionsPage() {
                   aria-checked={item.enabled}
                   aria-label={`${item.name}${item.enabled ? '已启用' : '已停用'}`}
                   disabled={busy}
-                  onClick={() => void update({ enabled: !item.enabled }, item.sessionId)}
+                  onClick={() => void updateSession(item, { enabled: !item.enabled })}
                 ><span /></button>
-                <span className={`override-tag ${item.overrides.length ? 'is-overridden' : ''}`}>{item.overrides.length ? '本群覆盖' : '继承全局'}</span>
+                <span className={`override-tag ${item.overrides.length ? 'is-overridden' : ''}`}>{item.overrides.length ? (item.kind === 'private' ? '本会话覆盖' : '本群覆盖') : '继承全局'}</span>
               </div>
             ))}
             {visible.length === 0 && <p className="empty-state">没有找到会话。</p>}
@@ -227,121 +205,17 @@ export function SessionsPage() {
         </section>
 
         <section className="session-detail panel-card">
-          {!selected && <div className="empty-state">选择一个会话查看设置。</div>}
-          {selected && <>
-            <div className="detail-title-row">
-              <div><div className="eyebrow">{selected.kind === 'group' ? '群聊' : '好友'}</div><h2>{selected.name}</h2><span className={`result-pill ${selected.enabled ? 'result-positive' : 'result-neutral'}`}>{selected.enabled ? '已启用' : '已停用'}</span></div>
-              <button className={`switch switch-large ${selected.enabled ? 'is-on' : ''}`} type="button" role="switch" aria-checked={selected.enabled} aria-label="启用会话" disabled={busy} onClick={() => void update({ enabled: !selected.enabled })}><span /></button>
-            </div>
-
-            <SettingGroup>
-              <FieldHeading title="什么时候说话" fields={['mode']} session={selected} onReset={restore} />
-              <div className="mode-grid">
-                {SESSION_MODE_OPTIONS.map((option) => (
-                  <button
-                    className={`mode-card ${selected.effective.mode === option.mode ? 'is-current' : ''}`}
-                    key={option.mode}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void update({ mode: option.mode })}
-                  ><strong>{option.title}</strong><span>{option.note}</span></button>
-                ))}
-              </div>
-            </SettingGroup>
-
-            <SettingGroup>
-              <FieldHeading title="按时间段切换" fields={['modeSchedule']} session={selected} onReset={restore} />
-              <p className="schedule-help">按列表顺序首个匹配项生效，支持跨午夜；没有匹配时使用上方默认模式。未提交草稿会在当前标签页刷新后保留，点击“保存时段”才写入配置。</p>
-              {draftPersistenceError && <p className="schedule-help" role="alert">{draftPersistenceError}</p>}
-              {scheduleEntries.length > 0
-                ? <div className="schedule-list">
-                  {scheduleEntries.map((entry, index) => (
-                    <div className="schedule-row" key={scheduleRowKeys[index]}>
-                      <label>
-                        <span>开始</span>
-                        <input
-                          type="time"
-                          value={entry.from}
-                          aria-label={`第 ${index + 1} 个时段开始时间`}
-                          disabled={busy}
-                          onChange={(event) => updateScheduleDraft(createModeScheduleEntryChangeFromInput(event, index, 'from'))}
-                        />
-                      </label>
-                      <label>
-                        <span>结束</span>
-                        <input
-                          type="time"
-                          value={entry.to}
-                          aria-label={`第 ${index + 1} 个时段结束时间`}
-                          disabled={busy}
-                          onChange={(event) => updateScheduleDraft(createModeScheduleEntryChangeFromInput(event, index, 'to'))}
-                        />
-                      </label>
-                      <label className="schedule-mode">
-                        <span>模式</span>
-                        <select
-                          value={entry.mode}
-                          aria-label={`第 ${index + 1} 个时段模式`}
-                          disabled={busy}
-                          onChange={(event) => updateScheduleDraft(createModeScheduleEntryChangeFromInput(event, index, 'mode'))}
-                        >
-                          {SESSION_MODE_OPTIONS.map((option) => <option value={option.mode} key={option.mode}>{option.title}</option>)}
-                        </select>
-                      </label>
-                      <button
-                        className="text-button schedule-remove"
-                        type="button"
-                        aria-label={`删除第 ${index + 1} 个时段`}
-                        disabled={busy}
-                        onClick={() => removeScheduleEntry(index)}
-                      >删除</button>
-                    </div>
-                  ))}
-                </div>
-                : <p className="empty-state schedule-empty">尚未设置时段，将始终使用上方默认模式。</p>}
-              <div className="schedule-actions">
-                <button className="text-button" type="button" disabled={busy} onClick={addScheduleEntry}>添加时段</button>
-                <div>
-                  {scheduleIsDirty && <span className="schedule-dirty" role="status">有未保存改动</span>}
-                  <button className="button button-secondary" type="button" disabled={busy || !scheduleIsDirty} onClick={() => void update({ modeSchedule: scheduleEntries })}>保存时段</button>
-                </div>
-              </div>
-            </SettingGroup>
-
-            <SettingGroup>
-              <FieldHeading title="叫它的名字" fields={['nicknames']} session={selected} onReset={restore} />
-              <label className="field-label" htmlFor="session-nicknames">多个名字用逗号分开</label>
-              <input id="session-nicknames" value={nicknames} onChange={(event) => setNicknames(event.currentTarget.value)} onBlur={() => void update({ nicknames: nicknames.split(',').map((name) => name.trim()).filter(Boolean) })} />
-            </SettingGroup>
-
-            <SettingGroup>
-              <FieldHeading title="在这个群里的补充说明" fields={['groupNote']} session={selected} onReset={restore} />
-              <textarea rows={3} value={groupNote} onChange={(event) => setGroupNote(event.currentTarget.value)} onBlur={() => void update({ groupNote })} aria-label="会话补充说明" />
-            </SettingGroup>
-
-            <SettingGroup>
-              <FieldHeading title="频率与上下文" fields={['rate', 'contextMessages']} session={selected} onReset={restore} />
-              <div className="number-grid">
-                <label><span>每人每分钟最多</span><input type="number" min="1" value={selected.effective.rate.perUserPerMinute} onBlur={(event) => void setRate('perUserPerMinute', event.currentTarget.value)} onChange={(event) => {
-                  const value = Number(event.currentTarget.value);
-                  setSessions((items) => items.map((item) => item.sessionId === selectedId ? { ...item, effective: { ...item.effective, rate: { ...item.effective.rate, perUserPerMinute: value } } } : item));
-                }} /></label>
-                <label><span>整个群每分钟最多</span><input type="number" min="1" value={selected.effective.rate.perSessionPerMinute} onBlur={(event) => void setRate('perSessionPerMinute', event.currentTarget.value)} onChange={(event) => {
-                  const value = Number(event.currentTarget.value);
-                  setSessions((items) => items.map((item) => item.sessionId === selectedId ? { ...item, effective: { ...item.effective, rate: { ...item.effective.rate, perSessionPerMinute: value } } } : item));
-                }} /></label>
-                <label><span>两次回复至少间隔（秒）</span><input type="number" min="0.1" step="0.1" value={selected.effective.rate.minIntervalSec} onBlur={(event) => void setRate('minIntervalSec', event.currentTarget.value)} onChange={(event) => {
-                  const value = Number(event.currentTarget.value);
-                  setSessions((items) => items.map((item) => item.sessionId === selectedId ? { ...item, effective: { ...item.effective, rate: { ...item.effective.rate, minIntervalSec: value } } } : item));
-                }} /></label>
-                <label><span>参考最近几条</span><input type="number" min="1" value={selected.effective.contextMessages} onBlur={(event) => void update({ contextMessages: Number(event.currentTarget.value) })} onChange={(event) => {
-                  const value = Number(event.currentTarget.value);
-                  setSessions((items) => items.map((item) => item.sessionId === selectedId ? { ...item, effective: { ...item.effective, contextMessages: value } } : item));
-                }} /></label>
-              </div>
-            </SettingGroup>
-            <div className="save-state" aria-live="polite">{busy ? '正在保存…' : scheduleIsDirty ? '时间段尚未写入配置' : savedAt ? `已保存 · ${savedAt}` : '其他设置自动保存；时间段需点击“保存时段”'}</div>
-          </>}
+          {selected
+            ? <SessionSettingsPanel
+              key={selected.id}
+              target={selected}
+              busy={busy}
+              onPatch={patchSettings}
+              onRefresh={refreshSettings}
+              onError={reportError}
+              onNavigateToDefaults={() => setSelectedId(GLOBAL_DEFAULT_ID)}
+            />
+            : <div className="empty-state">{selectedId === GLOBAL_DEFAULT_ID ? '正在读取全局默认设置…' : '选择一个会话查看设置。'}</div>}
         </section>
       </div>
     </div>

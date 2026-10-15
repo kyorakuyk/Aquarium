@@ -32,6 +32,23 @@ export interface ModeScheduleEntry {
   mode: SessionMode;
 }
 
+export interface SessionSettings {
+  mode: SessionMode;
+  modeSchedule: ModeScheduleEntry[];
+  nicknames: string[];
+  contextMessages: number;
+  rate: {
+    perUserPerMinute: number;
+    perSessionPerMinute: number;
+    minIntervalSec: number;
+  };
+  groupNote: string;
+}
+
+export interface DefaultsView extends SessionSettings {
+  enabled: boolean;
+}
+
 export interface SessionView {
   sessionId: string;
   name: string;
@@ -39,19 +56,9 @@ export interface SessionView {
   degraded: boolean;
   memberCount?: number;
   enabled: boolean;
+  lastMessageAt: number | null;
   overrides: string[];
-  effective: {
-    mode: SessionMode;
-    modeSchedule: ModeScheduleEntry[];
-    nicknames: string[];
-    contextMessages: number;
-    rate: {
-      perUserPerMinute: number;
-      perSessionPerMinute: number;
-      minIntervalSec: number;
-    };
-    groupNote: string;
-  };
+  effective: SessionSettings;
 }
 
 export interface DecisionView {

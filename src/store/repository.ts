@@ -80,6 +80,7 @@ export interface StoredPipelineTrace extends PipelineTraceRecord {
 export interface StoreRepository {
   saveMessage(message: MessageStorageRecord): boolean;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
+  lastMessageTime(sessionId: string): number | null;
   lastMessageBefore(sessionId: string, beforeTime: number): MessageStorageRecord | undefined;
   messageBySessionAndId(sessionId: string, messageId: string): MessageStorageRecord | undefined;
   recentMessagesThrough(sessionId: string, messageId: string, count: number): MessageStorageRecord[];
@@ -141,6 +142,9 @@ export function createRepository(
     ORDER BY time DESC, id DESC
     LIMIT ?
   `);
+  const selectLastMessageTime = database.prepare(
+    'SELECT MAX(time) AS latest_time FROM messages WHERE session_id = ?',
+  );
   const selectMessageBySessionAndId = database.prepare(`
     SELECT session_id, message_id, sender_id, sender_name, is_self, plain_text, segments_json, time
     FROM messages
@@ -258,6 +262,12 @@ export function createRepository(
         segments: JSON.parse(stringValue(row.segments_json, 'segments_json')) as unknown[],
         time: numberValue(row.time, 'time'),
       }));
+    },
+
+    lastMessageTime(sessionId) {
+      const row = selectLastMessageTime.get(sessionId) as Record<string, unknown> | undefined;
+      if (!row || row.latest_time === null) return null;
+      return numberValue(row.latest_time, 'latest_time');
     },
 
     lastMessageBefore(sessionId, beforeTime) {
