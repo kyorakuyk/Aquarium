@@ -115,6 +115,8 @@ export interface StoreRepository {
   insertTag(tag: TagRecord): number;
   tagById(id: number): StoredTag | undefined;
   listTagsForSubject(account: number, sessionId: string, userId: number | null): StoredTag[];
+  listTagsForSession(account: number, sessionId: string): StoredTag[];
+  senderNameFor(sessionId: string, senderId: number): string | undefined;
   updateTag(id: number, update: TagUpdate): void;
   getTagRun(account: number, sessionId: string): TagRunRecord | undefined;
   saveTagRun(run: TagRunRecord): void;

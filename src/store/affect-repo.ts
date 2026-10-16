@@ -81,7 +81,8 @@ export interface TagRunRecord {
 
 export type AffectRepositoryQueries = Pick<StoreRepository,
   'getMoodState' | 'saveMoodState' | 'recordMoodEvent' | 'recentMoodEvents' | 'moodEventsSince'
-  | 'insertTag' | 'tagById' | 'listTagsForSubject' | 'updateTag' | 'getTagRun' | 'saveTagRun'
+  | 'insertTag' | 'tagById' | 'listTagsForSubject' | 'listTagsForSession' | 'senderNameFor'
+  | 'updateTag' | 'getTagRun' | 'saveTagRun'
   | 'countMessagesAfter'
 >;
 
@@ -217,6 +218,19 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
     WHERE account = ? AND session_id = ? AND user_id IS ?
     ORDER BY last_seen DESC, id DESC
   `);
+  const selectTagsForSession = database.prepare(`
+    SELECT id, account, session_id, user_id, text, norm, status, source, samples, evidence_json, first_seen, last_seen, superseded_by, updated_at
+    FROM tags
+    WHERE account = ? AND session_id = ?
+    ORDER BY last_seen DESC, id DESC
+  `);
+  const selectSenderName = database.prepare(`
+    SELECT sender_name
+    FROM messages
+    WHERE session_id = ? AND sender_id = ?
+    ORDER BY time DESC, id DESC
+    LIMIT 1
+  `);
   const selectTagRun = database.prepare(`
     SELECT account, session_id, last_run_at, last_message_time
     FROM tag_runs
@@ -313,6 +327,16 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
     listTagsForSubject(account, sessionId, userId) {
       const rows = selectTagsForSubject.all(account, sessionId, userId) as Array<Record<string, unknown>>;
       return rows.map(tagRecord);
+    },
+
+    listTagsForSession(account, sessionId) {
+      const rows = selectTagsForSession.all(account, sessionId) as Array<Record<string, unknown>>;
+      return rows.map(tagRecord);
+    },
+
+    senderNameFor(sessionId, senderId) {
+      const row = selectSenderName.get(sessionId, senderId) as Record<string, unknown> | undefined;
+      return row ? stringValue(row.sender_name, 'sender_name') : undefined;
     },
 
     updateTag(id, update) {

@@ -1,7 +1,34 @@
 import { useEffect, useState } from 'react';
-import { apiRequest, post, type DecisionView, type PanelStatus, type SessionView, type UsageView } from '../api.ts';
+import { apiRequest, post, type DecisionView, type MoodBand, type MoodEventView, type MoodView, type PanelStatus, type SessionView, type UsageView } from '../api.ts';
 import type { PageId } from '../components/Sidebar.tsx';
 import { decisionLabel, decisionTone } from '../labels.ts';
+
+const MOOD_BAND_LABELS: Record<MoodBand, string> = {
+  low: '低落',
+  annoyed: '不爽',
+  calm: '平静',
+  happy: '开心',
+  excited: '很开心',
+};
+
+function moodEventLabel(event: MoodEventView): string {
+  if (event.source === 'band') {
+    const before = event.bandBefore ? MOOD_BAND_LABELS[event.bandBefore] : '未知';
+    const after = event.bandAfter ? MOOD_BAND_LABELS[event.bandAfter] : '未知';
+    return `换档：${before} → ${after}`;
+  }
+  if (event.source === 'rule') return '被叫到了';
+  const known: Record<string, string> = {
+    budget: '预算已满，跳过评估',
+    appraise_parse_error: '评估解析失败',
+    appraise_error: '评估调用失败',
+  };
+  return known[event.reason] ?? event.reason;
+}
+
+function signed(value: number): string {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}`;
+}
 
 function money(value: number): string {
   return `¥${value.toFixed(2)}`;
@@ -27,6 +54,7 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const [sessions, setSessions] = useState<SessionView[]>([]);
   const [decisions, setDecisions] = useState<DecisionView[]>([]);
   const [usage, setUsage] = useState<UsageView>();
+  const [mood, setMood] = useState<MoodView>();
   const [muted, setMuted] = useState(false);
   const [error, setError] = useState('');
 
@@ -36,11 +64,13 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
       apiRequest<SessionView[]>('/api/sessions'),
       apiRequest<DecisionView[]>('/api/decisions?limit=5'),
       apiRequest<UsageView>('/api/usage/today'),
-    ]).then(([nextStatus, nextSessions, nextDecisions, nextUsage]) => {
+      apiRequest<MoodView>('/api/mood'),
+    ]).then(([nextStatus, nextSessions, nextDecisions, nextUsage, nextMood]) => {
       setStatus(nextStatus);
       setSessions(nextSessions);
       setDecisions(nextDecisions);
       setUsage(nextUsage);
+      setMood(nextMood);
       setMuted(nextStatus.allMuted);
       setError('');
     }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : '读取控制台数据失败'));
@@ -144,6 +174,36 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
           <div className="chain-step"><span className="chain-dot dot-online" /><span>Aquarium</span><strong className="mono">PID {status.runtime.pid} · :{status.runtime.port}</strong></div>
           <p className="stat-foot">运行 {Math.floor(status.runtime.uptimeSeconds / 60)} 分钟</p>
         </article>
+      </section>
+
+      <section className="section-block panel-card mood-card">
+        <div className="section-heading">
+          <div><h2>心情</h2></div>
+          <span className="muted">
+            {mood && (mood.bandSince === null ? '基线状态' : `从 ${shortTime(mood.bandSince)} 起`)}
+          </span>
+        </div>
+        {!mood && <p className="muted">正在读取…</p>}
+        {mood && (
+          <div className="mood-layout">
+            <div className="mood-summary">
+              <div className="mood-band-name">{MOOD_BAND_LABELS[mood.band]}</div>
+              <div className="metric-row"><span>愉悦度</span><strong className="mono">{mood.valence.toFixed(2)}</strong></div>
+              <div className="metric-row"><span>兴奋度</span><strong className="mono">{mood.arousal.toFixed(2)}</strong></div>
+            </div>
+            <div className="mood-events">
+              <div className="small-heading">最近事件</div>
+              {mood.events.slice(0, 5).map((event) => (
+                <div className="mood-event" key={event.id}>
+                  <span className="mono muted">{fullTime(event.time)}</span>
+                  <span>{moodEventLabel(event)}</span>
+                  <span className="mono muted">{signed(event.appliedDv)} / {signed(event.appliedDa)}</span>
+                </div>
+              ))}
+              {mood.events.length === 0 && <p className="muted">还没有评估记录。</p>}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="section-block panel-card table-card">

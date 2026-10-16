@@ -20,6 +20,7 @@ import type { StoreRepository } from '../store/repository.ts';
 import { callSlot } from '../llm/slots.ts';
 import { registerPersonaRoutes } from './personas.ts';
 import { registerSessionRoutes } from './session-routes.ts';
+import { registerAffectRoutes } from './affect-routes.ts';
 import type { ContactSnapshot, PanelAccountRuntime } from './types.ts';
 import { budgetState } from '../llm/budget.ts';
 
@@ -197,6 +198,12 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     accounts: options.accounts,
     loadContacts,
     serializeConfigWrite,
+  });
+  registerAffectRoutes(app, {
+    getConfig: options.getConfig,
+    repository: options.repository,
+    accounts: options.accounts,
+    now,
   });
 
   app.get('/api/status', async (context) => {

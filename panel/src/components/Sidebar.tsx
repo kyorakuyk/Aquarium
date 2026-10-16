@@ -1,6 +1,6 @@
 import { FishIcon } from './FishIcon.tsx';
 
-export type PageId = 'overview' | 'sessions' | 'personas' | 'sandbox' | 'usage';
+export type PageId = 'overview' | 'sessions' | 'personas' | 'sandbox' | 'usage' | 'impressions';
 
 const pages: Array<{ id: PageId; label: string }> = [
   { id: 'overview', label: '总览' },
@@ -8,6 +8,7 @@ const pages: Array<{ id: PageId; label: string }> = [
   { id: 'personas', label: '人设' },
   { id: 'sandbox', label: '试聊与决策' },
   { id: 'usage', label: '用量' },
+  { id: 'impressions', label: '印象' },
 ];
 
 export function Sidebar({
@@ -43,7 +44,7 @@ export function Sidebar({
       </nav>
       <div className="coming-soon">
         <div className="section-eyebrow">即将开放</div>
-        {['群友', '情绪与好感', '存档'].map((label) => (
+        {['群友', '存档'].map((label) => (
           <button className="nav-item nav-disabled" key={label} type="button" disabled>
             <span>{label}</span><span className="m2-tag">M2</span>
           </button>

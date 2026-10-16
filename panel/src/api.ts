@@ -76,6 +76,57 @@ export interface DecisionView {
   hasPipelineTrace: boolean;
 }
 
+export type MoodBand = 'low' | 'annoyed' | 'calm' | 'happy' | 'excited';
+
+export interface MoodEventView {
+  id: number;
+  time: number;
+  source: 'appraise' | 'rule' | 'band';
+  sessionId: string | null;
+  senderId: number | null;
+  dv: number;
+  da: number;
+  appliedDv: number;
+  appliedDa: number;
+  reason: string;
+  bandBefore: MoodBand | null;
+  bandAfter: MoodBand | null;
+}
+
+export interface MoodView {
+  valence: number;
+  arousal: number;
+  band: MoodBand;
+  bandSince: number | null;
+  events: MoodEventView[];
+}
+
+export type TagStatus = 'candidate' | 'confirmed' | 'rejected' | 'superseded';
+
+export interface TagEvidenceView {
+  messageId: string;
+  time: number;
+  quote: string;
+}
+
+export interface TagView {
+  id: number;
+  text: string;
+  status: TagStatus;
+  source: 'auto' | 'manual';
+  samples: number;
+  activation: number;
+  evidence: TagEvidenceView[];
+  firstSeen: number;
+  lastSeen: number;
+}
+
+export interface ImpressionsView {
+  sessionId: string;
+  groupTags: TagView[];
+  members: Array<{ userId: number; name: string; tags: TagView[] }>;
+}
+
 export interface TraceView {
   id: number;
   time: number;
