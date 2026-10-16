@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiRequest, post, type DecisionView, type PanelStatus, type SessionView, type UsageView } from '../api.ts';
 import type { PageId } from '../components/Sidebar.tsx';
-import { FishIcon } from '../components/FishIcon.tsx';
 import { decisionLabel, decisionTone } from '../labels.ts';
 
 function money(value: number): string {
@@ -68,8 +67,8 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const accountCount = status.accounts.length;
   const onlineAccountCount = status.accounts.filter((item) => item.connectionStatus === 'online').length;
   const tankDescription = accountCount === 0
-    ? '缸里还没有鱼。'
-    : `缸里有 ${accountCount} 条鱼，${onlineAccountCount} 条在游动。`;
+    ? '还没有眷属。'
+    : `${accountCount} 位眷属，${onlineAccountCount} 位在线。`;
 
   return (
     <div className="page">
@@ -91,12 +90,12 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
       )}
 
       <section className="section-block">
-        <div className="section-heading"><h2>鱼缸</h2><span className="muted">{status.accounts.length} 个账号</span></div>
+        <div className="section-heading"><h2>眷属</h2><span className="muted">{status.accounts.length} 个账号</span></div>
         <div className="tank-grid">
           {status.accounts.map((account) => (
             <article className="tank-card" key={account.account}>
               <div className="tank-card-top">
-                <FishIcon className="tank-fish" />
+                <span className="avatar-initial">{Array.from(account.name)[0] ?? '水'}</span>
                 <span className={`status-pill status-${account.connectionStatus}`}>{connectionLabel(account.connectionStatus)}</span>
               </div>
               <h3>{account.name}</h3>
@@ -114,7 +113,7 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
           ))}
           <div className="tank-card tank-card-placeholder" aria-label="多账号功能即将开放">
             <span className="placeholder-mark">＋</span>
-            <strong>放入新的鱼</strong>
+            <strong>添加新眷属</strong>
             <span className="m2-tag">M3 多账号</span>
           </div>
         </div>

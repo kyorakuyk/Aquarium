@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { apiRequest, replayDecision, type DecisionReplayView, type DecisionStep, type DecisionView, type PanelStatus, type PipelineStepTraceView, type SessionView, type TraceView } from '../api.ts';
-import { FishIcon } from '../components/FishIcon.tsx';
 import { activityDecisionMetrics } from '../decision-metrics.ts';
 import { decisionLabel, decisionTone } from '../labels.ts';
 
@@ -55,6 +54,7 @@ function ReplayTraceList({ entries, emptyText }: { entries: PipelineStepTraceVie
 export function DecisionsPage() {
   const [view, setView] = useState<'sandbox' | 'records'>('sandbox');
   const [sessions, setSessions] = useState<SessionView[]>([]);
+  const [panelStatus, setPanelStatus] = useState<PanelStatus>();
   const [sessionId, setSessionId] = useState('');
   const [asOwner, setAsOwner] = useState(false);
   const [ownerAvailable, setOwnerAvailable] = useState(true);
@@ -78,6 +78,7 @@ export function DecisionsPage() {
       apiRequest<PanelStatus>('/api/status'),
     ]).then(([sessionRows, decisionRows, status]) => {
       setSessions(sessionRows);
+      setPanelStatus(status);
       setSessionId(sessionRows.find((item) => item.kind === 'group')?.sessionId ?? sessionRows[0]?.sessionId ?? '');
       setDecisions(decisionRows);
       setOwnerAvailable(status.ownerConfigured);
@@ -163,6 +164,9 @@ export function DecisionsPage() {
   }
 
   const selectedSession = sessions.find((item) => item.sessionId === sessionId);
+  const accountId = selectedSession?.sessionId.split(':', 1)[0];
+  const botName = panelStatus?.accounts.find((item) => String(item.account) === accountId)?.name ?? '';
+  const botInitial = Array.from(botName)[0] ?? '水';
   const selectedActivityMetrics = selectedDecision ? activityDecisionMetrics(selectedDecision.detail) : [];
 
   return (
@@ -191,7 +195,7 @@ export function DecisionsPage() {
             {messages.map((message) => message.role === 'user'
               ? <div className="chat-line chat-line-user" key={message.id}><div className="chat-bubble user-bubble">{message.text}</div></div>
               : <div className="chat-line chat-line-bot" key={message.id}>
-                <FishIcon className="bot-mark" />
+                <span className="avatar-initial">{botInitial}</span>
                 <button className={`chat-bubble bot-bubble ${steps === message.steps ? 'is-focused' : ''}`} type="button" onClick={() => setSteps(message.steps ?? [])} aria-label="查看这条回复的决策步骤">{message.text}</button>
                 <div className="chat-meta mono">{message.model ?? 'reply'} · {message.costCny === undefined ? '同轮' : `¥${message.costCny.toFixed(4)}`} · {message.partCount ?? 1} 条</div>
               </div>)}
