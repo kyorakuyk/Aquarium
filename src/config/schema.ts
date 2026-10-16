@@ -72,6 +72,19 @@ const hostSchema = z.object({
   scanIntervalSec: 5,
 });
 
+const moodSchema = z.object({
+  enabled: z.boolean().default(true),
+  baseline: z.object({
+    valence: z.number().min(-1).max(1).default(0.1),
+    arousal: z.number().min(0).max(1).default(0.4),
+  }).strict().default({ valence: 0.1, arousal: 0.4 }),
+  halfLifeMin: z.number().positive().default(30),
+}).strict().default({
+  enabled: true,
+  baseline: { valence: 0.1, arousal: 0.4 },
+  halfLifeMin: 30,
+});
+
 export const AquariumConfigSchema = z.object({
   owner: z.number().int().nonnegative(),
   accounts: z.array(z.object({
@@ -86,6 +99,7 @@ export const AquariumConfigSchema = z.object({
     dailyCny: z.number().nonnegative(),
     warnRatio: z.number().min(0).max(1),
   }).strict(),
+  mood: moodSchema,
   defaults: sessionSettingsSchema,
   sessions: z.record(z.string(), sessionOverrideSchema),
   debug: debugSchema,

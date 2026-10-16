@@ -53,6 +53,12 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     modeHint: settings.mode === 'busy' ? '你现在有点忙，回得简短随意。' : '',
     request: ctx.state.proactiveMode ? '请自然回应最近的群聊，不要要求别人提到你。' : undefined,
     context,
+    blocks: ctx.options.moodService?.promptBlocks({
+      account: ctx.message.session.account,
+      now: ctx.now(),
+      template: ctx.state.promptTemplates.affect,
+      record: !ctx.processOptions.replay,
+    }) ?? {},
     replySystemTemplate: ctx.state.promptTemplates.replySystem,
   };
   ctx.state.prompt = buildPromptMessages(promptOptions);

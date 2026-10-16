@@ -16,6 +16,8 @@ function copyPromptTemplates(): string {
   fs.copyFileSync(path.resolve('prompts/reply-system.md'), path.join(root, 'reply-system.md'));
   fs.copyFileSync(path.resolve('prompts/judge.md'), path.join(root, 'judge.md'));
   fs.copyFileSync(path.resolve('prompts/vision.md'), path.join(root, 'vision.md'));
+  fs.copyFileSync(path.resolve('prompts/appraise.md'), path.join(root, 'appraise.md'));
+  fs.copyFileSync(path.resolve('prompts/affect.md'), path.join(root, 'affect.md'));
   return root;
 }
 

@@ -24,10 +24,32 @@ export interface JudgePromptTemplate extends PromptTemplate {
   user: string;
 }
 
+export interface AppraisePromptTemplate extends PromptTemplate {
+  system: string;
+  user: string;
+}
+
+export interface AffectPromptTemplate extends PromptTemplate {
+  mood: {
+    low: string;
+    annoyed: string;
+    calm: string;
+    happy: string;
+    excited: string;
+  };
+  float: {
+    arousalLow: string;
+    arousalHigh: string;
+    wrap: string;
+  };
+}
+
 export interface PromptTemplateSet {
   replySystem: ReplySystemTemplate;
   judge: JudgePromptTemplate;
   vision: VisionPromptTemplate;
+  appraise: AppraisePromptTemplate;
+  affect: AffectPromptTemplate;
 }
 
 export interface PromptTemplateStore {
@@ -104,6 +126,53 @@ function parseJudgeTemplate(template: PromptTemplate): JudgePromptTemplate {
   return judge;
 }
 
+function parseAppraiseTemplate(template: PromptTemplate): AppraisePromptTemplate {
+  const fields = parseTemplateFields(template, 'appraise.md');
+  if (typeof fields.system !== 'string' || fields.system.length === 0
+    || typeof fields.user !== 'string' || fields.user.length === 0) {
+    throw new Error('appraise.md 必须包含非空 system 和 user 文本');
+  }
+  const appraise = { ...template, system: fields.system, user: fields.user };
+  validatePlaceholders('appraise.md', appraise.system, [], []);
+  validatePlaceholders('appraise.md', appraise.user, ['context'], ['context']);
+  return appraise;
+}
+
+const affectMoodKeys = ['low', 'annoyed', 'calm', 'happy', 'excited'] as const;
+
+function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
+  const fields = parseTemplateFields(template, 'affect.md');
+  const moodField = fields.mood;
+  const floatField = fields.float;
+  if (!moodField || typeof moodField !== 'object' || Array.isArray(moodField)
+    || !floatField || typeof floatField !== 'object' || Array.isArray(floatField)) {
+    throw new Error('affect.md 必须包含 mood 与 float 字段');
+  }
+  const moodRecord = moodField as Record<string, unknown>;
+  const mood = {} as AffectPromptTemplate['mood'];
+  for (const key of affectMoodKeys) {
+    const value = moodRecord[key];
+    if (typeof value !== 'string') throw new Error(`affect.md 缺少 mood.${key} 文本`);
+    mood[key] = value;
+  }
+  const floatRecord = floatField as Record<string, unknown>;
+  if (typeof floatRecord.arousalLow !== 'string' || typeof floatRecord.arousalHigh !== 'string'
+    || typeof floatRecord.wrap !== 'string') {
+    throw new Error('affect.md 必须包含 float.arousalLow、float.arousalHigh 与 float.wrap 文本');
+  }
+  const affect = {
+    ...template,
+    mood,
+    float: {
+      arousalLow: floatRecord.arousalLow,
+      arousalHigh: floatRecord.arousalHigh,
+      wrap: floatRecord.wrap,
+    },
+  };
+  validatePlaceholders('affect.md', affect.float.wrap, ['floats'], ['floats']);
+  return affect;
+}
+
 function validatePlaceholders(
   fileName: string,
   source: string,
@@ -125,10 +194,14 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
   const replySystem = parseReplySystemTemplate(readTemplate(root, 'reply-system.md'));
   const judge = parseJudgeTemplate(readTemplate(root, 'judge.md'));
   const vision = parseVisionTemplate(readTemplate(root, 'vision.md'));
+  const appraise = parseAppraiseTemplate(readTemplate(root, 'appraise.md'));
+  const affect = parseAffectTemplate(readTemplate(root, 'affect.md'));
   return Object.freeze({
     replySystem: Object.freeze(replySystem),
     judge: Object.freeze(judge),
     vision: Object.freeze(vision),
+    appraise: Object.freeze(appraise),
+    affect: Object.freeze(affect),
   });
 }
 

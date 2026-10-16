@@ -20,6 +20,7 @@ pricing:
   deepseek-v4-pro: { input: 4.8, cachedInput: 0.16, output: 14.4 }
   deepseek-flash: { input: 1.1, cachedInput: 0.02, output: 4.3 }
 budget: { dailyCny: 5, warnRatio: 0.8 }
+mood: { enabled: true, baseline: { valence: 0.1, arousal: 0.4 }, halfLifeMin: 30 }
 defaults:
   enabled: false
   mode: mention_only

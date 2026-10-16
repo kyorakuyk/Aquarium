@@ -1,0 +1,173 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { createMoodService } from '../src/core/mood/service.ts';
+import { createMessagePipeline } from '../src/core/pipeline.ts';
+import {
+  FakeAdapter,
+  groupSession,
+  makeConfig,
+  makeIncoming,
+  withRepository,
+} from './pipeline-test-helpers.ts';
+
+function createMoodHarness(
+  repository: Parameters<Parameters<typeof withRepository>[0]>[0],
+  config: ReturnType<typeof makeConfig>,
+  personaRoot: string,
+  options: { appraiseText?: string } = {},
+) {
+  const adapter = new FakeAdapter();
+  const replyPrompts: string[] = [];
+  const appraiseRequests: string[] = [];
+  const clock = { value: new Date(2026, 9, 12, 9, 0).getTime() };
+  const moodService = createMoodService({
+    repository,
+    getConfig: () => config,
+    now: () => clock.value,
+    callModel: async (_slot, messages) => {
+      appraiseRequests.push(messages.map((message) => String(message.content)).join('\n'));
+      return {
+        text: options.appraiseText ?? '{"valence":-0.15,"arousal":0.1,"reason":"被怼了"}',
+        provider: 'fake',
+        model: 'fake-model',
+        usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+      };
+    },
+  });
+  const pipeline = createMessagePipeline({
+    getConfig: () => config,
+    repository,
+    adapter,
+    getNickname: () => adapter.nickname,
+    personaRoot,
+    moodService,
+    callModel: async (_slot, messages) => {
+      replyPrompts.push(String(messages[0]?.content));
+      return {
+        text: '普通回复。',
+        provider: 'fake',
+        model: 'fake-model',
+        usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+      };
+    },
+    now: () => clock.value,
+    wait: async () => {},
+    random: () => 0.4,
+  });
+  return { adapter, appraiseRequests, clock, moodService, pipeline, replyPrompts };
+}
+
+test('回复后异步评估并换档，下一次提示词带情绪块', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const config = makeConfig();
+    const harness = createMoodHarness(repository, config, personaRoot);
+    const account = groupSession.account;
+    repository.saveMoodState({
+      account,
+      valence: -0.1,
+      arousal: 0.75,
+      updatedAt: harness.clock.value,
+      band: 'calm',
+      bandSince: harness.clock.value - 20 * 60_000,
+      lastBandChangeAt: harness.clock.value - 20 * 60_000,
+    });
+
+    const first = await harness.pipeline(makeIncoming({
+      messageId: 'mood-1',
+      time: harness.clock.value - 1_000,
+    }));
+    assert.deepEqual(first, { replied: true, reason: 'replied' });
+    await harness.moodService.idle();
+
+    const state = repository.getMoodState(account);
+    assert.equal(state?.band, 'annoyed');
+    assert.ok(Math.abs((state?.valence ?? 0) - (-0.25)) < 1e-9);
+    assert.ok(Math.abs((state?.arousal ?? 0) - 0.9) < 1e-9);
+
+    const events = repository.recentMoodEvents(account, 10);
+    assert.deepEqual(events.map((event) => event.source), ['band', 'appraise', 'rule']);
+    assert.equal(events[0]?.bandBefore, 'calm');
+    assert.equal(events[0]?.bandAfter, 'annoyed');
+    assert.equal(events[1]?.reason, '被怼了');
+    assert.equal(events[1]?.appliedDv, -0.15);
+    assert.equal(events[2]?.reason, 'called');
+    assert.ok(harness.appraiseRequests[0]?.includes('普通回复。'));
+
+    harness.clock.value += 100_000;
+    const second = await harness.pipeline(makeIncoming({
+      messageId: 'mood-2',
+      time: harness.clock.value - 1_000,
+    }));
+    assert.deepEqual(second, { replied: true, reason: 'replied' });
+    await harness.moodService.idle();
+
+    const secondPrompt = harness.replyPrompts[1] ?? '';
+    assert.ok(secondPrompt.includes('你现在有点不爽'));
+    assert.ok(secondPrompt.includes('很来劲'));
+    const detail = repository.recentDecisions(1)[0]?.detail as { promptBlocks?: Array<{ id: string }> };
+    assert.deepEqual(detail.promptBlocks?.map((block) => block.id), [
+      'persona', 'rules', 'groupNote', 'mood', 'float',
+    ]);
+  });
+});
+
+test('同一会话的评估至少间隔 90 秒，间隔内不评估也不排队', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const config = makeConfig();
+    const harness = createMoodHarness(repository, config, personaRoot);
+
+    await harness.pipeline(makeIncoming({ messageId: 'gap-1', time: harness.clock.value - 1_000 }));
+    await harness.moodService.idle();
+    assert.equal(harness.appraiseRequests.length, 1);
+
+    harness.clock.value += 30_000;
+    await harness.pipeline(makeIncoming({ messageId: 'gap-2', time: harness.clock.value - 1_000 }));
+    await harness.moodService.idle();
+    assert.equal(harness.appraiseRequests.length, 1);
+
+    harness.clock.value += 70_000;
+    await harness.pipeline(makeIncoming({ messageId: 'gap-3', time: harness.clock.value - 1_000 }));
+    await harness.moodService.idle();
+    assert.equal(harness.appraiseRequests.length, 2);
+  });
+});
+
+test('评估解析失败时记录原因且不改变状态', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const config = makeConfig();
+    const harness = createMoodHarness(repository, config, personaRoot, {
+      appraiseText: '{"valence":0.5,"arousal":0.2,"reason":"越界"}',
+    });
+
+    await harness.pipeline(makeIncoming({ messageId: 'parse-1', time: harness.clock.value - 1_000 }));
+    await harness.moodService.idle();
+
+    const state = repository.getMoodState(groupSession.account);
+    assert.equal(state?.valence, 0.1);
+    assert.equal(state?.arousal, 0.45);
+    assert.equal(state?.band, 'calm');
+    const events = repository.recentMoodEvents(groupSession.account, 10);
+    assert.deepEqual(events.map((event) => event.reason), ['appraise_parse_error', 'called']);
+    assert.equal(events.some((event) => event.source === 'band'), false);
+  });
+});
+
+test('mood.enabled 关闭时评估不调用且提示词没有情绪块', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const config = makeConfig({ mood: { enabled: false } });
+    const harness = createMoodHarness(repository, config, personaRoot);
+
+    const result = await harness.pipeline(makeIncoming({
+      messageId: 'off-1',
+      time: harness.clock.value - 1_000,
+    }));
+    await harness.moodService.idle();
+
+    assert.deepEqual(result, { replied: true, reason: 'replied' });
+    assert.equal(harness.appraiseRequests.length, 0);
+    assert.equal(repository.getMoodState(groupSession.account), undefined);
+    assert.deepEqual(repository.recentMoodEvents(groupSession.account, 10), []);
+    const detail = repository.recentDecisions(1)[0]?.detail as { promptBlocks?: Array<{ id: string }> };
+    assert.deepEqual(detail.promptBlocks?.map((block) => block.id), ['persona', 'rules', 'groupNote']);
+  });
+});

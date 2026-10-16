@@ -22,9 +22,11 @@ export function makeConfig(options: {
   nicknames?: string[];
   groupNote?: string;
   sessions?: Record<string, unknown>;
+  mood?: Record<string, unknown>;
 } = {}) {
   return AquariumConfigSchema.parse({
     ...exampleConfig,
+    ...(options.mood ? { mood: options.mood } : {}),
     defaults: {
       ...exampleConfig.defaults,
       enabled: options.enabled ?? true,

@@ -12,6 +12,7 @@ import { createManagementCommands } from '../core/management.ts';
 import type { ManagementCommands } from '../core/management.ts';
 import { sessionId } from '../core/events.ts';
 import { createSessionQueue } from '../core/session-queue.ts';
+import { createMoodService } from '../core/mood/service.ts';
 import { openDatabase } from '../store/db.ts';
 import { createRepository } from '../store/repository.ts';
 import { startPanelServer, type PanelAccountRuntime } from '../panel-server/server.ts';
@@ -58,6 +59,13 @@ subscriptions.push(bindPromptTemplateReload(configWatcher, promptTemplateStore, 
 }));
 const adapterStatuses = new Map<number, AdapterStatus>();
 const sessionQueue = createSessionQueue();
+const moodService = createMoodService({
+  repository,
+  getConfig: () => configWatcher.getConfig(),
+  onError: (error) => {
+    logger.error(`情绪后台任务失败：${describeError(error)}`);
+  },
+});
 let panelServer: ReturnType<typeof startPanelServer> | undefined;
 let managedHost: Host | undefined;
 let shuttingDown = false;
@@ -217,6 +225,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     adapter,
     getNickname: () => adapter.nickname || String(adapter.account),
     isMuted: management.isMuted,
+    moodService,
     onError: (error, message) => {
       logger.error(`消息 ${message.messageId} 的辅助操作失败：${describeError(error)}`);
     },

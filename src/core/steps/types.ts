@@ -11,6 +11,7 @@ import type { PromptBlockHash } from '../prompt.ts';
 import type { ActivityBatch } from '../activity/batcher.ts';
 import type { IdleBackoff } from '../activity/backoff.ts';
 import type { ActivityThreshold, ProactiveMode } from '../activity/threshold.ts';
+import type { MoodService } from '../mood/service.ts';
 
 export interface PipelineResult {
   replied: boolean;
@@ -58,6 +59,7 @@ export interface MessagePipelineOptions {
   isMuted?: (session: SessionKey) => boolean;
   idleBackoff?: IdleBackoff;
   activityThreshold?: ActivityThreshold;
+  moodService?: MoodService;
   onError?: (error: unknown, message: IncomingMessage) => void;
 }
 

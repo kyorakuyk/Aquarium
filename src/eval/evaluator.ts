@@ -53,6 +53,13 @@ function createUnusedTemplates(): PromptTemplateSet {
     replySystem: { source: '', version: '', system: '', groupNote: '', request: '' },
     judge: { source: '', version: '', system: '', user: '' },
     vision: { source: '', version: '', system: '', user: '' },
+    appraise: { source: '', version: '', system: '', user: '' },
+    affect: {
+      source: '',
+      version: '',
+      mood: { low: '', annoyed: '', calm: '', happy: '', excited: '' },
+      float: { arousalLow: '', arousalHigh: '', wrap: '{{floats}}' },
+    },
   };
 }
 

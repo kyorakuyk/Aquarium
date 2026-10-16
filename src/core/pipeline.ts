@@ -94,6 +94,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
           templateVersion: promptTemplates.replySystem.version,
           visionTemplateVersion: promptTemplates.vision.version,
           judgeTemplateVersion: promptTemplates.judge.version,
+          affectTemplateVersion: promptTemplates.affect.version,
           ...(ctx.state.promptHash ? { promptHash: ctx.state.promptHash } : {}),
           ...(ctx.state.promptFingerprints.length > 0
             ? { promptFingerprints: [...ctx.state.promptFingerprints] }
@@ -152,9 +153,32 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
       const activeSteps = processOptions.replay
         ? [...steps.slice(0, -1), replayDeliverStep]
         : steps;
+      const appraiseAfterReply = (): void => {
+        const moodTask = pipelineOptions.moodService?.afterReply({
+          account: message.session.account,
+          sessionId: currentSessionId,
+          senderId: message.senderId,
+          now: now(),
+          template: promptTemplates.appraise,
+        });
+        if (!moodTask) return;
+        void moodTask.catch((error: unknown) => {
+          try {
+            options.onError?.(error, message);
+          } catch {
+            // 后台情绪评估失败不能影响回复。
+          }
+        });
+      };
       for (const step of activeSteps) {
         const result = await step(ctx);
-        if (!result.next) return recordDecision(result.reason, result.detail, result.replied ?? false);
+        if (!result.next) {
+          const decision = recordDecision(result.reason, result.detail, result.replied ?? false);
+          if (!processOptions.replay && result.reason === 'replied' && result.replied === true) {
+            appraiseAfterReply();
+          }
+          return decision;
+        }
       }
       return recordDecision('replied', {}, true);
     } finally {

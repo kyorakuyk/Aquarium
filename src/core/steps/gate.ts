@@ -38,6 +38,13 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
       ? ctx.rateLimiter.preview(ctx.message.session, ctx.message.senderId, settings.rate)
       : ctx.rateLimiter.check(ctx.message.session, ctx.message.senderId, settings.rate);
     if (!rate.allowed) return { next: false, reason: 'rate_limited', detail: { limit: rate.reason } };
+    if (!ctx.processOptions.replay) {
+      ctx.options.moodService?.recordCalled({
+        account: ctx.message.session.account,
+        sessionId: ctx.currentSessionId,
+        now: ctx.now(),
+      });
+    }
     return { next: true };
   }
   if (settings.mode === 'mention_only') {
