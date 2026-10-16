@@ -1,4 +1,4 @@
-import { buildPromptMessages, hashPromptMessages } from '../prompt.ts';
+import { buildPromptMessages, describePromptBlocks, hashPromptMessages } from '../prompt.ts';
 import { captionIncomingImages, messageTextWithImageCaptions } from '../images.ts';
 import { loadPersona } from '../../persona/load.ts';
 import { createSlotCallOptions } from './call-options.ts';
@@ -46,7 +46,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
       ...record,
       plainText: messageTextWithImageCaptions(record, ctx.options.repository),
     }));
-  ctx.state.prompt = buildPromptMessages({
+  const promptOptions = {
     persona,
     ownerId: config.owner,
     groupNote: settings.groupNote,
@@ -54,7 +54,9 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     request: ctx.state.proactiveMode ? '请自然回应最近的群聊，不要要求别人提到你。' : undefined,
     context,
     replySystemTemplate: ctx.state.promptTemplates.replySystem,
-  });
+  };
+  ctx.state.prompt = buildPromptMessages(promptOptions);
+  ctx.state.promptBlocks = describePromptBlocks(promptOptions);
   ctx.state.promptHash = hashPromptMessages(ctx.state.prompt);
   return { next: true };
 });

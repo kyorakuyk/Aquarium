@@ -1,6 +1,7 @@
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildPromptMessages } from '../src/core/prompt.ts';
+import { buildPromptMessages, describePromptBlocks } from '../src/core/prompt.ts';
 import { promptTemplateStore } from '../src/core/prompt-templates.ts';
 
 test('buildPromptMessages 固定 system 前缀顺序并把上下文格式化成单条 user 消息', () => {
@@ -113,4 +114,48 @@ test('模板中的重复占位符都会被替换', () => {
   const systemContent = String(messages[0]?.content);
   assert.equal(systemContent.split('只有标注为（主人）').length - 1, 2);
   assert.ok(systemContent.endsWith('本会话补充说明：群公告 / 群公告'));
+});
+
+test('提示词块按固定顺序渲染并跳过空块', () => {
+  const options = {
+    persona: '块-人设',
+    ownerId: 0,
+    groupNote: '块-群说明',
+    context: [],
+    blocks: {
+      groupTags: '块-群标签',
+      mood: '',
+      memberTags: '块-群友标签',
+      float: '块-浮动值',
+    },
+  };
+  const messages = buildPromptMessages(options);
+  const systemContent = String(messages[0]?.content);
+  const positions = ['块-人设', '块-群说明', '块-群标签', '块-群友标签', '块-浮动值']
+    .map((text) => systemContent.indexOf(text));
+
+  assert.ok(positions.every((position) => position >= 0));
+  assert.deepEqual(positions, [...positions].sort((left, right) => left - right));
+  assert.deepEqual(
+    describePromptBlocks(options).map(({ id }) => id),
+    ['persona', 'rules', 'groupNote', 'groupTags', 'memberTags', 'float'],
+  );
+});
+
+test('describePromptBlocks 的内容哈希稳定且为 SHA-256 前八位', () => {
+  const options = {
+    persona: '人设块',
+    ownerId: 0,
+    groupNote: '',
+    context: [],
+    blocks: { groupTags: '群标签块' },
+  };
+  const first = describePromptBlocks(options);
+  const second = describePromptBlocks(options);
+
+  assert.deepEqual(first, second);
+  assert.equal(
+    first.find(({ id }) => id === 'groupTags')?.hash,
+    createHash('sha256').update('群标签块').digest('hex').slice(0, 8),
+  );
 });

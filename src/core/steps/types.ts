@@ -7,6 +7,7 @@ import type { RateLimiter } from '../rate-limit.ts';
 import type { SlotCallOptions, SlotResult } from '../../llm/slots.ts';
 import type { StoreRepository } from '../../store/repository.ts';
 import type { PromptTemplateSet } from '../prompt-templates.ts';
+import type { PromptBlockHash } from '../prompt.ts';
 import type { ActivityBatch } from '../activity/batcher.ts';
 import type { IdleBackoff } from '../activity/backoff.ts';
 import type { ActivityThreshold, ProactiveMode } from '../activity/threshold.ts';
@@ -80,6 +81,7 @@ export interface PipelineState {
   persona?: string;
   callOptions?: SlotCallOptions;
   prompt?: OpenAI.ChatCompletionMessageParam[];
+  promptBlocks?: PromptBlockHash[];
   result?: SlotResult;
   replyText?: string;
   parts?: string[];

@@ -80,6 +80,7 @@ test('pipeline 从被叫消息到模型回复、引用发送、落库和 replied
       visionTemplateVersion?: string;
       promptHash?: string;
       promptFingerprints?: Array<{ slot: string; templateVersion: string; promptHash: string }>;
+      promptBlocks?: Array<{ id: string; hash: string }>;
     };
     assert.equal(
       detail.templateVersion,
@@ -98,6 +99,8 @@ test('pipeline 从被叫消息到模型回复、引用发送、落库和 replied
       templateVersion: detail.templateVersion,
       promptHash: detail.promptHash,
     }]);
+    assert.deepEqual(detail.promptBlocks?.map(({ id }) => id), ['persona', 'rules', 'groupNote']);
+    assert.ok(detail.promptBlocks?.every(({ hash }) => /^[a-f0-9]{8}$/u.test(hash)));
   });
 });
 

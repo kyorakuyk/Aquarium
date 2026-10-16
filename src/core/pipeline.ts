@@ -98,6 +98,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
           ...(ctx.state.promptFingerprints.length > 0
             ? { promptFingerprints: [...ctx.state.promptFingerprints] }
             : {}),
+          ...(ctx.state.promptBlocks ? { promptBlocks: [...ctx.state.promptBlocks] } : {}),
         };
         if (typeof detail === 'object' && detail !== null && !Array.isArray(detail)) {
           return { ...detail, ...fingerprint };
