@@ -51,6 +51,58 @@ test('全局默认 API 可读取、部分更新并拒绝 null 或无效值', asy
   });
 });
 
+test('主动冷却可从全局默认继承、按群覆盖并恢复继承', async () => {
+  await withPanel(async ({ app, getConfig }) => {
+    assert.equal(getConfig().defaults.proactiveCooldownSec, 120);
+
+    const globalUpdate = await app.request('/api/defaults', {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proactiveCooldownSec: 240 }),
+    });
+    assert.equal(globalUpdate.status, 200);
+    assert.equal(getConfig().defaults.proactiveCooldownSec, 240);
+    const globalReadback = await app.request('/api/defaults', { headers: authHeaders() });
+    assert.equal((await globalReadback.json() as { proactiveCooldownSec: number }).proactiveCooldownSec, 240);
+
+    const id = sessionId(groupSession);
+    const sessionUpdate = await app.request(`/api/sessions/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proactiveCooldownSec: 15 }),
+    });
+    assert.equal(sessionUpdate.status, 200);
+    assert.equal(resolveSession(getConfig(), groupSession).proactiveCooldownSec, 15);
+    const sessionsReadback = await app.request('/api/sessions', { headers: authHeaders() });
+    const sessions = await sessionsReadback.json() as Array<{
+      sessionId: string;
+      effective: { proactiveCooldownSec: number };
+    }>;
+    assert.equal(sessions.find((session) => session.sessionId === id)?.effective.proactiveCooldownSec, 15);
+
+    const invalidValues = [-1, 3601, 1.5];
+    for (const value of invalidValues) {
+      const response = await app.request(`/api/sessions/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proactiveCooldownSec: value }),
+      });
+      assert.equal(response.status, 400);
+    }
+
+    const inherited = await app.request(`/api/sessions/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proactiveCooldownSec: null }),
+    });
+    assert.equal(inherited.status, 200);
+    assert.equal(resolveSession(getConfig(), groupSession).proactiveCooldownSec, 240);
+    const inheritedReadback = await app.request('/api/sessions', { headers: authHeaders() });
+    const inheritedSessions = await inheritedReadback.json() as typeof sessions;
+    assert.equal(inheritedSessions.find((session) => session.sessionId === id)?.effective.proactiveCooldownSec, 240);
+  });
+});
+
 test('会话 API 返回最近消息时间，并优先排列启用且最近活跃的会话', async () => {
   await withPanel(async ({ app, repository, adapter }) => {
     const groups = [

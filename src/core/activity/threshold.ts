@@ -33,7 +33,7 @@ export interface ActivityThreshold {
   /** Update the expected history and threshold for subsequent decisions only. */
   recordJudgment(sessionId: string, mode: ProactiveMode, probability: number, now: number): void;
   recordProactiveReply(sessionId: string, mode: ProactiveMode, now: number): void;
-  isProactiveCooldown(sessionId: string, now: number): boolean;
+  isProactiveCooldown(sessionId: string, now: number, cooldownMs?: number): boolean;
 }
 
 function createSessionState(mode: ProactiveMode): SessionThresholdState {
@@ -120,10 +120,11 @@ export function createActivityThreshold(): ActivityThreshold {
       state.lastProactiveReplyAt = now;
     },
 
-    isProactiveCooldown(sessionId, now) {
+    isProactiveCooldown(sessionId, now, cooldownMs = PROACTIVE_COOLDOWN_MS) {
+      if (cooldownMs <= 0) return false;
       const state = findSession(sessionId, now);
       return state?.lastProactiveReplyAt !== undefined
-        && now - state.lastProactiveReplyAt < PROACTIVE_COOLDOWN_MS;
+        && now - state.lastProactiveReplyAt < cooldownMs;
     },
   };
 }

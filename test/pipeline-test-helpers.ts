@@ -138,6 +138,7 @@ export function createProactiveHarness(
   personaRoot: string,
   options: {
     mode?: 'natural' | 'active' | 'busy';
+    proactiveCooldownSec?: number;
     dailyBudget?: number;
     judgeText?: string;
     judgeError?: Error;
@@ -154,6 +155,7 @@ export function createProactiveHarness(
     sessions: {
       [key]: {
         mode: options.mode ?? 'active',
+        ...(options.proactiveCooldownSec === undefined ? {} : { proactiveCooldownSec: options.proactiveCooldownSec }),
         ...(options.rate ? { rate: options.rate } : {}),
       },
     },

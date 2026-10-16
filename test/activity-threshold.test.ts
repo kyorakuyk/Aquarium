@@ -114,3 +114,12 @@ test('enforces the 120-second proactive cooldown per session with an inclusive d
   assert.equal(threshold.isProactiveCooldown('account:group:2', 120_999), false);
   assert.equal(threshold.isProactiveCooldown('account:group:1', 999), true);
 });
+
+test('proactive cooldown accepts a configured duration and zero disables the hard cap', () => {
+  const threshold = createActivityThreshold();
+  threshold.recordProactiveReply('account:group:1', 'active', 1_000);
+
+  assert.equal(threshold.isProactiveCooldown('account:group:1', 10_999, 10_000), true);
+  assert.equal(threshold.isProactiveCooldown('account:group:1', 11_000, 10_000), false);
+  assert.equal(threshold.isProactiveCooldown('account:group:1', 1_001, 0), false);
+});

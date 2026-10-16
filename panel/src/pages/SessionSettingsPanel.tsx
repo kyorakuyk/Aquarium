@@ -18,7 +18,7 @@ import {
 
 export const GLOBAL_DEFAULT_ID = '__global-defaults__';
 
-type SessionField = 'enabled' | 'mode' | 'modeSchedule' | 'nicknames' | 'contextMessages' | 'rate' | 'groupNote';
+type SessionField = 'enabled' | 'mode' | 'modeSchedule' | 'nicknames' | 'contextMessages' | 'proactiveCooldownSec' | 'rate' | 'groupNote';
 type RateField = keyof SessionSettings['rate'];
 
 export interface SessionSettingsTarget {
@@ -112,6 +112,7 @@ export function SessionSettingsPanel({
   const [groupNote, setGroupNote] = useState(target.settings.groupNote);
   const [rateDraft, setRateDraft] = useState(target.settings.rate);
   const [contextMessagesDraft, setContextMessagesDraft] = useState(target.settings.contextMessages);
+  const [proactiveCooldownDraft, setProactiveCooldownDraft] = useState(String(target.settings.proactiveCooldownSec));
   const [modeScheduleDrafts, setModeScheduleDrafts] = useState<ModeScheduleDrafts>(readModeScheduleDraftSnapshot);
   const modeScheduleDraftsRef = useRef(modeScheduleDrafts);
   const [modeScheduleRowKeys, setModeScheduleRowKeys] = useState<ModeScheduleRowKeys>(() => new Map());
@@ -128,7 +129,8 @@ export function SessionSettingsPanel({
     setGroupNote(target.settings.groupNote);
     setRateDraft(target.settings.rate);
     setContextMessagesDraft(target.settings.contextMessages);
-  }, [target.id, target.settings.nicknames, target.settings.groupNote, target.settings.rate, target.settings.contextMessages]);
+    setProactiveCooldownDraft(String(target.settings.proactiveCooldownSec));
+  }, [target.id, target.settings.nicknames, target.settings.groupNote, target.settings.rate, target.settings.contextMessages, target.settings.proactiveCooldownSec]);
 
   async function update(values: Record<string, unknown>) {
     try {
@@ -209,6 +211,15 @@ export function SessionSettingsPanel({
     }
     const value = rawValue.trim() === '' ? null : Number(rawValue);
     await update({ rate: { perUserPerMinute: value, perSessionPerMinute: value } });
+  }
+
+  async function setProactiveCooldown(rawValue: string) {
+    if (target.kind === 'global' && rawValue.trim() === '') {
+      setProactiveCooldownDraft(String(target.settings.proactiveCooldownSec));
+      return;
+    }
+    const value = rawValue.trim() === '' ? null : Number(rawValue);
+    await update({ proactiveCooldownSec: value });
   }
 
   function changeRateDraft(field: RateField, value: number) {
@@ -309,6 +320,13 @@ export function SessionSettingsPanel({
           <label><span>{target.kind === 'group' ? '参考最近几条' : '回复时参考最近几条'}</span><input type="number" min="1" value={contextMessagesDraft} disabled={busy} onBlur={() => void update({ contextMessages: Number(contextMessagesDraft) })} onChange={(event) => setContextMessagesDraft(Number(event.currentTarget.value))} /></label>
         </div>
       </SettingGroup>
+      {target.kind !== 'private' && <SettingGroup>
+        <FieldHeading title="主动回复冷却" fields={['proactiveCooldownSec']} target={target} onReset={restore} onNavigateToDefaults={onNavigateToDefaults} />
+        <div className="number-grid">
+          <label><span>两次主动回复至少间隔（秒）</span><input type="number" min="0" max="3600" step="1" value={proactiveCooldownDraft} disabled={busy} onBlur={(event) => void setProactiveCooldown(event.currentTarget.value)} onChange={(event) => setProactiveCooldownDraft(event.currentTarget.value)} /></label>
+        </div>
+        <p className="schedule-help">范围 0–3600 秒；设为 0 可关闭主动冷却，现有频率限制仍生效。</p>
+      </SettingGroup>}
       <div className="save-state" aria-live="polite">{busy ? '正在保存…' : scheduleIsDirty ? '时间段尚未写入配置' : savedAt ? `已保存 · ${savedAt}` : '其他设置自动保存；时间段需点击“保存时段”'}</div>
     </>
   );

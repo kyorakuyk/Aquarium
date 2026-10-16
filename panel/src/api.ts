@@ -35,6 +35,7 @@ export interface ModeScheduleEntry {
 export interface SessionSettings {
   mode: SessionMode;
   modeSchedule: ModeScheduleEntry[];
+  proactiveCooldownSec: number;
   nicknames: string[];
   contextMessages: number;
   rate: {

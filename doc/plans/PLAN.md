@@ -459,6 +459,7 @@
 | 2026-10-16 | B6 | 标签提取：两种触发与单飞、逐条校验、tag_runs 更新、groupTags/memberTags 注入；`npm run check` 367/367 |
 | 2026-10-16 | B7 | 控制台：心情卡片与印象页、mood/impressions/tags API；`npm run check` 370/370，`npm run panel:build` 成功（31 modules）；停在停止点 M2-B |
 | 2026-10-16 | B8 | 标签样本与证据修复、情绪完成时戳；check 374/374 |
+| 2026-10-16 | B9 | 主动冷却可配置；check 378/378 |
 
 ---
 
@@ -606,7 +607,7 @@
 4. **规则粗筛**（零成本）：`p0 = sigmoid(−0.6 + 1.2·active − 0.8·cold + 0.5·question − 1.0·mediaOnly − 0.9·atOther)`，其中 `active` = bot 在本会话最近 30 分钟内发过言；`cold` = 本批第一条消息之前该会话已沉默 ≥ 20 分钟；`question` = 文本含 `?` 或 `？`；`mediaOnly` = 只有图片或表情；`atOther` = @ 了别人。`p0 < 0.15` 则跳过，`reason='prefilter'`。权重写在独立文件 `src/core/activity/prefilter-weights.ts`，以便日后替换为拟合值。
 5. **模型精判**：用 `judge` 槽位与新模板 `prompts/judge.md`，上下文为最近 8 条消息。要求模型只输出 JSON：`{"probability": 0到1的数字, "reason": "不超过20字"}`。解析失败记 `reason='judge_parse_error'`；调用失败记 `reason='judge_error'`；两者都按“不回”计入退避。
 6. **动态阈值**：`probability ≥ 当前阈值` 才回复，否则 `reason='judge_skip'`（`n` 加 1）。每个会话在内存中维护过去 60 分钟的 `expected`（`probability ≥ 0.5` 的批次数）与 `actual`（实际主动回复数）。每次判断后：若 `expected ≥ 4` 且 `actual > expected × t`，阈值 +0.05；若 `actual < expected × t`，阈值 −0.05；限制在 [0.2, 0.9]。`expected < 4` 时使用 §9.1 的初始阈值。重启后重置。
-7. **硬上限**：同一会话两次主动回复间隔不得少于 120 秒，否则 `reason='proactive_cooldown'`。原有频率限制仍然生效。
+7. **硬上限**：同一会话主动回复间隔至少为有效配置 `proactiveCooldownSec`（全局默认 120 秒，群会话可覆盖；整数范围 0–3600，0 表示不施加此冷却），否则 `reason='proactive_cooldown'`。原有频率限制仍然生效。
 8. 通过后进入原有生成与发送步骤，上下文条数用 8（被叫时仍用 `contextMessages`），决策 `detail` 写入 `trigger: 'proactive'`、`p0`、`probability`、`threshold`。
 
 ### 9.3 按时间段切换模式
@@ -825,8 +826,9 @@
   3. `contradict` 产生的新标签也计入每个主语每次最多 3 条的上限。
   4. `src/core/mood/service.ts` `afterReply`：模型返回后再取一次 `now()`，用它来 loadState、写事件和 saveState，不要继续用调用前的 `input.now`。
   - 测试点：同一轮两条证据只加 1；同一轮两次 observe 后证据都保留；别人的消息作为某群友的证据会被丢弃；bot 消息作证据被丢弃；contradict 计入上限。
+- [x] **B9 主动冷却可配置**（用户提出，B8 之后做，一个提交）：默认 120 秒；支持全局默认和群会话覆盖/恢复继承；整数范围 0–3600 秒，0 关闭主动冷却但保留常规频率限制；控制台仅在全局默认与群会话显示，私聊不适用。测试点：旧配置默认及范围校验；API 全局/群级读写与继承；threshold 允许 0 关闭；pipeline 遵从自定义冷却。
 
-> **⛔ 停止点 M2-B**：B8 完成后停下。
+> **⛔ 停止点 M2-B**：B9 完成后停下。
 > **【用户】验收**：
 > 1. 在测试群聊天，让 bot 回几次；总览页的心情卡片里出现评估事件。故意气它一下，看档位是否切换，以及回复语气是否随之变化。
 > 2. 群里聊满 60 条且等待 30 分钟后，“印象”页出现候选标签。确认或否决几条；`@` bot 时，决策追踪的 `promptBlocks` 里能看到 groupTags 与 memberTags。

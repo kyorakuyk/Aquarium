@@ -306,6 +306,25 @@ test('proactive cooldown is a hard per-session cap after judging and threshold c
   });
 });
 
+test('proactive pipeline honors a shorter configured cooldown', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const activityThreshold = createActivityThreshold();
+    const key = sessionId(groupSession);
+    activityThreshold.recordProactiveReply(key, 'active', baseTime - 15_000);
+    const harness = createProactiveHarness(repository, personaRoot, {
+      activityThreshold,
+      proactiveCooldownSec: 10,
+    });
+
+    const result = await harness.pipeline(makeIncoming({
+      messageId: 'proactive-configured-cooldown', plainText: '今晚吃什么？', time: baseTime - 500,
+    }));
+
+    assert.equal(result.reason, 'replied');
+    assert.deepEqual(harness.modelSlots, ['judge', 'reply']);
+  });
+});
+
 test('proactive decisions retain the existing per-user rate limit and any successful reply clears backoff', async () => {
   await withRepository(async (repository, personaRoot) => {
     let now = baseTime;

@@ -90,6 +90,22 @@ test('旧配置的 modeSchedule 默认为空，会话数组整体覆盖默认时
   assert.deepEqual(resolveSession(config, { account: 7, kind: 'group', peer: 9 }).modeSchedule, sessionSchedule);
 });
 
+test('旧配置的主动冷却默认为 120 秒并限制在可配置范围内', () => {
+  const legacyConfig = structuredClone(exampleConfig) as Record<string, any>;
+  delete legacyConfig.defaults.proactiveCooldownSec;
+  const parsed = AquariumConfigSchema.parse(legacyConfig);
+  assert.equal(parsed.defaults.proactiveCooldownSec, 120);
+
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...exampleConfig,
+    defaults: { ...exampleConfig.defaults, proactiveCooldownSec: 0 },
+  }).success, true);
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...exampleConfig,
+    defaults: { ...exampleConfig.defaults, proactiveCooldownSec: 3601 },
+  }).success, false);
+});
+
 test('modeSchedule 拒绝非 HH:mm 时间和未知模式', () => {
   const invalidTime = structuredClone(exampleConfig) as Record<string, any>;
   invalidTime.defaults.modeSchedule = [{ from: '24:00', to: '07:00', mode: 'busy' }];

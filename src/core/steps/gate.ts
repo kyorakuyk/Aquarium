@@ -124,7 +124,7 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
     return { next: false, reason: 'judge_skip', detail: decisionDetail };
   }
 
-  if (thresholds.isProactiveCooldown(ctx.currentSessionId, ctx.now())) {
+  if (thresholds.isProactiveCooldown(ctx.currentSessionId, ctx.now(), settings.proactiveCooldownSec * 1000)) {
     return { next: false, reason: 'proactive_cooldown', detail: decisionDetail };
   }
 
