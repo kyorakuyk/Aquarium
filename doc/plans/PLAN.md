@@ -1,6 +1,6 @@
 # Aquarium 施工计划书（唯一任务清单）
 
-> 写给接手编码的模型。最后更新：2026-10-14。
+> 写给接手编码的模型。最后更新：2026-10-16。**当前任务：§10 M2-B；所有任务先遵守 §0.1 提速规则。**
 > **本文是唯一的任务清单。**文档优先级：`PLAN.md` > `HANDOFF.md`（只作为架构、接口、环境的参考）> `DESIGN.md`（设计依据）。
 > `REVIEW-2026-10-12.md` 与 `NIGHT-RUN.md` 已并入本文，**作废，不再阅读**。`MORNING.md` 只作为历史记录。
 > 开工前按顺序读：本文全文 → `HANDOFF.md` §1、§3、§4 → `DESIGN.md`（需要时查阅）。
@@ -31,6 +31,21 @@
 
 ---
 
+## 0.1 提速规则（2026-10-16 起生效，覆盖本文其他地方与之冲突的流程要求）
+
+近期每个任务耗时越来越长，主要花在流程上，不是写代码。从现在起：
+
+1. **不做**精确 staged review、SHA-256 记录、checkpoint tag、reviewer 子代理复审。每个任务提交前自己看一遍 `git diff`，就够了。只有任务标 🔍 时才做一轮独立 review（最多一轮）。
+2. **测试分两档**：开发中只跑相关文件，`node --test test/<相关>.test.ts`；**提交前跑一次** `npm run check`。前端只在改了 `panel/` 时才跑 `npm run panel:build`。
+3. **测试只覆盖规格列出的测试点**，每点 1–2 条用例。不为“更完整”加额外用例，不做先红后绿的仪式记录。
+4. **记录从简**：§5 进度日志每个任务一行，不超过 60 字。任务条目下**不写**“进度”子项，提交信息一行。
+5. **不重读整份文档**：开工读 §0、§0.1 和当前任务所在节，HANDOFF 只查需要的部分。
+6. **小事自己定**：文件内部结构、私有函数名、变量名、报错文案直接决定，不用问，也不用记录理由。只有**行为或范围**不清楚时才停下来问。
+7. **不顺手重构**：与当前任务无关的代码一行不动。看到问题写进 §6，一句话即可。
+8. 一个任务卡住超过 3 次尝试：按 §7.2 处理，不要反复重试。
+
+---
+
 ## 1. 环境事实（已核实）
 
 - 用户 Windows 上的 Node 实际为 **v26.7.0**（`package.json` 的 `engines` 保持 `>=22.18`，不改）。
@@ -44,6 +59,8 @@
 - 阶段 A–C（R1–R13、C0、T7–T10）已完成；U1、U2 真实环境验证已由用户完成，U2 反馈无重大问题；代码已在 `main`。
 - T11 托管层调研已由用户确认；T12a spike 的四项独立 GUI 验收已由用户确认通过；T12b 非托盘实现与 probe-timeout 复测已完成。T12c 真实托盘代码提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df`（review SHA-256 `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`）；用户实测后新增面板启动顺序修复提交 `1f0f2b7668e5ffbaee08824de10b7527aa78bbfa`（review SHA-256 `9a7982774c5da99984a93647a8d3b88b664356c0cb752eea3b2fa9b1bcc9ea64`，当时 `npm run check` 通过 212 项）。follow-up 标签为 `checkpoint/dev-host-panel-startup-fix-2026-10-14-unverified`。真实 Windows 托盘/QQ/autostart 用户验收仍待执行，`autostart:install` 未运行。
 - §9.0 U1–U4 代码已提交到 `dev/m2-modes`（`638f1bcadd56af8f6988955f6d538af69241e073`）；当前停在停止点 U，等待用户在控制台确认四项体验，确认前不开始 A1。真实 QQ 调试日志未读取，U3 设备字段确认待用户执行。
+
+- 2026-10-16：M2-A（A1–A6）代码完成，真实小群验收待用户；新增 §10 M2-B，从 `dev/m2-modes` 拉 `dev/m2-affect` 开始 B1。`GOALS.md` 为远期愿景，**不是任务来源**，不要据此实现任何功能。
 
 ---
 
@@ -451,8 +468,8 @@
 
 > 适用：用户睡觉期间运行，无人能回答问题、无人能在 QQ 上做验证。
 
-### 7.1 范围（当前有效：§8 长程任务包）
-- **本次夜间运行的唯一范围是 §8 的 N0–N5**，按顺序执行。阶段 D 的 §7.1 旧范围已于 2026-10-15 完成，**不再执行、不再收尾**。
+### 7.1 范围（当前有效：§10 M2-B）
+- **本次夜间运行的唯一范围是 §10 的 B1–B7**，按顺序执行；§8 N0–N5 已完成，不再执行。阶段 D 的 §7.1 旧范围已于 2026-10-15 完成，**不再执行、不再收尾**。
 - 所有【用户】验收步骤不执行，写进早上检查清单。
 
 ### 7.2 遇到问题时
@@ -602,3 +619,194 @@
 
 > **⛔ 停止点 M2-A**：A6 完成后停下。
 > **【用户】验收**：选一个测试小群设为 `active` → 群里正常聊天（不 @）半小时，bot 偶尔自然接话且两次间隔 ≥ 2 分钟 → 改为 `busy`，接话明显变少、变短 → 设置时间表让当前时段为 `mention_only`，不 @ 就完全不说话 → 控制台决策记录里能看到各种中文原因与概率数值 → 当天花费仍在预算内。
+
+---
+
+## 10. M2-B：简单情绪 + 群标签 + 群友标签（2026-10-16 编写）
+
+> 分支：从 `dev/m2-modes` 新建 `dev/m2-affect`。按 §0 与 §0.1 执行。
+> 设计依据：用户 2026-10-16 的决定，即**数值计算全部放在代码里**，模型只看到档位文字；档位切换带“静摩擦 / 滑动摩擦”防抖；提示词分块、按需整段替换。
+> 思路参考 `reference/ai-bot-groupmate`（记忆的候选→确认、半衰期）。**只借鉴思路，不复制代码。**
+> **本节不做**：好感度、性格演进、精力与作息、私聊信息分级、跨会话共享标签、向量检索。想到的写进 §6。
+
+### 10.1 通用约定
+- **角色键**：所有新表都带 `account INTEGER NOT NULL`（bot 的 QQ 号），代表“哪个角色”。目前只有一个账号，但必须带上，不得省略。
+- 时间一律毫秒时间戳。所有纯函数都接受注入的 `now`。
+- 新的模型调用都用已有的 `extract` 槽位，走现有用量记录与预算。`budgetState` 为 `exceeded` 时，所有新的后台调用跳过，原因记为 `budget`。
+- 后台任务（评估、提取）**不进** per-session `sessionQueue`，异步执行，失败只写日志与追踪，不影响回复。
+
+### 10.2 提示词分块（B1）
+`buildPromptMessages` 的 system 内容改为**按固定顺序排列的块**，空块跳过，块与块之间用 `\n\n` 连接。顺序按变化频率从低到高排，以便命中 DeepSeek 的前缀缓存：
+
+| 顺序 | 块 id | 内容 | 来源 |
+|---|---|---|---|
+| 1 | `persona` | 人设（底色） | 现有 |
+| 2 | `rules` | 固定规则（含 ownerRule、modeHint） | 现有 |
+| 3 | `groupNote` | 会话补充说明 | 现有 |
+| 4 | `groupTags` | 群标签 | §10.4 |
+| 5 | `mood` | 情绪偏移块，按档位整段替换 | §10.3 |
+| 6 | `memberTags` | 当前说话人的标签 | §10.4 |
+| 7 | `float` | 浮动值，单独一段，永远放最后 | §10.3 |
+
+- `buildPromptMessages` 新增可选参数 `blocks?: { groupTags?: string; mood?: string; memberTags?: string; float?: string }`，均为已经渲染好的文字。不传时输出必须与现在**逐字相同**，现有 prompt 测试不改就能通过。
+- 新增导出函数 `describePromptBlocks(...)`，返回 `[{ id, hash }]`（hash 为该块文字 sha256 的前 8 位，空块不列出）。生成步骤把结果写进现有 N3 追踪的 detail，字段名为 `promptBlocks`。
+- 测试：顺序正确；空块跳过；不传 blocks 时输出与旧版一致；`promptBlocks` 的 hash 稳定。
+
+### 10.3 简单情绪（B3、B4）
+**状态**：每个角色一份（不按会话区分，群里受的气私聊里也带着）。
+- `valence` 愉悦度，范围 [-1, 1]；`arousal` 兴奋度，范围 [0, 1]。
+- 基线默认 `valence 0.1`、`arousal 0.4`。
+- 配置新增顶层可选项 `mood: { enabled: true, baseline: { valence: 0.1, arousal: 0.4 }, halfLifeMin: 30 }`，有默认值，旧配置不填也能运行。
+
+**衰减**：读取时按真实时间计算，不用定时器。
+- `x = base + (x0 − base) × 2^(−Δt / halfLife)`，valence 和 arousal 各自独立计算。
+
+**事件**：
+1. **评估**（模型）：bot 在某会话**发出回复后**异步触发。同一会话两次评估至少间隔 90 秒，间隔内不评估、不排队。
+   - 输入：该会话最近 8 条消息（包括 bot 刚发的那条）。模板为 `prompts/appraise.md`。
+   - 要求模型只输出 JSON：`{"valence": -0.15~0.15, "arousal": -0.15~0.15, "reason": "不超过20字"}`。
+   - 解析严格：越界或缺字段都视为解析失败，记 `appraise_parse_error`，不改状态。
+   - 这次变化归到被回复消息的发送者名下。
+2. **规则**（零成本）：被叫时（私聊、@、叫名字），arousal +0.05，不归到任何人名下。
+
+**上限**：
+- 单次事件 |Δ| ≤ 0.15，由上面的 JSON 范围保证。
+- **同一发送者**过去 60 分钟内累计 |Δvalence| 不超过 0.3，超出部分截掉。实际生效的值记为 `applied`。
+- valence 和 arousal 最终裁剪到各自的范围内。
+
+**档位**（只看 valence）：
+
+| 档位 key | 区间 |
+|---|---|
+| `low` 低落 | v < −0.5 |
+| `annoyed` 不爽 | −0.5 ≤ v < −0.15 |
+| `calm` 平静 | −0.15 ≤ v < 0.15 |
+| `happy` 开心 | 0.15 ≤ v < 0.5 |
+| `excited` 很开心 | v ≥ 0.5 |
+
+**防抖（静摩擦 / 滑动摩擦）**：纯函数 `nextBand(state, v, now, cause)`，`cause` 为 `'event' | 'decay'`。
+- 当前档位为 B。只有当 v 越过 B 的边界并超出**余量 m** 时才换档：往上换需要 `v ≥ B上界 + m`，往下换需要 `v < B下界 − m`。满足条件时，新档位取 v 实际所在的档位，可以一次跨越多档。
+- **静摩擦**：默认 m = 0.08。
+- **滑动摩擦**：上次换档后 5 分钟内，m = 0.02，这样能连着变。
+- **最短停留**：`cause = 'decay'`（衰减慢慢漂过边界）时，当前档位必须已经保持了 ≥ 10 分钟才允许换档。`cause = 'event'` 时没有停留限制，这就是允许的“突变”。
+- 每次换档写一条 `mood_events`，`source = 'band'`，记录前后档位与原因。
+
+**提示词**：新模板 `prompts/affect.md`（YAML，纳入现有模板热重载与 `templateVersion`），键如下：
+- `mood.low` / `mood.annoyed` / `mood.calm` / `mood.happy` / `mood.excited`：每档一两句表现说明。`calm` 默认为空字符串，即不出块。初始文案：
+  - low：`你现在情绪低落，话少，不太想接梗，但不迁怒别人。`
+  - annoyed：`你现在有点不爽，说话更冲、更短，容易吐槽。`
+  - happy：`你现在心情不错，更愿意接话和开玩笑。`
+  - excited：`你现在心情很好，有点兴奋，话多一点，语气更跳。`
+- `float.arousalLow`：`有点懒洋洋`（arousal < 0.3）；`float.arousalHigh`：`很来劲`（arousal > 0.7）；在 0.3 到 0.7 之间时为空。
+- `float.wrap`：`（此刻状态：{{floats}}）`，`floats` 为空时整块不出。
+- 浮动值**不做防抖**，每次直接按当前值取词。
+
+**私聊与群聊都生效**。`mood.enabled = false` 时 mood 和 float 两块都不出，评估也不调用。
+
+### 10.4 群标签与群友标签（B5、B6）
+**对象**：
+- 群标签：主语为 (account, 群 sessionId)。
+- 群友标签：主语为 (account, 群 sessionId, userId)。
+- **只从群消息里提取，只在同一个群里注入**。本阶段私聊不提取、不注入任何标签。
+
+**字段**（表 `tags`）：
+
+| 字段 | 说明 |
+|---|---|
+| `id` | 主键 |
+| `account` | 角色键 |
+| `session_id` | 群 sessionId |
+| `user_id` | 群友 QQ 号；群标签为 NULL |
+| `text` | 2–16 字 |
+| `norm` | 规范化后的文字：去空白与标点、转小写，用于判重 |
+| `status` | `candidate` / `confirmed` / `rejected` / `superseded` |
+| `source` | `auto` / `manual` |
+| `samples` | 独立观察次数 |
+| `evidence_json` | 最近至多 5 条 `{messageId, time, quote}`，quote 不超过 40 字 |
+| `first_seen` | 首次观察时间 |
+| `last_seen` | 最近观察时间（取证据消息的时间） |
+| `superseded_by` | 被哪条标签推翻 |
+| `updated_at` | 更新时间 |
+
+**规则**（纯函数，放在 `src/core/impressions/`）：
+1. **观察**：证据 messageId 不在已有的 evidence 里，才算一次**独立观察**：`samples + 1`，`last_seen` 更新为该消息时间。同一 messageId 重复出现时不计数。
+2. **转正**：`candidate` 的 samples ≥ 2 时自动变为 `confirmed`。
+3. **新增**：同一主语下已有相同 `norm` 的标签时：
+   - 状态是 `rejected` 或 `superseded`：忽略，**不复活**；
+   - 其他状态：按“观察”处理。
+   - 没有相同 `norm` 的标签：新建 `candidate`，samples = 1。
+4. **推翻**：提取结果给出 `contradict: {id, text}`，且 id 属于同一主语、`source = auto`：旧标签改为 `superseded`、`superseded_by` 指向新标签，新标签为 `candidate`，samples = 1。`manual` 标签不会被自动推翻，这类条目直接丢弃。
+5. **淡忘**（不删除）：
+   - 激活度 = `2^(−(now − last_seen) / 半衰期)`；
+   - 半衰期：群友 30 天，群 14 天；samples ≥ 4 时乘 3；
+   - `manual` 标签激活度恒为 1。
+6. **注入选择**：
+   - 只取 `confirmed` 且激活度 ≥ 0.25 的标签；
+   - 排序：manual 优先 → samples 降序 → last_seen 降序；
+   - 群标签最多 6 条、总长不超过 120 字；
+   - 群友标签只取**触发消息的发送者**，最多 5 条、总长不超过 80 字；
+   - 因上限被丢掉的条数写进追踪的 `droppedTags`。
+7. 渲染模板放在 `prompts/reply-system.md` 新增键 `groupTags: 这个群的氛围：{{tags}}`、`memberTags: 关于{{name}}：{{tags}}`，标签之间用 `、` 连接，`name` 用 JSON 引号包住。
+
+**提取任务**（B6）：
+- 触发：每次持久化一条**已启用群**的非自己消息后，检查该群自上次提取以来的新消息数 `n` 和距上次提取的时间。满足以下任一条件就异步提取一次：
+  - `n ≥ 60` 且距上次 ≥ 30 分钟；
+  - `n ≥ 10` 且距上次 ≥ 6 小时。
+- 同一个群同一时间只允许一个提取在进行。
+- 进度存在表 `tag_runs (account, session_id, last_run_at, last_message_time)`。
+- 输入：
+  - 该群最近 80 条消息，格式同回复上下文，每行额外带 `#messageId` 与发送者 QQ 号；
+  - 现有的群标签，以及窗口内出现的发送者各自的标签（只含 `candidate` 与 `confirmed`，附 id）。
+- 模板 `prompts/extract-tags.md`。规则写在模板里：
+  - 只记稳定的兴趣、习惯、说话风格和群氛围，**不记一次性事件**，不把玩笑当事实；
+  - **不记**健康、性、政治立场、收入财务、住址、真实姓名、感情状况、家庭矛盾；
+  - 对已有标签优先用 observe，不要换个说法再新增一条。
+- 输出 JSON：
+  ```
+  {"group": {"observe": [{"id": 1, "messageId": "..."}], "new": [{"text": "...", "messageId": "..."}], "contradict": [{"id": 1, "text": "...", "messageId": "..."}]},
+   "members": [{"userId": 123, "observe": [...], "new": [...], "contradict": [...]}]}
+  ```
+- 校验：
+  - 整体解析失败：记 `extract_parse_error`，什么都不改，但 `tag_runs` 照常更新，避免同一批消息反复失败、反复花钱；
+  - 逐条校验：id 必须在提供的列表里且属于该主语；messageId 必须在窗口内；userId 必须是窗口内的非 bot 发送者；text 长 2–16 字；每个主语每次 `new` 最多 3 条；
+  - 不合格的条目单独丢弃，丢弃数写进追踪。
+- quote 取自证据消息的 plainText 前 40 字。
+
+### 10.5 数据库（B2）
+- 迁移 version 4，新增表：
+  - `mood_state(account PK, valence, arousal, updated_at, band, band_since, last_band_change_at)`
+  - `mood_events(id, account, time, source 'appraise'|'rule'|'band', session_id, sender_id NULL, dv, da, applied_dv, applied_da, reason, band_before, band_after)`
+  - `tags`（字段见 §10.4）
+  - `tag_runs`
+- 加必要的索引：`tags(account, session_id, user_id, status)`、`mood_events(account, time)`。
+- 读写函数放在 `src/store/repository.ts`，或新建同目录下的 `affect-repo.ts`，二选一。
+- 测试：迁移从 v3 升到 v4；读写往返一致。
+
+### 10.6 控制台（B7）
+- API（与现有接口相同的鉴权）：
+  - `GET /api/mood`：当前衰减后的值、档位、档位开始时间，以及最近 20 条 `mood_events`；
+  - `GET /api/impressions/:sessionId`：`{ groupTags, members: [{ userId, name, tags }] }`，含所有状态的标签、激活度和证据；
+  - `POST /api/tags`：请求体 `{ sessionId, userId | null, text }`，新建 `manual` + `confirmed` 标签；
+  - `PATCH /api/tags/:id`：请求体 `{ text?, status? }`，status 只允许 `confirmed`、`rejected`、`candidate`。手动改 text 时同步更新 `norm`，samples 不变。
+- 前端：
+  - 总览页加一张“心情”卡片：档位中文名、两个数值、最近 5 条事件及原因；
+  - 新页面“印象”：选择群 → 上方是群标签，下方是群友列表，每人显示标签；
+  - 每条标签显示：文字、状态、samples、激活度、可展开的证据；
+  - 操作：确认、否决、恢复为候选、改文字、手动新增；
+  - 否决的标签折叠显示。
+- 视觉遵守 §4。完成后跑 `npm run panel:build`。
+
+### 10.7 任务
+- [ ] **B1 提示词分块**（§10.2）
+- [ ] **B2 数据库迁移 v4**（§10.5）
+- [ ] **B3 情绪核心**（纯函数）：衰减、上限截断、`nextBand` 防抖。测试点：衰减数值；同一发送者每小时上限；静摩擦余量；5 分钟内的滑动摩擦；decay 换档受 10 分钟停留限制而 event 不受；一次跨多档。
+- [ ] **B4 情绪接入**：评估调用与解析、被叫规则、`affect.md` 模板、mood 与 float 块接入生成、追踪。测试点：用假模型走完“回复 → 评估 → 换档 → 下一次提示词带新块”；90 秒间隔；解析失败不改状态；`enabled: false` 时完全不生效。
+- [ ] **B5 标签核心**（纯函数）：观察、独立性、转正、新增判重（rejected 和 superseded 不复活）、推翻（manual 不可推翻）、激活度、注入选择与上限。测试点：上面每条规则 1–2 条用例。
+- [ ] **B6 标签提取与注入**：触发条件、同群单飞、`tag_runs`、`extract-tags.md`、逐条校验、注入到 groupTags 与 memberTags 块、私聊不注入。测试点：假模型下的完整提取；两种触发条件；非法条目被丢弃且其余条目照常生效；解析失败时 `tag_runs` 仍然更新。
+- [ ] **B7 控制台**（§10.6）。后端 API 要写测试，前端不写。
+
+> **⛔ 停止点 M2-B**：B7 完成后停下。
+> **【用户】验收**：
+> 1. 在测试群聊天，让 bot 回几次；总览页的心情卡片里出现评估事件。故意气它一下，看档位是否切换，以及回复语气是否随之变化。
+> 2. 群里聊满 60 条且等待 30 分钟后，“印象”页出现候选标签。确认或否决几条；`@` bot 时，决策追踪的 `promptBlocks` 里能看到 groupTags 与 memberTags。
+> 3. 当天花费仍在预算内。
