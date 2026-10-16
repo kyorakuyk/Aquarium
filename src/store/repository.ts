@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { createPanelQueries } from './panel-queries.ts';
+import { createAffectQueries, type MoodEventRecord, type MoodStateRecord, type StoredMoodEvent, type StoredTag, type TagRecord, type TagRunRecord, type TagUpdate } from './affect-repo.ts';
 
 export interface MessageStorageRecord {
   sessionId: string;
@@ -106,6 +107,17 @@ export interface StoreRepository {
   recordPipelineTrace(trace: PipelineTraceRecord): void;
   pipelineTraceFor(sessionId: string, messageId: string): StoredPipelineTrace | undefined;
   prunePipelineTraces(now: number, retainDays?: number): number;
+  getMoodState(account: number): MoodStateRecord | undefined;
+  saveMoodState(state: MoodStateRecord): void;
+  recordMoodEvent(event: MoodEventRecord): void;
+  recentMoodEvents(account: number, count: number): StoredMoodEvent[];
+  moodEventsSince(account: number, since: number): StoredMoodEvent[];
+  insertTag(tag: TagRecord): number;
+  tagById(id: number): StoredTag | undefined;
+  listTagsForSubject(account: number, sessionId: string, userId: number | null): StoredTag[];
+  updateTag(id: number, update: TagUpdate): void;
+  getTagRun(account: number, sessionId: string): TagRunRecord | undefined;
+  saveTagRun(run: TagRunRecord): void;
 }
 
 function limitValue(count: number): number {
@@ -234,6 +246,7 @@ export function createRepository(
 
   return {
     ...createPanelQueries(database, clock),
+    ...createAffectQueries(database),
     saveMessage(message) {
       const result = insertMessage.run(
         message.sessionId,
