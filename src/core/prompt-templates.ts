@@ -12,6 +12,8 @@ export interface ReplySystemTemplate extends PromptTemplate {
   system: string;
   groupNote: string;
   request: string;
+  groupTags: string;
+  memberTags: string;
 }
 
 export interface VisionPromptTemplate extends PromptTemplate {
@@ -25,6 +27,11 @@ export interface JudgePromptTemplate extends PromptTemplate {
 }
 
 export interface AppraisePromptTemplate extends PromptTemplate {
+  system: string;
+  user: string;
+}
+
+export interface ExtractTagsPromptTemplate extends PromptTemplate {
   system: string;
   user: string;
 }
@@ -50,6 +57,7 @@ export interface PromptTemplateSet {
   vision: VisionPromptTemplate;
   appraise: AppraisePromptTemplate;
   affect: AffectPromptTemplate;
+  extractTags: ExtractTagsPromptTemplate;
 }
 
 export interface PromptTemplateStore {
@@ -90,18 +98,24 @@ function parseReplySystemTemplate(template: PromptTemplate): ReplySystemTemplate
   const fields = parseTemplateFields(template, 'reply-system.md');
   if (typeof fields.system !== 'string' || fields.system.length === 0
     || typeof fields.groupNote !== 'string' || fields.groupNote.length === 0
-    || typeof fields.request !== 'string' || fields.request.length === 0) {
-    throw new Error('reply-system.md 必须包含非空 system、groupNote 和 request 文本');
+    || typeof fields.request !== 'string' || fields.request.length === 0
+    || typeof fields.groupTags !== 'string' || fields.groupTags.length === 0
+    || typeof fields.memberTags !== 'string' || fields.memberTags.length === 0) {
+    throw new Error('reply-system.md 必须包含非空 system、groupNote、request、groupTags 和 memberTags 文本');
   }
   const replySystem = {
     ...template,
     system: fields.system,
     groupNote: fields.groupNote,
     request: fields.request,
+    groupTags: fields.groupTags,
+    memberTags: fields.memberTags,
   };
   validatePlaceholders('reply-system.md', replySystem.system, ['ownerRule', 'modeHint'], ['ownerRule', 'modeHint']);
   validatePlaceholders('reply-system.md', replySystem.groupNote, ['groupNote'], ['groupNote']);
   validatePlaceholders('reply-system.md', replySystem.request, [], []);
+  validatePlaceholders('reply-system.md', replySystem.groupTags, ['tags'], ['tags']);
+  validatePlaceholders('reply-system.md', replySystem.memberTags, ['name', 'tags'], ['name', 'tags']);
   return replySystem;
 }
 
@@ -173,6 +187,18 @@ function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
   return affect;
 }
 
+function parseExtractTagsTemplate(template: PromptTemplate): ExtractTagsPromptTemplate {
+  const fields = parseTemplateFields(template, 'extract-tags.md');
+  if (typeof fields.system !== 'string' || fields.system.length === 0
+    || typeof fields.user !== 'string' || fields.user.length === 0) {
+    throw new Error('extract-tags.md 必须包含非空 system 和 user 文本');
+  }
+  const extractTags = { ...template, system: fields.system, user: fields.user };
+  validatePlaceholders('extract-tags.md', extractTags.system, [], []);
+  validatePlaceholders('extract-tags.md', extractTags.user, ['context', 'existing'], ['context', 'existing']);
+  return extractTags;
+}
+
 function validatePlaceholders(
   fileName: string,
   source: string,
@@ -196,12 +222,14 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
   const vision = parseVisionTemplate(readTemplate(root, 'vision.md'));
   const appraise = parseAppraiseTemplate(readTemplate(root, 'appraise.md'));
   const affect = parseAffectTemplate(readTemplate(root, 'affect.md'));
+  const extractTags = parseExtractTagsTemplate(readTemplate(root, 'extract-tags.md'));
   return Object.freeze({
     replySystem: Object.freeze(replySystem),
     judge: Object.freeze(judge),
     vision: Object.freeze(vision),
     appraise: Object.freeze(appraise),
     affect: Object.freeze(affect),
+    extractTags: Object.freeze(extractTags),
   });
 }
 

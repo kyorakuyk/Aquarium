@@ -18,6 +18,7 @@ function copyPromptTemplates(): string {
   fs.copyFileSync(path.resolve('prompts/vision.md'), path.join(root, 'vision.md'));
   fs.copyFileSync(path.resolve('prompts/appraise.md'), path.join(root, 'appraise.md'));
   fs.copyFileSync(path.resolve('prompts/affect.md'), path.join(root, 'affect.md'));
+  fs.copyFileSync(path.resolve('prompts/extract-tags.md'), path.join(root, 'extract-tags.md'));
   return root;
 }
 

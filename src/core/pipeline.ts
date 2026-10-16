@@ -100,6 +100,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
             ? { promptFingerprints: [...ctx.state.promptFingerprints] }
             : {}),
           ...(ctx.state.promptBlocks ? { promptBlocks: [...ctx.state.promptBlocks] } : {}),
+          ...(ctx.state.droppedTags ? { droppedTags: ctx.state.droppedTags } : {}),
         };
         if (typeof detail === 'object' && detail !== null && !Array.isArray(detail)) {
           return { ...detail, ...fingerprint };

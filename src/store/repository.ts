@@ -118,6 +118,7 @@ export interface StoreRepository {
   updateTag(id: number, update: TagUpdate): void;
   getTagRun(account: number, sessionId: string): TagRunRecord | undefined;
   saveTagRun(run: TagRunRecord): void;
+  countMessagesAfter(sessionId: string, time: number): number;
 }
 
 function limitValue(count: number): number {

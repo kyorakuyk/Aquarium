@@ -12,6 +12,7 @@ import type { ActivityBatch } from '../activity/batcher.ts';
 import type { IdleBackoff } from '../activity/backoff.ts';
 import type { ActivityThreshold, ProactiveMode } from '../activity/threshold.ts';
 import type { MoodService } from '../mood/service.ts';
+import type { ImpressionsService } from '../impressions/service.ts';
 
 export interface PipelineResult {
   replied: boolean;
@@ -60,6 +61,7 @@ export interface MessagePipelineOptions {
   idleBackoff?: IdleBackoff;
   activityThreshold?: ActivityThreshold;
   moodService?: MoodService;
+  impressionsService?: ImpressionsService;
   onError?: (error: unknown, message: IncomingMessage) => void;
 }
 
@@ -84,6 +86,7 @@ export interface PipelineState {
   callOptions?: SlotCallOptions;
   prompt?: OpenAI.ChatCompletionMessageParam[];
   promptBlocks?: PromptBlockHash[];
+  droppedTags?: number;
   result?: SlotResult;
   replyText?: string;
   parts?: string[];

@@ -82,6 +82,7 @@ export interface TagRunRecord {
 export type AffectRepositoryQueries = Pick<StoreRepository,
   'getMoodState' | 'saveMoodState' | 'recordMoodEvent' | 'recentMoodEvents' | 'moodEventsSince'
   | 'insertTag' | 'tagById' | 'listTagsForSubject' | 'updateTag' | 'getTagRun' | 'saveTagRun'
+  | 'countMessagesAfter'
 >;
 
 function numberValue(value: unknown, field: string): number {
@@ -228,6 +229,11 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
       last_run_at = excluded.last_run_at,
       last_message_time = excluded.last_message_time
   `);
+  const selectMessageCountAfter = database.prepare(`
+    SELECT COUNT(*) AS total
+    FROM messages
+    WHERE session_id = ? AND time > ?
+  `);
 
   return {
     getMoodState(account) {
@@ -333,6 +339,12 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
 
     saveTagRun(run) {
       upsertTagRun.run(run.account, run.sessionId, run.lastRunAt, run.lastMessageTime);
+    },
+
+    countMessagesAfter(sessionId, time) {
+      if (!Number.isFinite(time)) throw new RangeError('查询时间必须是有限数字');
+      const row = selectMessageCountAfter.get(sessionId, time) as Record<string, unknown> | undefined;
+      return numberValue(row?.total ?? 0, 'total');
     },
   };
 }

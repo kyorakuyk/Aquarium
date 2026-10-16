@@ -13,6 +13,7 @@ import type { ManagementCommands } from '../core/management.ts';
 import { sessionId } from '../core/events.ts';
 import { createSessionQueue } from '../core/session-queue.ts';
 import { createMoodService } from '../core/mood/service.ts';
+import { createImpressionsService } from '../core/impressions/service.ts';
 import { openDatabase } from '../store/db.ts';
 import { createRepository } from '../store/repository.ts';
 import { startPanelServer, type PanelAccountRuntime } from '../panel-server/server.ts';
@@ -64,6 +65,18 @@ const moodService = createMoodService({
   getConfig: () => configWatcher.getConfig(),
   onError: (error) => {
     logger.error(`情绪后台任务失败：${describeError(error)}`);
+  },
+});
+const impressionsService = createImpressionsService({
+  repository,
+  getConfig: () => configWatcher.getConfig(),
+  onError: (error) => {
+    logger.error(`印象提取失败：${describeError(error)}`);
+  },
+  onExtract: (summary) => {
+    logger.info(
+      `印象提取 ${summary.sessionId}：${summary.status}，新增 ${summary.inserted}、观察 ${summary.observed}、推翻 ${summary.superseded}、丢弃 ${summary.dropped}。`,
+    );
   },
 });
 let panelServer: ReturnType<typeof startPanelServer> | undefined;
@@ -226,6 +239,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     getNickname: () => adapter.nickname || String(adapter.account),
     isMuted: management.isMuted,
     moodService,
+    impressionsService,
     onError: (error, message) => {
       logger.error(`消息 ${message.messageId} 的辅助操作失败：${describeError(error)}`);
     },
