@@ -109,39 +109,59 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     account: number,
     sessionKey: string,
     userId: number | null,
-    recordsById: Map<string, { time: number; plainText: string }>,
+    recordsById: Map<string, { time: number; plainText: string; senderId: number; isSelf: boolean }>,
     at: number,
     counters: { inserted: number; observed: number; superseded: number; dropped: number },
   ): void {
     let newCount = 0;
+    const incrementedTagIds = new Set<number>();
+
+    const evidenceFor = (messageId: string, evidenceUserId: number | null) => {
+      const record = recordsById.get(messageId);
+      if (!record || record.isSelf) return undefined;
+      if (evidenceUserId !== null && record.senderId !== evidenceUserId) return undefined;
+      return {
+        messageId,
+        time: record.time,
+        quote: quoteOf(record.plainText),
+      };
+    };
+
+    const observe = (target: StoredTag, messageId: string, evidence: ReturnType<typeof evidenceFor>): boolean => {
+      if (!evidence) return false;
+      const outcome = applyTagObservation(current, {
+        text: target.text,
+        norm: target.norm,
+        messageId,
+        time: evidence.time,
+        quote: evidence.quote,
+      });
+      if (outcome.action !== 'observe') return false;
+
+      const alreadyIncremented = incrementedTagIds.has(target.id);
+      const update = {
+        samples: alreadyIncremented ? target.samples : outcome.samples,
+        status: alreadyIncremented ? target.status : outcome.status,
+        lastSeen: outcome.lastSeen,
+        evidence: outcome.evidence,
+        updatedAt: at,
+      };
+      if (!alreadyIncremented) incrementedTagIds.add(target.id);
+      options.repository.updateTag(outcome.id, update);
+      Object.assign(target, update);
+      counters.observed += 1;
+      return true;
+    };
 
     for (const raw of subject.observe) {
       const item = asObserveItem(raw);
       const target = item ? current.find((tag) => tag.id === item.id) : undefined;
-      const record = item ? recordsById.get(item.messageId) : undefined;
-      if (!item || !target || !record) {
+      const evidence = item ? evidenceFor(item.messageId, userId) : undefined;
+      if (!item || !target || !evidence) {
         counters.dropped += 1;
         continue;
       }
-      const outcome = applyTagObservation(current, {
-        text: target.text,
-        norm: target.norm,
-        messageId: item.messageId,
-        time: record.time,
-        quote: quoteOf(record.plainText),
-      });
-      if (outcome.action === 'observe') {
-        options.repository.updateTag(outcome.id, {
-          samples: outcome.samples,
-          status: outcome.status,
-          lastSeen: outcome.lastSeen,
-          evidence: outcome.evidence,
-          updatedAt: at,
-        });
-        counters.observed += 1;
-      } else {
-        counters.dropped += 1;
-      }
+      if (!observe(target, item.messageId, evidence)) counters.dropped += 1;
     }
 
     for (const raw of subject.new) {
@@ -151,17 +171,23 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         counters.dropped += 1;
         continue;
       }
-      const record = recordsById.get(item.messageId);
-      if (!record) {
+      const evidence = evidenceFor(item.messageId, userId);
+      if (!evidence) {
+        counters.dropped += 1;
+        continue;
+      }
+      const norm = normalizeTagText(item.text);
+      const existing = current.find((tag) => tag.norm === norm);
+      if (existing && incrementedTagIds.has(existing.id)) {
         counters.dropped += 1;
         continue;
       }
       const outcome = applyTagObservation(current, {
         text: item.text,
-        norm: normalizeTagText(item.text),
+        norm,
         messageId: item.messageId,
-        time: record.time,
-        quote: quoteOf(record.plainText),
+        time: evidence.time,
+        quote: evidence.quote,
       });
       if (outcome.action === 'insert') {
         const id = options.repository.insertTag({
@@ -174,12 +200,12 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
           source: 'auto',
           samples: 1,
           evidence: outcome.evidence,
-          firstSeen: record.time,
-          lastSeen: record.time,
+          firstSeen: evidence.time,
+          lastSeen: evidence.time,
           supersededBy: null,
           updatedAt: at,
         });
-        current.push({
+        const inserted: StoredTag = {
           id,
           account,
           sessionId: sessionKey,
@@ -190,22 +216,20 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
           source: 'auto',
           samples: 1,
           evidence: outcome.evidence,
-          firstSeen: record.time,
-          lastSeen: record.time,
+          firstSeen: evidence.time,
+          lastSeen: evidence.time,
           supersededBy: null,
           updatedAt: at,
-        });
+        };
+        current.push(inserted);
+        incrementedTagIds.add(id);
         counters.inserted += 1;
         newCount += 1;
       } else if (outcome.action === 'observe') {
-        options.repository.updateTag(outcome.id, {
-          samples: outcome.samples,
-          status: outcome.status,
-          lastSeen: outcome.lastSeen,
-          evidence: outcome.evidence,
-          updatedAt: at,
-        });
-        counters.observed += 1;
+        if (!existing || !observe(existing, item.messageId, evidence)) {
+          counters.dropped += 1;
+          continue;
+        }
         newCount += 1;
       } else {
         counters.dropped += 1;
@@ -214,12 +238,14 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
 
     for (const raw of subject.contradict) {
       const item = asContradictItem(raw);
-      if (!item || textLength(item.text) < TAG_TEXT_MIN || textLength(item.text) > TAG_TEXT_MAX) {
+      if (!item || newCount >= MAX_NEW_PER_SUBJECT
+        || textLength(item.text) < TAG_TEXT_MIN || textLength(item.text) > TAG_TEXT_MAX) {
         counters.dropped += 1;
         continue;
       }
-      const record = recordsById.get(item.messageId);
-      if (!record) {
+      const evidence = evidenceFor(item.messageId, userId);
+      const target = current.find((tag) => tag.id === item.id);
+      if (!evidence || !target || target.status === 'superseded') {
         counters.dropped += 1;
         continue;
       }
@@ -227,8 +253,8 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         id: item.id,
         text: item.text,
         messageId: item.messageId,
-        time: record.time,
-        quote: quoteOf(record.plainText),
+        time: evidence.time,
+        quote: evidence.quote,
       });
       if (outcome.action !== 'insert') {
         counters.dropped += 1;
@@ -244,16 +270,18 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         source: 'auto',
         samples: 1,
         evidence: outcome.evidence,
-        firstSeen: record.time,
-        lastSeen: record.time,
+        firstSeen: evidence.time,
+        lastSeen: evidence.time,
         supersededBy: null,
         updatedAt: at,
       });
-      options.repository.updateTag(outcome.supersedes, {
+      const superseded = {
         status: 'superseded',
         supersededBy: id,
         updatedAt: at,
-      });
+      } as const;
+      options.repository.updateTag(outcome.supersedes, superseded);
+      Object.assign(target, superseded);
       current.push({
         id,
         account,
@@ -265,11 +293,12 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         source: 'auto',
         samples: 1,
         evidence: outcome.evidence,
-        firstSeen: record.time,
-        lastSeen: record.time,
+        firstSeen: evidence.time,
+        lastSeen: evidence.time,
         supersededBy: null,
         updatedAt: at,
       });
+      newCount += 1;
       counters.inserted += 1;
       counters.superseded += 1;
     }
@@ -293,7 +322,12 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     const records = options.repository.recentMessages(sessionKey, EXTRACT_WINDOW_MESSAGES);
     const recordsById = new Map(records.map((record) => [
       record.messageId,
-      { time: record.time, plainText: record.plainText },
+      {
+        time: record.time,
+        plainText: record.plainText,
+        senderId: record.senderId,
+        isSelf: record.isSelf,
+      },
     ]));
     const senderIds = new Set<number>();
     for (const record of records) {

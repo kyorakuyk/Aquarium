@@ -194,9 +194,10 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
           recordUsage: (usage) => options.repository.recordUsage(usage),
           now,
         }));
+        const completedAt = now();
 
         if (!result.ok) {
-          recordEvent(input.account, input.now, {
+          recordEvent(input.account, completedAt, {
             source: 'appraise',
             sessionId: input.sessionId,
             senderId: input.senderId,
@@ -211,15 +212,15 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
           return;
         }
 
-        const current = loadState(input.account, input.now);
+        const current = loadState(input.account, completedAt);
         const history = options.repository
-          .moodEventsSince(input.account, input.now - SENDER_VALENCE_WINDOW_MS)
+          .moodEventsSince(input.account, completedAt - SENDER_VALENCE_WINDOW_MS)
           .map((event) => ({ time: event.time, senderId: event.senderId, appliedDv: event.appliedDv }));
-        const appliedDv = capSenderValenceDelta(result.valence, input.senderId, history, input.now);
+        const appliedDv = capSenderValenceDelta(result.valence, input.senderId, history, completedAt);
         const clamped = clampMood(current.valence + appliedDv, current.arousal + result.arousal);
-        const band = nextBand(current, clamped.valence, input.now, 'event');
+        const band = nextBand(current, clamped.valence, completedAt, 'event');
 
-        recordEvent(input.account, input.now, {
+        recordEvent(input.account, completedAt, {
           source: 'appraise',
           sessionId: input.sessionId,
           senderId: input.senderId,
@@ -234,7 +235,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
 
         let { bandSince, lastBandChangeAt } = current;
         if (band !== current.band) {
-          recordEvent(input.account, input.now, {
+          recordEvent(input.account, completedAt, {
             source: 'band',
             sessionId: input.sessionId,
             senderId: null,
@@ -246,10 +247,10 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
             bandBefore: current.band,
             bandAfter: band,
           });
-          bandSince = input.now;
-          lastBandChangeAt = input.now;
+          bandSince = completedAt;
+          lastBandChangeAt = completedAt;
         }
-        saveState(input.account, input.now, {
+        saveState(input.account, completedAt, {
           valence: clamped.valence,
           arousal: clamped.arousal,
           band,

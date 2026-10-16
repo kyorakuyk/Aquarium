@@ -458,6 +458,7 @@
 | 2026-10-16 | B5 | 标签纯函数：观察/独立性/转正、判重不复活、推翻、激活度与注入选择上限；`npm run check` 362/362 |
 | 2026-10-16 | B6 | 标签提取：两种触发与单飞、逐条校验、tag_runs 更新、groupTags/memberTags 注入；`npm run check` 367/367 |
 | 2026-10-16 | B7 | 控制台：心情卡片与印象页、mood/impressions/tags API；`npm run check` 370/370，`npm run panel:build` 成功（31 modules）；停在停止点 M2-B |
+| 2026-10-16 | B8 | 标签样本与证据修复、情绪完成时戳；check 374/374 |
 
 ---
 
@@ -818,7 +819,7 @@
 - [x] **B6 标签提取与注入**：触发条件、同群单飞、`tag_runs`、`extract-tags.md`、逐条校验、注入到 groupTags 与 memberTags 块、私聊不注入。测试点：假模型下的完整提取；两种触发条件；非法条目被丢弃且其余条目照常生效；解析失败时 `tag_runs` 仍然更新。
 - [x] **B7 控制台**（§10.6）。后端 API 要写测试，前端不写。
 
-- [ ] **B8 审查修复**（2026-10-16 Claude 审查，B7 之后做，一个提交）
+- [x] **B8 审查修复**（2026-10-16 Claude 审查，B7 之后做，一个提交）
   1. **一次提取最多加 1 次**（`src/core/impressions/service.ts` `applySubject`）：同一次提取里，同一标签的 samples 最多 +1，包括 new 命中已有标签的情况。本次已加过的，后续条目计为 dropped。原因：现在一段对话里出现两条证据，就能让候选标签直接转正，玩笑会变成事实。另外，observe 后要同步更新 `current` 里该标签的 samples / evidence / status；现在用的是旧值，同一轮第二次 observe 会覆盖掉第一次的证据。
   2. **证据归属**：群友标签（`userId` 非空）的证据消息，发送者必须就是该 userId，否则丢弃（避免别人起哄的话变成这个人的标签）。群标签和群友标签都不得用 bot 自己的消息（`isSelf`）作证据。
   3. `contradict` 产生的新标签也计入每个主语每次最多 3 条的上限。

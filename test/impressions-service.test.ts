@@ -106,7 +106,7 @@ test('假模型下完成一次提取：观察转正、新标签、成员标签�
           new: [{ text: '氛围轻松', messageId: 'msg-4' }],
           contradict: [],
         },
-        members: [{ userId: 42, observe: [], new: [{ text: '夜猫子', messageId: 'msg-5' }], contradict: [] }],
+        members: [{ userId: 42, observe: [], new: [{ text: '夜猫子', messageId: 'msg-3' }], contradict: [] }],
       }),
     });
 
@@ -234,6 +234,173 @@ test('整体解析失败时记原因且不改标签，tag_runs 照常更新', as
     const run = repository.getTagRun(account, key);
     assert.equal(run?.lastRunAt, harness.clock.value);
     assert.equal(run?.lastMessageTime, t0 + 9_000);
+  });
+});
+
+test('同一轮同标签 samples 最多加一且重复 observe 证据均保留', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const key = sessionId(groupSession);
+    const seeded = repository.insertTag({
+      account,
+      sessionId: key,
+      userId: null,
+      text: '爱聊游戏',
+      norm: '爱聊游戏',
+      status: 'candidate',
+      source: 'auto',
+      samples: 1,
+      evidence: [{ messageId: 'seed', time: 0, quote: '初始证据' }],
+      firstSeen: 0,
+      lastSeen: 0,
+      supersededBy: null,
+      updatedAt: 0,
+    });
+    const existingByNew = repository.insertTag({
+      account,
+      sessionId: key,
+      userId: null,
+      text: '爱看电影',
+      norm: '爱看电影',
+      status: 'candidate',
+      source: 'auto',
+      samples: 1,
+      evidence: [{ messageId: 'seed-movie', time: 0, quote: '初始证据' }],
+      firstSeen: 0,
+      lastSeen: 0,
+      supersededBy: null,
+      updatedAt: 0,
+    });
+    const harness = createImpressionsHarness(repository, makeConfig({ nicknames: [] }), personaRoot, {
+      extractText: JSON.stringify({
+        group: {
+          observe: [
+            { id: seeded, messageId: 'msg-3' },
+            { id: seeded, messageId: 'msg-4' },
+          ],
+          new: [
+            { text: '爱聊“游戏”！', messageId: 'msg-5' },
+            { text: '爱看电影', messageId: 'msg-6' },
+            { text: '爱看“电影”！', messageId: 'msg-7' },
+          ],
+          contradict: [],
+        },
+        members: [],
+      }),
+    });
+
+    await pump(harness, groupSession, 10);
+    await harness.impressionsService.idle();
+
+    const updated = repository.tagById(seeded);
+    assert.equal(updated?.samples, 2);
+    assert.equal(updated?.status, 'confirmed');
+    assert.deepEqual(updated?.evidence.map((item) => item.messageId), ['seed', 'msg-3', 'msg-4']);
+    assert.equal(repository.tagById(existingByNew)?.samples, 2);
+    assert.deepEqual(repository.tagById(existingByNew)?.evidence.map((item) => item.messageId), ['seed-movie', 'msg-6']);
+    assert.equal(harness.summaries[0]?.observed, 3);
+    assert.equal(harness.summaries[0]?.dropped, 2);
+  });
+});
+
+test('群友标签拒绝使用其他发送者的消息作证据', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const harness = createImpressionsHarness(repository, makeConfig({ nicknames: [] }), personaRoot, {
+      extractText: JSON.stringify({
+        group: { observe: [], new: [], contradict: [] },
+        members: [{ userId: 42, observe: [], new: [{ text: '爱聊游戏', messageId: 'msg-1' }], contradict: [] }],
+      }),
+    });
+
+    await pump(harness, groupSession, 10);
+    await harness.impressionsService.idle();
+
+    assert.equal(repository.listTagsForSubject(account, sessionId(groupSession), 42).length, 0);
+    assert.equal(harness.summaries[0]?.dropped, 1);
+  });
+});
+
+test('群标签与群友标签都拒绝使用 bot 自己的消息作证据', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const key = sessionId(groupSession);
+    const t0 = new Date(2026, 9, 12, 9, 0).getTime();
+    repository.saveMessage({
+      sessionId: key,
+      messageId: 'bot-evidence',
+      senderId: account,
+      senderName: 'Aquarium',
+      isSelf: true,
+      plainText: 'bot 自己说的话',
+      segments: [],
+      time: t0 + 500,
+    });
+    const harness = createImpressionsHarness(repository, makeConfig({ nicknames: [] }), personaRoot, {
+      extractText: JSON.stringify({
+        group: {
+          observe: [],
+          new: [{ text: '群里气氛活跃', messageId: 'bot-evidence' }],
+          contradict: [],
+        },
+        members: [{ userId: 42, observe: [], new: [{ text: '爱开玩笑', messageId: 'bot-evidence' }], contradict: [] }],
+      }),
+    });
+
+    await pump(harness, groupSession, 9);
+    await harness.impressionsService.idle();
+
+    assert.equal(repository.listTagsForSubject(account, key, null).length, 0);
+    assert.equal(repository.listTagsForSubject(account, key, 42).length, 0);
+    assert.equal(harness.extractRequests.length, 1);
+    assert.equal(harness.summaries[0]?.dropped, 2);
+  });
+});
+
+test('contradict 新标签计入每个主语每次最多新增三条', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const key = sessionId(groupSession);
+    const seed = (text: string) => repository.insertTag({
+      account,
+      sessionId: key,
+      userId: null,
+      text,
+      norm: text,
+      status: 'candidate' as const,
+      source: 'auto' as const,
+      samples: 1,
+      evidence: [{ messageId: `seed-${text}`, time: 0, quote: '' }],
+      firstSeen: 0,
+      lastSeen: 0,
+      supersededBy: null,
+      updatedAt: 0,
+    });
+    const first = seed('旧标签甲');
+    const second = seed('旧标签乙');
+    const harness = createImpressionsHarness(repository, makeConfig({ nicknames: [] }), personaRoot, {
+      extractText: JSON.stringify({
+        group: {
+          observe: [],
+          new: [
+            { text: '普通新增标签甲', messageId: 'msg-0' },
+            { text: '普通新增标签乙', messageId: 'msg-1' },
+          ],
+          contradict: [
+            { id: first, text: '推翻后标签甲', messageId: 'msg-2' },
+            { id: second, text: '推翻后标签乙', messageId: 'msg-3' },
+          ],
+        },
+        members: [],
+      }),
+    });
+
+    await pump(harness, groupSession, 10);
+    await harness.impressionsService.idle();
+
+    const tags = repository.listTagsForSubject(account, key, null);
+    assert.equal(tags.filter((tag) => tag.id !== first && tag.id !== second).length, 3);
+    assert.equal(repository.tagById(first)?.status, 'superseded');
+    assert.equal(repository.tagById(second)?.status, 'candidate');
+    assert.equal(harness.summaries[0]?.inserted, 3);
+    assert.equal(harness.summaries[0]?.superseded, 1);
+    assert.equal(harness.summaries[0]?.dropped, 1);
   });
 });
 

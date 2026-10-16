@@ -14,7 +14,7 @@ function createMoodHarness(
   repository: Parameters<Parameters<typeof withRepository>[0]>[0],
   config: ReturnType<typeof makeConfig>,
   personaRoot: string,
-  options: { appraiseText?: string } = {},
+  options: { appraiseText?: string; appraiseAdvanceMs?: number } = {},
 ) {
   const adapter = new FakeAdapter();
   const replyPrompts: string[] = [];
@@ -26,6 +26,7 @@ function createMoodHarness(
     now: () => clock.value,
     callModel: async (_slot, messages) => {
       appraiseRequests.push(messages.map((message) => String(message.content)).join('\n'));
+      clock.value += options.appraiseAdvanceMs ?? 0;
       return {
         text: options.appraiseText ?? '{"valence":-0.15,"arousal":0.1,"reason":"被怼了"}',
         provider: 'fake',
@@ -60,7 +61,7 @@ function createMoodHarness(
 test('回复后异步评估并换档，下一次提示词带情绪块', async () => {
   await withRepository(async (repository, personaRoot) => {
     const config = makeConfig();
-    const harness = createMoodHarness(repository, config, personaRoot);
+    const harness = createMoodHarness(repository, config, personaRoot, { appraiseAdvanceMs: 5_000 });
     const account = groupSession.account;
     repository.saveMoodState({
       account,
@@ -80,16 +81,21 @@ test('回复后异步评估并换档，下一次提示词带情绪块', async ()
     await harness.moodService.idle();
 
     const state = repository.getMoodState(account);
+    const decayedValence = 0.1 + (-0.1 - 0.1) * 2 ** (-5_000 / (30 * 60_000));
+    const decayedArousal = 0.4 + (0.8 - 0.4) * 2 ** (-5_000 / (30 * 60_000));
     assert.equal(state?.band, 'annoyed');
-    assert.ok(Math.abs((state?.valence ?? 0) - (-0.25)) < 1e-9);
-    assert.ok(Math.abs((state?.arousal ?? 0) - 0.9) < 1e-9);
+    assert.ok(Math.abs((state?.valence ?? 0) - (decayedValence - 0.15)) < 1e-9);
+    assert.ok(Math.abs((state?.arousal ?? 0) - (decayedArousal + 0.1)) < 1e-9);
+    assert.equal(state?.updatedAt, harness.clock.value);
 
     const events = repository.recentMoodEvents(account, 10);
     assert.deepEqual(events.map((event) => event.source), ['band', 'appraise', 'rule']);
     assert.equal(events[0]?.bandBefore, 'calm');
     assert.equal(events[0]?.bandAfter, 'annoyed');
+    assert.equal(events[0]?.time, harness.clock.value);
     assert.equal(events[1]?.reason, '被怼了');
     assert.equal(events[1]?.appliedDv, -0.15);
+    assert.equal(events[1]?.time, harness.clock.value);
     assert.equal(events[2]?.reason, 'called');
     assert.ok(harness.appraiseRequests[0]?.includes('普通回复。'));
 
@@ -136,6 +142,7 @@ test('评估解析失败时记录原因且不改变状态', async () => {
   await withRepository(async (repository, personaRoot) => {
     const config = makeConfig();
     const harness = createMoodHarness(repository, config, personaRoot, {
+      appraiseAdvanceMs: 5_000,
       appraiseText: '{"valence":0.5,"arousal":0.2,"reason":"越界"}',
     });
 
@@ -148,6 +155,7 @@ test('评估解析失败时记录原因且不改变状态', async () => {
     assert.equal(state?.band, 'calm');
     const events = repository.recentMoodEvents(groupSession.account, 10);
     assert.deepEqual(events.map((event) => event.reason), ['appraise_parse_error', 'called']);
+    assert.equal(events[0]?.time, harness.clock.value);
     assert.equal(events.some((event) => event.source === 'band'), false);
   });
 });
