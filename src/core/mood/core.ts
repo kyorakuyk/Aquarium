@@ -1,4 +1,5 @@
 import type { MoodBand } from '../../store/affect-repo.ts';
+import { nextLevel, type HysteresisParams } from '../hysteresis.ts';
 
 // 情绪基线：valence 愉悦度 [-1, 1]，arousal 兴奋度 [0, 1]。
 export const MOOD_BASELINE = { valence: 0.1, arousal: 0.4 } as const;
@@ -16,6 +17,13 @@ export const SLIDING_FRICTION_WINDOW_MS = 5 * 60 * 1000;
 export const MIN_BAND_DWELL_MS = 10 * 60 * 1000;
 
 export const BAND_ORDER: readonly MoodBand[] = ['low', 'annoyed', 'calm', 'happy', 'excited'];
+const MOOD_HYSTERESIS_PARAMS: HysteresisParams = {
+  bounds: [-0.5, -0.15, 0.15, 0.5],
+  staticMargin: STATIC_FRICTION,
+  slidingMargin: SLIDING_FRICTION,
+  slidingWindowMs: SLIDING_FRICTION_WINDOW_MS,
+  decayDwellMs: MIN_BAND_DWELL_MS,
+};
 
 export interface MoodBandState {
   band: MoodBand;
@@ -35,16 +43,6 @@ export function bandOf(valence: number): MoodBand {
   if (valence < 0.15) return 'calm';
   if (valence < 0.5) return 'happy';
   return 'excited';
-}
-
-function bandBounds(band: MoodBand): { lower: number; upper: number } {
-  switch (band) {
-    case 'low': return { lower: -Infinity, upper: -0.5 };
-    case 'annoyed': return { lower: -0.5, upper: -0.15 };
-    case 'calm': return { lower: -0.15, upper: 0.15 };
-    case 'happy': return { lower: 0.15, upper: 0.5 };
-    case 'excited': return { lower: 0.5, upper: Infinity };
-  }
 }
 
 // 读取时按真实时间衰减：x = base + (x0 − base) × 2^(−Δt / halfLife)。
@@ -84,15 +82,11 @@ export function nextBand(
   now: number,
   cause: 'event' | 'decay',
 ): MoodBand {
-  const current = state.band;
-  const target = bandOf(valence);
-  if (target === current) return current;
-  if (cause === 'decay' && now - state.bandSince < MIN_BAND_DWELL_MS) return current;
-  const margin = now - state.lastBandChangeAt < SLIDING_FRICTION_WINDOW_MS
-    ? SLIDING_FRICTION
-    : STATIC_FRICTION;
-  const bounds = bandBounds(current);
-  const movingUp = BAND_ORDER.indexOf(target) > BAND_ORDER.indexOf(current);
-  if (movingUp) return valence >= bounds.upper + margin ? target : current;
-  return valence < bounds.lower - margin ? target : current;
+  const current = BAND_ORDER.indexOf(state.band);
+  const next = nextLevel({
+    current,
+    since: state.bandSince,
+    lastChangeAt: state.lastBandChangeAt,
+  }, valence, now, cause, MOOD_HYSTERESIS_PARAMS);
+  return BAND_ORDER[next] ?? state.band;
 }
