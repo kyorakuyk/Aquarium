@@ -94,6 +94,20 @@ const affinitySchema = z.object({
   initial: z.number().min(0).max(100).default(50),
 }).strict().default({ enabled: true, initial: 50 });
 
+const sleepSchema = z.object({
+  enabled: z.boolean().default(false),
+  bedtime: scheduleTimeSchema.default('02:00'),
+  wake: scheduleTimeSchema.default('09:00'),
+  wakeWords: z.array(z.string().min(1)).default(['起床', '醒醒', '别睡了']),
+  goodnight: z.boolean().default(true),
+}).strict().default({
+  enabled: false,
+  bedtime: '02:00',
+  wake: '09:00',
+  wakeWords: ['起床', '醒醒', '别睡了'],
+  goodnight: true,
+});
+
 export const AquariumConfigSchema = z.object({
   owner: z.number().int().nonnegative(),
   accounts: z.array(z.object({
@@ -110,6 +124,7 @@ export const AquariumConfigSchema = z.object({
   }).strict(),
   mood: moodSchema,
   affinity: affinitySchema,
+  sleep: sleepSchema,
   defaults: sessionSettingsSchema,
   sessions: z.record(z.string(), sessionOverrideSchema),
   debug: debugSchema,

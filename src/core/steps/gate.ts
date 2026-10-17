@@ -9,6 +9,7 @@ import { messageTextWithImageCaptions } from '../images.ts';
 import { resolveMode } from '../activity/mode.ts';
 import { loadPersona } from '../../persona/load.ts';
 import { effectiveTalkLevel } from '../../persona/traits.ts';
+import { sleepPlan } from '../sleep.ts';
 import { createSlotCallOptions } from './call-options.ts';
 import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep } from './types.ts';
@@ -36,6 +37,20 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
   if (!settings.enabled) return { next: false, reason: 'disabled', detail: { enabled: false } };
 
   const trigger = messageTrigger(ctx.message, settings.nicknames);
+  if (config.sleep.enabled && !ctx.processOptions.replay) {
+    const now = ctx.now();
+    const plan = sleepPlan(now, config.sleep.bedtime, config.sleep.wake);
+    const wakeState = ctx.options.sleepWakeState;
+    const ownerMessage = config.owner !== 0 && ctx.message.senderId === config.owner;
+    const temporarilyAwake = wakeState?.isAwake(now) ?? false;
+    if (temporarilyAwake) {
+      if (ownerMessage) wakeState?.activate(now);
+    } else if (plan.asleep) {
+      const hasWakeWord = config.sleep.wakeWords.some((word) => ctx.message.plainText.includes(word));
+      if (ownerMessage && trigger !== 'none' && hasWakeWord && wakeState) wakeState.activate(now);
+      else return { next: false, reason: 'asleep', detail: { asleep: true } };
+    }
+  }
   if (trigger !== 'none') {
     const rate = ctx.processOptions.replay
       ? ctx.rateLimiter.preview(ctx.message.session, ctx.message.senderId, settings.rate)

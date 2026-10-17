@@ -123,6 +123,27 @@ test('talkOffset 默认继承为 0，会话覆盖限制在 -2 到 2', () => {
   }).success, false);
 });
 
+test('作息旧配置得到关闭默认值并校验时间格式', () => {
+  const legacyConfig = structuredClone(exampleConfig) as Record<string, any>;
+  delete legacyConfig.sleep;
+  assert.deepEqual(AquariumConfigSchema.parse(legacyConfig).sleep, {
+    enabled: false,
+    bedtime: '02:00',
+    wake: '09:00',
+    wakeWords: ['起床', '醒醒', '别睡了'],
+    goodnight: true,
+  });
+
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...exampleConfig,
+    sleep: { ...exampleConfig.sleep, bedtime: '25:00' },
+  }).success, false);
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...exampleConfig,
+    sleep: { ...exampleConfig.sleep, wake: '7:00' },
+  }).success, false);
+});
+
 test('modeSchedule 拒绝非 HH:mm 时间和未知模式', () => {
   const invalidTime = structuredClone(exampleConfig) as Record<string, any>;
   invalidTime.defaults.modeSchedule = [{ from: '24:00', to: '07:00', mode: 'busy' }];

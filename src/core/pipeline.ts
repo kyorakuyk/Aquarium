@@ -4,6 +4,7 @@ import { hashPromptMessages } from './prompt.ts';
 import { isDebugEnabled } from '../config/debug.ts';
 import { createIdleBackoff } from './activity/backoff.ts';
 import { createActivityThreshold } from './activity/threshold.ts';
+import { createSleepWakeState } from './sleep.ts';
 import { callSlot } from '../llm/slots.ts';
 import { sessionId, type IncomingMessage } from './events.ts';
 import { contextStep } from './steps/context.ts';
@@ -46,6 +47,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
     ...options,
     idleBackoff: options.idleBackoff ?? createIdleBackoff(),
     activityThreshold: options.activityThreshold ?? createActivityThreshold(),
+    sleepWakeState: options.sleepWakeState ?? createSleepWakeState(),
   };
   const now = options.now ?? Date.now;
   const wait = options.wait ?? ((milliseconds: number) => new Promise<void>((resolve) => {

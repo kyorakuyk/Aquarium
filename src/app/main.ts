@@ -15,6 +15,7 @@ import { createSessionQueue } from '../core/session-queue.ts';
 import { createAffinityService } from '../core/affinity/service.ts';
 import { createMoodService } from '../core/mood/service.ts';
 import { createImpressionsService } from '../core/impressions/service.ts';
+import { createSleepWakeState } from '../core/sleep.ts';
 import { openDatabase } from '../store/db.ts';
 import { createRepository } from '../store/repository.ts';
 import { startPanelServer, type PanelAccountRuntime } from '../panel-server/server.ts';
@@ -61,6 +62,7 @@ subscriptions.push(bindPromptTemplateReload(configWatcher, promptTemplateStore, 
 }));
 const adapterStatuses = new Map<number, AdapterStatus>();
 const sessionQueue = createSessionQueue();
+const sleepWakeState = createSleepWakeState();
 const affinityService = createAffinityService({
   repository,
   getConfig: () => configWatcher.getConfig(),
@@ -247,6 +249,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     moodService,
     affinityService,
     impressionsService,
+    sleepWakeState,
     onError: (error, message) => {
       logger.error(`消息 ${message.messageId} 的辅助操作失败：${describeError(error)}`);
     },
