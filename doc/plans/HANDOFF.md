@@ -341,3 +341,11 @@ AQUARIUM_PANEL_PASSWORD=
 - 五档使用共享 `nextLevel` 防抖；档位转换另记 `band` 事件。
 - 回复仅注入触发发送者的非 neutral `affinity` 块，名字以 JSON 引号包裹。
 - 控制台手动设置写 `manual` 事件，不受自动上限或档位防抖影响。
+
+## 10. 性格底色数据流（M2-D）
+- 人设 YAML `traits` 加载后剥离，不进入 persona 正文；无头默认为全 0，非法档位报 `persona_error`。
+- 非 0 档位按 `order → morality → talk → mind` 取 `prompts/traits.md` 句子，traits 块位于 persona 后、rules 前。
+- 有效话量 `talk' = clamp(persona.talk + session.talkOffset, −2, 2)`；缺省 offset 为 0。
+- 主动判断阈值在原值上减 `0.05 × talk'`，再限制到 `[0.2, 0.9]`。
+- 拆条上限：`talk' ≤ −2` 为 1 条，`talk' = −1` 为 2 条，其余 3 条；溢出内容并入最后一条。
+- `talkOffset` 从全局默认继承，可按群覆盖；面板私聊不显示该控制项。
