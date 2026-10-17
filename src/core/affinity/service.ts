@@ -49,7 +49,8 @@ export interface AffinityService {
   setManual(input: { account: number; userId: number; value: number; now: number }): AffinityCurrentView;
 }
 
-interface CurrentAffinity extends AffinityStateRecord {
+interface CurrentAffinity extends Omit<AffinityStateRecord, 'lastInteractionAt'> {
+  lastInteractionAt: number | null;
   decayedFrom: AffinityLevel | null;
 }
 
@@ -85,7 +86,7 @@ export function createAffinityService(options: AffinityServiceOptions): Affinity
       level,
       levelSince: levelChanged ? at : stored?.levelSince ?? at,
       lastLevelChangeAt: levelChanged ? at : stored?.lastLevelChangeAt ?? at,
-      lastInteractionAt: stored?.lastInteractionAt ?? at,
+      lastInteractionAt: stored && stored.lastInteractionAt > 0 ? stored.lastInteractionAt : null,
       updatedAt: stored?.updatedAt ?? at,
       decayedFrom: levelChanged ? previousLevel : null,
     };
@@ -96,7 +97,7 @@ export function createAffinityService(options: AffinityServiceOptions): Affinity
       userId: state.userId,
       value: state.value,
       level: state.level,
-      lastInteractionAt: state.lastInteractionAt > 0 ? state.lastInteractionAt : null,
+      lastInteractionAt: state.lastInteractionAt,
     };
   }
 
@@ -273,7 +274,7 @@ export function createAffinityService(options: AffinityServiceOptions): Affinity
         level,
         levelSince: levelChanged ? input.now : current.levelSince,
         lastLevelChangeAt: levelChanged ? input.now : current.lastLevelChangeAt,
-        lastInteractionAt: stored?.lastInteractionAt ?? 0,
+        lastInteractionAt: stored && stored.lastInteractionAt > 0 ? stored.lastInteractionAt : null,
         updatedAt: input.now,
       });
     },

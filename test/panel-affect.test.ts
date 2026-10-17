@@ -201,6 +201,12 @@ test('标签 API：手动新增、改文字与改状态', async () => {
 
 test('好感 API 按全局用户读取回落值与事件，并手动设置档位', async () => {
   await withPanel(async ({ app, repository }) => {
+    const unseenResponse = await app.request('/api/affinity/99', { headers: authHeaders() });
+    assert.equal(unseenResponse.status, 200);
+    const unseen = await unseenResponse.json() as { value: number; lastInteractionAt: number | null };
+    assert.equal(unseen.value, 50);
+    assert.equal(unseen.lastInteractionAt, null);
+
     const lastInteractionAt = now - 5 * 24 * 60 * 60 * 1000;
     repository.saveAffinityState({
       account,
