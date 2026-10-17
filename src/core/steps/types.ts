@@ -12,6 +12,7 @@ import type { ActivityBatch } from '../activity/batcher.ts';
 import type { IdleBackoff } from '../activity/backoff.ts';
 import type { ActivityThreshold, ProactiveMode } from '../activity/threshold.ts';
 import type { MoodService } from '../mood/service.ts';
+import type { AffinityService } from '../affinity/service.ts';
 import type { ImpressionsService } from '../impressions/service.ts';
 
 export interface PipelineResult {
@@ -61,6 +62,7 @@ export interface MessagePipelineOptions {
   idleBackoff?: IdleBackoff;
   activityThreshold?: ActivityThreshold;
   moodService?: MoodService;
+  affinityService?: AffinityService;
   impressionsService?: ImpressionsService;
   onError?: (error: unknown, message: IncomingMessage) => void;
 }

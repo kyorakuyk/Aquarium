@@ -61,6 +61,13 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     template: ctx.state.promptTemplates.affect,
     record: !ctx.processOptions.replay,
   }) ?? {};
+  const affinityBlock = ctx.options.affinityService?.promptBlock({
+    account: ctx.message.session.account,
+    userId: ctx.message.senderId,
+    name: ctx.message.senderName,
+    now: ctx.now(),
+    template: ctx.state.promptTemplates.affect,
+  });
   const promptOptions = {
     persona,
     ownerId: config.owner,
@@ -72,6 +79,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
       ...moodBlocks,
       ...(tagBlocks.groupTags === undefined ? {} : { groupTags: tagBlocks.groupTags }),
       ...(tagBlocks.memberTags === undefined ? {} : { memberTags: tagBlocks.memberTags }),
+      ...(affinityBlock === undefined ? {} : { affinity: affinityBlock }),
     },
     replySystemTemplate: ctx.state.promptTemplates.replySystem,
   };

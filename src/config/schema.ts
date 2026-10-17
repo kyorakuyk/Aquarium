@@ -87,6 +87,11 @@ const moodSchema = z.object({
   halfLifeMin: 30,
 });
 
+const affinitySchema = z.object({
+  enabled: z.boolean().default(true),
+  initial: z.number().min(0).max(100).default(50),
+}).strict().default({ enabled: true, initial: 50 });
+
 export const AquariumConfigSchema = z.object({
   owner: z.number().int().nonnegative(),
   accounts: z.array(z.object({
@@ -102,6 +107,7 @@ export const AquariumConfigSchema = z.object({
     warnRatio: z.number().min(0).max(1),
   }).strict(),
   mood: moodSchema,
+  affinity: affinitySchema,
   defaults: sessionSettingsSchema,
   sessions: z.record(z.string(), sessionOverrideSchema),
   debug: debugSchema,

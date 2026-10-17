@@ -49,6 +49,12 @@ export interface AffectPromptTemplate extends PromptTemplate {
     arousalHigh: string;
     wrap: string;
   };
+  affinity: {
+    cold: string;
+    cool: string;
+    warm: string;
+    close: string;
+  };
 }
 
 export interface PromptTemplateSet {
@@ -158,9 +164,11 @@ function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
   const fields = parseTemplateFields(template, 'affect.md');
   const moodField = fields.mood;
   const floatField = fields.float;
+  const affinityField = fields.affinity;
   if (!moodField || typeof moodField !== 'object' || Array.isArray(moodField)
-    || !floatField || typeof floatField !== 'object' || Array.isArray(floatField)) {
-    throw new Error('affect.md 必须包含 mood 与 float 字段');
+    || !floatField || typeof floatField !== 'object' || Array.isArray(floatField)
+    || !affinityField || typeof affinityField !== 'object' || Array.isArray(affinityField)) {
+    throw new Error('affect.md 必须包含 mood、float 与 affinity 字段');
   }
   const moodRecord = moodField as Record<string, unknown>;
   const mood = {} as AffectPromptTemplate['mood'];
@@ -174,6 +182,14 @@ function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
     || typeof floatRecord.wrap !== 'string') {
     throw new Error('affect.md 必须包含 float.arousalLow、float.arousalHigh 与 float.wrap 文本');
   }
+  const affinityRecord = affinityField as Record<string, unknown>;
+  const affinity = {} as AffectPromptTemplate['affinity'];
+  for (const key of ['cold', 'cool', 'warm', 'close'] as const) {
+    const value = affinityRecord[key];
+    if (typeof value !== 'string') throw new Error(`affect.md 缺少 affinity.${key} 文本`);
+    affinity[key] = value;
+    validatePlaceholders('affect.md', value, ['name'], ['name']);
+  }
   const affect = {
     ...template,
     mood,
@@ -182,6 +198,7 @@ function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
       arousalHigh: floatRecord.arousalHigh,
       wrap: floatRecord.wrap,
     },
+    affinity,
   };
   validatePlaceholders('affect.md', affect.float.wrap, ['floats'], ['floats']);
   return affect;

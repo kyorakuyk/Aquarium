@@ -12,6 +12,7 @@ import { createManagementCommands } from '../core/management.ts';
 import type { ManagementCommands } from '../core/management.ts';
 import { sessionId } from '../core/events.ts';
 import { createSessionQueue } from '../core/session-queue.ts';
+import { createAffinityService } from '../core/affinity/service.ts';
 import { createMoodService } from '../core/mood/service.ts';
 import { createImpressionsService } from '../core/impressions/service.ts';
 import { openDatabase } from '../store/db.ts';
@@ -60,9 +61,14 @@ subscriptions.push(bindPromptTemplateReload(configWatcher, promptTemplateStore, 
 }));
 const adapterStatuses = new Map<number, AdapterStatus>();
 const sessionQueue = createSessionQueue();
+const affinityService = createAffinityService({
+  repository,
+  getConfig: () => configWatcher.getConfig(),
+});
 const moodService = createMoodService({
   repository,
   getConfig: () => configWatcher.getConfig(),
+  affinityService,
   onError: (error) => {
     logger.error(`情绪后台任务失败：${describeError(error)}`);
   },
@@ -239,6 +245,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     getNickname: () => adapter.nickname || String(adapter.account),
     isMuted: management.isMuted,
     moodService,
+    affinityService,
     impressionsService,
     onError: (error, message) => {
       logger.error(`消息 ${message.messageId} 的辅助操作失败：${describeError(error)}`);

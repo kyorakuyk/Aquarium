@@ -44,6 +44,12 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
         sessionId: ctx.currentSessionId,
         now: ctx.now(),
       });
+      ctx.options.affinityService?.recordCalled({
+        account: ctx.message.session.account,
+        userId: ctx.message.senderId,
+        sessionId: ctx.currentSessionId,
+        now: ctx.now(),
+      });
     }
     return { next: true };
   }

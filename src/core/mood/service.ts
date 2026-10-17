@@ -3,6 +3,7 @@ import { budgetState } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
 import type { MoodBand, StoredMoodEvent } from '../../store/affect-repo.ts';
 import type { StoreRepository } from '../../store/repository.ts';
+import type { AffinityService } from '../affinity/service.ts';
 import type { AffectPromptTemplate, AppraisePromptTemplate } from '../prompt-templates.ts';
 import type { PipelineModelCall } from '../steps/types.ts';
 import { runAppraise } from './appraise.ts';
@@ -25,6 +26,7 @@ export interface MoodServiceOptions {
   repository: StoreRepository;
   getConfig: () => AquariumConfig;
   callModel?: PipelineModelCall;
+  affinityService?: AffinityService;
   now?: () => number;
   onError?: (error: unknown) => void;
 }
@@ -231,6 +233,14 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
           reason: result.reason,
           bandBefore: null,
           bandAfter: null,
+        });
+        options.affinityService?.recordAppraise({
+          account: input.account,
+          userId: input.senderId,
+          sessionId: input.sessionId,
+          appliedDv,
+          time: completedAt,
+          reason: result.reason,
         });
 
         let { bandSince, lastBandChangeAt } = current;

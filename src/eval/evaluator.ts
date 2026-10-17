@@ -59,6 +59,7 @@ function createUnusedTemplates(): PromptTemplateSet {
       version: '',
       mood: { low: '', annoyed: '', calm: '', happy: '', excited: '' },
       float: { arousalLow: '', arousalHigh: '', wrap: '{{floats}}' },
+      affinity: { cold: '', cool: '', warm: '', close: '' },
     },
     extractTags: { source: '', version: '', system: '', user: '{{context}}{{existing}}' },
   };

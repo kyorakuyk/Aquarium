@@ -9,4 +9,9 @@ float:
   arousalLow: 有点懒洋洋
   arousalHigh: 很来劲
   wrap: '（此刻状态：{{floats}}）'
+affinity:
+  cold: '你和{{name}}关系疏远，回应客气、简短，不主动开玩笑。'
+  cool: '你和{{name}}不算熟，态度平淡一些。'
+  warm: '你和{{name}}挺熟，说话随意，愿意接对方的梗。'
+  close: '你和{{name}}很亲近，说话随意，会互损、会主动关心。'
 ---
