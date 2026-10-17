@@ -331,3 +331,13 @@ AQUARIUM_PANEL_PASSWORD=
 - （2026-10-12 审查）**`config` ↔ `core` 目录互相引用**：`config` 只用到 `core/logger.ts` 与 `core/events.ts`。将来把这两个文件移到 `src/shared/`，使依赖变为单向。
 - （2026-10-12 审查）**`core` 依赖 OpenAI 类型**：`core/pipeline.ts`、`core/prompt.ts` 直接使用 `openai` 包的消息类型。接入 CLI 后端（M4）前，在 `src/llm/` 定义自有的 `ChatMessage` 类型并替换。
 - （2026-10-12 审查）**适配器断线重连后不再校验登录账号**：只在首次 `connect` 时校验。
+
+## 9. 好感度数据流（M2-C）
+- 主键为 `(account,userId)`，群聊和私聊共用关系；bot 自身不建档。
+- 被叫通过频率限制后记 `called`，每人每天最多 3 次，原始 +0.5 仍受自动事件日上限约束。
+- 情绪评估成功后，非零 `appliedDv` 按 ×20 转为好感变化，单次最多 ±3。
+- 自动事件分别记入 `affinity_events` 的原始 `delta` 与限额后的 `applied`；状态写入 `affinity_state`。
+- 查询值按距上次自动互动天数向 50 回落；只在新自动事件发生时写回回落结果。
+- 五档使用共享 `nextLevel` 防抖；档位转换另记 `band` 事件。
+- 回复仅注入触发发送者的非 neutral `affinity` 块，名字以 JSON 引号包裹。
+- 控制台手动设置写 `manual` 事件，不受自动上限或档位防抖影响。
