@@ -49,7 +49,8 @@ export const deliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'deliver'
   for (const [index, text] of parts.entries()) {
     const pacingMultiplier = ctx.state.settings?.mode === 'busy' ? 2.5 : 1;
     await ctx.wait(Math.round(replyDelayMs(text, ctx.random) * pacingMultiplier));
-    const segments: Segment[] = ctx.message.session.kind === 'group' && index === 0
+    const segments: Segment[] = ctx.processOptions.quoteReplyTo !== false
+      && ctx.message.session.kind === 'group' && index === 0
       ? [{ type: 'reply', messageId: ctx.message.messageId }, { type: 'text', text }]
       : [{ type: 'text', text }];
     let sent: { messageId: string };

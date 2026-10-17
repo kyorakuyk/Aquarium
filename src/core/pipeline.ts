@@ -4,9 +4,11 @@ import { hashPromptMessages } from './prompt.ts';
 import { isDebugEnabled } from '../config/debug.ts';
 import { createIdleBackoff } from './activity/backoff.ts';
 import { createActivityThreshold } from './activity/threshold.ts';
+import { resolveMode } from './activity/mode.ts';
 import { createSleepWakeState } from './sleep.ts';
 import { callSlot } from '../llm/slots.ts';
-import { sessionId, type IncomingMessage } from './events.ts';
+import { resolveSession } from '../config/resolve.ts';
+import { sessionId, type IncomingMessage, type SessionKey } from './events.ts';
 import { contextStep } from './steps/context.ts';
 import { deliverStep, replayDeliverStep } from './steps/deliver.ts';
 import { gateStep } from './steps/gate.ts';
@@ -57,7 +59,75 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
   const modelCall = options.callModel ?? callSlot;
   const rateLimiter = createRateLimiter(now);
 
-  return async function processMessage(
+  async function sendSystemReply(session: SessionKey, text: string, cycleKey: string): Promise<boolean> {
+    const config = pipelineOptions.getConfig();
+    const settings = resolveSession(config, session);
+    if (!config.sleep.enabled || !config.sleep.goodnight || !settings.enabled || pipelineOptions.isMuted?.(session)) {
+      return false;
+    }
+
+    const sentAt = now();
+    if (!rateLimiter.check(session, config.owner, settings.rate).allowed) return false;
+    const currentSessionId = sessionId(session);
+    const nickname = pipelineOptions.getNickname().trim() || String(session.account);
+    const message: IncomingMessage = {
+      session,
+      messageId: `sleep-goodnight-${cycleKey}-${session.kind}-${session.peer}`,
+      senderId: config.owner,
+      senderName: nickname,
+      segments: [{ type: 'text', text }],
+      plainText: text,
+      mentionsSelf: false,
+      replyToSelf: false,
+      time: sentAt,
+    };
+    const context: StepContext = {
+      message,
+      processOptions: { quoteReplyTo: false },
+      currentSessionId,
+      options: pipelineOptions,
+      now,
+      wait,
+      random,
+      modelCall,
+      rateLimiter,
+      trace: [],
+      state: {
+        config,
+        settings: { ...settings, mode: resolveMode(settings, sentAt) },
+        nickname,
+        result: {
+          text,
+          provider: 'local',
+          model: 'sleep-goodnight',
+          usage: { inputTokens: 0, cachedTokens: 0, outputTokens: 0, costCny: 0 },
+        },
+        replyText: text,
+        sentMessageIds: [],
+        promptTemplates: pipelineOptions.getPromptTemplates?.() ?? promptTemplateStore.get(),
+        promptFingerprints: [],
+      },
+    };
+    const result = await deliverStep(context);
+    if (context.state.sentMessageIds.length > 0) {
+      try {
+        pipelineOptions.repository.recordDecision({
+          time: now(),
+          sessionId: currentSessionId,
+          messageId: message.messageId,
+          replied: true,
+          reason: 'goodnight',
+          detail: { cycleKey, sentMessageIds: [...context.state.sentMessageIds] },
+        });
+      } catch (error) {
+        pipelineOptions.onError?.(error, message);
+      }
+    }
+    if (result.next) return false;
+    return result.reason === 'replied' && result.replied === true;
+  }
+
+  async function processMessage(
     message: IncomingMessage,
     processOptions: ProcessMessageOptions = {},
   ): Promise<PipelineResult> {
@@ -209,5 +279,6 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
         options.onError?.(error, message);
       }
     }
-  };
+  }
+  return Object.assign(processMessage, { sendSystemReply });
 }

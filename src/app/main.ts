@@ -16,6 +16,7 @@ import { createAffinityService } from '../core/affinity/service.ts';
 import { createMoodService } from '../core/mood/service.ts';
 import { createImpressionsService } from '../core/impressions/service.ts';
 import { createSleepWakeState } from '../core/sleep.ts';
+import { createSleepGoodnightScheduler } from '../core/sleep/goodnight.ts';
 import { openDatabase } from '../store/db.ts';
 import { createRepository } from '../store/repository.ts';
 import { startPanelServer, type PanelAccountRuntime } from '../panel-server/server.ts';
@@ -63,6 +64,19 @@ subscriptions.push(bindPromptTemplateReload(configWatcher, promptTemplateStore, 
 const adapterStatuses = new Map<number, AdapterStatus>();
 const sessionQueue = createSessionQueue();
 const sleepWakeState = createSleepWakeState();
+const sleepGoodnightScheduler = createSleepGoodnightScheduler({
+  getConfig: () => configWatcher.getConfig(),
+  adapters: () => adapters,
+  repository,
+  getGoodnightLines: () => promptTemplateStore.get().sleep.goodnight,
+  sendGoodnight: (session, text, cycleKey) => {
+    const pipeline = pipelines.get(session.account);
+    if (!pipeline) return Promise.resolve(false);
+    return sessionQueue.run(sessionId(session), () => pipeline.sendSystemReply(session, text, cycleKey));
+  },
+  onError: (error) => logger.error(`定时晚安发送失败：${describeError(error)}`),
+});
+subscriptions.push(sleepGoodnightScheduler.start());
 const affinityService = createAffinityService({
   repository,
   getConfig: () => configWatcher.getConfig(),

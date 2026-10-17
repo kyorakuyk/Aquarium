@@ -12,6 +12,7 @@ test('decision labels preserve reason categories and tone mapping', () => {
     ['command_mute', '管理指令', 'positive'],
     ['mode_mention_only', '只在被叫时', 'neutral'],
     ['asleep', '睡着了', 'neutral'],
+    ['goodnight', '晚安', 'neutral'],
     ['batched', '合并处理', 'neutral'],
     ['backoff', '退避中', 'neutral'],
     ['prefilter', '粗筛跳过', 'neutral'],

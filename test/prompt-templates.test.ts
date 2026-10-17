@@ -19,6 +19,7 @@ function copyPromptTemplates(): string {
   fs.copyFileSync(path.resolve('prompts/appraise.md'), path.join(root, 'appraise.md'));
   fs.copyFileSync(path.resolve('prompts/affect.md'), path.join(root, 'affect.md'));
   fs.copyFileSync(path.resolve('prompts/traits.md'), path.join(root, 'traits.md'));
+  fs.copyFileSync(path.resolve('prompts/sleep.md'), path.join(root, 'sleep.md'));
   fs.copyFileSync(path.resolve('prompts/extract-tags.md'), path.join(root, 'extract-tags.md'));
   return root;
 }
@@ -38,6 +39,18 @@ test('startup template load hashes raw bytes and parses the exact vision and jud
   assert.ok(templates.judge.user.includes('{{context}}'));
   assert.equal(templates.traits.order.m2, '你很讲规矩，说话做事有条理，不爱乱开话题。');
   assert.equal(templates.traits.talk.p2, '你是个话痨，什么都想插一句。');
+  assert.equal(templates.sleep.goodnight.length, 3);
+  assert.ok(Object.isFrozen(templates.sleep.goodnight));
+});
+
+test('sleep 模板拒绝空的晚安列表', () => {
+  const root = copyPromptTemplates();
+  try {
+    fs.writeFileSync(path.join(root, 'sleep.md'), '---\ngoodnight: []\n---', 'utf8');
+    assert.throws(() => createPromptTemplateStore(root), /goodnight 文本列表/u);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('配置变更重载模板且无效版本不会替换上一个有效快照', () => {

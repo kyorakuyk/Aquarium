@@ -66,6 +66,10 @@ export interface TraitsPromptTemplate extends PromptTemplate {
   mind: Record<TraitPromptLevel, string>;
 }
 
+export interface SleepPromptTemplate extends PromptTemplate {
+  goodnight: readonly string[];
+}
+
 export interface PromptTemplateSet {
   replySystem: ReplySystemTemplate;
   judge: JudgePromptTemplate;
@@ -73,6 +77,7 @@ export interface PromptTemplateSet {
   appraise: AppraisePromptTemplate;
   affect: AffectPromptTemplate;
   traits: TraitsPromptTemplate;
+  sleep: SleepPromptTemplate;
   extractTags: ExtractTagsPromptTemplate;
 }
 
@@ -237,6 +242,15 @@ function parseTraitsTemplate(template: PromptTemplate): TraitsPromptTemplate {
   return { ...template, ...parsed };
 }
 
+function parseSleepTemplate(template: PromptTemplate): SleepPromptTemplate {
+  const fields = parseTemplateFields(template, 'sleep.md');
+  if (!Array.isArray(fields.goodnight) || fields.goodnight.length === 0
+    || fields.goodnight.some((value) => typeof value !== 'string' || value.trim().length === 0)) {
+    throw new Error('sleep.md 必须包含非空 goodnight 文本列表');
+  }
+  return { ...template, goodnight: fields.goodnight as string[] };
+}
+
 function parseExtractTagsTemplate(template: PromptTemplate): ExtractTagsPromptTemplate {
   const fields = parseTemplateFields(template, 'extract-tags.md');
   if (typeof fields.system !== 'string' || fields.system.length === 0
@@ -273,6 +287,7 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
   const appraise = parseAppraiseTemplate(readTemplate(root, 'appraise.md'));
   const affect = parseAffectTemplate(readTemplate(root, 'affect.md'));
   const traits = parseTraitsTemplate(readTemplate(root, 'traits.md'));
+  const sleep = parseSleepTemplate(readTemplate(root, 'sleep.md'));
   const extractTags = parseExtractTagsTemplate(readTemplate(root, 'extract-tags.md'));
   return Object.freeze({
     replySystem: Object.freeze(replySystem),
@@ -281,6 +296,7 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
     appraise: Object.freeze(appraise),
     affect: Object.freeze(affect),
     traits: Object.freeze(traits),
+    sleep: Object.freeze({ ...sleep, goodnight: Object.freeze(sleep.goodnight) }),
     extractTags: Object.freeze(extractTags),
   });
 }

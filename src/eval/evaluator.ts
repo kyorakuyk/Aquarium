@@ -69,6 +69,7 @@ function createUnusedTemplates(): PromptTemplateSet {
       talk: { m2: '', m1: '', p1: '', p2: '' },
       mind: { m2: '', m1: '', p1: '', p2: '' },
     },
+    sleep: { source: '', version: '', goodnight: [] },
     extractTags: { source: '', version: '', system: '', user: '{{context}}{{existing}}' },
   };
 }

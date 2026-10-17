@@ -39,6 +39,7 @@ export interface ProcessMessageOptions {
   alreadySaved?: boolean;
   replay?: boolean;
   batched?: boolean;
+  quoteReplyTo?: boolean;
   activityBatch?: ActivityBatch<IncomingMessage>;
 }
 

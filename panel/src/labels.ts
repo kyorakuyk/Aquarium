@@ -8,6 +8,7 @@ const decisionLabels: Record<string, string> = {
   command_ignored: '指令已忽略',
   mode_mention_only: '只在被叫时',
   asleep: '睡着了',
+  goodnight: '晚安',
   batched: '合并处理',
   backoff: '退避中',
   prefilter: '粗筛跳过',
@@ -27,7 +28,7 @@ const decisionLabels: Record<string, string> = {
 
 const neutralReasons = new Set([
   'not_mentioned', 'disabled', 'duplicate', 'command_ignored', 'mode_mention_only',
-  'asleep', 'batched', 'backoff', 'prefilter', 'judge_skip', 'proactive_cooldown',
+  'asleep', 'goodnight', 'batched', 'backoff', 'prefilter', 'judge_skip', 'proactive_cooldown',
 ]);
 const warningReasons = new Set([
   'rate_limited', 'muted', 'empty_reply', 'llm_error', 'send_error', 'persona_error',
