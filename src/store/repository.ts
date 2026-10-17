@@ -1,6 +1,18 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { createPanelQueries } from './panel-queries.ts';
-import { createAffectQueries, type MoodEventRecord, type MoodStateRecord, type StoredMoodEvent, type StoredTag, type TagRecord, type TagRunRecord, type TagUpdate } from './affect-repo.ts';
+import {
+  createAffectQueries,
+  type AffinityEventRecord,
+  type AffinityStateRecord,
+  type MoodEventRecord,
+  type MoodStateRecord,
+  type StoredAffinityEvent,
+  type StoredMoodEvent,
+  type StoredTag,
+  type TagRecord,
+  type TagRunRecord,
+  type TagUpdate,
+} from './affect-repo.ts';
 
 export interface MessageStorageRecord {
   sessionId: string;
@@ -112,6 +124,11 @@ export interface StoreRepository {
   recordMoodEvent(event: MoodEventRecord): void;
   recentMoodEvents(account: number, count: number): StoredMoodEvent[];
   moodEventsSince(account: number, since: number): StoredMoodEvent[];
+  getAffinityState(account: number, userId: number): AffinityStateRecord | undefined;
+  listAffinityStates(account: number): AffinityStateRecord[];
+  saveAffinityState(state: AffinityStateRecord): void;
+  recordAffinityEvent(event: AffinityEventRecord): void;
+  recentAffinityEvents(account: number, userId: number, count: number): StoredAffinityEvent[];
   insertTag(tag: TagRecord): number;
   tagById(id: number): StoredTag | undefined;
   listTagsForSubject(account: number, sessionId: string, userId: number | null): StoredTag[];

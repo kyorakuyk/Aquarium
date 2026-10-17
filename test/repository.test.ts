@@ -319,3 +319,38 @@ test('标签与提取进度读写往返一致', () => {
     });
   });
 });
+
+test('好感度状态与事件读写往返一致', () => {
+  withRepository((repository) => {
+    const account = 900000001;
+    const userId = 42;
+    const state = {
+      account,
+      userId,
+      value: 72.5,
+      level: 'warm' as const,
+      levelSince: 2_000,
+      lastLevelChangeAt: 2_000,
+      lastInteractionAt: 3_000,
+      updatedAt: 3_000,
+    };
+    repository.saveAffinityState(state);
+    assert.deepEqual(repository.getAffinityState(account, userId), state);
+    assert.deepEqual(repository.listAffinityStates(account), [state]);
+
+    const event = {
+      account,
+      userId,
+      time: 4_000,
+      source: 'appraise' as const,
+      sessionId: '900000001:group:123456',
+      delta: 0.5,
+      applied: 0.5,
+      reason: '正向情绪事件',
+      levelBefore: 'neutral' as const,
+      levelAfter: 'warm' as const,
+    };
+    repository.recordAffinityEvent(event);
+    assert.deepEqual(repository.recentAffinityEvents(account, userId, 5), [{ id: 1, ...event }]);
+  });
+});

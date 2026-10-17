@@ -3,6 +3,8 @@ import type { StoreRepository } from './repository.ts';
 
 export type MoodBand = 'low' | 'annoyed' | 'calm' | 'happy' | 'excited';
 export type MoodEventSource = 'appraise' | 'rule' | 'band';
+export type AffinityLevel = 'cold' | 'cool' | 'neutral' | 'warm' | 'close';
+export type AffinityEventSource = 'appraise' | 'called' | 'manual' | 'band';
 export type TagStatus = 'candidate' | 'confirmed' | 'rejected' | 'superseded';
 export type TagSource = 'auto' | 'manual';
 
@@ -32,6 +34,34 @@ export interface MoodEventRecord {
 }
 
 export interface StoredMoodEvent extends MoodEventRecord {
+  id: number;
+}
+
+export interface AffinityStateRecord {
+  account: number;
+  userId: number;
+  value: number;
+  level: AffinityLevel;
+  levelSince: number;
+  lastLevelChangeAt: number;
+  lastInteractionAt: number;
+  updatedAt: number;
+}
+
+export interface AffinityEventRecord {
+  account: number;
+  userId: number;
+  time: number;
+  source: AffinityEventSource;
+  sessionId: string | null;
+  delta: number;
+  applied: number;
+  reason: string;
+  levelBefore: AffinityLevel | null;
+  levelAfter: AffinityLevel | null;
+}
+
+export interface StoredAffinityEvent extends AffinityEventRecord {
   id: number;
 }
 
@@ -81,6 +111,7 @@ export interface TagRunRecord {
 
 export type AffectRepositoryQueries = Pick<StoreRepository,
   'getMoodState' | 'saveMoodState' | 'recordMoodEvent' | 'recentMoodEvents' | 'moodEventsSince'
+  | 'getAffinityState' | 'listAffinityStates' | 'saveAffinityState' | 'recordAffinityEvent' | 'recentAffinityEvents'
   | 'insertTag' | 'tagById' | 'listTagsForSubject' | 'listTagsForSession' | 'senderNameFor'
   | 'updateTag' | 'getTagRun' | 'saveTagRun'
   | 'countMessagesAfter'
@@ -134,6 +165,35 @@ function moodEventRecord(row: Record<string, unknown>): StoredMoodEvent {
     reason: stringValue(row.reason, 'reason'),
     bandBefore: nullableString(row.band_before, 'band_before') as MoodBand | null,
     bandAfter: nullableString(row.band_after, 'band_after') as MoodBand | null,
+  };
+}
+
+function affinityStateRecord(row: Record<string, unknown>): AffinityStateRecord {
+  return {
+    account: numberValue(row.account, 'account'),
+    userId: numberValue(row.user_id, 'user_id'),
+    value: numberValue(row.value, 'value'),
+    level: stringValue(row.level, 'level') as AffinityLevel,
+    levelSince: numberValue(row.level_since, 'level_since'),
+    lastLevelChangeAt: numberValue(row.last_level_change_at, 'last_level_change_at'),
+    lastInteractionAt: numberValue(row.last_interaction_at, 'last_interaction_at'),
+    updatedAt: numberValue(row.updated_at, 'updated_at'),
+  };
+}
+
+function affinityEventRecord(row: Record<string, unknown>): StoredAffinityEvent {
+  return {
+    id: numberValue(row.id, 'id'),
+    account: numberValue(row.account, 'account'),
+    userId: numberValue(row.user_id, 'user_id'),
+    time: numberValue(row.time, 'time'),
+    source: stringValue(row.source, 'source') as AffinityEventSource,
+    sessionId: nullableString(row.session_id, 'session_id'),
+    delta: numberValue(row.delta, 'delta'),
+    applied: numberValue(row.applied, 'applied'),
+    reason: stringValue(row.reason, 'reason'),
+    levelBefore: nullableString(row.level_before, 'level_before') as AffinityLevel | null,
+    levelAfter: nullableString(row.level_after, 'level_after') as AffinityLevel | null,
   };
 }
 
@@ -201,6 +261,41 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
     FROM mood_events
     WHERE account = ? AND time >= ?
     ORDER BY time, id
+  `);
+  const selectAffinityState = database.prepare(`
+    SELECT account, user_id, value, level, level_since, last_level_change_at, last_interaction_at, updated_at
+    FROM affinity_state
+    WHERE account = ? AND user_id = ?
+  `);
+  const selectAffinityStates = database.prepare(`
+    SELECT account, user_id, value, level, level_since, last_level_change_at, last_interaction_at, updated_at
+    FROM affinity_state
+    WHERE account = ?
+    ORDER BY user_id
+  `);
+  const upsertAffinityState = database.prepare(`
+    INSERT INTO affinity_state
+      (account, user_id, value, level, level_since, last_level_change_at, last_interaction_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(account, user_id) DO UPDATE SET
+      value = excluded.value,
+      level = excluded.level,
+      level_since = excluded.level_since,
+      last_level_change_at = excluded.last_level_change_at,
+      last_interaction_at = excluded.last_interaction_at,
+      updated_at = excluded.updated_at
+  `);
+  const insertAffinityEvent = database.prepare(`
+    INSERT INTO affinity_events
+      (account, user_id, time, source, session_id, delta, applied, reason, level_before, level_after)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const selectRecentAffinityEvents = database.prepare(`
+    SELECT id, account, user_id, time, source, session_id, delta, applied, reason, level_before, level_after
+    FROM affinity_events
+    WHERE account = ? AND user_id = ?
+    ORDER BY time DESC, id DESC
+    LIMIT ?
   `);
   const insertTag = database.prepare(`
     INSERT INTO tags
@@ -297,6 +392,53 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
       if (!Number.isFinite(since)) throw new RangeError('查询时间必须是有限数字');
       const rows = selectMoodEventsSince.all(account, since) as Array<Record<string, unknown>>;
       return rows.map(moodEventRecord);
+    },
+
+    getAffinityState(account, userId) {
+      const row = selectAffinityState.get(account, userId) as Record<string, unknown> | undefined;
+      return row ? affinityStateRecord(row) : undefined;
+    },
+
+    listAffinityStates(account) {
+      const rows = selectAffinityStates.all(account) as Array<Record<string, unknown>>;
+      return rows.map(affinityStateRecord);
+    },
+
+    saveAffinityState(state) {
+      upsertAffinityState.run(
+        state.account,
+        state.userId,
+        state.value,
+        state.level,
+        state.levelSince,
+        state.lastLevelChangeAt,
+        state.lastInteractionAt,
+        state.updatedAt,
+      );
+    },
+
+    recordAffinityEvent(event) {
+      insertAffinityEvent.run(
+        event.account,
+        event.userId,
+        event.time,
+        event.source,
+        event.sessionId,
+        event.delta,
+        event.applied,
+        event.reason,
+        event.levelBefore,
+        event.levelAfter,
+      );
+    },
+
+    recentAffinityEvents(account, userId, count) {
+      if (!Number.isSafeInteger(count) || count < 0) {
+        throw new RangeError('查询数量必须是非负安全整数');
+      }
+      if (count === 0) return [];
+      const rows = selectRecentAffinityEvents.all(account, userId, count) as Array<Record<string, unknown>>;
+      return rows.map(affinityEventRecord);
     },
 
     insertTag(tag) {
