@@ -53,6 +53,13 @@ function roundThreshold(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+export function adjustThresholdForTalk(threshold: number, effectiveTalk: number): number {
+  return Math.max(MIN_THRESHOLD, Math.min(
+    MAX_THRESHOLD,
+    roundThreshold(threshold - 0.05 * effectiveTalk),
+  ));
+}
+
 export function createActivityThreshold(): ActivityThreshold {
   const sessions = new Map<string, SessionThresholdState>();
 

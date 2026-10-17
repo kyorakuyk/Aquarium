@@ -12,6 +12,7 @@ export interface BuildPromptOptions {
   request?: string;
   replySystemTemplate?: ReplySystemTemplate;
   blocks?: {
+    traits?: string;
     groupTags?: string;
     mood?: string;
     memberTags?: string;
@@ -48,6 +49,7 @@ function resolvePromptBlocks(options: BuildPromptOptions): RenderedPromptBlock[]
     : '';
   return [
     { id: 'persona', text: options.persona },
+    { id: 'traits', text: options.blocks?.traits ?? '' },
     {
       id: 'rules',
       text: template.system

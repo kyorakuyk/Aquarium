@@ -1,6 +1,7 @@
 import { buildPromptMessages, describePromptBlocks, hashPromptMessages } from '../prompt.ts';
 import { captionIncomingImages, messageTextWithImageCaptions } from '../images.ts';
 import { loadPersona } from '../../persona/load.ts';
+import { effectiveTalkLevel, renderTraitsBlock } from '../../persona/traits.ts';
 import { createSlotCallOptions } from './call-options.ts';
 import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep } from './types.ts';
@@ -13,13 +14,19 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   const account = config.accounts.find((entry) => entry.uin === ctx.message.session.account);
   const nickname = ctx.options.getNickname().trim() || String(ctx.message.session.account);
   let persona: string;
-  try {
-    persona = loadPersona(account?.persona ?? 'default', nickname, {
-      ...(ctx.options.personaRoot === undefined ? {} : { root: ctx.options.personaRoot }),
-    }).text;
-  } catch (error) {
-    ctx.options.onError?.(error, ctx.message);
-    return { next: false, reason: 'persona_error', detail: errorDetails(error) };
+  if (ctx.state.persona !== undefined && ctx.state.personaTraits !== undefined) {
+    persona = ctx.state.persona;
+  } else {
+    try {
+      const loaded = loadPersona(account?.persona ?? 'default', nickname, {
+        ...(ctx.options.personaRoot === undefined ? {} : { root: ctx.options.personaRoot }),
+      });
+      persona = loaded.text;
+      ctx.state.personaTraits = loaded.traits;
+    } catch (error) {
+      ctx.options.onError?.(error, ctx.message);
+      return { next: false, reason: 'persona_error', detail: errorDetails(error) };
+    }
   }
 
   const callOptions = ctx.state.callOptions ?? createSlotCallOptions(ctx, config);
@@ -68,6 +75,10 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     now: ctx.now(),
     template: ctx.state.promptTemplates.affect,
   });
+  const effectiveTalk = effectiveTalkLevel(ctx.state.personaTraits?.talk ?? 0, settings.talkOffset);
+  const traitsBlock = ctx.state.personaTraits
+    ? renderTraitsBlock(ctx.state.personaTraits, effectiveTalk, ctx.state.promptTemplates.traits)
+    : '';
   const promptOptions = {
     persona,
     ownerId: config.owner,
@@ -76,6 +87,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     request: ctx.state.proactiveMode ? '请自然回应最近的群聊，不要要求别人提到你。' : undefined,
     context,
     blocks: {
+      traits: traitsBlock,
       ...moodBlocks,
       ...(tagBlocks.groupTags === undefined ? {} : { groupTags: tagBlocks.groupTags }),
       ...(tagBlocks.memberTags === undefined ? {} : { memberTags: tagBlocks.memberTags }),

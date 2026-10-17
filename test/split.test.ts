@@ -93,3 +93,14 @@ test('splitReply 最多发三条并把多余内容合并到最后一条', () => 
   assert.deepEqual(parts.map((part) => Array.from(part).length), [80, 80, 90]);
   assert.equal(parts.join(''), '甲'.repeat(250));
 });
+
+test('splitReply 支持按有效话量进一步限制为一条或两条', () => {
+  const input = '甲'.repeat(250);
+  const onePart = splitReply(input, 1);
+  const twoParts = splitReply(input, 2);
+
+  assert.deepEqual(onePart, [input]);
+  assert.equal(twoParts.length, 2);
+  assert.equal(twoParts.join(''), input);
+  assert.equal(splitReply(input, 3).length, 3);
+});

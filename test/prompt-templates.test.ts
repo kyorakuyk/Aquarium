@@ -18,6 +18,7 @@ function copyPromptTemplates(): string {
   fs.copyFileSync(path.resolve('prompts/vision.md'), path.join(root, 'vision.md'));
   fs.copyFileSync(path.resolve('prompts/appraise.md'), path.join(root, 'appraise.md'));
   fs.copyFileSync(path.resolve('prompts/affect.md'), path.join(root, 'affect.md'));
+  fs.copyFileSync(path.resolve('prompts/traits.md'), path.join(root, 'traits.md'));
   fs.copyFileSync(path.resolve('prompts/extract-tags.md'), path.join(root, 'extract-tags.md'));
   return root;
 }
@@ -35,6 +36,8 @@ test('startup template load hashes raw bytes and parses the exact vision and jud
   assert.equal(templates.vision.user, '请描述这张图片，只输出一句话。');
   assert.ok(templates.judge.system.includes('严格 JSON'));
   assert.ok(templates.judge.user.includes('{{context}}'));
+  assert.equal(templates.traits.order.m2, '你很讲规矩，说话做事有条理，不爱乱开话题。');
+  assert.equal(templates.traits.talk.p2, '你是个话痨，什么都想插一句。');
 });
 
 test('配置变更重载模板且无效版本不会替换上一个有效快照', () => {

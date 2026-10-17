@@ -106,6 +106,23 @@ test('旧配置的主动冷却默认为 120 秒并限制在可配置范围内', 
   }).success, false);
 });
 
+test('talkOffset 默认继承为 0，会话覆盖限制在 -2 到 2', () => {
+  const legacyConfig = structuredClone(exampleConfig) as Record<string, any>;
+  delete legacyConfig.defaults.talkOffset;
+  const parsed = AquariumConfigSchema.parse(legacyConfig);
+  assert.equal(parsed.defaults.talkOffset, 0);
+
+  const config = AquariumConfigSchema.parse({
+    ...exampleConfig,
+    sessions: { '7:group:9': { talkOffset: -2 } },
+  });
+  assert.equal(resolveSession(config, { account: 7, kind: 'group', peer: 9 }).talkOffset, -2);
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...exampleConfig,
+    sessions: { '7:group:9': { talkOffset: 3 } },
+  }).success, false);
+});
+
 test('modeSchedule 拒绝非 HH:mm 时间和未知模式', () => {
   const invalidTime = structuredClone(exampleConfig) as Record<string, any>;
   invalidTime.defaults.modeSchedule = [{ from: '24:00', to: '07:00', mode: 'busy' }];

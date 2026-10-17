@@ -4,10 +4,13 @@ import { runJudge } from '../activity/judge.ts';
 import { calculatePrefilterActivity, calculatePrefilterFeatures, evaluatePrefilter } from '../activity/prefilter.ts';
 import { messageTrigger } from '../activity/trigger.ts';
 import { createIdleBackoff } from '../activity/backoff.ts';
-import { createActivityThreshold } from '../activity/threshold.ts';
+import { adjustThresholdForTalk, createActivityThreshold } from '../activity/threshold.ts';
 import { messageTextWithImageCaptions } from '../images.ts';
 import { resolveMode } from '../activity/mode.ts';
+import { loadPersona } from '../../persona/load.ts';
+import { effectiveTalkLevel } from '../../persona/traits.ts';
 import { createSlotCallOptions } from './call-options.ts';
+import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep } from './types.ts';
 
 const defaultIdleBackoff = createIdleBackoff();
@@ -115,8 +118,25 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
     return { next: false, reason: judge.reason, detail: prefilterDetail };
   }
 
+  if (ctx.state.personaTraits === undefined) {
+    const account = config.accounts.find((entry) => entry.uin === ctx.message.session.account);
+    const nickname = ctx.options.getNickname().trim() || String(ctx.message.session.account);
+    try {
+      const loaded = loadPersona(account?.persona ?? 'default', nickname, {
+        ...(ctx.options.personaRoot === undefined ? {} : { root: ctx.options.personaRoot }),
+      });
+      ctx.state.persona = loaded.text;
+      ctx.state.personaTraits = loaded.traits;
+    } catch (error) {
+      ctx.options.onError?.(error, ctx.message);
+      return { next: false, reason: 'persona_error', detail: errorDetails(error) };
+    }
+  }
+
   const thresholds = ctx.options.activityThreshold ?? defaultActivityThreshold;
-  const threshold = thresholds.getThreshold(ctx.currentSessionId, settings.mode, ctx.now());
+  const baseThreshold = thresholds.getThreshold(ctx.currentSessionId, settings.mode, ctx.now());
+  const effectiveTalk = effectiveTalkLevel(ctx.state.personaTraits?.talk ?? 0, settings.talkOffset);
+  const threshold = adjustThresholdForTalk(baseThreshold, effectiveTalk);
   if (!ctx.processOptions.replay) {
     thresholds.recordJudgment(ctx.currentSessionId, settings.mode, judge.probability, ctx.now());
   }

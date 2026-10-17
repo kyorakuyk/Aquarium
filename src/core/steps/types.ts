@@ -14,6 +14,7 @@ import type { ActivityThreshold, ProactiveMode } from '../activity/threshold.ts'
 import type { MoodService } from '../mood/service.ts';
 import type { AffinityService } from '../affinity/service.ts';
 import type { ImpressionsService } from '../impressions/service.ts';
+import type { PersonaTraits } from '../../persona/load.ts';
 
 export interface PipelineResult {
   replied: boolean;
@@ -85,6 +86,7 @@ export interface PipelineState {
   settings?: SessionSettings;
   nickname?: string;
   persona?: string;
+  personaTraits?: PersonaTraits;
   callOptions?: SlotCallOptions;
   prompt?: OpenAI.ChatCompletionMessageParam[];
   promptBlocks?: PromptBlockHash[];
@@ -128,7 +130,7 @@ const safeTraceReasons: Record<PipelineStepName, readonly string[]> = {
   persist: ['duplicate'],
   gate: [
     'muted', 'disabled', 'not_mentioned', 'mode_mention_only', 'rate_limited',
-    'budget', 'batched', 'backoff', 'prefilter', 'judge_parse_error', 'judge_error',
+    'budget', 'batched', 'backoff', 'persona_error', 'prefilter', 'judge_parse_error', 'judge_error',
     'judge_skip', 'proactive_cooldown',
   ],
   context: ['persona_error'],

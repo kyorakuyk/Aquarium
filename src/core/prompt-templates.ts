@@ -57,12 +57,22 @@ export interface AffectPromptTemplate extends PromptTemplate {
   };
 }
 
+export type TraitPromptLevel = 'm2' | 'm1' | 'p1' | 'p2';
+
+export interface TraitsPromptTemplate extends PromptTemplate {
+  order: Record<TraitPromptLevel, string>;
+  morality: Record<TraitPromptLevel, string>;
+  talk: Record<TraitPromptLevel, string>;
+  mind: Record<TraitPromptLevel, string>;
+}
+
 export interface PromptTemplateSet {
   replySystem: ReplySystemTemplate;
   judge: JudgePromptTemplate;
   vision: VisionPromptTemplate;
   appraise: AppraisePromptTemplate;
   affect: AffectPromptTemplate;
+  traits: TraitsPromptTemplate;
   extractTags: ExtractTagsPromptTemplate;
 }
 
@@ -159,6 +169,7 @@ function parseAppraiseTemplate(template: PromptTemplate): AppraisePromptTemplate
 }
 
 const affectMoodKeys = ['low', 'annoyed', 'calm', 'happy', 'excited'] as const;
+const traitPromptLevels = ['m2', 'm1', 'p1', 'p2'] as const;
 
 function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
   const fields = parseTemplateFields(template, 'affect.md');
@@ -204,6 +215,28 @@ function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
   return affect;
 }
 
+function parseTraitsTemplate(template: PromptTemplate): TraitsPromptTemplate {
+  const fields = parseTemplateFields(template, 'traits.md');
+  const parsed = {} as Pick<TraitsPromptTemplate, 'order' | 'morality' | 'talk' | 'mind'>;
+  for (const dimension of ['order', 'morality', 'talk', 'mind'] as const) {
+    const field = fields[dimension];
+    if (!field || typeof field !== 'object' || Array.isArray(field)) {
+      throw new Error(`traits.md 必须包含 ${dimension} 档位文本`);
+    }
+    const values = field as Record<string, unknown>;
+    const levels = {} as Record<TraitPromptLevel, string>;
+    for (const level of traitPromptLevels) {
+      const value = values[level];
+      if (typeof value !== 'string' || value.length === 0) {
+        throw new Error(`traits.md 缺少 ${dimension}.${level} 文本`);
+      }
+      levels[level] = value;
+    }
+    parsed[dimension] = levels;
+  }
+  return { ...template, ...parsed };
+}
+
 function parseExtractTagsTemplate(template: PromptTemplate): ExtractTagsPromptTemplate {
   const fields = parseTemplateFields(template, 'extract-tags.md');
   if (typeof fields.system !== 'string' || fields.system.length === 0
@@ -239,6 +272,7 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
   const vision = parseVisionTemplate(readTemplate(root, 'vision.md'));
   const appraise = parseAppraiseTemplate(readTemplate(root, 'appraise.md'));
   const affect = parseAffectTemplate(readTemplate(root, 'affect.md'));
+  const traits = parseTraitsTemplate(readTemplate(root, 'traits.md'));
   const extractTags = parseExtractTagsTemplate(readTemplate(root, 'extract-tags.md'));
   return Object.freeze({
     replySystem: Object.freeze(replySystem),
@@ -246,6 +280,7 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
     vision: Object.freeze(vision),
     appraise: Object.freeze(appraise),
     affect: Object.freeze(affect),
+    traits: Object.freeze(traits),
     extractTags: Object.freeze(extractTags),
   });
 }

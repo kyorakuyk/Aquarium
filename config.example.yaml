@@ -27,6 +27,7 @@ defaults:
   mode: mention_only
   modeSchedule: []
   proactiveCooldownSec: 120
+  talkOffset: 0
   nicknames: []
   contextMessages: 20
   rate: { perUserPerMinute: 4, perSessionPerMinute: 8, minIntervalSec: 3 }

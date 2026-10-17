@@ -141,6 +141,7 @@ export function createProactiveHarness(
   options: {
     mode?: 'natural' | 'active' | 'busy';
     proactiveCooldownSec?: number;
+    talkOffset?: number;
     dailyBudget?: number;
     judgeText?: string;
     judgeError?: Error;
@@ -158,6 +159,7 @@ export function createProactiveHarness(
       [key]: {
         mode: options.mode ?? 'active',
         ...(options.proactiveCooldownSec === undefined ? {} : { proactiveCooldownSec: options.proactiveCooldownSec }),
+        ...(options.talkOffset === undefined ? {} : { talkOffset: options.talkOffset }),
         ...(options.rate ? { rate: options.rate } : {}),
       },
     },
@@ -171,6 +173,7 @@ export function createProactiveHarness(
   });
   const adapter = new FakeAdapter();
   const modelSlots: string[] = [];
+  const modelRequests: Array<{ slot: string; messages: Array<{ role: string; content: string }> }> = [];
   const onErrors: unknown[] = [];
   const pipeline = createMessagePipeline({
     getConfig: () => config,
@@ -181,8 +184,9 @@ export function createProactiveHarness(
     idleBackoff: options.idleBackoff,
     activityThreshold: options.activityThreshold,
     onError: (error) => { onErrors.push(error); },
-    callModel: async (slot) => {
+    callModel: async (slot, messages) => {
       modelSlots.push(slot);
+      modelRequests.push({ slot, messages: messages as Array<{ role: string; content: string }> });
       if (slot === 'judge' && options.judgeError) throw options.judgeError;
       return {
         text: slot === 'judge'
@@ -196,5 +200,5 @@ export function createProactiveHarness(
     now: options.now ?? (() => baseTime),
     wait: async () => {},
   });
-  return { adapter, config, key, modelSlots, onErrors, pipeline };
+  return { adapter, config, key, modelRequests, modelSlots, onErrors, pipeline };
 }

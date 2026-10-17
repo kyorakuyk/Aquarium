@@ -61,6 +61,14 @@ function createUnusedTemplates(): PromptTemplateSet {
       float: { arousalLow: '', arousalHigh: '', wrap: '{{floats}}' },
       affinity: { cold: '', cool: '', warm: '', close: '' },
     },
+    traits: {
+      source: '',
+      version: '',
+      order: { m2: '', m1: '', p1: '', p2: '' },
+      morality: { m2: '', m1: '', p1: '', p2: '' },
+      talk: { m2: '', m1: '', p1: '', p2: '' },
+      mind: { m2: '', m1: '', p1: '', p2: '' },
+    },
     extractTags: { source: '', version: '', system: '', user: '{{context}}{{existing}}' },
   };
 }

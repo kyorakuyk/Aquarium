@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createActivityThreshold } from '../src/core/activity/threshold.ts';
+import { adjustThresholdForTalk, createActivityThreshold } from '../src/core/activity/threshold.ts';
 
 type ProactiveMode = 'natural' | 'active' | 'busy';
 
@@ -122,4 +122,11 @@ test('proactive cooldown accepts a configured duration and zero disables the har
   assert.equal(threshold.isProactiveCooldown('account:group:1', 10_999, 10_000), true);
   assert.equal(threshold.isProactiveCooldown('account:group:1', 11_000, 10_000), false);
   assert.equal(threshold.isProactiveCooldown('account:group:1', 1_001, 0), false);
+});
+
+test('talk adjusts the proactive threshold by 0.05 per level and clamps it', () => {
+  assert.equal(adjustThresholdForTalk(0.5, 2), 0.4);
+  assert.equal(adjustThresholdForTalk(0.5, -2), 0.6);
+  assert.equal(adjustThresholdForTalk(0.2, 2), 0.2);
+  assert.equal(adjustThresholdForTalk(0.9, -2), 0.9);
 });
