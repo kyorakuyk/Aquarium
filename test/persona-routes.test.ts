@@ -24,6 +24,18 @@ test('persona API accepts traits, preserves Markdown body, and reads back the sa
     assert.equal(saved.markdown, `---\ntraits:\n  order: -2\n  morality: 1\n  talk: 0\n  mind: 2\n---\n${bodyText}`);
     assert.deepEqual(saved.traits, { order: -2, morality: 1, talk: 0, mind: 2 });
 
+    const malformed = await app.request('/api/personas/custom-traits', {
+      method: 'PUT',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        markdown: '---\ntraits: [\n---\n正文',
+        traits: { order: -2, morality: 1, talk: 0, mind: 2 },
+      }),
+    });
+    assert.equal(malformed.status, 400);
+    const afterMalformed = await app.request('/api/personas/custom-traits', { headers: authHeaders() });
+    assert.equal((await afterMalformed.json() as { markdown: string }).markdown, saved.markdown);
+
     const invalid = await app.request('/api/personas/custom-traits', {
       method: 'PUT',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },

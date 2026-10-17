@@ -108,7 +108,11 @@ export function registerPersonaRoutes(app: Hono, root: string): void {
     try { rawBody = await context.req.json(); } catch { return context.json({ error: 'Invalid JSON' }, 400); }
     const body = parseBody(rawBody, personaBodySchema);
     if (!body) return context.json({ error: 'Invalid persona' }, 400);
-    const markdown = body.traits ? updatePersonaTraits(body.markdown, body.traits) : body.markdown;
+    let markdown = body.markdown;
+    if (body.traits) {
+      try { markdown = updatePersonaTraits(body.markdown, body.traits); }
+      catch { return context.json({ error: 'Invalid persona YAML front matter' }, 400); }
+    }
     writeTextAtomic(personaPath(root, 'data/personas', id), markdown);
     return context.json({ id, saved: true });
   });
