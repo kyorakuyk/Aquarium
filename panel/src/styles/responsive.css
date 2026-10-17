@@ -30,6 +30,9 @@
   .binding-row { grid-template-columns: 1fr; gap: 6px; }
   .new-persona-row { flex-wrap: wrap; }
   .new-persona-row input { flex: 1 1 180px; }
+  .affinity-person-row { grid-template-columns: 1fr; gap: 9px; }
+  .affinity-person-main { grid-template-columns: auto auto; }
+  .affinity-person-main progress { grid-column: 1 / -1; }
 }
 
 @media (max-width: 480px) {

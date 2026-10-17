@@ -125,7 +125,35 @@ export interface TagView {
 export interface ImpressionsView {
   sessionId: string;
   groupTags: TagView[];
-  members: Array<{ userId: number; name: string; tags: TagView[] }>;
+  members: Array<{ userId: number; name: string; affinity: AffinityView; tags: TagView[] }>;
+}
+
+export type AffinityLevel = 'cold' | 'cool' | 'neutral' | 'warm' | 'close';
+
+export interface AffinityView {
+  userId: number;
+  name: string;
+  value: number;
+  level: AffinityLevel;
+  lastInteractionAt: number | null;
+}
+
+export interface AffinityEventView {
+  id: number;
+  account: number;
+  userId: number;
+  time: number;
+  source: 'appraise' | 'called' | 'manual' | 'band';
+  sessionId: string | null;
+  delta: number;
+  applied: number;
+  reason: string;
+  levelBefore: AffinityLevel | null;
+  levelAfter: AffinityLevel | null;
+}
+
+export interface AffinityDetailView extends AffinityView {
+  events: AffinityEventView[];
 }
 
 export interface TraceView {

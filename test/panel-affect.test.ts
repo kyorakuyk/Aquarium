@@ -198,3 +198,82 @@ test('标签 API：手动新增、改文字与改状态', async () => {
     })).status, 404);
   });
 });
+
+test('好感 API 按全局用户读取回落值与事件，并手动设置档位', async () => {
+  await withPanel(async ({ app, repository }) => {
+    const lastInteractionAt = now - 5 * 24 * 60 * 60 * 1000;
+    repository.saveAffinityState({
+      account,
+      userId: 42,
+      value: 72,
+      level: 'warm',
+      levelSince: lastInteractionAt - 10 * 24 * 60 * 60 * 1000,
+      lastLevelChangeAt: lastInteractionAt - 10 * 24 * 60 * 60 * 1000,
+      lastInteractionAt,
+      updatedAt: lastInteractionAt,
+    });
+    repository.recordAffinityEvent({
+      account,
+      userId: 42,
+      time: lastInteractionAt,
+      source: 'appraise',
+      sessionId: sessionId(groupSession),
+      delta: 2,
+      applied: 2,
+      reason: '正向情绪',
+      levelBefore: null,
+      levelAfter: null,
+    });
+    const saveName = (messageId: string, senderName: string, time: number, kind: 'group' | 'private') => {
+      repository.saveMessage({
+        sessionId: sessionId({ account, kind, peer: kind === 'group' ? groupSession.peer : 42 }),
+        messageId,
+        senderId: 42,
+        senderName,
+        isSelf: false,
+        plainText: '测试消息',
+        segments: [],
+        time,
+      });
+    };
+    saveName('affinity-name-old', '旧名字', now - 1_000, 'group');
+    saveName('affinity-name-new', '最新名字', now - 500, 'private');
+
+    const listResponse = await app.request('/api/affinity', { headers: authHeaders() });
+    assert.equal(listResponse.status, 200);
+    const people = await listResponse.json() as Array<{
+      userId: number;
+      name: string;
+      value: number;
+      level: string;
+      lastInteractionAt: number | null;
+    }>;
+    assert.deepEqual(people, [{ userId: 42, name: '最新名字', value: 70, level: 'warm', lastInteractionAt }]);
+
+    const detailResponse = await app.request('/api/affinity/42', { headers: authHeaders() });
+    assert.equal(detailResponse.status, 200);
+    const detail = await detailResponse.json() as { events: Array<{ reason: string }> };
+    assert.equal(detail.events.length, 1);
+    assert.equal(detail.events[0]?.reason, '正向情绪');
+
+    const updateResponse = await app.request('/api/affinity/42', {
+      method: 'PATCH',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ value: 10 }),
+    });
+    assert.equal(updateResponse.status, 200);
+    const updated = repository.getAffinityState(account, 42);
+    assert.equal(updated?.value, 10);
+    assert.equal(updated?.level, 'cold');
+    assert.equal(updated?.lastInteractionAt, lastInteractionAt);
+    assert.equal(repository.recentAffinityEvents(account, 42, 1)[0]?.source, 'manual');
+
+    const invalidUpdate = await app.request('/api/affinity/42', {
+      method: 'PATCH',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ value: 101 }),
+    });
+    assert.equal(invalidUpdate.status, 400);
+    assert.equal((await app.request('/api/affinity/not-a-user', { headers: authHeaders() })).status, 400);
+  });
+});

@@ -20,6 +20,13 @@ export interface AffinityServiceOptions {
   getConfig: () => AquariumConfig;
 }
 
+export interface AffinityCurrentView {
+  userId: number;
+  value: number;
+  level: AffinityLevel;
+  lastInteractionAt: number | null;
+}
+
 export interface AffinityService {
   recordAppraise(input: {
     account: number;
@@ -37,6 +44,9 @@ export interface AffinityService {
     now: number;
     template: AffectPromptTemplate;
   }): string | undefined;
+  getCurrent(account: number, userId: number, now: number): AffinityCurrentView;
+  listCurrent(account: number, now: number): AffinityCurrentView[];
+  setManual(input: { account: number; userId: number; value: number; now: number }): AffinityCurrentView;
 }
 
 interface CurrentAffinity extends AffinityStateRecord {
@@ -57,7 +67,7 @@ export function createAffinityService(options: AffinityServiceOptions): Affinity
   function currentState(account: number, userId: number, at: number): CurrentAffinity {
     const stored = options.repository.getAffinityState(account, userId);
     const value = stored
-      ? decayAffinity(stored.value, stored.lastInteractionAt, at)
+      ? stored.lastInteractionAt > 0 ? decayAffinity(stored.value, stored.lastInteractionAt, at) : stored.value
       : options.getConfig().affinity.initial;
     const previousLevel = stored?.level ?? affinityLevelOf(value);
     const level = stored
@@ -78,6 +88,15 @@ export function createAffinityService(options: AffinityServiceOptions): Affinity
       lastInteractionAt: stored?.lastInteractionAt ?? at,
       updatedAt: stored?.updatedAt ?? at,
       decayedFrom: levelChanged ? previousLevel : null,
+    };
+  }
+
+  function currentView(state: CurrentAffinity): AffinityCurrentView {
+    return {
+      userId: state.userId,
+      value: state.value,
+      level: state.level,
+      lastInteractionAt: state.lastInteractionAt > 0 ? state.lastInteractionAt : null,
     };
   }
 
@@ -206,6 +225,57 @@ export function createAffinityService(options: AffinityServiceOptions): Affinity
       const current = currentState(input.account, input.userId, input.now);
       if (current.level === 'neutral') return undefined;
       return input.template.affinity[current.level].replaceAll('{{name}}', JSON.stringify(input.name));
+    },
+
+    getCurrent(account, userId, at) {
+      return currentView(currentState(account, userId, at));
+    },
+
+    listCurrent(account, at) {
+      return options.repository.listAffinityStates(account)
+        .map((state) => currentView(currentState(account, state.userId, at)));
+    },
+
+    setManual(input) {
+      if (!Number.isSafeInteger(input.value) || input.value < 0 || input.value > 100) {
+        throw new RangeError('好感度必须是 0–100 的整数');
+      }
+      const stored = options.repository.getAffinityState(input.account, input.userId);
+      const current = currentState(input.account, input.userId, input.now);
+      const level = affinityLevelOf(input.value);
+      const levelChanged = level !== current.level;
+      const delta = input.value - current.value;
+      recordEvent({
+        account: input.account,
+        userId: input.userId,
+        time: input.now,
+        source: 'manual',
+        sessionId: null,
+        delta,
+        applied: delta,
+        reason: 'manual',
+        levelBefore: current.level,
+        levelAfter: level,
+      });
+      options.repository.saveAffinityState({
+        account: input.account,
+        userId: input.userId,
+        value: input.value,
+        level,
+        levelSince: levelChanged ? input.now : current.levelSince,
+        lastLevelChangeAt: levelChanged ? input.now : current.lastLevelChangeAt,
+        lastInteractionAt: stored?.lastInteractionAt ?? 0,
+        updatedAt: input.now,
+      });
+      return currentView({
+        ...current,
+        value: input.value,
+        level,
+        levelSince: levelChanged ? input.now : current.levelSince,
+        lastLevelChangeAt: levelChanged ? input.now : current.lastLevelChangeAt,
+        lastInteractionAt: stored?.lastInteractionAt ?? 0,
+        updatedAt: input.now,
+      });
     },
   };
 }

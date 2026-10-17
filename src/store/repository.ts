@@ -130,6 +130,7 @@ export interface StoreRepository {
   recordAffinityEvent(event: AffinityEventRecord): void;
   recentAffinityEvents(account: number, userId: number, count: number): StoredAffinityEvent[];
   affinityEventsSince(account: number, userId: number, since: number): StoredAffinityEvent[];
+  latestSenderNameForAccount(account: number, userId: number): string | undefined;
   insertTag(tag: TagRecord): number;
   tagById(id: number): StoredTag | undefined;
   listTagsForSubject(account: number, sessionId: string, userId: number | null): StoredTag[];

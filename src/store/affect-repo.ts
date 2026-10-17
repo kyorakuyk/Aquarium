@@ -111,7 +111,7 @@ export interface TagRunRecord {
 
 export type AffectRepositoryQueries = Pick<StoreRepository,
   'getMoodState' | 'saveMoodState' | 'recordMoodEvent' | 'recentMoodEvents' | 'moodEventsSince'
-  | 'getAffinityState' | 'listAffinityStates' | 'saveAffinityState' | 'recordAffinityEvent' | 'recentAffinityEvents' | 'affinityEventsSince'
+  | 'getAffinityState' | 'listAffinityStates' | 'saveAffinityState' | 'recordAffinityEvent' | 'recentAffinityEvents' | 'affinityEventsSince' | 'latestSenderNameForAccount'
   | 'insertTag' | 'tagById' | 'listTagsForSubject' | 'listTagsForSession' | 'senderNameFor'
   | 'updateTag' | 'getTagRun' | 'saveTagRun'
   | 'countMessagesAfter'
@@ -303,6 +303,13 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
     WHERE account = ? AND user_id = ? AND time >= ?
     ORDER BY time, id
   `);
+  const selectLatestSenderNameForAccount = database.prepare(`
+    SELECT sender_name
+    FROM messages
+    WHERE session_id LIKE ? AND sender_id = ? AND is_self = 0
+    ORDER BY time DESC, id DESC
+    LIMIT 1
+  `);
   const insertTag = database.prepare(`
     INSERT INTO tags
       (account, session_id, user_id, text, norm, status, source, samples, evidence_json, first_seen, last_seen, superseded_by, updated_at)
@@ -451,6 +458,11 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
       if (!Number.isFinite(since)) throw new RangeError('查询时间必须是有限数字');
       const rows = selectAffinityEventsSince.all(account, userId, since) as Array<Record<string, unknown>>;
       return rows.map(affinityEventRecord);
+    },
+
+    latestSenderNameForAccount(account, userId) {
+      const row = selectLatestSenderNameForAccount.get(`${account}:%`, userId) as Record<string, unknown> | undefined;
+      return row ? stringValue(row.sender_name, 'sender_name') : undefined;
     },
 
     insertTag(tag) {

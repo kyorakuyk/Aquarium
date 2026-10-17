@@ -232,3 +232,16 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .member-grid { display: grid; gap: 12px; margin-top: 12px; }
 .member-card { padding: 15px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
 .member-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.member-affinity { margin: 8px 0 12px; }
+.member-affinity-toggle { display: grid; grid-template-columns: auto minmax(70px, 1fr) auto auto; align-items: center; gap: 10px; width: 100%; min-height: 44px; border: 0; background: transparent; color: var(--text); cursor: pointer; text-align: left; }
+.member-affinity-toggle progress, .affinity-person-main progress { width: 100%; height: 8px; accent-color: var(--accent); }
+.affinity-event-list { display: grid; gap: 5px; margin: 6px 0 10px; padding-left: 20px; color: var(--text); font-size: 11px; }
+.affinity-event-list li { line-height: 1.5; overflow-wrap: anywhere; }
+.affinity-panel { padding: 18px; }
+.affinity-person-list { display: grid; }
+.affinity-person-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, .4fr); align-items: center; gap: 20px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.affinity-person-main { display: grid; grid-template-columns: auto auto minmax(80px, 1fr); align-items: center; gap: 8px 12px; }
+.affinity-person-main progress { grid-column: 1 / -1; }
+.affinity-manual-form { display: flex; align-items: end; gap: 8px; }
+.affinity-manual-form label { display: grid; flex: 1; gap: 4px; }
+.affinity-manual-form input { min-height: 44px; }

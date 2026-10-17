@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { apiRequest, patch, post, type ImpressionsView, type SessionView, type TagStatus, type TagView } from '../api.ts';
+import { AffinityPanel, MemberAffinity } from '../components/AffinityPanel.tsx';
 
 const STATUS_LABELS: Record<TagStatus, string> = {
   candidate: '候选',
@@ -133,6 +134,7 @@ function TagSection({ tags, busy, onAction, onRename }: {
 export function ImpressionsPage() {
   const [groups, setGroups] = useState<SessionView[]>([]);
   const [selectedId, setSelectedId] = useState('');
+  const [tab, setTab] = useState<'groups' | 'people'>('groups');
   const [view, setView] = useState<ImpressionsView>();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -192,6 +194,12 @@ export function ImpressionsPage() {
         <p className="page-description">从群聊里慢慢攒出来的标签；确认后的标签会随回复提示词一起生效。</p>
       </header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
+      <div className="page-tabs" role="tablist" aria-label="印象视图">
+        <button className={tab === 'groups' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'groups'} onClick={() => setTab('groups')}>群聊</button>
+        <button className={tab === 'people' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'people'} onClick={() => setTab('people')}>所有人</button>
+      </div>
+      {tab === 'people' && <AffinityPanel />}
+      {tab === 'groups' && <>
       <div className="impressions-toolbar">
         <label>
           <span className="field-label">选择群</span>
@@ -232,6 +240,7 @@ export function ImpressionsPage() {
                     <strong>{member.name}</strong>
                     <span className="mono muted">QQ {member.userId}</span>
                   </div>
+                  <MemberAffinity affinity={member.affinity} account={Number(view.sessionId.split(':', 1)[0])} />
                   <TagSection
                     tags={member.tags}
                     busy={busy}
@@ -245,6 +254,7 @@ export function ImpressionsPage() {
           </section>
         </>
       )}
+      </>}
     </div>
   );
 }
