@@ -20,6 +20,7 @@ const sessionPatchSchema = z.object({
   mode: z.enum(['mention_only', 'active', 'natural', 'busy']).nullable().optional(),
   modeSchedule: ModeScheduleSchema.nullable().optional(),
   proactiveCooldownSec: z.number().int().min(0).max(3600).nullable().optional(),
+  talkOffset: z.number().int().min(-2).max(2).nullable().optional(),
   nicknames: z.array(z.string()).nullable().optional(),
   contextMessages: z.number().int().positive().nullable().optional(),
   rate: ratePatchSchema.nullable().optional(),
@@ -31,6 +32,7 @@ const defaultsPatchSchema = z.object({
   mode: z.enum(['mention_only', 'active', 'natural', 'busy']).optional(),
   modeSchedule: ModeScheduleSchema.optional(),
   proactiveCooldownSec: z.number().int().min(0).max(3600).optional(),
+  talkOffset: z.number().int().min(-2).max(2).optional(),
   nicknames: z.array(z.string()).optional(),
   contextMessages: z.number().int().positive().optional(),
   rate: z.object({
@@ -136,6 +138,7 @@ export function registerSessionRoutes(app: Hono, options: SessionRouteOptions): 
           mode: effective.mode,
           modeSchedule: effective.modeSchedule,
           proactiveCooldownSec: effective.proactiveCooldownSec,
+          talkOffset: effective.talkOffset,
           nicknames: effective.nicknames,
           contextMessages: effective.contextMessages,
           rate: effective.rate,

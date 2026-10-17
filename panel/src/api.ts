@@ -36,6 +36,7 @@ export interface SessionSettings {
   mode: SessionMode;
   modeSchedule: ModeScheduleEntry[];
   proactiveCooldownSec: number;
+  talkOffset: number;
   nicknames: string[];
   contextMessages: number;
   rate: {
@@ -44,6 +45,13 @@ export interface SessionSettings {
     minIntervalSec: number;
   };
   groupNote: string;
+}
+
+export interface PersonaTraits {
+  order: number;
+  morality: number;
+  talk: number;
+  mind: number;
 }
 
 export interface DefaultsView extends SessionSettings {

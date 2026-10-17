@@ -21,6 +21,8 @@
   .session-detail { order: -1; }
   .persona-workspace { gap: 12px; }
   .persona-library { order: 1; }
+  .persona-trait-grid { grid-template-columns: 1fr; }
+  .persona-traits-heading { align-items: flex-start; flex-direction: column; gap: 5px; }
   .editor-columns { grid-template-columns: 1fr; }
   .markdown-input, .preview-surface { min-height: 260px; }
   .chat-toolbar { grid-template-columns: 1fr 1fr; }

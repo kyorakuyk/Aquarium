@@ -19,6 +19,7 @@ export interface LoadPersonaOptions {
 }
 
 const traitFields = ['order', 'morality', 'talk', 'mind'] as const;
+const frontmatterPattern = /^---[ \t]*\r?\n([\s\S]*?)^---[ \t]*(?:\r?\n|$)/m;
 
 function parseTraits(frontmatter: string): PersonaTraits {
   let header: unknown;
@@ -50,6 +51,29 @@ function parseTraits(frontmatter: string): PersonaTraits {
   return traits;
 }
 
+export function parsePersonaMarkdown(source: string): LoadedPersona {
+  const match = frontmatterPattern.exec(source);
+  return {
+    text: match ? source.slice(match[0].length) : source,
+    traits: match ? parseTraits(match[1] ?? '') : { order: 0, morality: 0, talk: 0, mind: 0 },
+  };
+}
+
+export function updatePersonaTraits(source: string, traits: PersonaTraits): string {
+  const match = frontmatterPattern.exec(source);
+  let header: Record<string, unknown> = {};
+  let text = source;
+  if (match) {
+    const parsed: unknown = yaml.parse(match[1] ?? '');
+    if (parsed === null) header = {};
+    else if (typeof parsed === 'object' && !Array.isArray(parsed)) header = parsed as Record<string, unknown>;
+    else throw new Error('人设 YAML 文件头必须是对象');
+    text = source.slice(match[0].length);
+  }
+  const updatedHeader = yaml.stringify({ ...header, traits });
+  return `---\n${updatedHeader}---\n${text}`;
+}
+
 export function loadPersona(
   id: string,
   nickname: string,
@@ -65,9 +89,9 @@ export function loadPersona(
   if (!personaPath) throw new Error(`找不到人设文件：${id}.md`);
 
   const displayName = nickname.trim() || '水族箱';
-  const source = readFileSync(personaPath, 'utf8');
-  const match = /^---[ \t]*\r?\n([\s\S]*?)^---[ \t]*(?:\r?\n|$)/m.exec(source);
-  const traits = match ? parseTraits(match[1] ?? '') : { order: 0, morality: 0, talk: 0, mind: 0 };
-  const text = (match ? source.slice(match[0].length) : source).replaceAll('{{name}}', () => displayName);
-  return { text, traits };
+  const loaded = parsePersonaMarkdown(readFileSync(personaPath, 'utf8'));
+  return {
+    text: loaded.text.replaceAll('{{name}}', () => displayName),
+    traits: loaded.traits,
+  };
 }

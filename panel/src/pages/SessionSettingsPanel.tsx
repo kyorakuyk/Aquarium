@@ -18,7 +18,7 @@ import {
 
 export const GLOBAL_DEFAULT_ID = '__global-defaults__';
 
-type SessionField = 'enabled' | 'mode' | 'modeSchedule' | 'nicknames' | 'contextMessages' | 'proactiveCooldownSec' | 'rate' | 'groupNote';
+type SessionField = 'enabled' | 'mode' | 'modeSchedule' | 'nicknames' | 'contextMessages' | 'proactiveCooldownSec' | 'talkOffset' | 'rate' | 'groupNote';
 type RateField = keyof SessionSettings['rate'];
 
 export interface SessionSettingsTarget {
@@ -257,6 +257,25 @@ export function SessionSettingsPanel({
             ><strong>{option.title}</strong><span>{option.note}</span></button>
           ))}
         </div>
+      </SettingGroup>
+
+      <SettingGroup>
+        <FieldHeading title="在这里的话量" fields={['talkOffset']} target={target} onReset={restore} onNavigateToDefaults={onNavigateToDefaults} />
+        <label className="field-label" htmlFor="session-talk-offset">调整这个会话里的话量</label>
+        <select
+          id="session-talk-offset"
+          className="talk-offset-select"
+          value={target.settings.talkOffset}
+          disabled={busy}
+          onChange={(event) => void update({ talkOffset: Number(event.currentTarget.value) })}
+        >
+          <option value={-2}>更安静 −2</option>
+          <option value={-1}>−1</option>
+          <option value={0}>不变 0</option>
+          <option value={1}>+1</option>
+          <option value={2}>更话痨 +2</option>
+        </select>
+        <p className="schedule-help">按人设底色叠加，群聊可单独覆盖全局默认；私聊不显示。</p>
       </SettingGroup>
 
       <SettingGroup>

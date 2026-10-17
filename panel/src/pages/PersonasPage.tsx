@@ -1,12 +1,21 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
-import { apiRequest, type PanelStatus } from '../api.ts';
+import { apiRequest, type PanelStatus, type PersonaTraits } from '../api.ts';
 import type { PageId } from '../components/Sidebar.tsx';
+import { parsePersonaTraits, updatePersonaMarkdownTraits } from '../persona-traits.ts';
 
 interface PersonaCard {
   id: string;
   filename: string;
   source: 'data' | 'built-in';
 }
+
+const ZERO_TRAITS: PersonaTraits = { order: 0, morality: 0, talk: 0, mind: 0 };
+const TRAIT_FIELDS: Array<{ key: keyof PersonaTraits; title: string; low: string; high: string }> = [
+  { key: 'order', title: '规矩', low: '守序', high: '混沌' },
+  { key: 'morality', title: '善意', low: '善良', high: '邪恶' },
+  { key: 'talk', title: '话量', low: '文静', high: '话痨' },
+  { key: 'mind', title: '思维', low: '理性', high: '情感' },
+];
 
 function renderPlaceholders(line: string) {
   return line.split(/(\{\{[^}]+\}\})/gu).map((part, index) => part.startsWith('{{') && part.endsWith('}}')
@@ -37,6 +46,8 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const [accounts, setAccounts] = useState<PanelStatus['accounts']>([]);
   const [selectedId, setSelectedId] = useState('');
   const [markdown, setMarkdown] = useState('');
+  const [traits, setTraits] = useState<PersonaTraits>(ZERO_TRAITS);
+  const [traitsInvalid, setTraitsInvalid] = useState(false);
   const [newId, setNewId] = useState('');
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -61,10 +72,18 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   useEffect(() => {
     if (!selectedId) {
       setMarkdown('');
+      setTraits({ ...ZERO_TRAITS });
+      setTraitsInvalid(false);
       return;
     }
-    void apiRequest<{ markdown: string }>(`/api/personas/${encodeURIComponent(selectedId)}`)
-      .then((result) => { setMarkdown(result.markdown); setSaved(false); })
+    void apiRequest<{ markdown: string; traits: PersonaTraits | null }>(`/api/personas/${encodeURIComponent(selectedId)}`)
+      .then((result) => {
+        setMarkdown(result.markdown);
+        const parsed = result.traits ?? parsePersonaTraits(result.markdown);
+        setTraits(parsed ?? { ...ZERO_TRAITS });
+        setTraitsInvalid(parsed === null);
+        setSaved(false);
+      })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : '读取人设失败'));
   }, [selectedId]);
 
@@ -74,8 +93,12 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
     setError('');
     try {
       await apiRequest(`/api/personas/${encodeURIComponent(selectedId)}`, {
-        method: 'PUT', body: JSON.stringify({ markdown }),
+        method: 'PUT', body: JSON.stringify({ markdown, traits }),
       });
+      const savedPersona = await apiRequest<{ markdown: string; traits: PersonaTraits | null }>(`/api/personas/${encodeURIComponent(selectedId)}`);
+      setMarkdown(savedPersona.markdown);
+      setTraits(savedPersona.traits ?? { ...ZERO_TRAITS });
+      setTraitsInvalid(savedPersona.traits === null);
       setSaved(true);
       await loadLibrary(selectedId);
     } catch (reason) {
@@ -132,6 +155,26 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
     else setError('请拖入 Markdown（.md）文件。');
   }
 
+  function changeMarkdown(value: string) {
+    setMarkdown(value);
+    const parsed = parsePersonaTraits(value);
+    if (parsed) {
+      setTraits(parsed);
+      setTraitsInvalid(false);
+    } else {
+      setTraitsInvalid(true);
+    }
+    setSaved(false);
+  }
+
+  function changeTrait(field: keyof PersonaTraits, value: number) {
+    const updated = { ...traits, [field]: value };
+    setTraits(updated);
+    setMarkdown(updatePersonaMarkdownTraits(markdown, updated));
+    setTraitsInvalid(false);
+    setSaved(false);
+  }
+
   const selected = personas.find((persona) => persona.id === selectedId);
   const boundAccounts = accounts.filter((account) => account.persona === selectedId);
 
@@ -171,8 +214,33 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
               <div className="editor-actions"><span className="save-state">{busy ? '保存中…' : saved ? '已保存' : selected.source === 'built-in' ? '内置副本' : '未保存更改'}</span><button className="button button-primary" type="button" disabled={busy} onClick={() => void save()}>保存</button></div>
             </div>
             <div className="binding-row"><label htmlFor="persona-account">绑定账号</label><select id="persona-account" value={boundAccounts[0]?.account ?? ''} disabled aria-describedby="binding-note"><option value="">尚无账号使用</option>{accounts.map((account) => <option key={account.account} value={account.account}>QQ {account.account} · {account.persona}.md</option>)}</select><span id="binding-note" className="muted">账号绑定由配置文件管理</span></div>
+            <section className="persona-traits" aria-labelledby="persona-traits-title">
+              <div className="persona-traits-heading"><h3 id="persona-traits-title">性格底色</h3><span className="muted">0 表示不额外强调；点击档位后随人设保存。</span></div>
+              {traitsInvalid && <p className="notice notice-warn" role="alert">当前 YAML 性格文件头无效；选择档位并保存可重写性格文件头，Markdown 正文会保留。</p>}
+              <div className="persona-trait-grid">
+                {TRAIT_FIELDS.map((field) => (
+                  <div className="persona-trait-field" key={field.key}>
+                    <div className="persona-trait-label"><strong>{field.title}</strong><span className="muted">{field.low} ←　→ {field.high}</span></div>
+                    <div className="trait-segments" role="radiogroup" aria-label={`${field.title}：${field.low} 到 ${field.high}`}>
+                      {[-2, -1, 0, 1, 2].map((value) => (
+                        <button
+                          className={traits[field.key] === value ? 'is-selected' : ''}
+                          type="button"
+                          role="radio"
+                          aria-checked={traits[field.key] === value}
+                          aria-label={`${field.title} ${value > 0 ? `+${value}` : value}`}
+                          key={value}
+                          disabled={busy}
+                          onClick={() => changeTrait(field.key, value)}
+                        >{value > 0 ? `+${value}` : value}</button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
             <div className="editor-columns">
-              <label className="editor-column"><span className="small-heading">Markdown</span><textarea className="markdown-input mono" value={markdown} onChange={(event) => { setMarkdown(event.currentTarget.value); setSaved(false); }} spellCheck={false} aria-label="Markdown 人设内容" /></label>
+              <label className="editor-column"><span className="small-heading">Markdown</span><textarea className="markdown-input mono" value={markdown} onChange={(event) => changeMarkdown(event.currentTarget.value)} spellCheck={false} aria-label="Markdown 人设内容" /></label>
               <div className="editor-column"><div className="small-heading">预览</div><div className="preview-surface"><MarkdownPreview markdown={markdown} /></div></div>
             </div>
             <div className="editor-footer"><span className="muted">{boundAccounts.length ? `当前绑定：${boundAccounts.map((account) => `QQ ${account.account}`).join('、')}` : '尚无账号绑定此人设'}</span><button className="text-button" type="button" onClick={() => onNavigate('sandbox')} title="试聊将使用所选会话当前配置的人设">用当前会话试聊 →</button></div>

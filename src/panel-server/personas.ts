@@ -12,8 +12,18 @@ import {
 import path from 'node:path';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { parsePersonaMarkdown, updatePersonaTraits, type PersonaTraits } from '../persona/load.ts';
 
-const personaBodySchema = z.object({ markdown: z.string().max(100_000) }).strict();
+const personaTraitsSchema: z.ZodType<PersonaTraits> = z.object({
+  order: z.number().int().min(-2).max(2).default(0),
+  morality: z.number().int().min(-2).max(2).default(0),
+  talk: z.number().int().min(-2).max(2).default(0),
+  mind: z.number().int().min(-2).max(2).default(0),
+}).strict();
+const personaBodySchema = z.object({
+  markdown: z.string().max(100_000),
+  traits: personaTraitsSchema.optional(),
+}).strict();
 const personaImportSchema = z.object({
   filename: z.string().min(1).max(255),
   markdown: z.string().max(100_000),
@@ -85,7 +95,10 @@ export function registerPersonaRoutes(app: Hono, root: string): void {
     const builtInPath = personaPath(root, 'personas', id);
     const selectedPath = existsSync(userPath) ? userPath : builtInPath;
     if (!existsSync(selectedPath)) return context.json({ error: 'Persona not found' }, 404);
-    return context.json({ id, markdown: readFileSync(selectedPath, 'utf8') });
+    const markdown = readFileSync(selectedPath, 'utf8');
+    let traits: PersonaTraits | null = null;
+    try { traits = parsePersonaMarkdown(markdown).traits; } catch { /* keep invalid files editable in the panel */ }
+    return context.json({ id, markdown, traits });
   });
 
   app.put('/api/personas/:id', async (context) => {
@@ -95,7 +108,8 @@ export function registerPersonaRoutes(app: Hono, root: string): void {
     try { rawBody = await context.req.json(); } catch { return context.json({ error: 'Invalid JSON' }, 400); }
     const body = parseBody(rawBody, personaBodySchema);
     if (!body) return context.json({ error: 'Invalid persona' }, 400);
-    writeTextAtomic(personaPath(root, 'data/personas', id), body.markdown);
+    const markdown = body.traits ? updatePersonaTraits(body.markdown, body.traits) : body.markdown;
+    writeTextAtomic(personaPath(root, 'data/personas', id), markdown);
     return context.json({ id, saved: true });
   });
 
