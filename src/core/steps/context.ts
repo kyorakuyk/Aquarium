@@ -2,6 +2,7 @@ import { buildPromptMessages, describePromptBlocks, hashPromptMessages } from '.
 import { captionIncomingImages, messageTextWithImageCaptions } from '../images.ts';
 import { loadPersona } from '../../persona/load.ts';
 import { effectiveTalkLevel, renderTraitsBlock } from '../../persona/traits.ts';
+import { renderFloatBlock } from '../mood/render.ts';
 import { createSlotCallOptions } from './call-options.ts';
 import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep } from './types.ts';
@@ -66,8 +67,12 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     account: ctx.message.session.account,
     now: ctx.now(),
     template: ctx.state.promptTemplates.affect,
+    energy: ctx.state.energy ?? 1,
     record: !ctx.processOptions.replay,
   }) ?? {};
+  if (!ctx.options.moodService && config.sleep.enabled && (ctx.state.energy ?? 1) < 0.35) {
+    moodBlocks.float = renderFloatBlock(ctx.state.promptTemplates.affect, 0.5, ctx.state.energy);
+  }
   const affinityBlock = ctx.options.affinityService?.promptBlock({
     account: ctx.message.session.account,
     userId: ctx.message.senderId,

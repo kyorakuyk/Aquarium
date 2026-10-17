@@ -46,6 +46,56 @@ function createSleepHarness(
 
 const sleepTime = () => new Date(2026, 9, 18, 23).getTime();
 
+function createEnergyHarness(
+  repository: ReturnType<typeof createRepository>,
+  personaRoot: string,
+  now: number,
+  nicknames: string[],
+  judgeText: string,
+) {
+  const key = sessionId(groupSession);
+  const config = AquariumConfigSchema.parse({
+    ...makeConfig({ nicknames, sessions: { [key]: { mode: 'active' } } }),
+    sleep: { enabled: true, bedtime: '22:00', wake: '07:00', wakeWords: ['醒醒'], goodnight: true },
+  });
+  const adapter = new FakeAdapter();
+  const modelSlots: string[] = [];
+  let replyPrompt = '';
+  const pipeline = createMessagePipeline({
+    getConfig: () => config,
+    repository,
+    adapter,
+    getNickname: () => adapter.nickname,
+    personaRoot,
+    now: () => now,
+    wait: async () => {},
+    callModel: async (slot, messages) => {
+      modelSlots.push(slot);
+      if (slot === 'reply') {
+        replyPrompt = messages.map((message) => typeof message.content === 'string' ? message.content : '').join('\n');
+      }
+      return {
+        text: slot === 'judge' ? judgeText : '收到。',
+        provider: 'fake',
+        model: 'fake-model',
+        usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+      };
+    },
+  });
+  return { modelSlots, pipeline, replyPrompt: () => replyPrompt };
+}
+
+function recordRecentReply(repository: ReturnType<typeof createRepository>, now: number): void {
+  repository.recordDecision({
+    time: now - 30 * 60_000,
+    sessionId: sessionId(groupSession),
+    messageId: `prior-reply-${now}`,
+    replied: true,
+    reason: 'replied',
+    detail: {},
+  });
+}
+
 test('睡着时被叫也不回，但消息照常落库', async () => {
   await withRepository(async (repository, personaRoot) => {
     const harness = createSleepHarness(repository, personaRoot, sleepConfig(), sleepTime);
@@ -97,5 +147,37 @@ test('睡眠重放跳过睡眠拦截且不创建被叫醒状态', async () => {
     assert.deepEqual(harness.adapter.sent, []);
     const live = await harness.pipeline({ ...message, messageId: 'sleep-live' });
     assert.deepEqual(live, { replied: false, reason: 'asleep' });
+  });
+});
+
+test('低精力在真实 pipeline 提示词中加入困意浮动词', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const now = new Date(2026, 9, 18, 21).getTime();
+    recordRecentReply(repository, now);
+    const harness = createEnergyHarness(repository, personaRoot, now, ['小鱼'], '{"probability":0.9,"reason":"called"}');
+    const result = await harness.pipeline(makeIncoming({
+      messageId: 'sleep-energy-float', plainText: '小鱼，醒着吗？', time: now - 1_000,
+    }));
+
+    assert.equal(result.reason, 'replied');
+    assert.deepEqual(harness.modelSlots, ['reply']);
+    assert.match(harness.replyPrompt(), /有点困/u);
+  });
+});
+
+test('低于 0.25 的精力在主动判断阈值上增加 0.1', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const now = new Date(2026, 9, 18, 21).getTime();
+    recordRecentReply(repository, now);
+    const harness = createEnergyHarness(repository, personaRoot, now, [], '{"probability":0.4,"reason":"question"}');
+    const result = await harness.pipeline(makeIncoming({
+      messageId: 'sleep-energy-threshold', plainText: '今晚吃什么？', time: now - 1_000,
+    }));
+
+    assert.equal(result.reason, 'judge_skip');
+    assert.deepEqual(harness.modelSlots, ['judge']);
+    const detail = repository.recentDecisions(1)[0]?.detail as { threshold?: number; energy?: number };
+    assert.equal(detail.threshold, 0.45);
+    assert.ok((detail.energy ?? 1) < 0.25);
   });
 });

@@ -102,6 +102,7 @@ export interface PipelineState {
   replayReplyCostCny?: number;
   replayTotalCostCny?: number;
   activityDecisionDetail?: Record<string, unknown>;
+  energy?: number;
   proactiveMode?: ProactiveMode;
   promptFingerprints: PromptFingerprint[];
   promptTemplates: PromptTemplateSet;

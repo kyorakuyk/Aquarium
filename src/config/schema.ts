@@ -7,7 +7,8 @@ const rateSchema = z.object({
 }).strict();
 
 const modeSchema = z.enum(['mention_only', 'active', 'natural', 'busy']);
-const scheduleTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
+export const ScheduleTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
+const scheduleTimeSchema = ScheduleTimeSchema;
 const modeScheduleEntrySchema = z.object({
   from: scheduleTimeSchema,
   to: scheduleTimeSchema,

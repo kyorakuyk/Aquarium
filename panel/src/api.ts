@@ -110,6 +110,21 @@ export interface MoodView {
   events: MoodEventView[];
 }
 
+export type SleepStatus = 'awake' | 'asleep' | 'woken';
+
+export interface SleepView {
+  enabled: boolean;
+  bedtime: string;
+  wake: string;
+  wakeWords: string[];
+  goodnight: boolean;
+  status: SleepStatus;
+  energy: number | null;
+  nextChangeAt: number | null;
+  cycleKey: string;
+  account: number | null;
+}
+
 export type TagStatus = 'candidate' | 'confirmed' | 'rejected' | 'superseded';
 
 export interface TagEvidenceView {

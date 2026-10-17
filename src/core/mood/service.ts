@@ -7,7 +7,7 @@ import type { AffinityService } from '../affinity/service.ts';
 import type { AffectPromptTemplate, AppraisePromptTemplate } from '../prompt-templates.ts';
 import type { PipelineModelCall } from '../steps/types.ts';
 import { runAppraise } from './appraise.ts';
-import { renderMoodBlocks, type MoodPromptBlocks } from './render.ts';
+import { renderFloatBlock, renderMoodBlocks, type MoodPromptBlocks } from './render.ts';
 import {
   bandOf,
   capSenderValenceDelta,
@@ -36,6 +36,7 @@ export interface MoodService {
     account: number;
     now: number;
     template: AffectPromptTemplate;
+    energy?: number;
     record: boolean;
   }): MoodPromptBlocks;
   recordCalled(input: { account: number; sessionId: string; now: number }): void;
@@ -114,7 +115,11 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
 
   return {
     promptBlocks(input) {
-      if (!options.getConfig().mood.enabled) return {};
+      const moodConfig = options.getConfig().mood;
+      if (!moodConfig.enabled) {
+        const float = renderFloatBlock(input.template, 0.5, input.energy ?? 1);
+        return float ? { float } : {};
+      }
       const current = loadState(input.account, input.now);
       const band = nextBand(current, current.valence, input.now, 'decay');
       if (band !== current.band && input.record) {
@@ -137,7 +142,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
           lastBandChangeAt: input.now,
         });
       }
-      return renderMoodBlocks(input.template, band, current.arousal);
+      return renderMoodBlocks(input.template, band, current.arousal, input.energy ?? 1);
     },
 
     recordCalled(input) {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { apiRequest, post, type DecisionView, type MoodBand, type MoodEventView, type MoodView, type PanelStatus, type SessionView, type UsageView } from '../api.ts';
+import { apiRequest, post, type DecisionView, type MoodBand, type MoodEventView, type MoodView, type PanelStatus, type SessionView, type SleepView, type UsageView } from '../api.ts';
 import type { PageId } from '../components/Sidebar.tsx';
 import { decisionLabel, decisionTone } from '../labels.ts';
 
@@ -55,6 +55,7 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const [decisions, setDecisions] = useState<DecisionView[]>([]);
   const [usage, setUsage] = useState<UsageView>();
   const [mood, setMood] = useState<MoodView>();
+  const [sleep, setSleep] = useState<SleepView>();
   const [muted, setMuted] = useState(false);
   const [error, setError] = useState('');
 
@@ -74,6 +75,23 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
       setMuted(nextStatus.allMuted);
       setError('');
     }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : '读取控制台数据失败'));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      void apiRequest<SleepView>('/api/sleep').then((value) => {
+        if (active) setSleep(value);
+      }).catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : '读取作息状态失败');
+      });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, []);
 
   async function toggleMute() {
@@ -176,7 +194,8 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
         </article>
       </section>
 
-      <section className="section-block panel-card mood-card">
+      <div className="overview-state-grid section-block">
+      <section className="panel-card mood-card">
         <div className="section-heading">
           <div><h2>心情</h2></div>
           <span className="muted">
@@ -205,6 +224,35 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
           </div>
         )}
       </section>
+
+      <section className="panel-card mood-card sleep-card" aria-labelledby="sleep-card-title">
+        <div className="section-heading">
+          <div><h2 id="sleep-card-title">作息</h2></div>
+          {sleep && <span className="result-pill result-neutral">{sleep.enabled ? '已启用' : '已关闭'}</span>}
+        </div>
+        {!sleep && <p className="muted">正在读取作息状态…</p>}
+        {sleep && (
+          <div className="sleep-layout">
+            <div className="sleep-status-row">
+              <span className="muted">当前状态</span>
+              <strong>{sleep.status === 'asleep' ? '睡着' : sleep.status === 'woken' ? '被叫醒' : sleep.enabled ? '醒着' : '作息已关闭'}</strong>
+            </div>
+            <div className="sleep-energy-row">
+              <div className="metric-row"><span>精力</span><strong className="mono">{sleep.energy === null ? '—' : `${Math.round(sleep.energy * 100)}%`}</strong></div>
+              <div className="progress-track" role="progressbar" aria-label="当前精力" aria-valuenow={Math.round((sleep.energy ?? 0) * 100)} aria-valuemin={0} aria-valuemax={100} aria-valuetext={sleep.energy === null ? '睡着时不计算' : `${Math.round(sleep.energy * 100)}%`}>
+                <span style={{ width: `${Math.round((sleep.energy ?? 0) * 100)}%` }} />
+              </div>
+              {sleep.energy === null && <span className="muted sleep-energy-note">睡着时不计算精力</span>}
+            </div>
+            <div className="sleep-next-change">
+              <span className="muted">{sleep.status === 'asleep' ? '预计醒来' : sleep.status === 'woken' ? '被叫醒状态结束' : '下次入睡'}</span>
+              <strong className="mono">{sleep.nextChangeAt === null ? '未设置' : shortTime(sleep.nextChangeAt)}</strong>
+            </div>
+            {sleep.account !== null && <span className="muted sleep-energy-note">精力按 QQ {sleep.account} 的近 60 分钟回复统计</span>}
+          </div>
+        )}
+      </section>
+      </div>
 
       <section className="section-block panel-card table-card">
         <div className="section-heading">

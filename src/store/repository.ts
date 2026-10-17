@@ -104,6 +104,7 @@ export interface StoreRepository {
   costToday(): number;
   replyCountToday(): number;
   replyCountTodayForAccount(account: number): number;
+  replyCountLastHourForAccount(account: number, now: number): number;
   usageToday(): UsageSummary;
   getCaption(key: string): string | undefined;
   setCaption(key: string, caption: string, time?: number): void;

@@ -11,14 +11,22 @@ export function renderMoodBlocks(
   template: AffectPromptTemplate,
   band: MoodBand,
   arousal: number,
+  energy = 1,
 ): MoodPromptBlocks {
   const mood = template.mood[band];
-  const floatWord = arousal < 0.3
-    ? template.float.arousalLow
-    : arousal > 0.7 ? template.float.arousalHigh : '';
-  const float = floatWord ? template.float.wrap.replaceAll('{{floats}}', floatWord) : '';
+  const float = renderFloatBlock(template, arousal, energy);
   return {
     ...(mood ? { mood } : {}),
     ...(float ? { float } : {}),
   };
+}
+
+export function renderFloatBlock(template: AffectPromptTemplate, arousal: number, energy = 1): string {
+  const floatWord = arousal < 0.3
+    ? template.float.arousalLow
+    : arousal > 0.7 ? template.float.arousalHigh : '';
+  const floatWords = [floatWord, ...(energy < 0.35 ? ['有点困'] : [])].filter(Boolean);
+  return floatWords.length > 0
+    ? template.float.wrap.replaceAll('{{floats}}', floatWords.join('、'))
+    : '';
 }

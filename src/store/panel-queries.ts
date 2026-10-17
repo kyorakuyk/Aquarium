@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { StoreRepository } from './repository.ts';
 
 export type PanelRepositoryQueries = Pick<StoreRepository,
-  'latestSelfMessageForAccount' | 'selfMessagesById' | 'replyCountToday' | 'replyCountTodayForAccount' | 'usageToday' | 'decisionMessageText' | 'decisionById' | 'hasDebugTrace' | 'hasPipelineTrace'
+  'latestSelfMessageForAccount' | 'selfMessagesById' | 'replyCountToday' | 'replyCountTodayForAccount' | 'replyCountLastHourForAccount' | 'usageToday' | 'decisionMessageText' | 'decisionById' | 'hasDebugTrace' | 'hasPipelineTrace'
 >;
 
 function numberValue(value: unknown, field: string): number {
@@ -68,6 +68,11 @@ export function createPanelQueries(
     FROM decisions
     WHERE replied = 1 AND session_id LIKE ? AND time >= ? AND time < ?
   `);
+  const selectReplyCountLastHourForAccount = database.prepare(`
+    SELECT COUNT(*) AS total
+    FROM decisions
+    WHERE replied = 1 AND session_id LIKE ? AND time >= ? AND time <= ?
+  `);
   const selectDecisionById = database.prepare(`
     SELECT id, time, session_id, message_id, replied, reason, detail_json
     FROM decisions
@@ -114,6 +119,12 @@ export function createPanelQueries(
     replyCountTodayForAccount(account) {
       if (!Number.isSafeInteger(account) || account <= 0) return 0;
       const row = selectTodayReplyCountForAccount.get(`${account}:%`, ...todayRange()) as Record<string, unknown> | undefined;
+      return numberValue(row?.total ?? 0, 'total');
+    },
+
+    replyCountLastHourForAccount(account, now) {
+      if (!Number.isSafeInteger(account) || account <= 0 || !Number.isFinite(now)) return 0;
+      const row = selectReplyCountLastHourForAccount.get(`${account}:%`, now - 60 * 60_000, now) as Record<string, unknown> | undefined;
       return numberValue(row?.total ?? 0, 'total');
     },
 

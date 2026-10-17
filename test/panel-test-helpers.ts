@@ -4,6 +4,7 @@ import path from 'node:path';
 import yaml from 'yaml';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
 import { createManagementCommands } from '../src/core/management.ts';
+import { createSleepWakeState } from '../src/core/sleep.ts';
 import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../src/core/events.ts';
 import type { ContactFriend, ContactGroup, ProtocolAdapter } from '../src/adapters/types.ts';
 import { createPanelApp } from '../src/panel-server/app.ts';
@@ -58,6 +59,7 @@ export async function withPanel<T>(
     adapter: FakeAdapter;
     modelSlots: string[];
     replayedMessages: IncomingMessage[];
+    sleepWakeState: ReturnType<typeof createSleepWakeState>;
     getConfig: () => ReturnType<typeof AquariumConfigSchema.parse>;
     getSavedConfig: () => ReturnType<typeof AquariumConfigSchema.parse> | undefined;
   }) => Promise<T>,
@@ -81,6 +83,7 @@ export async function withPanel<T>(
   });
   let savedConfig: ReturnType<typeof AquariumConfigSchema.parse> | undefined;
   const adapter = new FakeAdapter();
+  const sleepWakeState = createSleepWakeState();
   const modelSlots: string[] = [];
   const replayedMessages: IncomingMessage[] = [];
   const management = createManagementCommands({
@@ -95,6 +98,7 @@ export async function withPanel<T>(
     saveConfig: (next) => { config = next; savedConfig = next; },
     repository,
     accounts: () => [{ adapter, getStatus: () => 'online', getNickname: () => adapter.nickname }],
+    sleepWakeState,
     management: () => [management],
     root,
     now: () => now,
@@ -144,6 +148,7 @@ export async function withPanel<T>(
       adapter,
       modelSlots,
       replayedMessages,
+      sleepWakeState,
       getConfig: () => config,
       getSavedConfig: () => savedConfig,
     });

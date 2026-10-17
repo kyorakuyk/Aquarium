@@ -329,6 +329,7 @@ await startPanelWhileAccountStartupRuns(accountStartup, () => {
           },
           repository,
           accounts: () => panelAccounts,
+          sleepWakeState,
           management: () => managementControllers,
           replayMessage: (message) => {
             const pipeline = pipelines.get(message.session.account);

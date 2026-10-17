@@ -9,6 +9,7 @@ const WAKE_WINDOW_MS = 30 * 60_000;
 
 export interface SleepWakeState {
   isAwake(now: number): boolean;
+  activeUntil(now: number): number | null;
   activate(now: number): void;
 }
 
@@ -16,6 +17,7 @@ export function createSleepWakeState(): SleepWakeState {
   let awakeUntil = 0;
   return {
     isAwake: (now) => now < awakeUntil,
+    activeUntil: (now) => now < awakeUntil ? awakeUntil : null,
     activate: (now) => { awakeUntil = now + WAKE_WINDOW_MS; },
   };
 }

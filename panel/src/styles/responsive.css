@@ -17,6 +17,7 @@
   h1 { font-size: 28px; }
   .tank-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stats-grid { grid-template-columns: 1fr; }
+  .overview-state-grid, .sleep-settings-grid { grid-template-columns: 1fr; }
   .session-workspace, .persona-workspace, .sandbox-layout, .decision-records-layout { grid-template-columns: 1fr; }
   .session-detail { order: -1; }
   .persona-workspace { gap: 12px; }

@@ -23,8 +23,10 @@ import { callSlot } from '../llm/slots.ts';
 import { registerPersonaRoutes } from './personas.ts';
 import { registerSessionRoutes } from './session-routes.ts';
 import { registerAffectRoutes } from './affect-routes.ts';
+import { registerSleepRoutes } from './sleep-routes.ts';
 import type { ContactSnapshot, PanelAccountRuntime } from './types.ts';
 import { budgetState } from '../llm/budget.ts';
+import type { SleepWakeState } from '../core/sleep.ts';
 
 export interface PanelServerOptions {
   password: string;
@@ -39,6 +41,7 @@ export interface PanelServerOptions {
   adapterTimeoutMs?: number;
   callModel?: PipelineModelCall;
   replayMessage?: (message: IncomingMessage) => Promise<PipelineResult | undefined>;
+  sleepWakeState?: SleepWakeState;
   onError?: (error: unknown) => void;
 }
 
@@ -206,6 +209,15 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     repository: options.repository,
     accounts: options.accounts,
     now,
+  });
+  registerSleepRoutes(app, {
+    getConfig: options.getConfig,
+    saveConfig: options.saveConfig,
+    repository: options.repository,
+    account: () => options.accounts()[0]?.adapter.account ?? null,
+    sleepWakeState: options.sleepWakeState,
+    now,
+    serializeConfigWrite,
   });
 
   app.get('/api/status', async (context) => {

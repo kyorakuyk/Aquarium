@@ -53,10 +53,10 @@ function roundThreshold(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-export function adjustThresholdForTalk(threshold: number, effectiveTalk: number): number {
+export function adjustThresholdForTalk(threshold: number, effectiveTalk: number, energy = 1): number {
   return Math.max(MIN_THRESHOLD, Math.min(
     MAX_THRESHOLD,
-    roundThreshold(threshold - 0.05 * effectiveTalk),
+    roundThreshold(threshold - 0.05 * effectiveTalk + (energy < 0.25 ? 0.1 : 0)),
   ));
 }
 

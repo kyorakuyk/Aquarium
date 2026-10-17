@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiRequest, patch, type DefaultsView, type SessionView } from '../api.ts';
+import { SleepSettingsPanel } from './SleepSettingsPanel.tsx';
 import {
   createDefaultsSettingsTarget,
   createSessionSettingsTarget,
@@ -216,6 +217,7 @@ export function SessionsPage() {
               onNavigateToDefaults={() => setSelectedId(GLOBAL_DEFAULT_ID)}
             />
             : <div className="empty-state">{selectedId === GLOBAL_DEFAULT_ID ? '正在读取全局默认设置…' : '选择一个会话查看设置。'}</div>}
+          {selected?.kind === 'global' && <SleepSettingsPanel />}
         </section>
       </div>
     </div>
