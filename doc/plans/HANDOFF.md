@@ -349,3 +349,11 @@ AQUARIUM_PANEL_PASSWORD=
 - 主动判断阈值在原值上减 `0.05 × talk'`，再限制到 `[0.2, 0.9]`。
 - 拆条上限：`talk' ≤ −2` 为 1 条，`talk' = −1` 为 2 条，其余 3 条；溢出内容并入最后一条。
 - `talkOffset` 从全局默认继承，可按群覆盖；面板私聊不显示该控制项。
+
+## 11. 作息与精力数据流
+
+- 顶层 `sleep` 默认关闭，时间为本地 `HH:mm`；`sleepPlan` 支持跨午夜，非法或相同时间视为醒着，`cycleKey` 为入睡日期。
+- 入睡后消息仍先持久化，再以 `asleep` 跳过回复和主动判断；重放不拦截。主人在叫 bot 的消息里含醒词可叫醒 30 分钟，主人发言续期；重启丢失，非主人无效。
+- 每分钟检测 awake→sleep；对近 2 小时 bot 发过言的已启用会话取最近前 2，随机发送 `prompts/sleep.md`，不调模型，复用 deliverStep/闭嘴/频率限制；cycleKey 内存去重并记 `goodnight` decision，启动已睡不补发，关机清理定时器。
+- 醒着时 `energy=clamp(1−0.8×(now−wakeAt)/(bedAt−wakeAt)−0.01×account近60分钟回复数,0,1)`；作息关闭恒为 1，睡着时不计算。
+- `energy<0.35` 时 float 加“有点困”（与 arousal 词用顿号）；`energy<0.25` 时在 talk 偏移后、阈值限幅前加 0.1。控制台通过 `/api/sleep` GET/PATCH 配置，作息卡显示状态、精力和下次变化时间。
