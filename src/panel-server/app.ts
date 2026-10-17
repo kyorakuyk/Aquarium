@@ -360,7 +360,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     const settings = resolveSession(config, key);
     const accountConfig = config.accounts.find((candidate) => candidate.uin === key.account);
     const nickname = runtime.getNickname();
-    const persona = loadPersona(accountConfig?.persona ?? 'default', nickname, { root });
+    const persona = loadPersona(accountConfig?.persona ?? 'default', nickname, { root }).text;
     const nowTime = now();
     const nonOwnerId = config.owner === 1 ? 2 : 1;
     const contextMessages = body.history.map((message, index) => {

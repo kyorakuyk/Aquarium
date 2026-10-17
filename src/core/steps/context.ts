@@ -16,7 +16,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   try {
     persona = loadPersona(account?.persona ?? 'default', nickname, {
       ...(ctx.options.personaRoot === undefined ? {} : { root: ctx.options.personaRoot }),
-    });
+    }).text;
   } catch (error) {
     ctx.options.onError?.(error, ctx.message);
     return { next: false, reason: 'persona_error', detail: errorDetails(error) };
