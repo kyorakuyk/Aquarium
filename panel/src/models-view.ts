@@ -20,6 +20,17 @@ export const REASONING_OPTIONS: Array<{ value: ModelReasoning; label: string }> 
   { value: 'high', label: '高' },
 ];
 
+export function reasoningFieldOptions(value: string | undefined): Array<{ value: string; label: string }> {
+  const options = [
+    { value: 'reasoning_effort', label: '支持（reasoning_effort）' },
+    { value: 'none', label: '不支持' },
+  ];
+  if (value && value !== 'none' && value !== 'reasoning_effort') {
+    options.push({ value, label: `自定义（${value}）` });
+  }
+  return options;
+}
+
 export function reasoningLabel(value: ModelReasoning | undefined): string {
   return REASONING_OPTIONS.find((option) => option.value === (value ?? 'off'))?.label ?? '关';
 }

@@ -43,13 +43,23 @@ const sessionOverrideSchema = z.object({
   groupNote: z.string().optional(),
 }).strict();
 
+const reservedReasoningFields = new Set([
+  'model', 'messages', 'temperature', 'max_tokens', 'max_completion_tokens', 'stream', 'n',
+  'tools', 'tool_choice', 'response_format', 'top_p', 'stop', 'seed', 'frequency_penalty',
+  'presence_penalty', 'logit_bias', 'user', 'service_tier', 'parallel_tool_calls', 'modalities',
+]);
+export const ReasoningFieldSchema = z.string().regex(/^[a-z][a-z0-9_]*$/).refine(
+  (field) => !reservedReasoningFields.has(field),
+  '思考强度字段不能覆盖请求参数',
+);
+
 export const ProviderConfigSchema = z.union([
   z.object({
     kind: z.literal('api').default('api'),
     baseUrl: z.string().min(1),
     apiKeyEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
     label: z.string().min(1).optional(),
-    reasoningField: z.string().regex(/^[a-z][a-z0-9_]*$/).default('reasoning_effort'),
+    reasoningField: ReasoningFieldSchema.default('reasoning_effort'),
   }).strict(),
   z.object({
     kind: z.literal('cli'),

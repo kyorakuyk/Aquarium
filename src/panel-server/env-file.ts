@@ -10,17 +10,24 @@ function assertKeyName(name: string): void {
 }
 
 export function envValueFromLine(line: string): string {
-  const raw = line.slice(line.indexOf('=') + 1).trim();
-  if (raw.length >= 2 && (raw.startsWith('"') && raw.endsWith('"') || raw.startsWith("'") && raw.endsWith("'"))) {
-    return raw.slice(1, -1);
+  const source = line.slice(line.indexOf('=') + 1).trim();
+  const commentIndex = inlineCommentStart(source);
+  const raw = (commentIndex >= 0 ? source.slice(0, commentIndex) : source).trim();
+  if (raw.startsWith('"') && raw.endsWith('"')) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (typeof parsed === 'string') return parsed;
+    } catch {
+      return raw.slice(1, -1);
+    }
   }
-  const commentIndex = raw.search(/\s#/u);
-  return (commentIndex >= 0 ? raw.slice(0, commentIndex) : raw).trim();
+  if (raw.length >= 2 && raw.startsWith("'") && raw.endsWith("'")) return raw.slice(1, -1);
+  return raw;
 }
 
 export function maskSecret(value: string | undefined): { set: boolean; last4: string } {
   if (!value) return { set: false, last4: '' };
-  return { set: true, last4: value.slice(-4) };
+  return { set: true, last4: value.length <= 4 ? '••••' : value.slice(-4) };
 }
 
 export function readEnvKey(envPath: string, name: string): string | undefined {
@@ -43,24 +50,58 @@ function formatValue(value: string): string {
   return JSON.stringify(value);
 }
 
+function inlineCommentStart(value: string): number {
+  let quote: '"' | "'" | undefined;
+  let escaped = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === '\\' && quote === '"') {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === '#' && (index === 0 || /\s/u.test(value[index - 1] ?? ''))) {
+      let start = index;
+      while (start > 0 && /\s/u.test(value[start - 1] ?? '')) start -= 1;
+      return start;
+    }
+  }
+  return -1;
+}
+
+function replaceAssignment(line: string, value: string): string {
+  const equalsIndex = line.indexOf('=');
+  const existingValue = line.slice(equalsIndex + 1);
+  const commentIndex = inlineCommentStart(existingValue);
+  const comment = commentIndex >= 0 ? existingValue.slice(commentIndex) : '';
+  return `${line.slice(0, equalsIndex + 1)}${formatValue(value)}${comment}`;
+}
+
 export function setEnvAssignment(source: string, name: string, value: string): string {
   assertKeyName(name);
   const newline = source.includes('\r\n') ? '\r\n' : '\n';
   const lines = source.length === 0 ? [] : source.split(/\r?\n/u);
   if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
-  const assignment = `${name}=${formatValue(value)}`;
-  const target = lines.findIndex((line) => {
+  let found = false;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
     const match = assignmentPattern.exec(line);
-    return match?.[1] === name;
-  });
-  if (target >= 0) {
-    const previous = lines[target] ?? '';
-    const indent = /^\s*/u.exec(previous)?.[0] ?? '';
-    const exported = /^\s*export\s+/u.test(previous) ? 'export ' : '';
-    lines[target] = `${indent}${exported}${assignment}`;
-  } else {
-    lines.push(assignment);
+    if (match?.[1] !== name) continue;
+    lines[index] = replaceAssignment(line, value);
+    found = true;
   }
+  if (!found) lines.push(`${name}=${formatValue(value)}`);
   return `${lines.join(newline)}${newline}`;
 }
 

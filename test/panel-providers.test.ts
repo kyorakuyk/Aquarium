@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { createCliRuntime } from '../src/llm/cli.ts';
-import { setEnvAssignment } from '../src/panel-server/env-file.ts';
+import { maskSecret, setEnvAssignment } from '../src/panel-server/env-file.ts';
 import { authHeaders, now, withPanel } from './panel-test-helpers.ts';
 
 const syntheticKey = ['sk', 'test', 'value', '1234'].join('-');
@@ -37,6 +37,23 @@ test('.env assignment replaces an existing line in place and preserves comments 
   const appended = setEnvAssignment(replaced, 'NEW_API_KEY', syntheticKey);
   assert.match(appended, new RegExp(`NEW_API_KEY=${syntheticKey}`, 'u'));
   assert.equal(appended.split('\n').filter((line) => line.startsWith('OTHER_KEY=')).length, 1);
+});
+
+test('.env assignment updates duplicate key rows and preserves their inline comments', () => {
+  const source = 'API_KEY=old # first comment\n# standalone\nAPI_KEY=stale # second comment\nOTHER=keep\n';
+  const updated = setEnvAssignment(source, 'API_KEY', syntheticKey);
+  const keyLines = updated.split('\n').filter((line) => /^API_KEY=/u.test(line));
+  assert.equal(keyLines.length, 2);
+  assert.ok(keyLines.every((line) => line.includes(syntheticKey)));
+  assert.match(updated, /# first comment/u);
+  assert.match(updated, /# second comment/u);
+  assert.match(updated, /# standalone/u);
+  assert.match(updated, /OTHER=keep/u);
+});
+
+test('short keys are masked without returning the entire value as last4', () => {
+  assert.deepEqual(maskSecret('abc'), { set: true, last4: '••••' });
+  assert.deepEqual(maskSecret('four'), { set: true, last4: '••••' });
 });
 
 test('models API and provider lifecycle manage configs without ever returning the key', async () => {
@@ -86,6 +103,21 @@ test('models API and provider lifecycle manage configs without ever returning th
       body: JSON.stringify({ id: 'bad', provider: { kind: 'api', baseUrl: '', apiKeyEnv: 'lowercase' } }),
     });
     assert.equal(invalid.status, 400);
+
+    const reservedReasoningField = await app.request('/api/providers', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        id: 'reserved-field',
+        provider: {
+          kind: 'api',
+          baseUrl: 'https://example.invalid/v1',
+          apiKeyEnv: 'SYNTHETIC_API_KEY',
+          reasoningField: 'model',
+        },
+      }),
+    });
+    assert.equal(reservedReasoningField.status, 400);
 
     const models = await app.request('/api/models', { headers: authHeaders() });
     assert.equal(models.status, 200);
@@ -150,7 +182,17 @@ test('provider key endpoint writes .env, updates the status, and never echoes th
       body: JSON.stringify({ key: 'with\nnewline' }),
     });
     assert.equal(cliKey.status, 400);
-    assert.equal(fs.readFileSync(envPath, 'utf8').includes('with'), false);
+    assert.equal(fs.readFileSync(envPath, 'utf8').includes('newline'), false);
+
+    const short = await app.request('/api/providers/deepseek/key', {
+      method: 'PUT',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'abc' }),
+    });
+    assert.equal(short.status, 200);
+    const shortText = await short.text();
+    assert.equal(shortText.includes('abc'), false);
+    assert.deepEqual(JSON.parse(shortText), { set: true, last4: '••••' });
   }, undefined, { envPath, env });
 });
 

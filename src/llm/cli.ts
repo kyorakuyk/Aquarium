@@ -1,8 +1,14 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AquariumConfig } from '../config/schema.ts';
+import {
+  runCliChild,
+  spawnCliChild,
+  terminateCliChild,
+  type CliProviderConfig,
+} from './cli-process.ts';
 
 type ProviderConfig = AquariumConfig['providers'][string];
-export type CliProviderConfig = Extract<ProviderConfig, { kind: 'cli' }>;
+export type { CliProviderConfig } from './cli-process.ts';
 
 export type CliRuntimeState = 'stopped' | 'starting' | 'ready' | 'busy' | 'restarting';
 
@@ -27,8 +33,6 @@ export interface CliRuntimeOptions {
   log?: (message: string) => void;
 }
 
-const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
-
 export function buildCliInput(messages: Array<{ role?: string; content?: unknown }>): string {
   return messages.map((message) => {
     const prefix = message.role === 'system' ? '[系统]' : '[对话]';
@@ -37,89 +41,13 @@ export function buildCliInput(messages: Array<{ role?: string; content?: unknown
   }).join('\n\n');
 }
 
-interface CliRunHooks {
-  onSpawn?: (pid: number | undefined) => void;
-}
-
-function runChild(
-  child: ChildProcessWithoutNullStreams,
-  input: string,
-  timeoutMs: number,
-  hooks: CliRunHooks = {},
-): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    let outputBytes = 0;
-    let settled = false;
-    let timedOut = false;
-
-    const finish = (error: Error | undefined, text?: string) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      child.removeAllListeners();
-      child.stdout.removeAllListeners();
-      child.stderr.removeAllListeners();
-      child.removeAllListeners('exit');
-      child.on('error', () => { /* 收尾后忽略迟到的错误事件。 */ });
-      if (error) reject(error);
-      else resolve(text ?? '');
-    };
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill();
-    }, timeoutMs);
-
-    child.once('spawn', () => hooks.onSpawn?.(child.pid));
-    child.once('error', () => finish(new Error('CLI 启动失败')));
-    child.stdout.on('data', (chunk: Buffer) => {
-      outputBytes += chunk.length;
-      if (outputBytes > MAX_OUTPUT_BYTES) {
-        child.kill();
-        finish(new Error('CLI 输出过大'));
-        return;
-      }
-      stdout.push(chunk);
-    });
-    child.stderr.on('data', (chunk: Buffer) => {
-      if (stderr.length < 16) stderr.push(chunk);
-    });
-    child.once('close', (code) => {
-      if (timedOut) {
-        finish(new Error('CLI 调用超时'));
-        return;
-      }
-      if (code !== 0) {
-        finish(new Error(`CLI 退出码 ${code ?? '未知'}`));
-        return;
-      }
-      const text = Buffer.concat(stdout).toString('utf8').trim();
-      if (!text) {
-        finish(new Error('CLI 没有输出'));
-        return;
-      }
-      finish(undefined, text);
-    });
-
-    child.stdin.on('error', () => { /* close 事件会给出最终失败原因。 */ });
-    child.stdin.end(input);
-  });
-}
-
-function spawnChild(spawnProcess: typeof spawn, provider: CliProviderConfig): ChildProcessWithoutNullStreams {
-  return spawnProcess(provider.command, provider.args, {
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true,
-  }) as ChildProcessWithoutNullStreams;
-}
-
 class PrewarmSlot {
   private readonly provider: CliProviderConfig;
   private readonly options: Required<Pick<CliRuntimeOptions, 'spawnProcess' | 'restartBaseMs' | 'restartMaxMs'>>;
   private readonly log: (message: string) => void;
+  private readonly activeChildren = new Set<ChildProcessWithoutNullStreams>();
   private child: ChildProcessWithoutNullStreams | undefined;
+  private idleReady = false;
   private state: CliRuntimeState = 'stopped';
   private served = 0;
   private stopped = false;
@@ -139,7 +67,8 @@ class PrewarmSlot {
   }
 
   status(): CliRuntimeStatus {
-    return { state: this.state, pid: this.child?.pid ?? null, served: this.served };
+    const activePid = [...this.activeChildren].find((child) => child.pid)?.pid;
+    return { state: this.state, pid: this.child?.pid ?? activePid ?? null, served: this.served };
   }
 
   start(): void {
@@ -149,21 +78,30 @@ class PrewarmSlot {
       this.restartTimer = undefined;
     }
     this.state = 'starting';
-    const child = spawnChild(this.options.spawnProcess, this.provider);
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = spawnCliChild(this.options.spawnProcess, this.provider);
+    } catch {
+      this.state = 'restarting';
+      this.scheduleRestart();
+      return;
+    }
     this.child = child;
+    this.idleReady = false;
     child.stdout.resume();
     child.stderr.resume();
     child.once('spawn', () => {
       if (this.child !== child) return;
-      this.state = 'ready';
-      this.backoffMs = this.options.restartBaseMs;
+      this.idleReady = true;
+      this.state = this.activeChildren.size > 0 ? 'busy' : 'ready';
     });
     const idleExit = (code: number | null) => {
       if (this.child !== child) return;
       this.child = undefined;
+      this.idleReady = false;
       this.idleExitHandler = undefined;
       if (this.stopped) return;
-      this.state = 'restarting';
+      this.state = this.activeChildren.size > 0 ? 'busy' : 'restarting';
       this.log(`CLI 预热进程提前退出（${code ?? '未知'}），准备重启。`);
       this.scheduleRestart();
     };
@@ -172,8 +110,9 @@ class PrewarmSlot {
     child.once('error', () => {
       if (this.child !== child) return;
       this.child = undefined;
+      this.idleReady = false;
       if (this.stopped) return;
-      this.state = 'restarting';
+      this.state = this.activeChildren.size > 0 ? 'busy' : 'restarting';
       this.scheduleRestart();
     });
     child.stdin.on('error', () => { /* 空闲进程退出时忽略 EPIPE。 */ });
@@ -184,22 +123,41 @@ class PrewarmSlot {
     let child = this.child;
     if (child) {
       this.child = undefined;
+      this.idleReady = false;
       if (this.idleExitHandler) {
         child.removeListener('exit', this.idleExitHandler);
         this.idleExitHandler = undefined;
       }
     } else {
-      child = spawnChild(this.options.spawnProcess, this.provider);
+      try {
+        child = spawnCliChild(this.options.spawnProcess, this.provider);
+      } catch {
+        if (!this.stopped && this.restartTimer === undefined) {
+          this.state = 'restarting';
+          this.scheduleRestart();
+        }
+        throw new Error('CLI 启动失败');
+      }
     }
+    this.activeChildren.add(child);
     this.state = 'busy';
+    if (!this.child && this.restartTimer === undefined) this.start();
     try {
-      const text = await runChild(child, input, this.provider.timeoutSec * 1_000);
+      const text = await runCliChild(child, input, this.provider.timeoutSec * 1_000);
       this.served += 1;
+      this.backoffMs = this.options.restartBaseMs;
       return text;
     } finally {
+      this.activeChildren.delete(child);
       if (!this.stopped) {
-        this.state = 'starting';
-        this.start();
+        if (this.restartTimer !== undefined && !this.child) {
+          this.state = 'restarting';
+        } else if (this.child) {
+          this.state = this.activeChildren.size > 0 ? 'busy' : this.idleReady ? 'ready' : 'starting';
+        } else {
+          this.state = 'restarting';
+          this.scheduleRestart();
+        }
       }
     }
   }
@@ -211,8 +169,10 @@ class PrewarmSlot {
       clearTimeout(this.restartTimer);
       this.restartTimer = undefined;
     }
-    this.child?.kill();
+    if (this.child) void terminateCliChild(this.child);
     this.child = undefined;
+    this.idleReady = false;
+    for (const child of this.activeChildren) void terminateCliChild(child);
     this.state = 'stopped';
     this.start();
   }
@@ -223,9 +183,26 @@ class PrewarmSlot {
       clearTimeout(this.restartTimer);
       this.restartTimer = undefined;
     }
-    this.child?.kill();
+    if (this.child) void terminateCliChild(this.child);
     this.child = undefined;
+    this.idleReady = false;
+    for (const child of this.activeChildren) void terminateCliChild(child);
     this.state = 'stopped';
+  }
+
+  async stopAndWait(): Promise<void> {
+    const children = [...this.activeChildren];
+    if (this.child) children.push(this.child);
+    this.stopped = true;
+    if (this.restartTimer !== undefined) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = undefined;
+    }
+    this.child = undefined;
+    this.idleReady = false;
+    this.idleExitHandler = undefined;
+    this.state = 'stopped';
+    await Promise.all(children.map((child) => terminateCliChild(child)));
   }
 
   private scheduleRestart(): void {
@@ -244,12 +221,18 @@ class Runtime implements CliRuntime {
   private readonly slots = new Map<string, PrewarmSlot>();
   private readonly providers = new Map<string, CliProviderConfig>();
   private readonly signatures = new Map<string, string>();
+  private readonly activeChildren = new Map<string, Set<ChildProcessWithoutNullStreams>>();
+  private readonly servedCounts = new Map<string, number>();
   private readonly options: {
     spawnProcess: typeof spawn;
     restartBaseMs: number;
     restartMaxMs: number;
     log: (message: string) => void;
   };
+
+  private stopActiveChildren(id: string): void {
+    for (const child of this.activeChildren.get(id) ?? []) void terminateCliChild(child);
+  }
 
   constructor(options: CliRuntimeOptions = {}) {
     this.options = {
@@ -264,42 +247,57 @@ class Runtime implements CliRuntime {
     for (const [id, provider] of Object.entries(providers)) {
       if (provider.kind !== 'cli') {
         this.slots.get(id)?.stop();
+        this.stopActiveChildren(id);
         this.slots.delete(id);
         this.providers.delete(id);
         this.signatures.delete(id);
+        this.servedCounts.delete(id);
         continue;
       }
       this.providers.set(id, provider);
       const signature = JSON.stringify(provider);
+      const previousSignature = this.signatures.get(id);
+      if (previousSignature !== undefined && previousSignature !== signature) this.stopActiveChildren(id);
+      this.signatures.set(id, signature);
       if (!provider.prewarm) {
         this.slots.get(id)?.stop();
         this.slots.delete(id);
-        this.signatures.delete(id);
         continue;
       }
-      if (this.slots.has(id) && this.signatures.get(id) !== signature) {
+      if (this.slots.has(id) && previousSignature !== signature) {
         this.slots.get(id)?.stop();
         this.slots.delete(id);
       }
       if (!this.slots.has(id)) {
         const slot = new PrewarmSlot(provider, this.options, this.options.log);
         this.slots.set(id, slot);
-        this.signatures.set(id, signature);
         slot.start();
       }
     }
-    for (const [id, slot] of this.slots) {
-      if (!providers[id]) {
-        slot.stop();
-        this.slots.delete(id);
-        this.providers.delete(id);
-        this.signatures.delete(id);
-      }
+    for (const id of this.providers.keys()) {
+      if (providers[id]) continue;
+      this.slots.get(id)?.stop();
+      this.stopActiveChildren(id);
+      this.slots.delete(id);
+      this.providers.delete(id);
+      this.signatures.delete(id);
+      this.servedCounts.delete(id);
+    }
+    for (const id of this.activeChildren.keys()) {
+      if (!providers[id]) this.stopActiveChildren(id);
     }
   }
 
   status(id: string): CliRuntimeStatus {
-    return this.slots.get(id)?.status() ?? { state: 'stopped', pid: null, served: 0 };
+    const status = this.slots.get(id)?.status();
+    const activePid = [...(this.activeChildren.get(id) ?? [])].find((child) => child.pid)?.pid;
+    return status
+      ? { ...status, pid: status.pid ?? activePid ?? null, served: this.servedCounts.get(id) ?? status.served }
+      : {
+        state: (this.activeChildren.get(id)?.size ?? 0) > 0 ? 'busy' : 'stopped',
+        pid: activePid ?? null,
+        served: this.servedCounts.get(id) ?? 0,
+      };
   }
 
   restart(id: string, provider: CliProviderConfig): void {
@@ -317,7 +315,18 @@ class Runtime implements CliRuntime {
 
   async call(id: string, provider: CliProviderConfig, input: string): Promise<string> {
     if (!provider.prewarm) {
-      return runChild(spawnChild(this.options.spawnProcess, provider), input, provider.timeoutSec * 1_000);
+      const child = spawnCliChild(this.options.spawnProcess, provider);
+      const children = this.activeChildren.get(id) ?? new Set<ChildProcessWithoutNullStreams>();
+      children.add(child);
+      this.activeChildren.set(id, children);
+      try {
+        const text = await runCliChild(child, input, provider.timeoutSec * 1_000);
+        this.servedCounts.set(id, (this.servedCounts.get(id) ?? 0) + 1);
+        return text;
+      } finally {
+        children.delete(child);
+        if (children.size === 0) this.activeChildren.delete(id);
+      }
     }
     let slot = this.slots.get(id);
     if (!slot) {
@@ -327,14 +336,21 @@ class Runtime implements CliRuntime {
       this.slots.set(id, slot);
       slot.start();
     }
-    return slot.call(input);
+    const text = await slot.call(input);
+    this.servedCounts.set(id, (this.servedCounts.get(id) ?? 0) + 1);
+    return text;
   }
 
   async stopAll(): Promise<void> {
-    for (const slot of this.slots.values()) slot.stop();
+    const slotStops = [...this.slots.values()].map((slot) => slot.stopAndWait());
+    const oneShotStops = [...this.activeChildren.values()].flatMap((children) =>
+      [...children].map((child) => terminateCliChild(child)));
+    await Promise.all([...slotStops, ...oneShotStops]);
     this.slots.clear();
     this.providers.clear();
     this.signatures.clear();
+    this.activeChildren.clear();
+    this.servedCounts.clear();
   }
 }
 
@@ -350,5 +366,5 @@ export function getCliRuntime(): CliRuntime {
 }
 
 export async function runCliOnce(provider: CliProviderConfig, input: string): Promise<string> {
-  return runChild(spawnChild(spawn, provider), input, provider.timeoutSec * 1_000);
+  return getCliRuntime().call(`__run_once__:${provider.command}`, { ...provider, prewarm: false }, input);
 }

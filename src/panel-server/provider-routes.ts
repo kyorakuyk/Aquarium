@@ -3,13 +3,14 @@ import { z } from 'zod';
 import {
   AquariumConfigSchema,
   ProviderConfigSchema,
+  ReasoningFieldSchema,
   SlotEntryConfigSchema,
   type AquariumConfig,
 } from '../config/schema.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import type { UsageAttempt } from '../llm/slots.ts';
 import { clearProviderClients } from '../llm/client.ts';
-import { buildCliInput, getCliRuntime, runCliOnce, type CliRuntime } from '../llm/cli.ts';
+import { buildCliInput, getCliRuntime, type CliRuntime } from '../llm/cli.ts';
 import { maskSecret, readEnvKey, writeEnvKey } from './env-file.ts';
 
 const providerNameSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
@@ -18,7 +19,7 @@ const apiProviderBodySchema = z.object({
   label: z.string().min(1).max(80).optional(),
   baseUrl: z.string().min(1).max(2048),
   apiKeyEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
-  reasoningField: z.string().regex(/^(?:[a-z][a-z0-9_]*|none)$/).default('reasoning_effort'),
+  reasoningField: ReasoningFieldSchema.default('reasoning_effort'),
 }).strict();
 const cliProviderBodySchema = z.object({
   kind: z.literal('cli'),
@@ -33,7 +34,7 @@ const providerPatchSchema = z.object({
   label: z.string().min(1).max(80).nullable().optional(),
   baseUrl: z.string().min(1).max(2048).optional(),
   apiKeyEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/).optional(),
-  reasoningField: z.string().regex(/^(?:[a-z][a-z0-9_]*|none)$/).optional(),
+  reasoningField: ReasoningFieldSchema.optional(),
   command: z.string().min(1).max(2048).optional(),
   args: z.array(z.string().max(2048)).max(64).optional(),
   prewarm: z.boolean().optional(),
@@ -239,7 +240,7 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
       }
       env[provider.apiKeyEnv] = body.key;
       clearProviderClients();
-      return context.json({ set: true, last4: body.key.slice(-4) });
+      return context.json({ set: true, last4: maskSecret(body.key).last4 });
     });
   });
 
@@ -297,7 +298,7 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
         }, { timeout: 30_000, maxRetries: 0 });
         outcome = { ok: true, latencyMs: Math.max(0, now() - startedAt) };
       } else if (provider.kind === 'cli') {
-        await runCliOnce(provider, buildCliInput([{ role: 'user', content: 'ping' }]));
+        await cliRuntime.call(id, provider, buildCliInput([{ role: 'user', content: 'ping' }]));
         outcome = { ok: true, latencyMs: Math.max(0, now() - startedAt) };
       } else {
         outcome = { ok: false, latencyMs: Math.max(0, now() - startedAt), error: 'CLI provider is not available' };

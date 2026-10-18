@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest, patch, post, type ModelProviderView, type ModelReasoning, type ModelSlotEntryView } from '../api.ts';
-import { REASONING_OPTIONS, type SlotDef } from '../models-view.ts';
+import { REASONING_OPTIONS, reasoningFieldOptions, type SlotDef } from '../models-view.ts';
 
 function errorMessage(reason: unknown): string {
   return reason instanceof Error ? reason.message : '操作失败';
@@ -48,7 +48,7 @@ export function ProviderDialog({
         ...(trimmedLabel ? { label: trimmedLabel } : mode === 'edit' ? { label: null } : {}),
         baseUrl: baseUrl.trim(),
         apiKeyEnv: apiKeyEnv.trim(),
-        reasoningField: reasoningField === 'none' ? 'none' : 'reasoning_effort',
+        reasoningField: reasoningField.trim() || 'reasoning_effort',
       }
       : {
         ...(trimmedLabel ? { label: trimmedLabel } : mode === 'edit' ? { label: null } : {}),
@@ -102,9 +102,8 @@ export function ProviderDialog({
         {kind === 'api' ? <>
           <label className="model-form-wide"><span className="field-label">Base URL</span><input value={baseUrl} placeholder="https://api.example.com/v1" autoComplete="off" disabled={busy} onChange={(event) => setBaseUrl(event.currentTarget.value)} /></label>
           <label><span className="field-label">密钥变量名</span><input value={apiKeyEnv} autoComplete="off" disabled={busy} onChange={(event) => setApiKeyEnv(event.currentTarget.value)} /></label>
-          <label><span className="field-label">思考强度字段</span><select value={reasoningField === 'none' ? 'none' : 'reasoning_effort'} disabled={busy} onChange={(event) => setReasoningField(event.currentTarget.value)}>
-            <option value="reasoning_effort">支持（reasoning_effort）</option>
-            <option value="none">不支持</option>
+          <label><span className="field-label">思考强度字段</span><select value={reasoningField} disabled={busy} onChange={(event) => setReasoningField(event.currentTarget.value)}>
+            {reasoningFieldOptions(reasoningField).map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
           </select></label>
         </> : <>
           <label className="model-form-wide"><span className="field-label">命令</span><input value={command} placeholder="例如 claude" autoComplete="off" disabled={busy} onChange={(event) => setCommand(event.currentTarget.value)} /></label>

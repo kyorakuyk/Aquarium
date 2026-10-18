@@ -47,6 +47,12 @@ test('V4 defaults keep legacy provider and slot configuration compatible', () =>
   assert.equal(parsed.slots.reply?.[0]?.maxTokens, undefined);
 });
 
+test('reasoningField rejects request identity and parameter names', () => {
+  const invalid = structuredClone(exampleConfig) as Record<string, any>;
+  invalid.providers.deepseek.reasoningField = 'model';
+  assert.equal(AquariumConfigSchema.safeParse(invalid).success, false);
+});
+
 test('旧配置缺少 debug 时补入安全默认值', () => {
   const legacyConfig = structuredClone(exampleConfig) as Record<string, unknown>;
   delete legacyConfig.debug;
