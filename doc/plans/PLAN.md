@@ -502,6 +502,7 @@
 | 2026-10-19 | V14a | check 482/482; boundaries passed |
 | 2026-10-19 | V14b | check 482/482; panel127 |
 | 2026-10-19 | V15 | check 482/482; panel128 |
+| 2026-10-19 | V16a | check 485/485 |
 
 ---
 
@@ -1368,7 +1369,7 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
 
 - [ ] **V16 从接入拉取模型列表，并按能力显示参数**（2026-10-19，用户需求；V15 之后做；拆成 V16a 后端、V16b 前端两个提交）
   - **说明**：OpenAI 兼容接口的 `GET {baseUrl}/models` 一般**只返回模型 id**，不返回“支持哪些参数”。少数聚合平台（如 OpenRouter）会额外返回 `supported_parameters`。因此参数能力按三级来源确定，**不得凭空编造**某个模型支持什么。
-  - [ ] **V16a 后端**：
+  - [x] **V16a 后端**：
     - `GET /api/providers/:id/models`：仅限 api 接入。用该接入的密钥请求 `{baseUrl}/models`（超时 10 秒），解析 `data[].id`；如果条目里有 `supported_parameters` 数组，一并保留。结果按接入缓存 10 分钟；带 `?refresh=1` 时强制刷新。
       - 返回 `{ models: [{ id, params: { temperature, maxTokens, reasoning } }], fetchedAt }`，其中每个参数的取值为 `'supported' | 'unsupported' | 'unknown'`。
       - 失败（401、超时、格式不对）时返回 `{ models: [], error }`，HTTP 状态仍为 200，由前端提示。CLI 接入返回 `{ models: [], cli: true }`。

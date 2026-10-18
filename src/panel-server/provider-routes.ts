@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   AquariumConfigSchema,
   ProviderConfigSchema,
+  ProviderModelParamsSchema,
   ReasoningFieldSchema,
   SlotEntryConfigSchema,
   type AquariumConfig,
@@ -12,6 +13,7 @@ import type { UsageAttempt } from '../llm/slots.ts';
 import { clearProviderClients } from '../llm/client.ts';
 import { buildCliInput, getCliRuntime, type CliRuntime } from '../llm/cli.ts';
 import { maskSecret, readEnvKey, writeEnvKey } from './env-file.ts';
+import { registerProviderModelRoutes } from './provider-model-routes.ts';
 
 const providerNameSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
 const apiProviderBodySchema = z.object({
@@ -20,6 +22,7 @@ const apiProviderBodySchema = z.object({
   baseUrl: z.string().min(1).max(2048),
   apiKeyEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
   reasoningField: ReasoningFieldSchema.default('reasoning_effort'),
+  modelParams: ProviderModelParamsSchema.optional(),
 }).strict();
 const cliProviderBodySchema = z.object({
   kind: z.literal('cli'),
@@ -35,6 +38,7 @@ const providerPatchSchema = z.object({
   baseUrl: z.string().min(1).max(2048).optional(),
   apiKeyEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/).optional(),
   reasoningField: ReasoningFieldSchema.optional(),
+  modelParams: ProviderModelParamsSchema.optional(),
   command: z.string().min(1).max(2048).optional(),
   args: z.array(z.string().max(2048)).max(64).optional(),
   prewarm: z.boolean().optional(),
@@ -50,6 +54,7 @@ export interface ProviderRouteOptions {
   serializeConfigWrite: <T>(task: () => Promise<T>) => Promise<T>;
   envPath: string;
   env?: NodeJS.ProcessEnv;
+  fetch?: typeof fetch;
   now?: () => number;
   testProvider?: (provider: string, model: string, config: AquariumConfig) => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
   cliRuntime?: CliRuntime;
@@ -87,6 +92,13 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
   const now = options.now ?? Date.now;
   const env = options.env ?? process.env;
   const cliRuntime = options.cliRuntime ?? getCliRuntime();
+  registerProviderModelRoutes(app, {
+    getConfig: options.getConfig,
+    envPath: options.envPath,
+    env,
+    now,
+    ...(options.fetch ? { fetch: options.fetch } : {}),
+  });
 
   const keyStatus = (provider: AquariumConfig['providers'][string]) => {
     const name = safeApiKeyEnv(provider);
@@ -173,6 +185,7 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
           baseUrl: current.baseUrl,
           apiKeyEnv: current.apiKeyEnv,
           reasoningField: current.reasoningField,
+          ...(current.modelParams ? { modelParams: current.modelParams } : {}),
         }
         : {
           kind: 'cli' as const,
@@ -182,7 +195,7 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
           timeoutSec: current.timeoutSec,
         };
       const allowed = current.kind === 'api'
-        ? ['baseUrl', 'apiKeyEnv', 'reasoningField']
+        ? ['baseUrl', 'apiKeyEnv', 'reasoningField', 'modelParams']
         : ['command', 'args', 'prewarm', 'timeoutSec'];
       if (Object.keys(fields).some((key) => !allowed.includes(key))) {
         return context.json({ error: 'Invalid provider patch' }, 400);

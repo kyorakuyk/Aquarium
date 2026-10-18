@@ -53,6 +53,13 @@ export const ReasoningFieldSchema = z.string().regex(/^[a-z][a-z0-9_]*$/).refine
   '思考强度字段不能覆盖请求参数',
 );
 
+export const ModelParamOverrideSchema = z.object({
+  temperature: z.boolean().optional(),
+  maxTokens: z.boolean().optional(),
+  reasoning: z.boolean().optional(),
+}).strict();
+export const ProviderModelParamsSchema = z.record(z.string(), ModelParamOverrideSchema);
+
 export const ProviderConfigSchema = z.union([
   z.object({
     kind: z.literal('api').default('api'),
@@ -60,6 +67,7 @@ export const ProviderConfigSchema = z.union([
     apiKeyEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
     label: z.string().min(1).optional(),
     reasoningField: ReasoningFieldSchema.default('reasoning_effort'),
+    modelParams: ProviderModelParamsSchema.optional(),
   }).strict(),
   z.object({
     kind: z.literal('cli'),

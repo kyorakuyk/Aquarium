@@ -86,6 +86,7 @@ export async function withPanel<T>(
   panelOptions: {
     envPath?: string;
     env?: NodeJS.ProcessEnv;
+    fetch?: PanelServerOptions['fetch'];
     testProvider?: (provider: string, model: string, config: ReturnType<typeof AquariumConfigSchema.parse>) => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
     cliRuntime?: CliRuntime;
     callModel?: PanelServerOptions['callModel'];
@@ -155,6 +156,7 @@ export async function withPanel<T>(
     now: () => now,
     ...(panelOptions.envPath ? { envPath: panelOptions.envPath } : {}),
     ...(panelOptions.env ? { env: panelOptions.env } : {}),
+    ...(panelOptions.fetch ? { fetch: panelOptions.fetch } : {}),
     ...(panelOptions.testProvider ? { testProvider: panelOptions.testProvider } : {}),
     ...(panelOptions.cliRuntime ? { cliRuntime: panelOptions.cliRuntime } : {}),
     callModel: panelOptions.callModel ?? (async (slot: string, _messages: unknown[], options: SlotCallOptions): Promise<SlotResult> => {
