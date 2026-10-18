@@ -265,6 +265,48 @@ export interface UsageRangeView {
   rows: UsageRowView[];
 }
 
+export type ModelReasoning = 'off' | 'low' | 'medium' | 'high';
+export type CliRuntimeState = 'stopped' | 'starting' | 'ready' | 'busy' | 'restarting';
+
+export interface KeyStatusView {
+  set: boolean;
+  last4: string;
+}
+
+export interface CliRuntimeView {
+  state: CliRuntimeState;
+  pid: number | null;
+  served: number;
+}
+
+export interface ModelProviderView {
+  id: string;
+  kind: 'api' | 'cli';
+  label: string;
+  keyStatus: KeyStatusView;
+  baseUrl?: string;
+  reasoningField?: string;
+  apiKeyEnv?: string;
+  command?: string;
+  args?: string[];
+  prewarm?: boolean;
+  timeoutSec?: number;
+  runtime?: CliRuntimeView;
+}
+
+export interface ModelSlotEntryView {
+  provider: string;
+  model: string;
+  temperature?: number;
+  maxTokens?: number;
+  reasoning: ModelReasoning;
+}
+
+export interface ModelsView {
+  providers: ModelProviderView[];
+  slots: Record<string, ModelSlotEntryView[]>;
+}
+
 export interface DecisionStep {
   step: string;
   status: string;

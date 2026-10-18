@@ -63,6 +63,25 @@ function safeApiKeyEnv(provider: AquariumConfig['providers'][string]): string | 
   return provider.kind === 'api' ? provider.apiKeyEnv : null;
 }
 
+function safeBaseUrl(raw: string): string | null {
+  try {
+    const url = new URL(raw.trim());
+    if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username || url.password) return null;
+    return url.toString().replace(/\/$/u, '');
+  } catch {
+    return null;
+  }
+}
+
+function displayBaseUrl(raw: string): string {
+  try {
+    const url = new URL(raw);
+    return `${url.protocol}//${url.host}${url.pathname}${url.search}`.replace(/\/$/u, '');
+  } catch {
+    return raw;
+  }
+}
+
 export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions): void {
   const now = options.now ?? Date.now;
   const env = options.env ?? process.env;
@@ -89,7 +108,7 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
         kind: provider.kind,
         label: provider.label ?? id,
         ...(provider.kind === 'api'
-          ? { baseUrl: provider.baseUrl, reasoningField: provider.reasoningField }
+          ? { baseUrl: displayBaseUrl(provider.baseUrl), reasoningField: provider.reasoningField, apiKeyEnv: provider.apiKeyEnv }
           : { command: provider.command, args: provider.args, prewarm: provider.prewarm, timeoutSec: provider.timeoutSec }),
         keyStatus: keyStatus(provider),
         ...(provider.kind === 'cli' ? { runtime: cliRuntime.status(id) } : {}),
@@ -105,6 +124,9 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
     if (!parsed) return context.json({ error: 'Invalid provider' }, 400);
     const provider = ProviderConfigSchema.safeParse(parsed.provider);
     if (!provider.success) return context.json({ error: 'Invalid provider' }, 400);
+    if (provider.data.kind === 'api' && !safeBaseUrl(provider.data.baseUrl)) {
+      return context.json({ error: 'Invalid base URL' }, 400);
+    }
 
     return options.serializeConfigWrite(async () => {
       const config = options.getConfig();
@@ -140,6 +162,9 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
       const current = config.providers[id];
       if (!current) return context.json({ error: 'Unknown provider' }, 404);
       const { label, ...fields } = patch;
+      if (current.kind === 'api' && patch.baseUrl !== undefined && !safeBaseUrl(patch.baseUrl)) {
+        return context.json({ error: 'Invalid base URL' }, 400);
+      }
       const base = current.kind === 'api'
         ? {
           kind: 'api' as const,
@@ -304,6 +329,7 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
       const provider = options.getConfig().providers[id];
       if (!provider) return context.json({ error: 'Unknown provider' }, 404);
       if (provider.kind !== 'cli') return context.json({ error: 'Only CLI providers can restart' }, 400);
+      if (!provider.prewarm) return context.json({ error: 'Only prewarmed CLI providers can restart' }, 400);
       cliRuntime.restart(id, provider);
       return context.json(cliRuntime.status(id));
     });

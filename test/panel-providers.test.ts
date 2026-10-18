@@ -213,12 +213,12 @@ test('API key values never appear in GET models output even when process env alr
   });
 });
 
-test('provider API does not expose apiKeyEnv or accept unknown fields', async () => {
+test('provider API exposes the env name but never a key value and rejects unknown fields', async () => {
   await withPanel(async ({ app }) => {
     const models = await app.request('/api/models', { headers: authHeaders() });
     const text = await models.text();
-    assert.equal(text.includes('DEEPSEEK_API_KEY'), false);
-    assert.equal(text.includes('apiKeyEnv'), false);
+    assert.equal(text.includes('DEEPSEEK_API_KEY'), true);
+    assert.equal(text.includes(syntheticKey), false);
 
     const unknownField = await app.request('/api/providers', {
       method: 'POST',

@@ -8,6 +8,7 @@ import { PersonasPage } from './pages/PersonasPage.tsx';
 import { DecisionsPage } from './pages/DecisionsPage.tsx';
 import { UsagePage } from './pages/UsagePage.tsx';
 import { ImpressionsPage } from './pages/ImpressionsPage.tsx';
+import { ModelsPage } from './pages/ModelsPage.tsx';
 
 export function App() {
   const [authenticated, setAuthenticated] = useState(
@@ -41,7 +42,7 @@ export function App() {
         {page === 'overview' && <OverviewPage onNavigate={setPage} />}
         {page === 'sessions' && <SessionsPage />}
         {page === 'personas' && <PersonasPage onNavigate={setPage} />}
-        {page === 'models' && <div className="page"><header className="page-header"><h1>模型</h1></header><p className="muted">模型接入与分配将在 V6 中开放。</p></div>}
+        {page === 'models' && <ModelsPage />}
         {page === 'sandbox' && <DecisionsPage />}
         {page === 'usage' && <UsagePage />}
         {page === 'impressions' && <ImpressionsPage />}
