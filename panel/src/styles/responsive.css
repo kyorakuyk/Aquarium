@@ -21,19 +21,12 @@
   .tank-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stats-grid { grid-template-columns: 1fr; }
   .overview-state-grid, .sleep-settings-grid { grid-template-columns: 1fr; }
-  .session-workspace, .persona-workspace, .sandbox-layout, .decision-records-layout { grid-template-columns: 1fr; }
+  .session-workspace, .sandbox-layout, .decision-records-layout { grid-template-columns: 1fr; }
   .session-details-row { grid-template-columns: 1fr; gap: 0; }
-  .persona-workspace { gap: 12px; }
-  .persona-library { order: 1; }
-  .persona-trait-grid { grid-template-columns: 1fr; }
-  .persona-traits-heading { align-items: flex-start; flex-direction: column; gap: 5px; }
-  .editor-columns { grid-template-columns: 1fr; }
-  .markdown-input, .preview-surface { min-height: 260px; }
   .chat-toolbar { grid-template-columns: 1fr 1fr; }
   .chat-toolbar .button { grid-column: 1 / -1; }
   .trace-card { min-height: 280px; }
   .replay-columns { grid-template-columns: 1fr; }
-  .binding-row { grid-template-columns: 1fr; gap: 6px; }
   .new-persona-row { flex-wrap: wrap; }
   .new-persona-row input { flex: 1 1 180px; }
   .affinity-person-row { grid-template-columns: 1fr; gap: 9px; }
@@ -51,7 +44,7 @@
   .page { padding-right: 14px; padding-left: 14px; }
   .tank-grid, .usage-grid { grid-template-columns: 1fr; }
   .tank-card-placeholder { min-height: 130px; }
-  .session-list-card, .session-detail, .persona-library, .persona-editor, .chat-card, .trace-card { padding: 15px; }
+  .session-list-card, .session-detail, .chat-card, .trace-card { padding: 15px; }
   .number-grid { grid-template-columns: 1fr; }
   .decision-record { grid-template-columns: auto 1fr; }
   .decision-record > :nth-child(n + 3) { grid-column: 2; }
