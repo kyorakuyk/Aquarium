@@ -70,7 +70,7 @@ test('replay uses historical context, counts usage, and performs no live deliver
       callModel: async (_slot, messages, callOptions) => {
         modelRequests.push(messages as Array<{ role: string; content: string }>);
         callOptions.recordUsage({
-          time: Date.now(), slot: 'reply', provider: 'fake', model: 'fake-model',
+          time: Date.now(), account: callOptions.account, slot: 'reply', provider: 'fake', model: 'fake-model',
           inputTokens: 10, cachedTokens: 0, outputTokens: 4, costCny: 0.003, latencyMs: 4, ok: true,
         });
         return {
@@ -131,7 +131,7 @@ test('replay reports incurred model cost when generation fails', async () => {
       personaRoot,
       callModel: async (_slot, _messages, callOptions) => {
         callOptions.recordUsage({
-          time: Date.now(), slot: 'reply', provider: 'fake', model: 'fake-model',
+          time: Date.now(), account: callOptions.account, slot: 'reply', provider: 'fake', model: 'fake-model',
           inputTokens: 10, cachedTokens: 0, outputTokens: 0, costCny: 0.002, latencyMs: 4, ok: false,
         });
         throw new Error('fake provider failure');
@@ -240,7 +240,7 @@ test('replay distinguishes reply-call cost from total multi-slot cost', async ()
       callModel: async (slot, _messages, callOptions) => {
         const costCny = slot === 'vision' ? 0.004 : 0.003;
         callOptions.recordUsage({
-          time: Date.now(), slot, provider: 'fake', model: 'fake-model',
+          time: Date.now(), account: callOptions.account, slot, provider: 'fake', model: 'fake-model',
           inputTokens: 10, cachedTokens: 0, outputTokens: 2, costCny, latencyMs: 2, ok: true,
         });
         return {

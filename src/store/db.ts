@@ -187,6 +187,13 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 6,
+    up(database) {
+      const usageTable = database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage'").get();
+      if (usageTable) database.exec('ALTER TABLE usage ADD COLUMN account INTEGER;');
+    },
+  },
 ];
 
 export function openDatabase(databasePath = join(process.cwd(), 'data', 'aquarium.db')): DatabaseSync {

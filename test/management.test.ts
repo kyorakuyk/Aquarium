@@ -286,6 +286,7 @@ test('/aq status 显示今日花费、预算状态和已启用会话数', async 
     adapter.friends = [{ userId: friend.peer, nickname: '好友' }];
     repository.recordUsage({
       time: currentTime,
+      account,
       slot: 'reply',
       provider: 'deepseek',
       model: 'deepseek-flash',

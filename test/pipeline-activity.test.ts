@@ -116,7 +116,7 @@ test('budget gate stops proactive judging before the judge slot', async () => {
   await withRepository(async (repository, personaRoot) => {
     const harness = createProactiveHarness(repository, personaRoot, { dailyBudget: 0.001 });
     repository.recordUsage({
-      time: Date.now(), slot: 'reply', provider: 'fake', model: 'fake-model',
+      time: Date.now(), account: groupSession.account, slot: 'reply', provider: 'fake', model: 'fake-model',
       inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0.001, latencyMs: 1, ok: true,
     });
 

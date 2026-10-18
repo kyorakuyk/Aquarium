@@ -1,0 +1,39 @@
+/* Usage page: compact summary and scan-friendly grouped table. */
+.usage-page-header { align-items: center; }
+.usage-range-tabs { display: flex; width: 260px; flex: none; margin: 0; }
+.usage-summary { display: grid; grid-template-columns: minmax(90px, .7fr) minmax(80px, .6fr) minmax(100px, .7fr) minmax(220px, 2.4fr); align-items: center; gap: 20px; padding: 19px 24px; margin-bottom: 16px; }
+.usage-metric { display: grid; gap: 4px; color: var(--muted); font-size: 11px; }
+.usage-metric strong { color: var(--ink); font-size: 25px; font-weight: 500; }
+.usage-budget { min-width: 0; }
+.usage-budget-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; color: var(--muted); font-size: 11px; }
+.usage-table-card { padding: 14px 16px 8px; }
+.usage-table-card .section-heading { margin: 0 2px 6px; }
+.usage-table { min-width: 760px; }
+.usage-table th { padding: 11px 12px; }
+.usage-table td { padding: 11px 12px; vertical-align: middle; }
+.usage-table th:not(:first-child), .usage-table td:not(:first-child) { text-align: right; }
+.usage-data-row:hover td { background: var(--surface-2); }
+.usage-row-toggle { display: flex; min-width: 230px; min-height: 44px; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; color: var(--ink); cursor: pointer; text-align: left; }
+.usage-row-chevron { flex: none; color: var(--muted); font-size: 14px; }
+.usage-row-label { display: grid; min-width: 0; gap: 2px; }
+.usage-row-label strong { overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 600; text-overflow: ellipsis; }
+.usage-row-label small { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; }
+.usage-sparkline { display: block; width: 120px; height: 32px; margin-left: auto; overflow: visible; }
+.usage-detail-row td { padding: 5px 20px 12px; border-top: 0; background: var(--surface-2); }
+.usage-slot-list { display: grid; max-width: 620px; gap: 2px; }
+.usage-slot-row { display: grid; grid-template-columns: minmax(120px, 1fr) auto auto auto; align-items: center; gap: 16px; min-height: 38px; padding: 0 9px; font-size: 11px; }
+.usage-slot-row strong { font-size: 12px; font-weight: 600; }
+
+@media (max-width: 760px) {
+  .usage-page-header { align-items: stretch; flex-direction: column; gap: 12px; }
+  .usage-range-tabs { width: 100%; }
+  .usage-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 17px; }
+  .usage-budget { grid-column: 1 / -1; }
+  .usage-table-card { padding: 12px 10px 6px; }
+}
+
+@media (max-width: 480px) {
+  .usage-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .usage-slot-row { grid-template-columns: minmax(0, 1fr) auto; gap: 5px 10px; padding: 6px 4px; }
+  .usage-slot-row strong { grid-column: 1 / -1; }
+}

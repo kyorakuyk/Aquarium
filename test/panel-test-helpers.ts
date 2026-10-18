@@ -106,6 +106,7 @@ export async function withPanel<T>(
       modelSlots.push(slot);
       options.recordUsage({
         time: now,
+        account: options.account,
         slot: 'reply',
         provider: 'deepseek',
         model: 'deepseek-flash',

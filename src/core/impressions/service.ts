@@ -346,8 +346,9 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       template,
       (slot, messages) => callModel(slot, messages, {
         config,
+        account,
         costToday: () => options.repository.costToday(),
-        recordUsage: (usage) => options.repository.recordUsage(usage),
+        recordUsage: (usage) => options.repository.recordUsage({ ...usage, account }),
         now,
       }),
     ).catch((error: unknown) => {

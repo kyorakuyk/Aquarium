@@ -24,6 +24,7 @@ import { registerPersonaRoutes } from './personas.ts';
 import { registerSessionRoutes } from './session-routes.ts';
 import { registerAffectRoutes } from './affect-routes.ts';
 import { registerSleepRoutes } from './sleep-routes.ts';
+import { registerUsageRoutes } from './usage-routes.ts';
 import type { ContactSnapshot, PanelAccountRuntime } from './types.ts';
 import { budgetState } from '../llm/budget.ts';
 import type { SleepWakeState } from '../core/sleep.ts';
@@ -219,6 +220,11 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     now,
     serializeConfigWrite,
   });
+  registerUsageRoutes(app, {
+    getConfig: options.getConfig,
+    repository: options.repository,
+    now,
+  });
 
   app.get('/api/status', async (context) => {
     const config = options.getConfig();
@@ -412,8 +418,9 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     const modelCall = options.callModel ?? callSlot;
     const result = await modelCall('reply', prompt, {
       config,
+      account: key.account,
       costToday: options.repository.costToday,
-      recordUsage: (usage) => options.repository.recordUsage(usage),
+      recordUsage: (usage) => options.repository.recordUsage({ ...usage, account: key.account }),
     });
     const text = cleanReply(result.text, [nickname, ...settings.nicknames]);
     const parts = splitReply(text, replyPartLimitForTalk(effectiveTalk));

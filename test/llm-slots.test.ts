@@ -37,6 +37,7 @@ test('callSlot 在 5xx 时降级并分别记录失败与成功用量', async () 
 
   const result = await callSlot('reply', [{ role: 'user', content: '你好' }], {
     config,
+    account: 42,
     costToday: () => 0,
     getClient: () => client,
     now: () => 1_000,
@@ -46,6 +47,8 @@ test('callSlot 在 5xx 时降级并分别记录失败与成功用量', async () 
   assert.deepEqual(models, ['deepseek-v4-pro', 'deepseek-flash']);
   assert.equal(result.text, '你好。');
   assert.equal(usageRecords.length, 2);
+  assert.equal(usageRecords[0]?.account, 42);
+  assert.equal(usageRecords[1]?.account, 42);
   assert.equal(usageRecords[0]?.ok, false);
   assert.equal(usageRecords[1]?.ok, true);
   assert.equal(usageRecords[1]?.inputTokens, 100);
@@ -69,6 +72,7 @@ test('callSlot 默认使用 30 秒超时且超时后切换模型', async () => {
 
   const result = await callSlot('reply', [{ role: 'user', content: '你好' }], {
     config,
+    account: null,
     costToday: () => 0,
     getClient: () => client,
     now: () => 2_000,
@@ -99,6 +103,7 @@ test('callSlot 对 408、429 和网络错误继续尝试降级项', async () => 
 
     await callSlot('reply', [{ role: 'user', content: '你好' }], {
       config,
+      account: null,
       costToday: () => 0,
       getClient: () => client,
       now: () => 2_500,
@@ -121,6 +126,7 @@ test('callSlot 遇到 400、401、403 或 404 时不降级', async () => {
     await assert.rejects(
       callSlot('reply', [{ role: 'user', content: '你好' }], {
         config,
+        account: null,
         costToday: () => 0,
         getClient: () => client,
         now: () => 2_750,
@@ -150,6 +156,7 @@ test('callSlot 支持 DeepSeek 的顶层缓存命中 token 字段', async () => 
 
   await callSlot('reply', [{ role: 'user', content: '你好' }], {
     config,
+    account: null,
     costToday: () => 0,
     getClient: () => client,
     now: () => 2_600,
@@ -169,6 +176,7 @@ test('预算超限时 reply 槽位只调用降级链最后一项', async () => {
 
   await callSlot('reply', [{ role: 'user', content: '你好' }], {
     config,
+    account: null,
     costToday: () => config.budget.dailyCny,
     getClient: () => client,
     now: () => 3_000,

@@ -18,6 +18,7 @@ const retryableNetworkCodes = new Set([
 
 export interface UsageAttempt {
   time: number;
+  account: number | null;
   slot: string;
   provider: string;
   model: string;
@@ -31,6 +32,7 @@ export interface UsageAttempt {
 
 export interface SlotCallOptions {
   config: AquariumConfig;
+  account: number | null;
   costToday: () => number;
   recordUsage: (usage: UsageAttempt) => void;
   getClient?: (provider: string) => OpenAI;
@@ -191,6 +193,7 @@ export async function callSlot(
     if (failed) {
       options.recordUsage({
         time: completedAt,
+        account: options.account,
         slot,
         provider: entry.provider,
         model: entry.model,
@@ -236,6 +239,7 @@ export async function callSlot(
 
     options.recordUsage({
       time: completedAt,
+      account: options.account,
       slot,
       provider: entry.provider,
       model: entry.model,

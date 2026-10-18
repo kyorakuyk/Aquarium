@@ -197,8 +197,9 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
         }));
         const result = await runAppraise(context, input.template, (slot, messages) => callModel(slot, messages, {
           config,
+          account: input.account,
           costToday: () => options.repository.costToday(),
-          recordUsage: (usage) => options.repository.recordUsage(usage),
+          recordUsage: (usage) => options.repository.recordUsage({ ...usage, account: input.account }),
           now,
         }));
         const completedAt = now();

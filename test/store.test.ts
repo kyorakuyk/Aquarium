@@ -11,7 +11,7 @@ function createDatabaseFixture() {
   return { root, databasePath: path.join(root, 'aquarium.db') };
 }
 
-test('openDatabase 开启 WAL 并创建版本 5 数据表', () => {
+test('openDatabase 开启 WAL 并创建版本 6 数据表', () => {
   const { root, databasePath } = createDatabaseFixture();
   let database: DatabaseSync | undefined;
   try {
@@ -42,14 +42,14 @@ test('openDatabase 开启 WAL 并创建版本 5 数据表', () => {
       'id', 'time', 'session_id', 'message_id', 'slot', 'provider', 'model',
       'prompt_json', 'response_text', 'prompt_hash', 'detail_json',
     ]);
-    assert.equal(version.version, 5);
+    assert.equal(version.version, 6);
   } finally {
     if (database?.isOpen) database.close();
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
-test('openDatabase 创建版本 5 的情绪、好感度与标签表和索引', () => {
+test('openDatabase 创建版本 6 的情绪、好感度与标签表和索引', () => {
   const { root, databasePath } = createDatabaseFixture();
   let database: DatabaseSync | undefined;
   try {
@@ -58,7 +58,7 @@ test('openDatabase 创建版本 5 的情绪、好感度与标签表和索引', (
     const columns = database.prepare("PRAGMA table_info('pipeline_traces')").all() as Array<{ name: string }>;
     const indexes = database.prepare("PRAGMA index_list('pipeline_traces')").all() as Array<{ name: string }>;
 
-    assert.equal(version.version, 5);
+    assert.equal(version.version, 6);
     assert.deepEqual(columns.map((column) => column.name), [
       'id', 'time', 'session_id', 'message_id', 'trace_json',
     ]);
@@ -116,7 +116,7 @@ test('重复打开数据库不会重复应用迁移', () => {
     const version = second.prepare('SELECT version FROM schema_version WHERE id = 1').get() as { version: number };
     const messageIndexes = second.prepare("PRAGMA index_list('messages')").all() as Array<{ name: string }>;
 
-    assert.equal(version.version, 5);
+    assert.equal(version.version, 6);
     assert.ok(messageIndexes.some((index) => index.name === 'idx_messages_session_time'));
     const debugIndexes = second.prepare("PRAGMA index_list('debug_traces')").all() as Array<{ name: string }>;
     assert.ok(debugIndexes.some((index) => index.name === 'idx_debug_traces_session_time'));
@@ -157,7 +157,7 @@ test('版本 2 数据库迁移 pipeline_traces 时保留既有调试记录', () 
     const version = upgraded.prepare('SELECT version FROM schema_version WHERE id = 1').get() as { version: number };
     const retained = upgraded.prepare('SELECT response_text FROM debug_traces WHERE id = 1').get() as { response_text: string };
 
-    assert.equal(version.version, 5);
+    assert.equal(version.version, 6);
     assert.equal(retained.response_text, 'kept');
     assert.equal(upgraded.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pipeline_traces'").get() !== undefined, true);
   } finally {
@@ -188,7 +188,7 @@ test('版本 1 数据库会升级到包含调试追踪与情绪表的当前版�
     const table = upgraded.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'debug_traces'")
       .get() as { name: string } | undefined;
 
-    assert.equal(version.version, 5);
+    assert.equal(version.version, 6);
     assert.equal(table?.name, 'debug_traces');
     assert.equal(upgraded.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pipeline_traces'").get() !== undefined, true);
   } finally {
@@ -198,7 +198,7 @@ test('版本 1 数据库会升级到包含调试追踪与情绪表的当前版�
   }
 });
 
-test('版本 3 数据库迁移到版本 5 时新增情绪、好感度与标签表', () => {
+test('版本 3 数据库迁移到版本 6 时新增情绪、好感度与标签表', () => {
   const { root, databasePath } = createDatabaseFixture();
   let legacy: DatabaseSync | undefined;
   let upgraded: DatabaseSync | undefined;
@@ -226,7 +226,7 @@ test('版本 3 数据库迁移到版本 5 时新增情绪、好感度与标签�
       .all() as Array<{ name: string }>;
     const retained = upgraded.prepare('SELECT trace_json FROM pipeline_traces WHERE id = 1').get() as { trace_json: string };
 
-    assert.equal(version.version, 5);
+    assert.equal(version.version, 6);
     assert.deepEqual(tables.map((table) => table.name), [
       'affinity_events', 'affinity_state', 'mood_events', 'mood_state', 'tag_runs', 'tags',
     ]);
@@ -238,7 +238,7 @@ test('版本 3 数据库迁移到版本 5 时新增情绪、好感度与标签�
   }
 });
 
-test('版本 4 数据库迁移到版本 5 并保留既有数据', () => {
+test('版本 4 数据库迁移到版本 6 并保留既有数据', () => {
   const { root, databasePath } = createDatabaseFixture();
   let legacy: DatabaseSync | undefined;
   let upgraded: DatabaseSync | undefined;
@@ -262,9 +262,59 @@ test('版本 4 数据库迁移到版本 5 并保留既有数据', () => {
     const affinityTables = upgraded.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('affinity_state', 'affinity_events') ORDER BY name")
       .all() as Array<{ name: string }>;
 
-    assert.equal(version.version, 5);
+    assert.equal(version.version, 6);
     assert.deepEqual(affinityTables.map((table) => table.name), ['affinity_events', 'affinity_state']);
     assert.equal(retained.value, 'preserved');
+  } finally {
+    if (legacy?.isOpen) legacy.close();
+    if (upgraded?.isOpen) upgraded.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('版本 5 用量迁移保留旧行并将账号标记为未知', () => {
+  const { root, databasePath } = createDatabaseFixture();
+  let legacy: DatabaseSync | undefined;
+  let upgraded: DatabaseSync | undefined;
+  try {
+    legacy = new DatabaseSync(databasePath);
+    legacy.exec(`
+      CREATE TABLE schema_version (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        version INTEGER NOT NULL
+      );
+      INSERT INTO schema_version (id, version) VALUES (1, 5);
+      CREATE TABLE usage (
+        id INTEGER PRIMARY KEY,
+        time INTEGER NOT NULL,
+        slot TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        input_tokens INTEGER NOT NULL,
+        cached_tokens INTEGER NOT NULL,
+        output_tokens INTEGER NOT NULL,
+        cost_cny REAL NOT NULL,
+        latency_ms INTEGER NOT NULL,
+        ok INTEGER NOT NULL CHECK (ok IN (0, 1))
+      );
+    `);
+    legacy.prepare(`
+      INSERT INTO usage (time, slot, provider, model, input_tokens, cached_tokens, output_tokens, cost_cny, latency_ms, ok)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(new Date(2026, 9, 12, 12).getTime(), 'reply', 'deepseek', 'test-model', 10, 0, 4, 0.001, 12, 1);
+    legacy.close();
+    legacy = undefined;
+
+    upgraded = openDatabase(databasePath);
+    const columns = upgraded.prepare("PRAGMA table_info('usage')").all() as Array<{ name: string; notnull: number }>;
+    const accountColumn = columns.find((column) => column.name === 'account');
+    assert.ok(accountColumn);
+    assert.equal(accountColumn.notnull, 0);
+    const oldRow = upgraded.prepare('SELECT id, account FROM usage WHERE id = 1').get() as { id: number; account: number | null };
+    const version = upgraded.prepare('SELECT version FROM schema_version WHERE id = 1').get() as { version: number };
+    assert.equal(oldRow.id, 1);
+    assert.equal(oldRow.account, null);
+    assert.equal(version.version, 6);
   } finally {
     if (legacy?.isOpen) legacy.close();
     if (upgraded?.isOpen) upgraded.close();

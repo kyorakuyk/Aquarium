@@ -10,9 +10,10 @@ export function createSlotCallOptions(
   const debugEnabled = isDebugEnabled(config, ctx.currentSessionId);
   return {
     config,
+    account: ctx.message.session.account,
     costToday: () => ctx.options.repository.costToday(),
     recordUsage: (usage) => {
-      ctx.options.repository.recordUsage(usage);
+      ctx.options.repository.recordUsage({ ...usage, account: ctx.message.session.account });
       if (ctx.processOptions.replay) {
         ctx.state.replayTotalCostCny = (ctx.state.replayTotalCostCny ?? 0) + usage.costCny;
         if (usage.slot === 'reply') {

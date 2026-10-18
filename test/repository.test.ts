@@ -51,6 +51,7 @@ test('costToday 只累计本地自然日内的用量', () => {
     const nextDay = new Date(2026, 9, 13).getTime();
     const record = (time: number, cost: number) => repository.recordUsage({
       time,
+      account: null,
       slot: 'reply',
       provider: 'deepseek',
       model: 'test-model',

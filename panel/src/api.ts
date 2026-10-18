@@ -234,6 +234,36 @@ export interface UsageView {
   averageLatencyMs: number;
 }
 
+export type UsageRange = 'today' | '7d' | '30d';
+
+export interface UsageSlotView {
+  slot: string;
+  calls: number;
+  costCny: number;
+  avgLatencyMs: number;
+}
+
+export interface UsageRowView {
+  provider: string;
+  account: number | null;
+  calls: number;
+  costCny: number;
+  avgLatencyMs: number;
+  cacheHitRatio: number | null;
+  daily: number[];
+  bySlot: UsageSlotView[];
+}
+
+export interface UsageRangeView {
+  totals: {
+    costCny: number;
+    calls: number;
+    cacheHitRatio: number | null;
+    budgetToday: { used: number; limit: number };
+  };
+  rows: UsageRowView[];
+}
+
 export interface DecisionStep {
   step: string;
   status: string;

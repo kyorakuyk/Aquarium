@@ -27,6 +27,7 @@ export interface MessageStorageRecord {
 
 export interface UsageRecord {
   time: number;
+  account: number | null;
   slot: string;
   provider: string;
   model: string;
@@ -47,6 +48,35 @@ export interface UsageSummary {
   outputTokens: number;
   costCny: number;
   averageLatencyMs: number;
+}
+
+export type UsageRange = 'today' | '7d' | '30d';
+
+export interface UsageSlotSummary {
+  slot: string;
+  calls: number;
+  costCny: number;
+  avgLatencyMs: number;
+}
+
+export interface UsageAccountSummary {
+  provider: string;
+  account: number | null;
+  calls: number;
+  costCny: number;
+  avgLatencyMs: number;
+  cacheHitRatio: number | null;
+  daily: number[];
+  bySlot: UsageSlotSummary[];
+}
+
+export interface UsageRangeSummary {
+  totals: {
+    costCny: number;
+    calls: number;
+    cacheHitRatio: number | null;
+  };
+  rows: UsageAccountSummary[];
 }
 
 export interface DecisionRecord {
@@ -106,6 +136,7 @@ export interface StoreRepository {
   replyCountTodayForAccount(account: number): number;
   replyCountLastHourForAccount(account: number, now: number): number;
   usageToday(): UsageSummary;
+  usageByRange(range: UsageRange, now: number): UsageRangeSummary;
   getCaption(key: string): string | undefined;
   setCaption(key: string, caption: string, time?: number): void;
   recordDecision(decision: DecisionRecord): void;
@@ -214,8 +245,8 @@ export function createRepository(
   `);
   const insertUsage = database.prepare(`
     INSERT INTO usage
-      (time, slot, provider, model, input_tokens, cached_tokens, output_tokens, cost_cny, latency_ms, ok)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (time, account, slot, provider, model, input_tokens, cached_tokens, output_tokens, cost_cny, latency_ms, ok)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const selectTodayCost = database.prepare(`
     SELECT COALESCE(SUM(cost_cny), 0) AS total
@@ -371,6 +402,7 @@ export function createRepository(
     recordUsage(usage) {
       insertUsage.run(
         usage.time,
+        usage.account,
         usage.slot,
         usage.provider,
         usage.model,
