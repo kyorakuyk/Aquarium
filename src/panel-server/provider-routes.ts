@@ -121,7 +121,12 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
         kind: provider.kind,
         label: provider.label ?? id,
         ...(provider.kind === 'api'
-          ? { baseUrl: displayBaseUrl(provider.baseUrl), reasoningField: provider.reasoningField, apiKeyEnv: provider.apiKeyEnv }
+          ? {
+            baseUrl: displayBaseUrl(provider.baseUrl),
+            reasoningField: provider.reasoningField,
+            apiKeyEnv: provider.apiKeyEnv,
+            modelParams: provider.modelParams ?? {},
+          }
           : { command: provider.command, args: provider.args, prewarm: provider.prewarm, timeoutSec: provider.timeoutSec }),
         keyStatus: keyStatus(provider),
         ...(provider.kind === 'cli' ? { runtime: cliRuntime.status(id) } : {}),
@@ -200,9 +205,16 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
       if (Object.keys(fields).some((key) => !allowed.includes(key))) {
         return context.json({ error: 'Invalid provider patch' }, 400);
       }
+      const mergedModelParams = current.kind === 'api' ? { ...(current.modelParams ?? {}) } : {};
+      if (current.kind === 'api' && patch.modelParams !== undefined) {
+        for (const [modelId, overrides] of Object.entries(patch.modelParams)) {
+          mergedModelParams[modelId] = { ...(mergedModelParams[modelId] ?? {}), ...overrides };
+        }
+      }
       const merged = {
         ...base,
         ...fields,
+        ...(current.kind === 'api' && patch.modelParams !== undefined ? { modelParams: mergedModelParams } : {}),
         ...(label !== undefined ? { label: label === null ? undefined : label } : current.label !== undefined ? { label: current.label } : {}),
       };
       const provider = ProviderConfigSchema.safeParse(merged);

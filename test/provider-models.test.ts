@@ -8,12 +8,14 @@ const requestOptions = {
 };
 
 async function readModels(response: Response): Promise<{
-  models: Array<{ id: string; params: Record<string, string> }>;
+  models: Array<{ id: string; params: Record<string, string>; sources: Record<string, string> }>;
+  modelParams?: Record<string, { temperature?: boolean; maxTokens?: boolean; reasoning?: boolean }>;
   fetchedAt?: number;
   error?: string;
 }> {
   return await response.json() as {
-    models: Array<{ id: string; params: Record<string, string> }>;
+    models: Array<{ id: string; params: Record<string, string>; sources: Record<string, string> }>;
+    modelParams?: Record<string, { temperature?: boolean; maxTokens?: boolean; reasoning?: boolean }>;
     fetchedAt?: number;
     error?: string;
   };
@@ -35,11 +37,14 @@ test('provider model endpoint maps advertised and undeclared capabilities', asyn
     const response = await app.request('/api/providers/deepseek/models', { headers: authHeaders() });
     assert.equal(response.status, 200);
     const body = await readModels(response);
-    assert.deepEqual(body.models, [
+    assert.deepEqual(body.models.map(({ id, params }) => ({ id, params })), [
       { id: 'plain-model', params: { temperature: 'unknown', maxTokens: 'unknown', reasoning: 'unknown' } },
       { id: 'complete-model', params: { temperature: 'supported', maxTokens: 'supported', reasoning: 'supported' } },
       { id: 'reasoning-model', params: { temperature: 'unsupported', maxTokens: 'unsupported', reasoning: 'supported' } },
     ]);
+    assert.equal(body.models[0]?.sources.temperature, 'unknown');
+    assert.equal(body.models[1]?.sources.temperature, 'advertised');
+    assert.deepEqual(body.modelParams, {});
     assert.equal(typeof body.fetchedAt, 'number');
   }, undefined, { ...requestOptions, fetch: fetchModels });
 
@@ -59,22 +64,30 @@ test('provider model endpoint applies overrides and caches until forced refresh'
 
   await withPanel(async ({ app }) => {
     const headers = { ...authHeaders(), 'Content-Type': 'application/json' };
-    const writeOverride = async (temperature: boolean) => app.request('/api/providers/deepseek', {
+    const writeOverride = async (modelParams: Record<string, { temperature?: boolean; maxTokens?: boolean }>) => app.request('/api/providers/deepseek', {
       method: 'PATCH',
       headers,
-      body: JSON.stringify({ modelParams: { 'override-model': { temperature, maxTokens: false } } }),
+      body: JSON.stringify({ modelParams }),
     });
-    assert.equal((await writeOverride(true)).status, 200);
+    assert.equal((await writeOverride({ 'override-model': { temperature: true } })).status, 200);
 
     const first = await readModels(await app.request('/api/providers/deepseek/models', { headers: authHeaders() }));
     assert.deepEqual(first.models[0]?.params, {
-      temperature: 'supported', maxTokens: 'unsupported', reasoning: 'unknown',
+      temperature: 'supported', maxTokens: 'unknown', reasoning: 'unknown',
     });
 
-    assert.equal((await writeOverride(false)).status, 200);
+    assert.equal((await writeOverride({ 'override-model': { maxTokens: false } })).status, 200);
     const cached = await readModels(await app.request('/api/providers/deepseek/models', { headers: authHeaders() }));
+    assert.deepEqual(cached.modelParams?.['override-model'], { temperature: true, maxTokens: false });
     assert.deepEqual(cached.models[0]?.params, {
-      temperature: 'unsupported', maxTokens: 'unsupported', reasoning: 'unknown',
+      temperature: 'supported', maxTokens: 'unsupported', reasoning: 'unknown',
+    });
+    assert.equal(cached.models[0]?.sources.temperature, 'override');
+    assert.deepEqual(cached.modelParams?.['override-model'], { temperature: true, maxTokens: false });
+    const configResponse = await app.request('/api/models', { headers: authHeaders() });
+    const configBody = await configResponse.json() as { providers: Array<{ id: string; modelParams?: Record<string, { temperature?: boolean; maxTokens?: boolean }> }> };
+    assert.deepEqual(configBody.providers.find((provider) => provider.id === 'deepseek')?.modelParams?.['override-model'], {
+      temperature: true, maxTokens: false,
     });
     assert.equal(requests, 1);
 

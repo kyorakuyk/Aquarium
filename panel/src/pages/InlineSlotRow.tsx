@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ModelProviderView, ModelReasoning, ModelSlotEntryView } from '../api.ts';
+import { modelParameterInfo, type ModelParameterName, type ProviderModelsState } from '../model-api.ts';
 import { chainSummary, REASONING_OPTIONS, type SlotDef } from '../models-view.ts';
+import { ModelParamField } from './ModelParamField.tsx';
 
 type EditableField = 'temperature' | 'reasoning' | 'maxTokens';
 type SlotDraft = { temperature: string; reasoning: ModelReasoning; maxTokens: string };
@@ -18,16 +20,21 @@ function draftFrom(entry: ModelSlotEntryView | undefined): SlotDraft {
   };
 }
 
-export function InlineSlotRow({ definition, chain, providers, disabled, onEdit, onSave }: {
+export function InlineSlotRow({ definition, chain, providers, providerModels, disabled, onEdit, onSave, onLoadModels, onOverrideChange }: {
   definition: SlotDef;
   chain: ModelSlotEntryView[];
   providers: ModelProviderView[];
+  providerModels: Record<string, ProviderModelsState>;
   disabled: boolean;
   onEdit: () => void;
   onSave: (nextChain: ModelSlotEntryView[]) => Promise<string | undefined>;
+  onLoadModels: (provider: ModelProviderView, refresh?: boolean) => Promise<unknown>;
+  onOverrideChange: (providerId: string, modelId: string, parameter: ModelParameterName, supported: boolean) => Promise<string | undefined>;
 }) {
   const first = chain[0];
   const provider = first ? providers.find((candidate) => candidate.id === first.provider) : undefined;
+  const providerModelState = first ? providerModels[first.provider] : undefined;
+  const providerModelStatus = providerModelState?.status;
   const serverDraft = draftFrom(first);
   const [draft, setDraft] = useState<SlotDraft>(serverDraft);
   const [dirty, setDirty] = useState<Record<EditableField, boolean>>({
@@ -50,6 +57,9 @@ export function InlineSlotRow({ definition, chain, providers, disabled, onEdit, 
   useEffect(() => {
     if (!dirtyRef.current.maxTokens) setDraft((current) => ({ ...current, maxTokens: serverDraft.maxTokens }));
   }, [serverDraft.maxTokens]);
+  useEffect(() => {
+    if (provider?.kind === 'api' && first?.model && providerModelStatus === undefined) void onLoadModels(provider);
+  }, [first?.model, onLoadModels, provider?.id, provider?.kind, providerModelStatus]);
   useEffect(() => () => {
     if (feedbackTimer.current !== undefined) window.clearTimeout(feedbackTimer.current);
   }, []);
@@ -140,7 +150,18 @@ export function InlineSlotRow({ definition, chain, providers, disabled, onEdit, 
   const temperatureFeedback = feedback?.field === 'temperature' ? feedback : undefined;
   const reasoningFeedback = feedback?.field === 'reasoning' ? feedback : undefined;
   const maxTokensFeedback = feedback?.field === 'maxTokens' ? feedback : undefined;
-  const reasoningUnsupported = provider?.reasoningField === 'none';
+  const modelList = first ? providerModels[first.provider]?.data : undefined;
+  const temperatureInfo = modelParameterInfo(provider, first?.model ?? '', 'temperature', modelList);
+  const reasoningInfo = modelParameterInfo(provider, first?.model ?? '', 'reasoning', modelList);
+  const maxTokensInfo = modelParameterInfo(provider, first?.model ?? '', 'maxTokens', modelList);
+  const capabilityLoading = provider?.kind === 'api' && providerModelStatus !== 'ready' && providerModelStatus !== 'error';
+  const parameterDisabled = editingDisabled || capabilityLoading;
+  const capabilityError = providerModelState?.status === 'error' ? providerModelState.error : undefined;
+
+  function confirmOverride(parameter: ModelParameterName, supported: boolean): Promise<string | undefined> {
+    if (!provider || !first) return Promise.resolve('请先配置模型。');
+    return onOverrideChange(provider.id, first.model, parameter, supported);
+  }
 
   return (
     <tr>
@@ -150,65 +171,74 @@ export function InlineSlotRow({ definition, chain, providers, disabled, onEdit, 
           <span>{chainSummary(chain, providers)}</span>
           <span className="slot-chain-edit"><span aria-hidden="true">✎</span>更换</span>
         </button>
+        {capabilityError && <small className="model-picker-error">能力列表读取失败：{capabilityError}；点“编辑”可重试。</small>}
       </td>
-      <td className="slot-inline-cell">
-        <input
-          className="slot-inline-number mono"
-          type="number"
-          min={0}
-          max={2}
-          step={0.1}
-          placeholder="默认"
-          aria-label={`${definition.title}温度`}
-          value={draft.temperature}
-          disabled={editingDisabled}
-          onChange={(event) => {
-            const value = event.currentTarget.value;
-            setDraft((current) => ({ ...current, temperature: value }));
-            markDirty('temperature', value !== serverDraft.temperature);
-          }}
-          onBlur={() => { void saveField('temperature', draft.temperature); }}
-          onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }}
-        />
+      <td>
+        <ModelParamField label="温度" className="slot-inline-cell" {...temperatureInfo} disabled={parameterDisabled} allowOverride={provider?.kind === 'api' && Boolean(first?.model.trim())} onOverrideChange={(supported) => confirmOverride('temperature', supported)}>
+          {(controlDisabled, title) => <input
+            className="slot-inline-number mono"
+            type="number"
+            min={0}
+            max={2}
+            step={0.1}
+            placeholder="默认"
+            aria-label={`${definition.title}温度`}
+            title={title}
+            value={draft.temperature}
+            disabled={controlDisabled}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              setDraft((current) => ({ ...current, temperature: value }));
+              markDirty('temperature', value !== serverDraft.temperature);
+            }}
+            onBlur={() => { void saveField('temperature', draft.temperature); }}
+            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }}
+          />}
+        </ModelParamField>
         {temperatureFeedback && <small className={temperatureFeedback.success ? 'slot-inline-success' : 'slot-inline-error'}>{temperatureFeedback.message}</small>}
         {fallbackNote}
       </td>
-      <td className="slot-inline-cell">
-        <select
-          aria-label={`${definition.title}思考强度`}
-          title={reasoningUnsupported ? '该接入不支持' : undefined}
-          value={draft.reasoning}
-          disabled={editingDisabled || reasoningUnsupported}
-          onChange={(event) => {
-            const value = event.currentTarget.value as ModelReasoning;
-            setDraft((current) => ({ ...current, reasoning: value }));
-            markDirty('reasoning', value !== serverDraft.reasoning);
-            void saveField('reasoning', value);
-          }}
-        >
-          {REASONING_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
-        </select>
+      <td>
+        <ModelParamField label="思考强度" className="slot-inline-cell" {...reasoningInfo} disabled={parameterDisabled} allowOverride={provider?.kind === 'api' && Boolean(first?.model.trim())} onOverrideChange={(supported) => confirmOverride('reasoning', supported)}>
+          {(controlDisabled, title) => <select
+            aria-label={`${definition.title}思考强度`}
+            title={title}
+            value={draft.reasoning}
+            disabled={controlDisabled}
+            onChange={(event) => {
+              const value = event.currentTarget.value as ModelReasoning;
+              setDraft((current) => ({ ...current, reasoning: value }));
+              markDirty('reasoning', value !== serverDraft.reasoning);
+              void saveField('reasoning', value);
+            }}
+          >
+            {REASONING_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
+          </select>}
+        </ModelParamField>
         {reasoningFeedback && <small className={reasoningFeedback.success ? 'slot-inline-success' : 'slot-inline-error'}>{reasoningFeedback.message}</small>}
         {fallbackNote}
       </td>
-      <td className="slot-inline-cell">
-        <input
-          className="slot-inline-number mono"
-          type="number"
-          min={1}
-          step={1}
-          placeholder="默认"
-          aria-label={`${definition.title}最大长度`}
-          value={draft.maxTokens}
-          disabled={editingDisabled}
-          onChange={(event) => {
-            const value = event.currentTarget.value;
-            setDraft((current) => ({ ...current, maxTokens: value }));
-            markDirty('maxTokens', value !== serverDraft.maxTokens);
-          }}
-          onBlur={() => { void saveField('maxTokens', draft.maxTokens); }}
-          onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }}
-        />
+      <td>
+        <ModelParamField label="最大长度" className="slot-inline-cell" {...maxTokensInfo} disabled={parameterDisabled} allowOverride={provider?.kind === 'api' && Boolean(first?.model.trim())} onOverrideChange={(supported) => confirmOverride('maxTokens', supported)}>
+          {(controlDisabled, title) => <input
+            className="slot-inline-number mono"
+            type="number"
+            min={1}
+            step={1}
+            placeholder="默认"
+            aria-label={`${definition.title}最大长度`}
+            title={title}
+            value={draft.maxTokens}
+            disabled={controlDisabled}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              setDraft((current) => ({ ...current, maxTokens: value }));
+              markDirty('maxTokens', value !== serverDraft.maxTokens);
+            }}
+            onBlur={() => { void saveField('maxTokens', draft.maxTokens); }}
+            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }}
+          />}
+        </ModelParamField>
         {maxTokensFeedback && <small className={maxTokensFeedback.success ? 'slot-inline-success' : 'slot-inline-error'}>{maxTokensFeedback.message}</small>}
         {fallbackNote}
       </td>

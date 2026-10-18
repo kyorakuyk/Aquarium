@@ -13,6 +13,10 @@ const modelListSchema = z.object({
 });
 
 type ModelCapability = 'supported' | 'unsupported' | 'unknown';
+type ModelCapabilitySource = 'advertised' | 'override' | 'unknown';
+type ModelParameterName = 'temperature' | 'maxTokens' | 'reasoning';
+type ModelParameters = Record<ModelParameterName, ModelCapability>;
+type ModelParameterSources = Record<ModelParameterName, ModelCapabilitySource>;
 type ApiProvider = Extract<AquariumConfig['providers'][string], { kind: 'api' }>;
 type ProviderModel = z.infer<typeof modelListSchema>['data'][number];
 interface ModelCacheEntry {
@@ -35,25 +39,34 @@ function capability(value: boolean | undefined): ModelCapability {
   return value ? 'supported' : 'unsupported';
 }
 
-function modelParams(model: ProviderModel, provider: ApiProvider): {
-  temperature: ModelCapability;
-  maxTokens: ModelCapability;
-  reasoning: ModelCapability;
+function modelParameters(model: ProviderModel, provider: ApiProvider): {
+  params: ModelParameters;
+  sources: ModelParameterSources;
 } {
   if (model.supported_parameters !== undefined) {
     const advertised = new Set(model.supported_parameters);
     return {
-      temperature: advertised.has('temperature') ? 'supported' : 'unsupported',
-      maxTokens: advertised.has('max_tokens') ? 'supported' : 'unsupported',
-      reasoning: advertised.has('reasoning') || advertised.has('reasoning_effort') ? 'supported' : 'unsupported',
+      params: {
+        temperature: advertised.has('temperature') ? 'supported' : 'unsupported',
+        maxTokens: advertised.has('max_tokens') ? 'supported' : 'unsupported',
+        reasoning: advertised.has('reasoning') || advertised.has('reasoning_effort') ? 'supported' : 'unsupported',
+      },
+      sources: { temperature: 'advertised', maxTokens: 'advertised', reasoning: 'advertised' },
     };
   }
 
   const override = provider.modelParams?.[model.id];
   return {
-    temperature: capability(override?.temperature),
-    maxTokens: capability(override?.maxTokens),
-    reasoning: capability(override?.reasoning),
+    params: {
+      temperature: capability(override?.temperature),
+      maxTokens: capability(override?.maxTokens),
+      reasoning: capability(override?.reasoning),
+    },
+    sources: {
+      temperature: override?.temperature === undefined ? 'unknown' : 'override',
+      maxTokens: override?.maxTokens === undefined ? 'unknown' : 'override',
+      reasoning: override?.reasoning === undefined ? 'unknown' : 'override',
+    },
   };
 }
 
@@ -97,7 +110,7 @@ async function fetchModels(
       signal: controller.signal,
     });
     if (!response.ok) {
-      void response.body?.cancel().catch(() => undefined);
+      await response.body?.cancel().catch(() => undefined);
       return {
         error: response.status === 401 || response.status === 403
           ? `接入认证失败（HTTP ${response.status}）`
@@ -138,7 +151,7 @@ export function registerProviderModelRoutes(app: Hono, options: ProviderModelRou
       && entry.apiKeyEnv === initialProvider.apiKeyEnv;
     if (refresh || !entry || !cacheMatches || ageMs < 0 || ageMs >= CACHE_TTL_MS) {
       const result = await fetchModels(initialProvider, options);
-      if ('error' in result) return context.json({ models: [], error: result.error });
+      if ('error' in result) return context.json({ models: [], modelParams: initialProvider.modelParams ?? {}, error: result.error });
       entry = {
         baseUrl: initialProvider.baseUrl,
         apiKeyEnv: initialProvider.apiKeyEnv,
@@ -156,7 +169,8 @@ export function registerProviderModelRoutes(app: Hono, options: ProviderModelRou
     }
 
     return context.json({
-      models: entry.models.map((model) => ({ id: model.id, params: modelParams(model, currentProvider) })),
+      models: entry.models.map((model) => ({ id: model.id, ...modelParameters(model, currentProvider) })),
+      modelParams: currentProvider.modelParams ?? {},
       fetchedAt: entry.fetchedAt,
     });
   });

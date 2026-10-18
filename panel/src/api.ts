@@ -325,6 +325,7 @@ export interface ModelProviderView {
   baseUrl?: string;
   reasoningField?: string;
   apiKeyEnv?: string;
+  modelParams?: Record<string, { temperature?: boolean; maxTokens?: boolean; reasoning?: boolean }>;
   command?: string;
   args?: string[];
   prewarm?: boolean;

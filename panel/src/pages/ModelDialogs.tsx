@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest, patch, post, type ModelProviderView, type ModelReasoning, type ModelSlotEntryView } from '../api.ts';
 import { REASONING_OPTIONS, reasoningFieldOptions, type SlotDef } from '../models-view.ts';
+import { modelParameterInfo, type ModelParameterName, type ProviderModelsState } from '../model-api.ts';
+import { ModelParamField } from './ModelParamField.tsx';
+import { ModelPicker } from './ModelPicker.tsx';
 
 function errorMessage(reason: unknown): string {
   return reason instanceof Error ? reason.message : '操作失败';
@@ -168,10 +171,14 @@ interface SlotRow {
   reasoning: ModelReasoning;
 }
 
-export function SlotDialog({ definition, chain, providers, onClose, onSaved }: {
+export function SlotDialog({ definition, chain, providers, providerModels, pageBusy, onLoadModels, onOverrideChange, onClose, onSaved }: {
   definition: SlotDef;
   chain: ModelSlotEntryView[];
   providers: ModelProviderView[];
+  providerModels: Record<string, ProviderModelsState>;
+  pageBusy: boolean;
+  onLoadModels: (provider: ModelProviderView, refresh?: boolean) => Promise<unknown>;
+  onOverrideChange: (providerId: string, modelId: string, parameter: ModelParameterName, supported: boolean) => Promise<string | undefined>;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -188,6 +195,7 @@ export function SlotDialog({ definition, chain, providers, onClose, onSaved }: {
   const [rows, setRows] = useState<SlotRow[]>(() => chain.map(toRow));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const dialogBusy = busy || pageBusy;
 
   function change(key: number, patch: Partial<Omit<SlotRow, 'key'>>) {
     setRows((current) => current.map((row) => row.key === key ? { ...row, ...patch } : row));
@@ -213,11 +221,11 @@ export function SlotDialog({ definition, chain, providers, onClose, onSaved }: {
   }
 
   async function save() {
-    if (busy) return;
     if (rows.length === 0) {
       setError('至少保留一项降级项。');
       return;
     }
+    if (dialogBusy) return;
     const chainBody: ModelSlotEntryView[] = [];
     for (const row of rows) {
       const temperature = row.temperature.trim() === '' ? undefined : Number(row.temperature);
@@ -263,26 +271,56 @@ export function SlotDialog({ definition, chain, providers, onClose, onSaved }: {
       <p className="model-help">{definition.description}；按顺序降级，前一项失败才尝试下一项。</p>
       {error && <p className="notice notice-warn" role="alert">{error}</p>}
       <div className="slot-editor">
-        {rows.map((row, index) => <div className="slot-editor-row" key={row.key}>
-          <span className="slot-index mono">{index + 1}</span>
-          <label><span className="field-label">接入</span><select value={row.provider} disabled={busy} onChange={(event) => change(row.key, { provider: event.currentTarget.value })}>
-            {providers.map((provider) => <option value={provider.id} key={provider.id}>{provider.label}</option>)}
-          </select></label>
-          <label><span className="field-label">模型名</span><input value={row.model} autoComplete="off" spellCheck={false} disabled={busy} onChange={(event) => change(row.key, { model: event.currentTarget.value })} /></label>
-          <label><span className="field-label">温度</span><input type="number" min={0} max={2} step={0.1} placeholder="默认" value={row.temperature} disabled={busy} onChange={(event) => change(row.key, { temperature: event.currentTarget.value })} /></label>
-          <label><span className="field-label">思考强度</span><select value={row.reasoning} disabled={busy} onChange={(event) => change(row.key, { reasoning: event.currentTarget.value as ModelReasoning })}>
-            {REASONING_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
-          </select></label>
-          <label><span className="field-label">最大长度</span><input type="number" min={1} placeholder="默认" value={row.maxTokens} disabled={busy} onChange={(event) => change(row.key, { maxTokens: event.currentTarget.value })} /></label>
-          <div className="slot-row-actions">
-            <button className="text-button" type="button" aria-label={`上移第 ${index + 1} 项`} disabled={busy || index === 0} onClick={() => move(index, -1)}>上移</button>
-            <button className="text-button" type="button" aria-label={`下移第 ${index + 1} 项`} disabled={busy || index === rows.length - 1} onClick={() => move(index, 1)}>下移</button>
-            <button className="text-button" type="button" aria-label={`删除第 ${index + 1} 项`} disabled={busy} onClick={() => setRows((current) => current.filter((item) => item.key !== row.key))}>删除</button>
-          </div>
-        </div>)}
+        {rows.map((row, index) => {
+          const provider = providers.find((candidate) => candidate.id === row.provider);
+          const modelList = providerModels[row.provider]?.data;
+          const modelListStatus = providerModels[row.provider]?.status;
+          const capabilitiesLoading = provider?.kind === 'api' && modelListStatus !== 'ready' && modelListStatus !== 'error';
+          const parameterDisabled = dialogBusy || capabilitiesLoading;
+          const temperatureInfo = modelParameterInfo(provider, row.model, 'temperature', modelList);
+          const reasoningInfo = modelParameterInfo(provider, row.model, 'reasoning', modelList);
+          const maxTokensInfo = modelParameterInfo(provider, row.model, 'maxTokens', modelList);
+          const confirmOverride = (parameter: ModelParameterName, supported: boolean) => provider
+            ? onOverrideChange(provider.id, row.model, parameter, supported)
+            : Promise.resolve('请先选择模型接入。');
+          return <div className="slot-editor-row" key={row.key}>
+            <span className="slot-index mono">{index + 1}</span>
+            <label><span className="field-label">接入</span><select value={row.provider} disabled={dialogBusy} onChange={(event) => change(row.key, { provider: event.currentTarget.value })}>
+              {providers.map((candidate) => <option value={candidate.id} key={candidate.id}>{candidate.label}</option>)}
+            </select></label>
+            <div className="slot-editor-model">
+              <span className="field-label">模型名</span>
+              <ModelPicker
+                provider={provider}
+                value={row.model}
+                label={`${definition.title}第 ${index + 1} 项模型名`}
+                state={providerModels[row.provider]}
+                disabled={dialogBusy}
+                onLoad={onLoadModels}
+                onChange={(model) => change(row.key, { model })}
+              />
+            </div>
+            <ModelParamField label="温度" className="slot-editor-param" {...temperatureInfo} disabled={parameterDisabled} allowOverride={provider?.kind === 'api' && Boolean(row.model.trim())} onOverrideChange={(supported) => confirmOverride('temperature', supported)}>
+              {(controlDisabled, title) => <input className="mono" type="number" min={0} max={2} step={0.1} placeholder="默认" value={row.temperature} title={title} disabled={controlDisabled} onChange={(event) => change(row.key, { temperature: event.currentTarget.value })} />}
+            </ModelParamField>
+            <ModelParamField label="思考强度" className="slot-editor-param" {...reasoningInfo} disabled={parameterDisabled} allowOverride={provider?.kind === 'api' && Boolean(row.model.trim())} onOverrideChange={(supported) => confirmOverride('reasoning', supported)}>
+              {(controlDisabled, title) => <select value={row.reasoning} title={title} disabled={controlDisabled} onChange={(event) => change(row.key, { reasoning: event.currentTarget.value as ModelReasoning })}>
+                {REASONING_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
+              </select>}
+            </ModelParamField>
+            <ModelParamField label="最大长度" className="slot-editor-param" {...maxTokensInfo} disabled={parameterDisabled} allowOverride={provider?.kind === 'api' && Boolean(row.model.trim())} onOverrideChange={(supported) => confirmOverride('maxTokens', supported)}>
+              {(controlDisabled, title) => <input className="mono" type="number" min={1} step={1} placeholder="默认" value={row.maxTokens} title={title} disabled={controlDisabled} onChange={(event) => change(row.key, { maxTokens: event.currentTarget.value })} />}
+            </ModelParamField>
+            <div className="slot-row-actions">
+              <button className="text-button" type="button" aria-label={`上移第 ${index + 1} 项`} disabled={dialogBusy || index === 0} onClick={() => move(index, -1)}>上移</button>
+              <button className="text-button" type="button" aria-label={`下移第 ${index + 1} 项`} disabled={dialogBusy || index === rows.length - 1} onClick={() => move(index, 1)}>下移</button>
+              <button className="text-button" type="button" aria-label={`删除第 ${index + 1} 项`} disabled={dialogBusy} onClick={() => setRows((current) => current.filter((item) => item.key !== row.key))}>删除</button>
+            </div>
+          </div>;
+        })}
       </div>
-      <button className="text-button slot-add" type="button" disabled={busy || providers.length === 0 || rows.length >= 8} onClick={addRow}>添加降级项</button>
-      <div className="model-dialog-footer"><span /><div><button className="button button-secondary" type="button" disabled={busy} onClick={close}>取消</button><button className="button button-primary" type="button" disabled={busy} onClick={() => void save()}>{busy ? '保存中…' : '保存'}</button></div></div>
+      <button className="text-button slot-add" type="button" disabled={dialogBusy || providers.length === 0 || rows.length >= 8} onClick={addRow}>添加降级项</button>
+      <div className="model-dialog-footer"><span /><div><button className="button button-secondary" type="button" disabled={dialogBusy} onClick={close}>取消</button><button className="button button-primary" type="button" disabled={dialogBusy} onClick={() => void save()}>{dialogBusy ? '保存中…' : '保存'}</button></div></div>
     </dialog>
   );
 }
