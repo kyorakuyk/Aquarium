@@ -25,6 +25,7 @@ import { registerSessionRoutes } from './session-routes.ts';
 import { registerAffectRoutes } from './affect-routes.ts';
 import { registerSleepRoutes } from './sleep-routes.ts';
 import { registerUsageRoutes } from './usage-routes.ts';
+import { registerProviderRoutes } from './provider-routes.ts';
 import type { ContactSnapshot, PanelAccountRuntime } from './types.ts';
 import { budgetState } from '../llm/budget.ts';
 import type { SleepWakeState } from '../core/sleep.ts';
@@ -43,6 +44,9 @@ export interface PanelServerOptions {
   callModel?: PipelineModelCall;
   replayMessage?: (message: IncomingMessage) => Promise<PipelineResult | undefined>;
   sleepWakeState?: SleepWakeState;
+  envPath?: string;
+  env?: NodeJS.ProcessEnv;
+  testProvider?: (provider: string, model: string, config: AquariumConfig) => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
   onError?: (error: unknown) => void;
 }
 
@@ -224,6 +228,16 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     getConfig: options.getConfig,
     repository: options.repository,
     now,
+  });
+  registerProviderRoutes(app, {
+    getConfig: options.getConfig,
+    saveConfig: options.saveConfig,
+    repository: options.repository,
+    serializeConfigWrite,
+    envPath: options.envPath ?? path.join(root, '.env'),
+    env: options.env ?? process.env,
+    now,
+    testProvider: options.testProvider,
   });
 
   app.get('/api/status', async (context) => {

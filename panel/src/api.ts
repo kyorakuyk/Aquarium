@@ -200,6 +200,7 @@ export interface PipelineStepTraceView {
   startedAt: number;
   durationMs: number;
   summary: string;
+  detail?: unknown;
 }
 
 export interface DecisionReplayView {

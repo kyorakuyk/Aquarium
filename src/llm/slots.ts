@@ -69,11 +69,18 @@ export interface SlotUsage {
   costCny: number;
 }
 
+export interface SlotRequestParams {
+  temperature?: number;
+  maxTokens?: number;
+  reasoning?: 'low' | 'medium' | 'high';
+}
+
 export interface SlotResult {
   text: string;
   provider: string;
   model: string;
   usage: SlotUsage;
+  params?: SlotRequestParams;
 }
 
 function tokenCount(value: unknown): number {
@@ -170,6 +177,24 @@ export async function callSlot(
     if (!entry) continue;
     const price = options.config.pricing[entry.model];
     if (!price) throw new Error(`模型 ${entry.model} 缺少价格配置，拒绝发送请求`);
+    const provider = options.config.providers[entry.provider];
+    if (!provider) throw new Error(`未配置模型服务商：${entry.provider}`);
+    const sentParams: SlotRequestParams = provider.kind === 'api' ? {
+      ...(entry.temperature !== undefined ? { temperature: entry.temperature } : {}),
+      ...(entry.maxTokens !== undefined ? { maxTokens: entry.maxTokens } : {}),
+      ...(entry.reasoning !== 'off' && provider.reasoningField !== 'none'
+        ? { reasoning: entry.reasoning }
+        : {}),
+    } : {};
+    const requestBody = {
+      model: entry.model,
+      messages,
+      ...(sentParams.temperature !== undefined ? { temperature: sentParams.temperature } : {}),
+      ...(sentParams.maxTokens !== undefined ? { max_tokens: sentParams.maxTokens } : {}),
+      ...(sentParams.reasoning !== undefined && provider.kind === 'api'
+        ? { [provider.reasoningField]: sentParams.reasoning }
+        : {}),
+    } as OpenAI.ChatCompletionCreateParamsNonStreaming;
 
     const startedAt = now();
     let response: OpenAI.ChatCompletion | undefined;
@@ -179,10 +204,7 @@ export async function callSlot(
       const client = options.getClient
         ? options.getClient(entry.provider)
         : getProviderClient(options.config, entry.provider);
-      response = await client.chat.completions.create(
-        { model: entry.model, messages },
-        { timeout: timeoutMs, maxRetries: 0 },
-      );
+      response = await client.chat.completions.create(requestBody, { timeout: timeoutMs, maxRetries: 0 });
     } catch (error) {
       failed = true;
       attemptError = error;
@@ -261,6 +283,7 @@ export async function callSlot(
       provider: entry.provider,
       model: entry.model,
       usage: slotUsage,
+      params: sentParams,
     };
   }
 

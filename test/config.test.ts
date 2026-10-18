@@ -24,6 +24,29 @@ test('config.example.yaml 符合配置 schema 并默认关闭所有会话', () =
   assert.equal(result.data.accounts.length, 1);
 });
 
+test('V4 defaults keep legacy provider and slot configuration compatible', () => {
+  const legacyConfig = structuredClone(exampleConfig) as Record<string, any>;
+  for (const provider of Object.values(legacyConfig.providers) as Array<Record<string, unknown>>) {
+    delete provider.kind;
+    delete provider.label;
+    delete provider.reasoningField;
+  }
+  for (const chain of Object.values(legacyConfig.slots) as Array<Array<Record<string, unknown>>>) {
+    for (const entry of chain) {
+      delete entry.temperature;
+      delete entry.maxTokens;
+      delete entry.reasoning;
+    }
+  }
+
+  const parsed = AquariumConfigSchema.parse(legacyConfig);
+  assert.equal(parsed.providers.deepseek?.kind, 'api');
+  assert.equal(parsed.providers.deepseek?.reasoningField, 'reasoning_effort');
+  assert.equal(parsed.slots.reply?.[0]?.reasoning, 'off');
+  assert.equal(parsed.slots.reply?.[0]?.temperature, undefined);
+  assert.equal(parsed.slots.reply?.[0]?.maxTokens, undefined);
+});
+
 test('旧配置缺少 debug 时补入安全默认值', () => {
   const legacyConfig = structuredClone(exampleConfig) as Record<string, unknown>;
   delete legacyConfig.debug;

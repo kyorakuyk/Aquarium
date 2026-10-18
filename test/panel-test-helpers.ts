@@ -64,6 +64,11 @@ export async function withPanel<T>(
     getSavedConfig: () => ReturnType<typeof AquariumConfigSchema.parse> | undefined;
   }) => Promise<T>,
   ownerId = exampleConfig.owner,
+  panelOptions: {
+    envPath?: string;
+    env?: NodeJS.ProcessEnv;
+    testProvider?: (provider: string, model: string, config: ReturnType<typeof AquariumConfigSchema.parse>) => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
+  } = {},
 ): Promise<T> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-panel-test-'));
   fs.mkdirSync(path.join(root, 'personas'), { recursive: true });
@@ -102,6 +107,9 @@ export async function withPanel<T>(
     management: () => [management],
     root,
     now: () => now,
+    ...(panelOptions.envPath ? { envPath: panelOptions.envPath } : {}),
+    ...(panelOptions.env ? { env: panelOptions.env } : {}),
+    ...(panelOptions.testProvider ? { testProvider: panelOptions.testProvider } : {}),
     callModel: async (slot: string, _messages: unknown[], options: SlotCallOptions): Promise<SlotResult> => {
       modelSlots.push(slot);
       options.recordUsage({

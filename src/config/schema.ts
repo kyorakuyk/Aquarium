@@ -43,14 +43,30 @@ const sessionOverrideSchema = z.object({
   groupNote: z.string().optional(),
 }).strict();
 
-const providerSchema = z.object({
-  baseUrl: z.string().min(1),
-  apiKeyEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
-}).strict();
+export const ProviderConfigSchema = z.union([
+  z.object({
+    kind: z.literal('api').default('api'),
+    baseUrl: z.string().min(1),
+    apiKeyEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
+    label: z.string().min(1).optional(),
+    reasoningField: z.string().regex(/^[a-z][a-z0-9_]*$/).default('reasoning_effort'),
+  }).strict(),
+  z.object({
+    kind: z.literal('cli'),
+    command: z.string().min(1),
+    args: z.array(z.string()).default([]),
+    label: z.string().min(1).optional(),
+    prewarm: z.boolean().default(false),
+    timeoutSec: z.number().int().positive().default(120),
+  }).strict(),
+]);
 
-const slotEntrySchema = z.object({
+export const SlotEntryConfigSchema = z.object({
   provider: z.string().min(1),
   model: z.string().min(1),
+  temperature: z.number().min(0).max(2).optional(),
+  maxTokens: z.number().int().positive().optional(),
+  reasoning: z.enum(['off', 'low', 'medium', 'high']).default('off'),
 }).strict();
 
 const priceSchema = z.object({
@@ -116,8 +132,8 @@ export const AquariumConfigSchema = z.object({
     persona: z.string().min(1),
     snowlumaDir: z.string().min(1),
   }).strict()),
-  providers: z.record(z.string(), providerSchema),
-  slots: z.record(z.string(), z.array(slotEntrySchema).min(1)),
+  providers: z.record(z.string(), ProviderConfigSchema),
+  slots: z.record(z.string(), z.array(SlotEntryConfigSchema).min(1)),
   pricing: z.record(z.string(), priceSchema),
   budget: z.object({
     dailyCny: z.number().nonnegative(),

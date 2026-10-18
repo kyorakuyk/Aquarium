@@ -241,14 +241,16 @@ test('generate step records empty replies without continuing to delivery', async
     provider: 'fake',
     model: 'fake-model',
     usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 0, costCny: 0 },
+    params: { temperature: 0.4, maxTokens: 77, reasoning: 'high' },
   });
 
   assert.deepEqual(await generateStep(ctx), {
     next: false,
     reason: 'empty_reply',
-    detail: { model: 'fake-model' },
+    detail: { model: 'fake-model', params: { temperature: 0.4, maxTokens: 77, reasoning: 'high' } },
   });
-  traceFor(ctx, 'generate');
+  const generateTrace = ctx.trace.find((entry) => entry.step === 'generate');
+  assert.deepEqual(generateTrace?.detail, { params: { temperature: 0.4, maxTokens: 77, reasoning: 'high' } });
 });
 
 test('deliver step sends and stores each reply part before returning replied', async (t) => {

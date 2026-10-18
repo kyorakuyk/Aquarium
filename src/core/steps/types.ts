@@ -78,6 +78,7 @@ export interface TraceEntry {
   startedAt: number;
   durationMs: number;
   summary: string;
+  detail?: unknown;
 }
 
 export type StepResult =
@@ -167,6 +168,25 @@ function traceSummary(step: PipelineStepName, result: StepResult): string {
   return boundedTraceSummary(summaryParts.join(' '));
 }
 
+function generateTraceDetail(detail: unknown): { params: Record<string, number | string> } | undefined {
+  if (typeof detail !== 'object' || detail === null || Array.isArray(detail)) return undefined;
+  const rawParams = (detail as Record<string, unknown>).params;
+  if (typeof rawParams !== 'object' || rawParams === null || Array.isArray(rawParams)) return undefined;
+  const params = rawParams as Record<string, unknown>;
+  const safeParams: Record<string, number | string> = {};
+  if (typeof params.temperature === 'number' && Number.isFinite(params.temperature)
+    && params.temperature >= 0 && params.temperature <= 2) {
+    safeParams.temperature = params.temperature;
+  }
+  if (Number.isSafeInteger(params.maxTokens) && typeof params.maxTokens === 'number' && params.maxTokens > 0) {
+    safeParams.maxTokens = params.maxTokens;
+  }
+  if (params.reasoning === 'low' || params.reasoning === 'medium' || params.reasoning === 'high') {
+    safeParams.reasoning = params.reasoning;
+  }
+  return { params: safeParams };
+}
+
 export async function traceStep(
   ctx: StepContext,
   step: PipelineStepName,
@@ -175,9 +195,11 @@ export async function traceStep(
   const startedAt = Date.now();
   const started = performance.now();
   let summary = 'error';
+  let detail: unknown;
   try {
     const result = await run();
     summary = traceSummary(step, result);
+    if (step === 'generate') detail = generateTraceDetail(result.detail);
     return result;
   } finally {
     ctx.trace.push({
@@ -185,6 +207,7 @@ export async function traceStep(
       startedAt,
       durationMs: Math.max(0, performance.now() - started),
       summary,
+      ...(detail !== undefined ? { detail } : {}),
     });
   }
 }
