@@ -21,6 +21,7 @@ function copyPromptTemplates(): string {
   fs.copyFileSync(path.resolve('prompts/traits.md'), path.join(root, 'traits.md'));
   fs.copyFileSync(path.resolve('prompts/sleep.md'), path.join(root, 'sleep.md'));
   fs.copyFileSync(path.resolve('prompts/extract-tags.md'), path.join(root, 'extract-tags.md'));
+  fs.copyFileSync(path.resolve('prompts/persona-import.md'), path.join(root, 'persona-import.md'));
   return root;
 }
 
@@ -41,6 +42,20 @@ test('startup template load hashes raw bytes and parses the exact vision and jud
   assert.equal(templates.traits.talk.p2, '你是个话痨，什么都想插一句。');
   assert.equal(templates.sleep.goodnight.length, 3);
   assert.ok(Object.isFrozen(templates.sleep.goodnight));
+  assert.ok(templates.personaImport.system.includes('不得推断、补全或编造'));
+  assert.ok(templates.personaImport.user.includes('{{text}}'));
+});
+
+test('persona-import 模板必须声明 text 占位符', () => {
+  const root = copyPromptTemplates();
+  try {
+    const templatePath = path.join(root, 'persona-import.md');
+    const source = fs.readFileSync(templatePath, 'utf8');
+    fs.writeFileSync(templatePath, source.replace('{{text}}', '{{unknown}}'), 'utf8');
+    assert.throws(() => createPromptTemplateStore(root), /未知占位符：unknown/u);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('sleep 模板拒绝空的晚安列表', () => {

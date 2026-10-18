@@ -123,3 +123,100 @@ test('persona preview returns section blocks and the runtime trait renderer outp
     );
   });
 });
+
+test('persona import uses the extract slot and returns a redacted unsaved draft', async () => {
+  const syntheticSecret = ['sk', 'test', 'secret', '123456'].join('-');
+  const sourceText = '一段待整理的人设资料。';
+  const calls: Array<{ slot: string; messages: unknown[] }> = [];
+  const extracted = {
+    fields: {
+      身份: syntheticSecret,
+      年龄: '成年',
+      背景: '',
+      说话方式: '',
+      口头禅: ['你好'],
+      常用表情: [],
+      对熟人: '',
+      对陌生人: '',
+      对主人: '',
+      底线: [],
+    },
+    traits: { order: 1, morality: 0, talk: -1, mind: 0 },
+    other: [{ heading: '经历', text: '后来搬到海边。' }, { heading: '', text: '' }],
+  };
+
+  await withPanel(async ({ app }) => {
+    const response = await app.request('/api/personas/import', {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: 'new-card.md', text: sourceText }),
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json() as { draft: string; mappedCount: number; otherCount: number };
+    assert.equal(result.mappedCount, 5);
+    assert.equal(result.otherCount, 1);
+    assert.ok(!result.draft.includes(syntheticSecret), 'draft must not expose imported credential text');
+    assert.ok(result.draft.includes('[敏感内容已隐藏]'));
+    const form = parseSections(result.draft);
+    assert.equal(form.fields.身份, '[敏感内容已隐藏]');
+    assert.deepEqual(form.fields.口头禅, ['你好']);
+    assert.deepEqual(form.traits, extracted.traits);
+    assert.deepEqual(form.other, [extracted.other[0]]);
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.slot, 'extract');
+    assert.ok(JSON.stringify(calls[0]?.messages).includes(sourceText));
+
+    const personas = await app.request('/api/personas', { headers: authHeaders() });
+    assert.deepEqual((await personas.json() as Array<{ id: string }>).map(({ id }) => id), ['default']);
+    assert.equal((await app.request('/api/personas/new-card', { headers: authHeaders() })).status, 404);
+  }, undefined, {
+    callModel: async (slot, messages) => {
+      calls.push({ slot, messages });
+      return {
+        text: JSON.stringify(extracted),
+        provider: 'fake',
+        model: 'fake-model',
+        usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+      };
+    },
+  });
+});
+
+test('persona import returns 422 with a reason for invalid JSON and schema values', async () => {
+  const valid = {
+    fields: {
+      身份: '', 年龄: '', 背景: '', 说话方式: '', 口头禅: [], 常用表情: [],
+      对熟人: '', 对陌生人: '', 对主人: '', 底线: [],
+    },
+    traits: { order: 0, morality: 0, talk: 0, mind: 0 },
+    other: [],
+  };
+  const invalidResponses = [
+    'not JSON',
+    JSON.stringify({ ...valid, fields: { ...valid.fields, 身份: 7 } }),
+    JSON.stringify({ ...valid, traits: { ...valid.traits, order: 3 } }),
+  ];
+  let responseIndex = 0;
+
+  await withPanel(async ({ app }) => {
+    for (let index = 0; index < invalidResponses.length; index += 1) {
+      const response = await app.request('/api/personas/import', {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: 'draft.md', text: '来源文本' }),
+      });
+      assert.equal(response.status, 422);
+      const result = await response.json() as { reason?: string };
+      assert.equal(typeof result.reason, 'string');
+      assert.ok(result.reason.length > 0);
+    }
+  }, undefined, {
+    callModel: async () => ({
+      text: invalidResponses[responseIndex++] ?? '',
+      provider: 'fake',
+      model: 'fake-model',
+      usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+    }),
+  });
+});

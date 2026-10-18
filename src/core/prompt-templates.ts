@@ -36,6 +36,11 @@ export interface ExtractTagsPromptTemplate extends PromptTemplate {
   user: string;
 }
 
+export interface PersonaImportPromptTemplate extends PromptTemplate {
+  system: string;
+  user: string;
+}
+
 export interface AffectPromptTemplate extends PromptTemplate {
   mood: {
     low: string;
@@ -79,6 +84,7 @@ export interface PromptTemplateSet {
   traits: TraitsPromptTemplate;
   sleep: SleepPromptTemplate;
   extractTags: ExtractTagsPromptTemplate;
+  personaImport: PersonaImportPromptTemplate;
 }
 
 export interface PromptTemplateStore {
@@ -263,6 +269,18 @@ function parseExtractTagsTemplate(template: PromptTemplate): ExtractTagsPromptTe
   return extractTags;
 }
 
+function parsePersonaImportTemplate(template: PromptTemplate): PersonaImportPromptTemplate {
+  const fields = parseTemplateFields(template, 'persona-import.md');
+  if (typeof fields.system !== 'string' || fields.system.length === 0
+    || typeof fields.user !== 'string' || fields.user.length === 0) {
+    throw new Error('persona-import.md 必须包含非空 system 和 user 文本');
+  }
+  const personaImport = { ...template, system: fields.system, user: fields.user };
+  validatePlaceholders('persona-import.md', personaImport.system, [], []);
+  validatePlaceholders('persona-import.md', personaImport.user, ['text'], ['text']);
+  return personaImport;
+}
+
 function validatePlaceholders(
   fileName: string,
   source: string,
@@ -289,6 +307,7 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
   const traits = parseTraitsTemplate(readTemplate(root, 'traits.md'));
   const sleep = parseSleepTemplate(readTemplate(root, 'sleep.md'));
   const extractTags = parseExtractTagsTemplate(readTemplate(root, 'extract-tags.md'));
+  const personaImport = parsePersonaImportTemplate(readTemplate(root, 'persona-import.md'));
   return Object.freeze({
     replySystem: Object.freeze(replySystem),
     judge: Object.freeze(judge),
@@ -298,6 +317,7 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
     traits: Object.freeze(traits),
     sleep: Object.freeze({ ...sleep, goodnight: Object.freeze(sleep.goodnight) }),
     extractTags: Object.freeze(extractTags),
+    personaImport: Object.freeze(personaImport),
   });
 }
 

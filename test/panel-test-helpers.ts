@@ -7,7 +7,7 @@ import { createManagementCommands } from '../src/core/management.ts';
 import { createSleepWakeState } from '../src/core/sleep.ts';
 import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../src/core/events.ts';
 import type { ContactFriend, ContactGroup, ProtocolAdapter } from '../src/adapters/types.ts';
-import { createPanelApp } from '../src/panel-server/app.ts';
+import { createPanelApp, type PanelServerOptions } from '../src/panel-server/app.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
 import type { SlotCallOptions, SlotResult } from '../src/llm/slots.ts';
@@ -70,6 +70,7 @@ export async function withPanel<T>(
     env?: NodeJS.ProcessEnv;
     testProvider?: (provider: string, model: string, config: ReturnType<typeof AquariumConfigSchema.parse>) => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
     cliRuntime?: CliRuntime;
+    callModel?: PanelServerOptions['callModel'];
   } = {},
 ): Promise<T> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-panel-test-'));
@@ -113,7 +114,7 @@ export async function withPanel<T>(
     ...(panelOptions.env ? { env: panelOptions.env } : {}),
     ...(panelOptions.testProvider ? { testProvider: panelOptions.testProvider } : {}),
     ...(panelOptions.cliRuntime ? { cliRuntime: panelOptions.cliRuntime } : {}),
-    callModel: async (slot: string, _messages: unknown[], options: SlotCallOptions): Promise<SlotResult> => {
+    callModel: panelOptions.callModel ?? (async (slot: string, _messages: unknown[], options: SlotCallOptions): Promise<SlotResult> => {
       modelSlots.push(slot);
       options.recordUsage({
         time: now,
@@ -134,7 +135,7 @@ export async function withPanel<T>(
         model: 'deepseek-flash',
         usage: { inputTokens: 10, cachedTokens: 0, outputTokens: 4, costCny: 0.001 },
       };
-    },
+    }),
     replayMessage: async (message: IncomingMessage) => {
       replayedMessages.push(message);
       return {

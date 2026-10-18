@@ -12,6 +12,7 @@
 - V6 完成 21:15–21:19：模型接入卡片、密钥状态/设置、CLI 常驻后台与重启、用途降级链编辑对话框；panel build119。
 - R5 完成 21:20–22:16，提交 `cac59f83`：初审固定范围 V4–V6（base `60573a4` → target `62e0ed5`；SHA-256 `178f1fec12d47c6f6c999e470589735fed541982cba3cdae12ee5ed254c6c025`，113984 B）未通过；单一修复提交处理 2 项逻辑、2 项进程阻断及密钥掩码/.env重复项；定向37/37、check457/457、panel build119。修复提交未二次独立审查（§0.1 限制）。
 - V7 完成 22:19–22:51：sections 纯函数、保序与 traits 保留、预览 API；`npm run check` 459/459。仅后端改动；未启动 GUI。
+- V8 完成 22:55–23:15：假模型通过 extract 槽整理；严格校验并返回未保存草稿，过滤空 other；`mappedCount` 为非空字段数加非零 traits 数；输出敏感文本脱敏；`npm run check` 462/462。
 - 开工：浏览器已打开 5 个参照页；从 `dev/m2-persona` 建立 `dev/console-v2`。
 - 未运行 `npm start`/GUI/QQ/SnowLuma 或真实请求；未修改 `reference/`。
 
@@ -42,3 +43,4 @@
 - V5：首个实现用了 TypeScript 参数属性，被 Node strip-only 拒绝；改为显式字段。预热进程补了 stdout/stderr 排空，避免启动横幅写满管道。CLI 测试全部使用 `node -e` 假命令。
 - R5 修复：定向回归覆盖自定义 reasoningField、预热崩溃退避、并发时单个空闲进程、stopAll 终止忙碌/单次进程、超时强制结束，以及短密钥遮蔽和重复 `.env` 行；全测 457/457 通过。独立审查仅针对修复前的固定 V4–V6 快照。
 - V7：切换 persona fixture 到 CRLF 后初次断言仍按 LF 比较；修正为使用文件行尾，定向 3/3 与全测 459/459 通过。
+- V8：首次导入联调发现对整份 Markdown 脱敏会改坏 YAML traits 键；改为仅对字段值和 other 文本脱敏，再构建草稿；回归与全测通过。

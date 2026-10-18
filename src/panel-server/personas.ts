@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
   existsSync,
-  linkSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -12,10 +11,21 @@ import {
 import path from 'node:path';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import type { AquariumConfig } from '../config/schema.ts';
+import type { PipelineModelCall } from '../core/pipeline.ts';
 import { promptTemplateStore } from '../core/prompt-templates.ts';
+import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
+import { callSlot } from '../llm/slots.ts';
 import { effectiveTalkLevel, renderTraitsBlock } from '../persona/traits.ts';
 import { parsePersonaMarkdown, updatePersonaTraits, type PersonaTraits } from '../persona/load.ts';
-import { buildSections, parseSections, renderPersonaSectionBlocks } from '../persona/sections.ts';
+import {
+  buildSections,
+  parseSections,
+  renderPersonaSectionBlocks,
+  type PersonaSectionFields,
+  type PersonaSectionsForm,
+} from '../persona/sections.ts';
+import type { StoreRepository } from '../store/repository.ts';
 
 const personaTraitsSchema: z.ZodType<PersonaTraits> = z.object({
   order: z.number().int().min(-2).max(2).default(0),
@@ -29,9 +39,35 @@ const personaBodySchema = z.object({
 }).strict();
 const personaImportSchema = z.object({
   filename: z.string().min(1).max(255),
-  markdown: z.string().max(100_000),
+  text: z.string().min(1).max(100_000),
 }).strict();
 const personaPreviewSchema = z.object({ content: z.string().max(100_000) }).strict();
+const personaImportFieldsSchema = z.object({
+  身份: z.string().max(10_000),
+  年龄: z.string().max(10_000),
+  背景: z.string().max(10_000),
+  说话方式: z.string().max(10_000),
+  口头禅: z.array(z.string().max(10_000)).max(100),
+  常用表情: z.array(z.string().max(10_000)).max(100),
+  对熟人: z.string().max(10_000),
+  对陌生人: z.string().max(10_000),
+  对主人: z.string().max(10_000),
+  底线: z.array(z.string().max(10_000)).max(100),
+}).strict();
+const personaImportResultSchema = z.object({
+  fields: personaImportFieldsSchema,
+  traits: personaTraitsSchema,
+  other: z.array(z.object({
+    heading: z.string().max(255).refine((value) => !/[\r\n]/u.test(value)),
+    text: z.string().max(100_000),
+  }).strict()).max(100),
+}).strict();
+
+interface PersonaRouteOptions {
+  getConfig: () => AquariumConfig;
+  repository: StoreRepository;
+  callModel?: PipelineModelCall;
+}
 
 function validPersonaId(value: string): boolean {
   return /^[a-z0-9_-]+$/u.test(value);
@@ -52,18 +88,13 @@ function listPersonaIds(directory: string): string[] {
   }
 }
 
-function writeTextAtomic(filePath: string, content: string, exclusive = false): void {
+function writeTextAtomic(filePath: string, content: string): void {
   const directory = path.dirname(filePath);
   mkdirSync(directory, { recursive: true });
   const temporaryPath = `${filePath}.${randomUUID()}.tmp`;
   try {
     writeFileSync(temporaryPath, content, { encoding: 'utf8', flag: 'wx' });
-    if (exclusive) {
-      linkSync(temporaryPath, filePath);
-      unlinkSync(temporaryPath);
-    } else {
-      renameSync(temporaryPath, filePath);
-    }
+    renameSync(temporaryPath, filePath);
   } catch (error) {
     try { unlinkSync(temporaryPath); } catch { /* best-effort temporary-file cleanup */ }
     throw error;
@@ -75,11 +106,7 @@ function parseBody<T>(body: unknown, schema: z.ZodType<T>): T | undefined {
   return result.success ? result.data : undefined;
 }
 
-function isAlreadyExists(error: unknown): boolean {
-  return !!error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST';
-}
-
-export function registerPersonaRoutes(app: Hono, root: string): void {
+export function registerPersonaRoutes(app: Hono, root: string, options: PersonaRouteOptions): void {
   app.get('/api/personas', (context) => {
     const ids = new Set([
       ...listPersonaIds(path.join(root, 'personas')),
@@ -150,20 +177,66 @@ export function registerPersonaRoutes(app: Hono, root: string): void {
     let rawBody: unknown;
     try { rawBody = await context.req.json(); } catch { return context.json({ error: 'Invalid JSON' }, 400); }
     const body = parseBody(rawBody, personaImportSchema);
-    if (!body || /[\\/]/u.test(body.filename)) return context.json({ error: 'Invalid persona filename' }, 400);
-    const extension = body.filename.lastIndexOf('.');
-    const id = extension > 0 ? body.filename.slice(0, extension) : body.filename;
-    if (!validPersonaId(id)) return context.json({ error: 'Invalid persona ID' }, 400);
-    const destination = personaPath(root, 'data/personas', id);
-    if (existsSync(destination) || existsSync(personaPath(root, 'personas', id))) {
-      return context.json({ error: 'Persona already exists' }, 409);
+    if (!body || /[\\/\u0000-\u001f\u007f]/u.test(body.filename) || body.filename === '.' || body.filename === '..'
+      || body.text.trim().length === 0) {
+      return context.json({ error: 'Invalid persona import' }, 400);
     }
+    const template = promptTemplateStore.get().personaImport;
+    const messages: Parameters<PipelineModelCall>[1] = [
+      { role: 'system', content: template.system },
+      { role: 'user', content: template.user.replaceAll('{{text}}', () => body.text) },
+    ];
+    let modelResult;
     try {
-      writeTextAtomic(destination, body.markdown, true);
-    } catch (error) {
-      if (isAlreadyExists(error)) return context.json({ error: 'Persona already exists' }, 409);
-      throw error;
+      modelResult = await (options.callModel ?? callSlot)('extract', messages, {
+        config: options.getConfig(),
+        account: null,
+        costToday: options.repository.costToday,
+        recordUsage: options.repository.recordUsage,
+      });
+    } catch {
+      return context.json({ error: 'Persona import failed', reason: '模型调用失败' }, 502);
     }
-    return context.json({ id, filename: `${id}.md` }, 201);
+    let modelJson: unknown;
+    try {
+      modelJson = JSON.parse(modelResult.text);
+    } catch {
+      return context.json({ error: 'Invalid persona import response', reason: '模型返回内容不是有效 JSON' }, 422);
+    }
+    const parsed = personaImportResultSchema.safeParse(modelJson);
+    if (!parsed.success) {
+      return context.json({ error: 'Invalid persona import response', reason: '模型返回字段或 traits 数值不符合要求' }, 422);
+    }
+    const extracted = parsed.data;
+    const other = extracted.other.filter((section) => section.text.trim().length > 0);
+    const fields: PersonaSectionFields = Object.fromEntries(
+      Object.entries(extracted.fields).map(([heading, value]) => [
+        heading,
+        Array.isArray(value) ? value.map(redactSensitiveText) : redactSensitiveText(value),
+      ]),
+    ) as PersonaSectionFields;
+    const form: PersonaSectionsForm = {
+      title: '# {{name}}',
+      introduction: '',
+      traits: extracted.traits,
+      fields,
+      other: other.map((section) => ({
+        heading: redactSensitiveText(section.heading),
+        text: redactSensitiveText(section.text),
+      })),
+      metadata: {},
+      lineEnding: '\n',
+    };
+    let draft: string;
+    try {
+      draft = buildSections(form);
+    } catch {
+      return context.json({ error: 'Invalid persona import response', reason: '模型返回内容无法生成草稿' }, 422);
+    }
+    const mappedFields = Object.values(extracted.fields).filter((value) => Array.isArray(value)
+      ? value.some((item) => item.trim().length > 0)
+      : value.trim().length > 0).length;
+    const mappedTraits = Object.values(extracted.traits).filter((value) => value !== 0).length;
+    return context.json({ draft, mappedCount: mappedFields + mappedTraits, otherCount: other.length });
   });
 }

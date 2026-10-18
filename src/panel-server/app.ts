@@ -202,7 +202,11 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     }
     await next();
   });
-  registerPersonaRoutes(app, root);
+  registerPersonaRoutes(app, root, {
+    getConfig: options.getConfig,
+    repository: options.repository,
+    callModel: options.callModel,
+  });
   registerSessionRoutes(app, {
     getConfig: options.getConfig,
     saveConfig: options.saveConfig,

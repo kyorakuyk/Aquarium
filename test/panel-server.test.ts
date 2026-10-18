@@ -440,31 +440,14 @@ test('owner 未设置时试聊不会把扮演者伪标为主人', async () => {
   }, 0);
 });
 
-test('人设导入校验路径 ID、写入后可读回，并拒绝冲突', async () => {
+test('人设导入拒绝路径穿越文件名', async () => {
   await withPanel(async ({ app }) => {
     const invalid = await app.request('/api/personas/import', {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: '../escape.md', markdown: '# 不可写' }),
+      body: JSON.stringify({ filename: '../escape.md', text: '来源文本' }),
     });
     assert.equal(invalid.status, 400);
-
-    const imported = await app.request('/api/personas/import', {
-      method: 'POST',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: 'new-card.md', markdown: '# 新人设\n你好。' }),
-    });
-    assert.equal(imported.status, 201);
-    const readBack = await app.request('/api/personas/new-card', { headers: authHeaders() });
-    assert.equal(readBack.status, 200);
-    assert.equal((await readBack.json() as { markdown: string }).markdown, '# 新人设\n你好。');
-
-    const conflict = await app.request('/api/personas/import', {
-      method: 'POST',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: 'new-card.md', markdown: '# 覆盖' }),
-    });
-    assert.equal(conflict.status, 409);
   });
 });
 
