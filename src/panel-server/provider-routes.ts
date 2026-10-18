@@ -9,6 +9,7 @@ import {
 import type { StoreRepository } from '../store/repository.ts';
 import type { UsageAttempt } from '../llm/slots.ts';
 import { clearProviderClients } from '../llm/client.ts';
+import { buildCliInput, getCliRuntime, runCliOnce, type CliRuntime } from '../llm/cli.ts';
 import { maskSecret, readEnvKey, writeEnvKey } from './env-file.ts';
 
 const providerNameSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
@@ -50,6 +51,7 @@ export interface ProviderRouteOptions {
   env?: NodeJS.ProcessEnv;
   now?: () => number;
   testProvider?: (provider: string, model: string, config: AquariumConfig) => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
+  cliRuntime?: CliRuntime;
 }
 
 function parseJsonBody<T>(raw: unknown, schema: z.ZodType<T>): T | undefined {
@@ -64,6 +66,7 @@ function safeApiKeyEnv(provider: AquariumConfig['providers'][string]): string | 
 export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions): void {
   const now = options.now ?? Date.now;
   const env = options.env ?? process.env;
+  const cliRuntime = options.cliRuntime ?? getCliRuntime();
 
   const keyStatus = (provider: AquariumConfig['providers'][string]) => {
     const name = safeApiKeyEnv(provider);
@@ -77,9 +80,6 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
     return maskSecret(fromFile ?? env[name]);
   };
 
-  const cliStatus = (provider: AquariumConfig['providers'][string]) => provider.kind === 'cli'
-    ? { state: 'stopped', pid: null as number | null, served: 0 }
-    : undefined;
 
   app.get('/api/models', (context) => {
     const config = options.getConfig();
@@ -92,7 +92,7 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
           ? { baseUrl: provider.baseUrl, reasoningField: provider.reasoningField }
           : { command: provider.command, args: provider.args, prewarm: provider.prewarm, timeoutSec: provider.timeoutSec }),
         keyStatus: keyStatus(provider),
-        ...(provider.kind === 'cli' ? { runtime: cliStatus(provider) } : {}),
+        ...(provider.kind === 'cli' ? { runtime: cliRuntime.status(id) } : {}),
       })),
       slots: config.slots,
     });
@@ -121,7 +121,7 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
         id: parsed.id,
         kind: stored.kind,
         ...(stored.kind === 'cli'
-          ? { runtime: { state: 'stopped', pid: null, served: 0 } }
+          ? { runtime: cliRuntime.status(parsed.id) }
           : { keyStatus: keyStatus(stored) }),
       }, 201);
     });
@@ -251,9 +251,11 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
     const config = options.getConfig();
     const provider = config.providers[id];
     if (!provider) return context.json({ error: 'Unknown provider' }, 404);
-    const model = body.model ?? config.slots.reply?.[0]?.model;
-    const price = model ? config.pricing[model] : undefined;
-    if (!model || !price) return context.json({ error: 'Model is not priced' }, 400);
+    const model = body.model ?? (provider.kind === 'cli' ? 'cli' : config.slots.reply?.[0]?.model);
+    if (!model) return context.json({ error: 'Model is not priced' }, 400);
+    if (provider.kind === 'api' && !config.pricing[model]) {
+      return context.json({ error: 'Model is not priced' }, 400);
+    }
 
     const startedAt = now();
     let outcome: { ok: boolean; latencyMs: number; error?: string };
@@ -268,6 +270,9 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
           messages: [{ role: 'user', content: 'ping' }],
           max_tokens: 1,
         }, { timeout: 30_000, maxRetries: 0 });
+        outcome = { ok: true, latencyMs: Math.max(0, now() - startedAt) };
+      } else if (provider.kind === 'cli') {
+        await runCliOnce(provider, buildCliInput([{ role: 'user', content: 'ping' }]));
         outcome = { ok: true, latencyMs: Math.max(0, now() - startedAt) };
       } else {
         outcome = { ok: false, latencyMs: Math.max(0, now() - startedAt), error: 'CLI provider is not available' };
@@ -291,5 +296,16 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
     };
     options.repository.recordUsage(attempt);
     return context.json(outcome);
+  });
+
+  app.post('/api/providers/:id/restart', (context) => {
+    const id = context.req.param('id');
+    return options.serializeConfigWrite(async () => {
+      const provider = options.getConfig().providers[id];
+      if (!provider) return context.json({ error: 'Unknown provider' }, 404);
+      if (provider.kind !== 'cli') return context.json({ error: 'Only CLI providers can restart' }, 400);
+      cliRuntime.restart(id, provider);
+      return context.json(cliRuntime.status(id));
+    });
   });
 }

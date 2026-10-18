@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import type { AquariumConfig } from '../config/schema.ts';
 import { getProviderClient } from './client.ts';
 import { budgetState } from './budget.ts';
+import { buildCliInput, getCliRuntime, type CliRuntime } from './cli.ts';
 
 const retryableNetworkCodes = new Set([
   'ECONNABORTED',
@@ -38,6 +39,7 @@ export interface SlotCallOptions {
   getClient?: (provider: string) => OpenAI;
   now?: () => number;
   timeoutMs?: number;
+  cliRuntime?: CliRuntime;
   debugTrace?: SlotDebugTraceContext;
 }
 
@@ -175,10 +177,12 @@ export async function callSlot(
   for (let index = 0; index < chain.length; index += 1) {
     const entry = chain[index];
     if (!entry) continue;
-    const price = options.config.pricing[entry.model];
-    if (!price) throw new Error(`模型 ${entry.model} 缺少价格配置，拒绝发送请求`);
     const provider = options.config.providers[entry.provider];
     if (!provider) throw new Error(`未配置模型服务商：${entry.provider}`);
+    const price = options.config.pricing[entry.model];
+    if (provider.kind === 'api' && !price) {
+      throw new Error(`模型 ${entry.model} 缺少价格配置，拒绝发送请求`);
+    }
     const sentParams: SlotRequestParams = provider.kind === 'api' ? {
       ...(entry.temperature !== undefined ? { temperature: entry.temperature } : {}),
       ...(entry.maxTokens !== undefined ? { maxTokens: entry.maxTokens } : {}),
@@ -198,13 +202,22 @@ export async function callSlot(
 
     const startedAt = now();
     let response: OpenAI.ChatCompletion | undefined;
+    let cliText: string | undefined;
     let attemptError: unknown;
     let failed = false;
     try {
-      const client = options.getClient
-        ? options.getClient(entry.provider)
-        : getProviderClient(options.config, entry.provider);
-      response = await client.chat.completions.create(requestBody, { timeout: timeoutMs, maxRetries: 0 });
+      if (provider.kind === 'cli') {
+        cliText = await (options.cliRuntime ?? getCliRuntime()).call(
+          entry.provider,
+          provider,
+          buildCliInput(messages),
+        );
+      } else {
+        const client = options.getClient
+          ? options.getClient(entry.provider)
+          : getProviderClient(options.config, entry.provider);
+        response = await client.chat.completions.create(requestBody, { timeout: timeoutMs, maxRetries: 0 });
+      }
     } catch (error) {
       failed = true;
       attemptError = error;
@@ -235,15 +248,17 @@ export async function callSlot(
         detail: debugErrorDetails(attemptError),
       });
       lastError = attemptError;
-      if (!canFallback(attemptError) || index === chain.length - 1) throw attemptError;
+      if (provider.kind === 'api' && !canFallback(attemptError) || index === chain.length - 1) throw attemptError;
       continue;
     }
 
-    if (!response) throw new Error(`模型 ${entry.model} 没有返回结果`);
-    const responseText = typeof response.choices[0]?.message.content === 'string'
-      ? response.choices[0].message.content
-      : '';
-    const usage = response.usage;
+    if (provider.kind === 'api' && !response) throw new Error(`模型 ${entry.model} 没有返回结果`);
+    const responseText = provider.kind === 'cli'
+      ? cliText ?? ''
+      : typeof response?.choices[0]?.message.content === 'string'
+        ? response.choices[0].message.content
+        : '';
+    const usage = response?.usage;
     const inputTokens = tokenCount(usage?.prompt_tokens);
     const outputTokens = tokenCount(usage?.completion_tokens);
     const extendedUsage = usage as (typeof usage & {
@@ -252,11 +267,13 @@ export async function callSlot(
     const cachedValue = extendedUsage?.prompt_cache_hit_tokens
       ?? usage?.prompt_tokens_details?.cached_tokens;
     const cachedTokens = Math.min(inputTokens, tokenCount(cachedValue));
-    const costCny = (
-      (inputTokens - cachedTokens) * price.input
-      + cachedTokens * price.cachedInput
-      + outputTokens * price.output
-    ) / 1_000_000;
+    const costCny = provider.kind === 'cli' || !price
+      ? 0
+      : (
+        (inputTokens - cachedTokens) * price.input
+        + cachedTokens * price.cachedInput
+        + outputTokens * price.output
+      ) / 1_000_000;
     const slotUsage = { inputTokens, cachedTokens, outputTokens, costCny };
 
     options.recordUsage({

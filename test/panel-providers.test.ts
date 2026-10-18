@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { createCliRuntime } from '../src/llm/cli.ts';
 import { setEnvAssignment } from '../src/panel-server/env-file.ts';
 import { authHeaders, now, withPanel } from './panel-test-helpers.ts';
 
@@ -226,4 +227,41 @@ test('provider API does not expose apiKeyEnv or accept unknown fields', async ()
     });
     assert.equal(unknownField.status, 400);
   });
+});
+
+test('CLI providers can be tested and restarted through the API', async () => {
+  const runtime = createCliRuntime({ restartBaseMs: 20, restartMaxMs: 80 });
+  try {
+    await withPanel(async ({ app }) => {
+      const headers = { ...authHeaders(), 'Content-Type': 'application/json' };
+      const script = 'process.stdin.resume();process.stdin.on("end",()=>process.stdout.write("pong"));';
+      const created = await app.request('/api/providers', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          id: 'echo-cli',
+          provider: { kind: 'cli', command: process.execPath, args: ['-e', script], prewarm: true, timeoutSec: 5 },
+        }),
+      });
+      assert.equal(created.status, 201);
+
+      const tested = await app.request('/api/providers/echo-cli/test', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      });
+      assert.equal(tested.status, 200);
+      assert.equal((await tested.json() as { ok: boolean }).ok, true);
+
+      const restarted = await app.request('/api/providers/echo-cli/restart', { method: 'POST', headers });
+      assert.equal(restarted.status, 200);
+      const status = await restarted.json() as { state: string };
+      assert.ok(status.state === 'starting' || status.state === 'ready');
+
+      const apiOnly = await app.request('/api/providers/deepseek/restart', { method: 'POST', headers });
+      assert.equal(apiOnly.status, 400);
+    }, undefined, { cliRuntime: runtime });
+  } finally {
+    await runtime.stopAll();
+  }
 });

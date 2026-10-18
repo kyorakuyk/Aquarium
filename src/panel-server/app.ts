@@ -26,6 +26,7 @@ import { registerAffectRoutes } from './affect-routes.ts';
 import { registerSleepRoutes } from './sleep-routes.ts';
 import { registerUsageRoutes } from './usage-routes.ts';
 import { registerProviderRoutes } from './provider-routes.ts';
+import type { CliRuntime } from '../llm/cli.ts';
 import type { ContactSnapshot, PanelAccountRuntime } from './types.ts';
 import { budgetState } from '../llm/budget.ts';
 import type { SleepWakeState } from '../core/sleep.ts';
@@ -47,6 +48,7 @@ export interface PanelServerOptions {
   envPath?: string;
   env?: NodeJS.ProcessEnv;
   testProvider?: (provider: string, model: string, config: AquariumConfig) => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
+  cliRuntime?: CliRuntime;
   onError?: (error: unknown) => void;
 }
 
@@ -238,6 +240,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     env: options.env ?? process.env,
     now,
     testProvider: options.testProvider,
+    cliRuntime: options.cliRuntime,
   });
 
   app.get('/api/status', async (context) => {

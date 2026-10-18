@@ -11,6 +11,7 @@ import { createPanelApp } from '../src/panel-server/app.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
 import type { SlotCallOptions, SlotResult } from '../src/llm/slots.ts';
+import type { CliRuntime } from '../src/llm/cli.ts';
 
 export const exampleConfig = AquariumConfigSchema.parse(yaml.parse(
   fs.readFileSync(path.resolve('config.example.yaml'), 'utf8'),
@@ -68,6 +69,7 @@ export async function withPanel<T>(
     envPath?: string;
     env?: NodeJS.ProcessEnv;
     testProvider?: (provider: string, model: string, config: ReturnType<typeof AquariumConfigSchema.parse>) => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
+    cliRuntime?: CliRuntime;
   } = {},
 ): Promise<T> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-panel-test-'));
@@ -110,6 +112,7 @@ export async function withPanel<T>(
     ...(panelOptions.envPath ? { envPath: panelOptions.envPath } : {}),
     ...(panelOptions.env ? { env: panelOptions.env } : {}),
     ...(panelOptions.testProvider ? { testProvider: panelOptions.testProvider } : {}),
+    ...(panelOptions.cliRuntime ? { cliRuntime: panelOptions.cliRuntime } : {}),
     callModel: async (slot: string, _messages: unknown[], options: SlotCallOptions): Promise<SlotResult> => {
       modelSlots.push(slot);
       options.recordUsage({

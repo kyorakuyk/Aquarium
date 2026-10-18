@@ -17,6 +17,7 @@ import { createMoodService } from '../core/mood/service.ts';
 import { createImpressionsService } from '../core/impressions/service.ts';
 import { createSleepWakeState } from '../core/sleep.ts';
 import { createSleepGoodnightScheduler } from '../core/sleep/goodnight.ts';
+import { getCliRuntime } from '../llm/cli.ts';
 import { openDatabase } from '../store/db.ts';
 import { createRepository } from '../store/repository.ts';
 import { startPanelServer, type PanelAccountRuntime } from '../panel-server/server.ts';
@@ -38,6 +39,8 @@ const initialConfig = loadConfig({ configPath });
 const database = openDatabase();
 const repository = createRepository(database);
 const configWatcher = watchConfig({ initialConfig, configPath });
+const cliRuntime = getCliRuntime();
+cliRuntime.sync(initialConfig.providers);
 function pruneTraces(): void {
   try {
     const config = configWatcher.getConfig();
@@ -146,6 +149,7 @@ async function shutdown(signal: string): Promise<void> {
     logger.error(`Windows 托管关闭失败：${describeError(error)}`);
   }
   await sessionQueue.idle();
+  await cliRuntime.stopAll();
   database.close();
   logger.info('Aquarium 已关闭。');
 }
@@ -154,6 +158,7 @@ process.once('SIGINT', () => { void shutdown('SIGINT'); });
 process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
 
 configWatcher.on('changed', (config) => {
+  cliRuntime.sync(config.providers);
   logger.info('配置已热重载；后续收到的消息将使用新配置。');
   if (!hasEnabledSession(config)) logger.warn('当前没有启用任何会话。');
   if (accountSignature(config) !== accountSignature(initialConfig)) {
@@ -330,6 +335,7 @@ await startPanelWhileAccountStartupRuns(accountStartup, () => {
           repository,
           accounts: () => panelAccounts,
           sleepWakeState,
+          cliRuntime,
           management: () => managementControllers,
           replayMessage: (message) => {
             const pipeline = pipelines.get(message.session.account);
