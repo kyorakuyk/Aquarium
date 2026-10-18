@@ -1,8 +1,8 @@
-# Aquarium 从骨架到 M1：初学者施工导读
+# Aquarium 从骨架到 M2：初学者施工导读
 
-> 本文是随代码一起更新的学习材料。目标不是让你记住所有 API，而是让你能回答：程序分成哪些部分、每一层负责什么、为什么选这些库，以及每个任务怎样验证。当前 T0–T6 与阶段 B 的 R1–R9 均已完成；真实 SnowLuma/QQ 和模型验收仍由用户执行。
+> 本文是随代码一起更新的学习材料。目标不是让你记住所有 API，而是让你能回答：程序分成哪些部分、每一层负责什么、为什么选这些库，以及每个任务怎样验证。当前覆盖 T0–T6、阶段 B 的 R1–R9、阶段 C/D、M2-A A1–A6 和 §9.0 U1–U4 的代码及自动化验证；真实 SnowLuma/QQ、模型、Windows GUI 与 U1–U4 控制台体验仍按各自清单由用户确认。
 >
-> 当前代码已经通过单元测试，但真实 SnowLuma/QQ 操作属于用户验收步骤，夜间运行不会代替你执行。
+> 自动化测试和生产构建不等于真实运行验收。夜间运行不会替代真实 SnowLuma/QQ、模型、Windows GUI 或控制台体验确认。
 
 ## 1. 先建立整体地图
 
@@ -376,6 +376,56 @@ PLAN §7.1 的托盘工作分成三个不同层次：先离线检查 T12a spike 
 
 ## 13. 之后的阶段
 
-T0–T10 与 R10–R13 的代码和自动化检查均已完成；U2 真实环境验收已由用户于 2026-10-14 完成，反馈无重大问题。T11 方案已由用户确认。dev/host 已完成 T12a spike、T12b host、T12c Aquarium trayjs worker 集成及面板启动 follow-up；T12a 四项 spike GUI 验收通过，T12b 测试账号可正常对话。最新 `npm run check` 通过 212 项，startup follow-up 精确复核通过；真实 Aquarium Windows 托盘/QQ 与自启动验收仍待用户，`autostart:install` 未执行。
+T0–T10 与 R10–R13 的代码和自动化检查均已完成；此前 T7/R11 图片下载切片的 U2 真实环境验收已由用户于 2026-10-14 完成，反馈无重大问题。T11 方案已由用户确认。dev/host 已完成 T12a spike、T12b host、T12c Aquarium trayjs worker 集成及面板启动 follow-up；T12a 四项 spike GUI 验收通过，T12b 测试账号可正常对话。M2-A A1–A6 与 §9.0 U1–U4 的代码切片和自动化验证均已完成；截至 2026-10-16，`npm run check` 通过 340 项测试，`npm run panel:build` 成功（30 modules）。真实 Aquarium Windows 托盘/QQ 与自启动、M2-A 真实 QQ/模型/成本验收，以及 U1–U4 控制台体验确认仍待用户；`autostart:install` 未执行。当前按 PLAN §9.0 停在停止点 U，不开始后续任务。
 
 每个章节都以实际代码和真实测试结果为准；还没实现的部分会明确标为“计划”，不把计划写成已完成事实。
+
+## 14. M2：活跃模式与会话设置
+
+M2 不是另起一套聊天管线，而是在现有 pipeline 上增加可配置的群聊参与节奏，并让控制台能够查看、修改全局默认值和会话覆盖。
+
+### 14.1 四种模式与时间表
+
+`src/core/activity/mode.ts` 的 `resolveMode(settings, now)` 按本地时间选择第一个命中的 `modeSchedule` 项；时间段可以跨午夜，均未命中时回落到 `mode`。四种模式分别是：
+
+| 模式 | 被叫时 | 未被叫的群消息 |
+|---|---|---|
+| `mention_only` | 回复 | 不做主动判断 |
+| `natural` | 回复 | 按主动判断流程决定 |
+| `active` | 回复 | 更积极地判断 |
+| `busy` | 回复较慢、较简短 | 更少主动回复 |
+
+被叫消息和私聊仍沿用正式消息路径；未被叫的群消息才进入主动判断。主控位置在 `src/app/activity-routing.ts`、`src/core/steps/gate.ts`，分离的策略模块位于 `src/core/activity/`。
+
+### 14.2 主动判断不是一次模型调用
+
+非 `mention_only` 的未被叫群消息先受预算限制，再经过攒批、空闲退避和零成本规则粗筛；只有通过这些关卡才调用 `judge` 槽位。`src/core/activity/batcher.ts` 使用安静窗口并有最长等待上限，`backoff.ts` 控制连续不回复后的退避，`prefilter.ts` 计算粗筛概率，`judge.ts` 严格解析模型 JSON，`threshold.ts` 按近期行为更新后续判断阈值。最终仍受每会话主动回复冷却和既有频率限制约束。决策原因、概率与阈值会进入可读记录和 trace。
+
+这些限制把“是否值得主动说话”拆成可观察的规则步骤，避免每条群消息都调用模型；自动化测试使用 fake judge，不代表真实模型判断质量或真实群聊体验。
+
+### 14.3 全局默认、会话覆盖与列表状态
+
+- `src/panel-server/session-routes.ts` 提供受保护的 `GET/PATCH /api/defaults`。请求通过 schema 校验；PATCH 支持部分更新，嵌套 `rate` 只合并提交字段，再走原子配置写入与 watcher 热更新路径。
+- `panel/src/pages/SessionsPage.tsx` 把“全局默认”固定在列表中；`panel/src/pages/SessionSettingsPanel.tsx` 复用设置表单，并区分继承与覆盖。会话选择和分组状态经 `localStorage` 安全读写；已不存在的会话会回落到有效列表项。
+- `/api/sessions` 为每个会话提供 `lastMessageAt`，仓储以 `messages` 表的 `MAX(time)` 计算；列表优先呈现启用状态，再结合最近消息时间和名称稳定排序。
+- 联系人读取时排除 bot 自身及昵称/备注完全等于“我的电脑”“我的手机”“我的Pad”“我的平板”的条目；这是 U3 在没有真实 QQ 调试数据时采用的计划回退规则，不表示已验证真实 `userId` 字段。过滤只影响列表展示，已有配置覆盖不会被删除。
+- 私聊面板隐藏群模式和昵称配置，改为私聊说明及“对这个人的补充说明”；单个“每分钟最多”输入同步写入 `perUserPerMinute` 与 `perSessionPerMinute`。群聊仍保留原有群设置项。
+
+### 14.4 测试边界与文件规模
+
+为避免测试文件持续膨胀，pipeline 测试按普通消息、历史重放、主动判断拆到 `test/pipeline.test.ts`、`test/pipeline-replay.test.ts`、`test/pipeline-activity.test.ts`，共用夹具放在 `test/pipeline-test-helpers.ts`；OneBot 适配器测试按生命周期和公开行为拆到 `test/onebot-adapter.test.ts` 与 `test/onebot-adapter-contract.test.ts`，共用夹具放在 `test/onebot-adapter-test-helpers.ts`。结构拆分前两个旧测试文件合计 46 项均通过；拆分后定向回归仍为 46/46，全量 gate 为 340/340。
+
+维护规则：代码文件超过 400 行就检查职责边界、停止继续堆无关功能；超过 600 行必须拆分。2026-10-16 的 Aquarium 代码文件清单（不含 `reference/` 只读目录）有 163 个文件，0 个超过 600 行；以下 8 个已超过 400 行，后续新增前先评估拆分或转移职责：
+
+| 文件 | 行数 | 当前处理 |
+|---|---:|---|
+| `test/panel-server.test.ts` | 539 | 接近上限；会话相关测试已分到 `panel-sessions.test.ts` |
+| `src/adapters/onebot/adapter.ts` | 515 | 后续适配器改动先检查职责边界 |
+| `src/store/repository.ts` | 464 | 新增仓储行为前检查是否应按领域拆分 |
+| `src/panel-server/app.ts` | 445 | 会话路由已拆到 `session-routes.ts`，继续控制增长 |
+| `test/debug-traces.test.ts` | 426 | 按功能增加测试时检查是否需要拆分 |
+| `src/host/windows/snowluma-process.ts` | 413 | 后续 host 改动先检查生命周期边界 |
+| `test/windows-host.test.ts` | 412 | 按行为域拆分测试，避免继续堆积 |
+| `test/snowluma-webui.test.ts` | 404 | 后续认证与请求行为改动先检查职责边界 |
+
+截至本轮验证，`npm run check` 包含 TypeScript、依赖边界检查及 340 项测试；`npm run panel:build` 完成前端类型检查和生产构建。没有启动 QQ、GUI、模型或 `npm start`。§9.0 的 U1–U4 仍等待用户在控制台确认；U3 设备联系人的真实字段也仍待确认。

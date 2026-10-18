@@ -50,8 +50,28 @@ function createEvaluationConfig(): AquariumConfig {
 
 function createUnusedTemplates(): PromptTemplateSet {
   return {
-    replySystem: { source: '', version: '', system: '', groupNote: '', request: '' },
+    replySystem: { source: '', version: '', system: '', groupNote: '', request: '', groupTags: '', memberTags: '' },
+    judge: { source: '', version: '', system: '', user: '' },
     vision: { source: '', version: '', system: '', user: '' },
+    appraise: { source: '', version: '', system: '', user: '' },
+    affect: {
+      source: '',
+      version: '',
+      mood: { low: '', annoyed: '', calm: '', happy: '', excited: '' },
+      float: { arousalLow: '', arousalHigh: '', wrap: '{{floats}}' },
+      affinity: { cold: '', cool: '', warm: '', close: '' },
+    },
+    traits: {
+      source: '',
+      version: '',
+      order: { m2: '', m1: '', p1: '', p2: '' },
+      morality: { m2: '', m1: '', p1: '', p2: '' },
+      talk: { m2: '', m1: '', p1: '', p2: '' },
+      mind: { m2: '', m1: '', p1: '', p2: '' },
+    },
+    sleep: { source: '', version: '', goodnight: [] },
+    extractTags: { source: '', version: '', system: '', user: '{{context}}{{existing}}' },
+    personaImport: { source: '', version: '', system: '', user: '{{text}}' },
   };
 }
 

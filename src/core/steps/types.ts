@@ -7,6 +7,15 @@ import type { RateLimiter } from '../rate-limit.ts';
 import type { SlotCallOptions, SlotResult } from '../../llm/slots.ts';
 import type { StoreRepository } from '../../store/repository.ts';
 import type { PromptTemplateSet } from '../prompt-templates.ts';
+import type { PromptBlockHash } from '../prompt.ts';
+import type { ActivityBatch } from '../activity/batcher.ts';
+import type { IdleBackoff } from '../activity/backoff.ts';
+import type { ActivityThreshold, ProactiveMode } from '../activity/threshold.ts';
+import type { MoodService } from '../mood/service.ts';
+import type { AffinityService } from '../affinity/service.ts';
+import type { ImpressionsService } from '../impressions/service.ts';
+import type { PersonaTraits } from '../../persona/load.ts';
+import type { SleepWakeState } from '../sleep.ts';
 
 export interface PipelineResult {
   replied: boolean;
@@ -29,6 +38,9 @@ export interface ReplayOutcome {
 export interface ProcessMessageOptions {
   alreadySaved?: boolean;
   replay?: boolean;
+  batched?: boolean;
+  quoteReplyTo?: boolean;
+  activityBatch?: ActivityBatch<IncomingMessage>;
 }
 
 export type PipelineModelCall = (
@@ -50,6 +62,12 @@ export interface MessagePipelineOptions {
   getPromptTemplates?: () => PromptTemplateSet;
   downloadImage?: ImageDownloader;
   isMuted?: (session: SessionKey) => boolean;
+  idleBackoff?: IdleBackoff;
+  activityThreshold?: ActivityThreshold;
+  moodService?: MoodService;
+  affinityService?: AffinityService;
+  impressionsService?: ImpressionsService;
+  sleepWakeState?: SleepWakeState;
   onError?: (error: unknown, message: IncomingMessage) => void;
 }
 
@@ -60,10 +78,11 @@ export interface TraceEntry {
   startedAt: number;
   durationMs: number;
   summary: string;
+  detail?: unknown;
 }
 
 export type StepResult =
-  | { next: true }
+  | { next: true; detail?: unknown }
   | { next: false; reason: string; detail?: unknown; replied?: boolean };
 
 export interface PipelineState {
@@ -71,8 +90,11 @@ export interface PipelineState {
   settings?: SessionSettings;
   nickname?: string;
   persona?: string;
+  personaTraits?: PersonaTraits;
   callOptions?: SlotCallOptions;
   prompt?: OpenAI.ChatCompletionMessageParam[];
+  promptBlocks?: PromptBlockHash[];
+  droppedTags?: number;
   result?: SlotResult;
   replyText?: string;
   parts?: string[];
@@ -80,6 +102,9 @@ export interface PipelineState {
   promptHash?: string;
   replayReplyCostCny?: number;
   replayTotalCostCny?: number;
+  activityDecisionDetail?: Record<string, unknown>;
+  energy?: number;
+  proactiveMode?: ProactiveMode;
   promptFingerprints: PromptFingerprint[];
   promptTemplates: PromptTemplateSet;
 }
@@ -108,7 +133,11 @@ export type PipelineStep = (ctx: StepContext) => Promise<StepResult>;
 
 const safeTraceReasons: Record<PipelineStepName, readonly string[]> = {
   persist: ['duplicate'],
-  gate: ['muted', 'disabled', 'not_mentioned', 'rate_limited'],
+  gate: [
+    'muted', 'disabled', 'not_mentioned', 'mode_mention_only', 'rate_limited',
+    'budget', 'batched', 'backoff', 'asleep', 'persona_error', 'prefilter', 'judge_parse_error', 'judge_error',
+    'judge_skip', 'proactive_cooldown',
+  ],
   context: ['persona_error'],
   generate: ['llm_error', 'empty_reply'],
   deliver: ['send_error', 'replied', 'replay'],
@@ -119,9 +148,43 @@ export function boundedTraceSummary(value: string): string {
 }
 
 function traceSummary(step: PipelineStepName, result: StepResult): string {
-  if (result.next) return 'next';
-  const reason = safeTraceReasons[step].includes(result.reason) ? result.reason : 'stopped';
-  return boundedTraceSummary(reason);
+  const reason = result.next
+    ? 'next'
+    : safeTraceReasons[step].includes(result.reason) ? result.reason : 'stopped';
+  if (step !== 'gate' || !result.detail || typeof result.detail !== 'object' || Array.isArray(result.detail)) {
+    return boundedTraceSummary(reason);
+  }
+
+  const detail = result.detail as Record<string, unknown>;
+  const summaryParts = [reason];
+  if (detail.trigger === 'proactive') summaryParts.push('trigger=proactive');
+  for (const key of ['batchSize', 'p0', 'probability', 'threshold'] as const) {
+    const value = detail[key];
+    if (typeof value === 'number' && Number.isFinite(value)) summaryParts.push(`${key}=${value}`);
+  }
+  if (detail.backoff === 'clear' || detail.backoff === 'waiting' || detail.backoff === 'bypassed') {
+    summaryParts.push(`backoff=${detail.backoff}`);
+  }
+  return boundedTraceSummary(summaryParts.join(' '));
+}
+
+function generateTraceDetail(detail: unknown): { params: Record<string, number | string> } | undefined {
+  if (typeof detail !== 'object' || detail === null || Array.isArray(detail)) return undefined;
+  const rawParams = (detail as Record<string, unknown>).params;
+  if (typeof rawParams !== 'object' || rawParams === null || Array.isArray(rawParams)) return undefined;
+  const params = rawParams as Record<string, unknown>;
+  const safeParams: Record<string, number | string> = {};
+  if (typeof params.temperature === 'number' && Number.isFinite(params.temperature)
+    && params.temperature >= 0 && params.temperature <= 2) {
+    safeParams.temperature = params.temperature;
+  }
+  if (Number.isSafeInteger(params.maxTokens) && typeof params.maxTokens === 'number' && params.maxTokens > 0) {
+    safeParams.maxTokens = params.maxTokens;
+  }
+  if (params.reasoning === 'low' || params.reasoning === 'medium' || params.reasoning === 'high') {
+    safeParams.reasoning = params.reasoning;
+  }
+  return { params: safeParams };
 }
 
 export async function traceStep(
@@ -132,9 +195,11 @@ export async function traceStep(
   const startedAt = Date.now();
   const started = performance.now();
   let summary = 'error';
+  let detail: unknown;
   try {
     const result = await run();
     summary = traceSummary(step, result);
+    if (step === 'generate') detail = generateTraceDetail(result.detail);
     return result;
   } finally {
     ctx.trace.push({
@@ -142,6 +207,7 @@ export async function traceStep(
       startedAt,
       durationMs: Math.max(0, performance.now() - started),
       summary,
+      ...(detail !== undefined ? { detail } : {}),
     });
   }
 }

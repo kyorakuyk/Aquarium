@@ -36,6 +36,7 @@ test('host 在目标 PID 注入后等待适配器在线；退出只停止 SnowLu
   const child = new FakeChild();
   const adapterStatuses = new Map<number, 'connecting' | 'online' | 'offline'>([[10001, 'connecting']]);
   const hostStatuses: string[] = [];
+  const intervalDelays: number[] = [];
   let intervalCallback: (() => void) | undefined;
   let clearIntervalCalls = 0;
   const processInfo = {
@@ -58,9 +59,9 @@ test('host 在目标 PID 注入后等待适配器在线；退出只停止 SnowLu
     getAdapterStatus: (uin) => adapterStatuses.get(uin),
     spawnProcess: (() => child) as never,
     setInterval: ((callback: () => void, milliseconds: number) => {
-      assert.equal(milliseconds, 5_000);
+      intervalDelays.push(milliseconds);
       intervalCallback = callback;
-      return 1;
+      return intervalDelays.length;
     }) as never,
     clearInterval: (() => { clearIntervalCalls += 1; }) as never,
     fetch: (async (input: RequestInfo | URL) => {
@@ -84,17 +85,19 @@ test('host 在目标 PID 注入后等待适配器在线；退出只停止 SnowLu
   try {
     await host.start();
     assert.equal(host.status(), 'waiting_qq_login');
+    assert.deepEqual(intervalDelays, [2_000]);
     adapterStatuses.set(10001, 'online');
     intervalCallback?.();
     await new Promise<void>((resolve) => setImmediate(resolve));
     assert.equal(host.status(), 'online');
+    assert.deepEqual(intervalDelays, [2_000, 5_000]);
     let lateSubscriptionStatus: string | undefined;
     host.onStatus((status) => { lateSubscriptionStatus = status; });
     assert.equal(lateSubscriptionStatus, 'online');
 
     await host.stop();
     assert.deepEqual(child.signals, ['SIGTERM']);
-    assert.equal(clearIntervalCalls, 1);
+    assert.equal(clearIntervalCalls, 2);
     assert.equal(hostStatuses.includes('online'), true);
   } finally {
     await host.stop();

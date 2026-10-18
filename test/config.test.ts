@@ -24,6 +24,35 @@ test('config.example.yaml 符合配置 schema 并默认关闭所有会话', () =
   assert.equal(result.data.accounts.length, 1);
 });
 
+test('V4 defaults keep legacy provider and slot configuration compatible', () => {
+  const legacyConfig = structuredClone(exampleConfig) as Record<string, any>;
+  for (const provider of Object.values(legacyConfig.providers) as Array<Record<string, unknown>>) {
+    delete provider.kind;
+    delete provider.label;
+    delete provider.reasoningField;
+  }
+  for (const chain of Object.values(legacyConfig.slots) as Array<Array<Record<string, unknown>>>) {
+    for (const entry of chain) {
+      delete entry.temperature;
+      delete entry.maxTokens;
+      delete entry.reasoning;
+    }
+  }
+
+  const parsed = AquariumConfigSchema.parse(legacyConfig);
+  assert.equal(parsed.providers.deepseek?.kind, 'api');
+  assert.equal(parsed.providers.deepseek?.reasoningField, 'reasoning_effort');
+  assert.equal(parsed.slots.reply?.[0]?.reasoning, 'off');
+  assert.equal(parsed.slots.reply?.[0]?.temperature, undefined);
+  assert.equal(parsed.slots.reply?.[0]?.maxTokens, undefined);
+});
+
+test('reasoningField rejects request identity and parameter names', () => {
+  const invalid = structuredClone(exampleConfig) as Record<string, any>;
+  invalid.providers.deepseek.reasoningField = 'model';
+  assert.equal(AquariumConfigSchema.safeParse(invalid).success, false);
+});
+
 test('旧配置缺少 debug 时补入安全默认值', () => {
   const legacyConfig = structuredClone(exampleConfig) as Record<string, unknown>;
   delete legacyConfig.debug;
@@ -71,6 +100,90 @@ test('配置 schema 拒绝越界端口和负数 owner', () => {
 
   assert.equal(AquariumConfigSchema.safeParse(invalidPort).success, false);
   assert.equal(AquariumConfigSchema.safeParse(negativeOwner).success, false);
+});
+
+test('旧配置的 modeSchedule 默认为空，会话数组整体覆盖默认时间表', () => {
+  const legacyConfig = structuredClone(exampleConfig) as Record<string, any>;
+  delete legacyConfig.defaults.modeSchedule;
+  assert.deepEqual(AquariumConfigSchema.parse(legacyConfig).defaults.modeSchedule, []);
+
+  const defaultSchedule = [{ from: '09:00', to: '12:00', mode: 'active' }];
+  const sessionSchedule = [{ from: '23:00', to: '07:00', mode: 'busy' }];
+  const config = AquariumConfigSchema.parse({
+    ...exampleConfig,
+    defaults: { ...exampleConfig.defaults, modeSchedule: defaultSchedule },
+    sessions: { '7:group:9': { modeSchedule: sessionSchedule } },
+  });
+
+  assert.deepEqual(config.defaults.modeSchedule, defaultSchedule);
+  assert.deepEqual(resolveSession(config, { account: 7, kind: 'group', peer: 9 }).modeSchedule, sessionSchedule);
+});
+
+test('旧配置的主动冷却默认为 120 秒并限制在可配置范围内', () => {
+  const legacyConfig = structuredClone(exampleConfig) as Record<string, any>;
+  delete legacyConfig.defaults.proactiveCooldownSec;
+  const parsed = AquariumConfigSchema.parse(legacyConfig);
+  assert.equal(parsed.defaults.proactiveCooldownSec, 120);
+
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...exampleConfig,
+    defaults: { ...exampleConfig.defaults, proactiveCooldownSec: 0 },
+  }).success, true);
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...exampleConfig,
+    defaults: { ...exampleConfig.defaults, proactiveCooldownSec: 3601 },
+  }).success, false);
+});
+
+test('talkOffset 默认继承为 0，会话覆盖限制在 -2 到 2', () => {
+  const legacyConfig = structuredClone(exampleConfig) as Record<string, any>;
+  delete legacyConfig.defaults.talkOffset;
+  const parsed = AquariumConfigSchema.parse(legacyConfig);
+  assert.equal(parsed.defaults.talkOffset, 0);
+
+  const config = AquariumConfigSchema.parse({
+    ...exampleConfig,
+    sessions: { '7:group:9': { talkOffset: -2 } },
+  });
+  assert.equal(resolveSession(config, { account: 7, kind: 'group', peer: 9 }).talkOffset, -2);
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...exampleConfig,
+    sessions: { '7:group:9': { talkOffset: 3 } },
+  }).success, false);
+});
+
+test('作息旧配置得到关闭默认值并校验时间格式', () => {
+  const legacyConfig = structuredClone(exampleConfig) as Record<string, any>;
+  delete legacyConfig.sleep;
+  assert.deepEqual(AquariumConfigSchema.parse(legacyConfig).sleep, {
+    enabled: false,
+    bedtime: '02:00',
+    wake: '09:00',
+    wakeWords: ['起床', '醒醒', '别睡了'],
+    goodnight: true,
+  });
+
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...exampleConfig,
+    sleep: { ...exampleConfig.sleep, bedtime: '25:00' },
+  }).success, false);
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...exampleConfig,
+    sleep: { ...exampleConfig.sleep, wake: '7:00' },
+  }).success, false);
+});
+
+test('modeSchedule 拒绝非 HH:mm 时间和未知模式', () => {
+  const invalidTime = structuredClone(exampleConfig) as Record<string, any>;
+  invalidTime.defaults.modeSchedule = [{ from: '24:00', to: '07:00', mode: 'busy' }];
+  const invalidMode = structuredClone(exampleConfig) as Record<string, any>;
+  invalidMode.defaults.modeSchedule = [{ from: '09:00', to: '12:00', mode: 'quiet' }];
+  const equalEndpoints = structuredClone(exampleConfig) as Record<string, any>;
+  equalEndpoints.defaults.modeSchedule = [{ from: '09:00', to: '09:00', mode: 'busy' }];
+
+  assert.equal(AquariumConfigSchema.safeParse(invalidTime).success, false);
+  assert.equal(AquariumConfigSchema.safeParse(invalidMode).success, false);
+  assert.equal(AquariumConfigSchema.safeParse(equalEndpoints).success, false);
 });
 
 test('deepMerge 递归合并对象，但数组整体覆盖', () => {

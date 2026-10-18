@@ -1,7 +1,7 @@
 import { serve, type ServerType } from '@hono/node-server';
 import { createPanelApp, type PanelServerOptions } from './app.ts';
 
-export type { PanelAccountRuntime } from './app.ts';
+export type { PanelAccountRuntime } from './types.ts';
 
 export interface PanelListenOptions extends PanelServerOptions {
   host: string;

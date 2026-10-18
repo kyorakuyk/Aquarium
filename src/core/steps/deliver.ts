@@ -1,8 +1,17 @@
 import type { Segment } from '../events.ts';
 import { replyDelayMs } from '../pacing.ts';
 import { splitReply } from '../split.ts';
+import { effectiveTalkLevel, replyPartLimitForTalk } from '../../persona/traits.ts';
 import { errorDetails } from './errors.ts';
-import { traceStep, type PipelineStep } from './types.ts';
+import { traceStep, type PipelineStep, type StepContext } from './types.ts';
+
+function maxPartsForContext(ctx: StepContext): 1 | 2 | 3 {
+  const effectiveTalk = effectiveTalkLevel(
+    ctx.state.personaTraits?.talk ?? 0,
+    ctx.state.settings?.talkOffset ?? 0,
+  );
+  return replyPartLimitForTalk(effectiveTalk);
+}
 
 export const replayDeliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'deliver', async () => {
   const result = ctx.state.result;
@@ -10,7 +19,7 @@ export const replayDeliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'de
   if (!result || replyText === undefined) {
     throw new Error('generate step must run before replay delivery');
   }
-  ctx.state.parts = splitReply(replyText);
+  ctx.state.parts = splitReply(replyText, maxPartsForContext(ctx));
   return { next: false, reason: 'replay', replied: false };
 });
 
@@ -21,7 +30,7 @@ export const deliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'deliver'
   if (!result || replyText === undefined || nickname === undefined) {
     throw new Error('generate step must run before deliver step');
   }
-  const parts = splitReply(replyText);
+  const parts = splitReply(replyText, maxPartsForContext(ctx));
   ctx.state.parts = parts;
 
   try {
@@ -38,8 +47,10 @@ export const deliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'deliver'
   }
 
   for (const [index, text] of parts.entries()) {
-    await ctx.wait(replyDelayMs(text, ctx.random));
-    const segments: Segment[] = ctx.message.session.kind === 'group' && index === 0
+    const pacingMultiplier = ctx.state.settings?.mode === 'busy' ? 2.5 : 1;
+    await ctx.wait(Math.round(replyDelayMs(text, ctx.random) * pacingMultiplier));
+    const segments: Segment[] = ctx.processOptions.quoteReplyTo !== false
+      && ctx.message.session.kind === 'group' && index === 0
       ? [{ type: 'reply', messageId: ctx.message.messageId }, { type: 'text', text }]
       : [{ type: 'text', text }];
     let sent: { messageId: string };

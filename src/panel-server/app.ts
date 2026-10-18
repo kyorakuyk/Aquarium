@@ -5,28 +5,31 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
-import type { AdapterStatus, ContactFriend, ContactGroup, ProtocolAdapter } from '../adapters/types.ts';
+import type { ContactFriend, ContactGroup, ProtocolAdapter } from '../adapters/types.ts';
 import type { AquariumConfig } from '../config/schema.ts';
-import { AquariumConfigSchema } from '../config/schema.ts';
 import { resolveSession } from '../config/resolve.ts';
 import { parseSessionId, listEnabledSessions } from '../core/sessions.ts';
 import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../core/events.ts';
 import { buildPromptMessages } from '../core/prompt.ts';
 import { cleanReply } from '../core/text.ts';
 import { splitReply } from '../core/split.ts';
+import { promptTemplateStore } from '../core/prompt-templates.ts';
 import type { PipelineModelCall, PipelineResult } from '../core/pipeline.ts';
 import { loadPersona } from '../persona/load.ts';
+import { effectiveTalkLevel, renderTraitsBlock, replyPartLimitForTalk } from '../persona/traits.ts';
 import type { ManagementCommands } from '../core/management.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import { callSlot } from '../llm/slots.ts';
 import { registerPersonaRoutes } from './personas.ts';
+import { registerSessionRoutes } from './session-routes.ts';
+import { registerAffectRoutes } from './affect-routes.ts';
+import { registerSleepRoutes } from './sleep-routes.ts';
+import { registerUsageRoutes } from './usage-routes.ts';
+import { registerProviderRoutes } from './provider-routes.ts';
+import type { CliRuntime } from '../llm/cli.ts';
+import type { ContactSnapshot, PanelAccountRuntime } from './types.ts';
 import { budgetState } from '../llm/budget.ts';
-
-export interface PanelAccountRuntime {
-  adapter: ProtocolAdapter;
-  getStatus: () => AdapterStatus;
-  getNickname: () => string;
-}
+import type { SleepWakeState } from '../core/sleep.ts';
 
 export interface PanelServerOptions {
   password: string;
@@ -41,23 +44,13 @@ export interface PanelServerOptions {
   adapterTimeoutMs?: number;
   callModel?: PipelineModelCall;
   replayMessage?: (message: IncomingMessage) => Promise<PipelineResult | undefined>;
+  sleepWakeState?: SleepWakeState;
+  envPath?: string;
+  env?: NodeJS.ProcessEnv;
+  testProvider?: (provider: string, model: string, config: AquariumConfig) => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
+  cliRuntime?: CliRuntime;
   onError?: (error: unknown) => void;
 }
-
-const ratePatchSchema = z.object({
-  perUserPerMinute: z.number().int().positive().nullable().optional(),
-  perSessionPerMinute: z.number().int().positive().nullable().optional(),
-  minIntervalSec: z.number().positive().nullable().optional(),
-}).strict();
-
-const sessionPatchSchema = z.object({
-  enabled: z.boolean().nullable().optional(),
-  mode: z.enum(['mention_only', 'active', 'natural', 'busy']).nullable().optional(),
-  nicknames: z.array(z.string()).nullable().optional(),
-  contextMessages: z.number().int().positive().nullable().optional(),
-  rate: ratePatchSchema.nullable().optional(),
-  groupNote: z.string().nullable().optional(),
-}).strict();
 
 const sandboxSchema = z.object({
   sessionId: z.string(),
@@ -94,12 +87,6 @@ interface ContactCache {
   friends?: ContactFriend[];
   groupsRequest?: Promise<ContactGroup[]>;
   friendsRequest?: Promise<ContactFriend[]>;
-}
-
-interface ContactSnapshot {
-  groups: ContactGroup[];
-  friends: ContactFriend[];
-  degraded: boolean;
 }
 
 const DEFAULT_ADAPTER_TIMEOUT_MS = 3_000;
@@ -215,7 +202,50 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     }
     await next();
   });
-  registerPersonaRoutes(app, root);
+  registerPersonaRoutes(app, root, {
+    getConfig: options.getConfig,
+    repository: options.repository,
+    callModel: options.callModel,
+  });
+  registerSessionRoutes(app, {
+    getConfig: options.getConfig,
+    saveConfig: options.saveConfig,
+    repository: options.repository,
+    accounts: options.accounts,
+    loadContacts,
+    serializeConfigWrite,
+  });
+  registerAffectRoutes(app, {
+    getConfig: options.getConfig,
+    repository: options.repository,
+    accounts: options.accounts,
+    now,
+  });
+  registerSleepRoutes(app, {
+    getConfig: options.getConfig,
+    saveConfig: options.saveConfig,
+    repository: options.repository,
+    account: () => options.accounts()[0]?.adapter.account ?? null,
+    sleepWakeState: options.sleepWakeState,
+    now,
+    serializeConfigWrite,
+  });
+  registerUsageRoutes(app, {
+    getConfig: options.getConfig,
+    repository: options.repository,
+    now,
+  });
+  registerProviderRoutes(app, {
+    getConfig: options.getConfig,
+    saveConfig: options.saveConfig,
+    repository: options.repository,
+    serializeConfigWrite,
+    envPath: options.envPath ?? path.join(root, '.env'),
+    env: options.env ?? process.env,
+    now,
+    testProvider: options.testProvider,
+    cliRuntime: options.cliRuntime,
+  });
 
   app.get('/api/status', async (context) => {
     const config = options.getConfig();
@@ -257,103 +287,6 @@ export function createPanelApp(options: PanelServerOptions): Hono {
       runtime: { pid: process.pid, port: config.panel.port, uptimeSeconds: Math.floor(process.uptime()) },
     });
   });
-
-  app.get('/api/sessions', async (context) => {
-    const config = options.getConfig();
-    const runtimes = options.accounts();
-    const snapshots = await Promise.all(runtimes.map(loadContacts));
-    const rows = new Map<string, { key: SessionKey; name: string; memberCount?: number; degraded: boolean }>();
-    const degradedByAccount = new Map<number, boolean>();
-    for (const [index, runtime] of runtimes.entries()) {
-      const snapshot = snapshots[index] ?? { groups: [], friends: [], degraded: true };
-      const degraded = snapshot.degraded || runtime.getStatus() !== 'online';
-      degradedByAccount.set(runtime.adapter.account, degraded);
-      for (const group of snapshot.groups) {
-        const key: SessionKey = { account: runtime.adapter.account, kind: 'group', peer: group.groupId };
-        rows.set(sessionId(key), { key, name: group.name, memberCount: group.memberCount, degraded });
-      }
-      for (const friend of snapshot.friends) {
-        const key: SessionKey = { account: runtime.adapter.account, kind: 'private', peer: friend.userId };
-        rows.set(sessionId(key), { key, name: friend.remark || friend.nickname, degraded });
-      }
-    }
-    for (const configuredId of Object.keys(config.sessions)) {
-      const key = parseSessionId(configuredId);
-      if (key && runtimes.some((runtime) => runtime.adapter.account === key.account) && !rows.has(configuredId)) {
-        rows.set(configuredId, { key, name: configuredId, degraded: degradedByAccount.get(key.account) ?? true });
-      }
-    }
-    const result = [...rows.entries()].map(([id, row]) => {
-      const effective = resolveSession(config, row.key);
-      const runtime = runtimes.find((candidate) => candidate.adapter.account === row.key.account);
-      return {
-        sessionId: id,
-        name: row.name,
-        kind: row.key.kind,
-        degraded: row.degraded || !runtime || runtime.getStatus() !== 'online',
-        ...(row.memberCount === undefined ? {} : { memberCount: row.memberCount }),
-        enabled: effective.enabled,
-        overrides: Object.keys(config.sessions[id] ?? {}),
-        effective: {
-          mode: effective.mode,
-          nicknames: effective.nicknames,
-          contextMessages: effective.contextMessages,
-          rate: effective.rate,
-          groupNote: effective.groupNote,
-        },
-      };
-    });
-    result.sort((first, second) => first.name.localeCompare(second.name, 'zh-CN'));
-    return context.json(result);
-  });
-
-  app.patch('/api/sessions/:sessionId', async (context) => {
-    const id = context.req.param('sessionId');
-    const key = parseSessionId(id);
-    if (!key || !options.accounts().some((runtime) => runtime.adapter.account === key.account)) {
-      return context.json({ error: 'Invalid session' }, 400);
-    }
-    let rawBody: unknown;
-    try { rawBody = await context.req.json(); } catch { return context.json({ error: 'Invalid JSON' }, 400); }
-    const patch = parseJsonBody(rawBody, sessionPatchSchema);
-    if (!patch) return context.json({ error: 'Invalid session patch' }, 400);
-
-    return serializeConfigWrite(async () => {
-      const config = options.getConfig();
-      const updated = { ...(config.sessions[id] ?? {}) } as Record<string, unknown>;
-      for (const [field, value] of Object.entries(patch)) {
-        if (field !== 'rate') {
-          if (value === null) delete updated[field];
-          else if (value !== undefined) updated[field] = value;
-          continue;
-        }
-        if (value === null) {
-          delete updated.rate;
-          continue;
-        }
-        if (value) {
-          const rate = { ...((updated.rate as Record<string, unknown> | undefined) ?? {}) };
-          for (const [rateField, rateValue] of Object.entries(value)) {
-            if (rateValue === null) delete rate[rateField];
-            else if (rateValue !== undefined) rate[rateField] = rateValue;
-          }
-          if (Object.keys(rate).length === 0) delete updated.rate;
-          else updated.rate = rate;
-        }
-      }
-      const sessions = { ...config.sessions };
-      if (Object.keys(updated).length === 0) delete sessions[id];
-      else sessions[id] = updated as AquariumConfig['sessions'][string];
-      const nextConfig = AquariumConfigSchema.parse({ ...config, sessions });
-      await options.saveConfig(nextConfig);
-      return context.json({
-        sessionId: id,
-        enabled: resolveSession(nextConfig, key).enabled,
-        overrides: Object.keys(nextConfig.sessions[id] ?? {}),
-      });
-    });
-  });
-
 
   app.get('/api/decisions', async (context) => {
     const rawLimit = context.req.query('limit');
@@ -469,6 +402,8 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     const accountConfig = config.accounts.find((candidate) => candidate.uin === key.account);
     const nickname = runtime.getNickname();
     const persona = loadPersona(accountConfig?.persona ?? 'default', nickname, { root });
+    const effectiveTalk = effectiveTalkLevel(persona.traits.talk, settings.talkOffset);
+    const traitsBlock = renderTraitsBlock(persona.traits, effectiveTalk, promptTemplateStore.get().traits);
     const nowTime = now();
     const nonOwnerId = config.owner === 1 ? 2 : 1;
     const contextMessages = body.history.map((message, index) => {
@@ -495,19 +430,21 @@ export function createPanelApp(options: PanelServerOptions): Hono {
       time: nowTime,
     });
     const prompt = buildPromptMessages({
-      persona,
+      persona: persona.text,
       ownerId: config.owner,
       groupNote: settings.groupNote,
       context: contextMessages,
+      blocks: { traits: traitsBlock },
     });
     const modelCall = options.callModel ?? callSlot;
     const result = await modelCall('reply', prompt, {
       config,
+      account: key.account,
       costToday: options.repository.costToday,
-      recordUsage: (usage) => options.repository.recordUsage(usage),
+      recordUsage: (usage) => options.repository.recordUsage({ ...usage, account: key.account }),
     });
     const text = cleanReply(result.text, [nickname, ...settings.nicknames]);
-    const parts = splitReply(text);
+    const parts = splitReply(text, replyPartLimitForTalk(effectiveTalk));
     return context.json({
       parts,
       decisionSteps: [

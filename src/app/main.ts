@@ -12,6 +12,12 @@ import { createManagementCommands } from '../core/management.ts';
 import type { ManagementCommands } from '../core/management.ts';
 import { sessionId } from '../core/events.ts';
 import { createSessionQueue } from '../core/session-queue.ts';
+import { createAffinityService } from '../core/affinity/service.ts';
+import { createMoodService } from '../core/mood/service.ts';
+import { createImpressionsService } from '../core/impressions/service.ts';
+import { createSleepWakeState } from '../core/sleep.ts';
+import { createSleepGoodnightScheduler } from '../core/sleep/goodnight.ts';
+import { getCliRuntime } from '../llm/cli.ts';
 import { openDatabase } from '../store/db.ts';
 import { createRepository } from '../store/repository.ts';
 import { startPanelServer, type PanelAccountRuntime } from '../panel-server/server.ts';
@@ -20,6 +26,8 @@ import { startPanelWhileAccountStartupRuns } from './startup-order.ts';
 import type { Host } from '../host/types.ts';
 import { bindHostTrayAfterLoad, createWindowsTray } from '../host/tray.ts';
 import { createWindowsHost } from '../host/windows/host.ts';
+import { createAccountActivityRouter } from './activity-routing.ts';
+import { startAdapterForHost } from './adapter-start.ts';
 import {
   createHostLifecycleQueue,
   createSnowLumaRestartHandler,
@@ -32,6 +40,8 @@ const initialConfig = loadConfig({ configPath });
 const database = openDatabase();
 const repository = createRepository(database);
 const configWatcher = watchConfig({ initialConfig, configPath });
+const cliRuntime = getCliRuntime();
+cliRuntime.sync(initialConfig.providers);
 function pruneTraces(): void {
   try {
     const config = configWatcher.getConfig();
@@ -48,6 +58,7 @@ pruneTraces();
 const debugPruneTimer = setInterval(pruneTraces, 6 * 60 * 60 * 1000);
 debugPruneTimer.unref();
 const adapters: OneBotAdapter[] = [];
+const injectedUins = new Set<number>();
 const panelAccounts: PanelAccountRuntime[] = [];
 const managementControllers: ManagementCommands[] = [];
 const pipelines = new Map<number, ReturnType<typeof createMessagePipeline>>();
@@ -57,6 +68,44 @@ subscriptions.push(bindPromptTemplateReload(configWatcher, promptTemplateStore, 
 }));
 const adapterStatuses = new Map<number, AdapterStatus>();
 const sessionQueue = createSessionQueue();
+const sleepWakeState = createSleepWakeState();
+const sleepGoodnightScheduler = createSleepGoodnightScheduler({
+  getConfig: () => configWatcher.getConfig(),
+  adapters: () => adapters,
+  repository,
+  getGoodnightLines: () => promptTemplateStore.get().sleep.goodnight,
+  sendGoodnight: (session, text, cycleKey) => {
+    const pipeline = pipelines.get(session.account);
+    if (!pipeline) return Promise.resolve(false);
+    return sessionQueue.run(sessionId(session), () => pipeline.sendSystemReply(session, text, cycleKey));
+  },
+  onError: (error) => logger.error(`定时晚安发送失败：${describeError(error)}`),
+});
+subscriptions.push(sleepGoodnightScheduler.start());
+const affinityService = createAffinityService({
+  repository,
+  getConfig: () => configWatcher.getConfig(),
+});
+const moodService = createMoodService({
+  repository,
+  getConfig: () => configWatcher.getConfig(),
+  affinityService,
+  onError: (error) => {
+    logger.error(`情绪后台任务失败：${describeError(error)}`);
+  },
+});
+const impressionsService = createImpressionsService({
+  repository,
+  getConfig: () => configWatcher.getConfig(),
+  onError: (error) => {
+    logger.error(`印象提取失败：${describeError(error)}`);
+  },
+  onExtract: (summary) => {
+    logger.info(
+      `印象提取 ${summary.sessionId}：${summary.status}，新增 ${summary.inserted}、观察 ${summary.observed}、推翻 ${summary.superseded}、丢弃 ${summary.dropped}。`,
+    );
+  },
+});
 let panelServer: ReturnType<typeof startPanelServer> | undefined;
 let managedHost: Host | undefined;
 let shuttingDown = false;
@@ -102,6 +151,7 @@ async function shutdown(signal: string): Promise<void> {
     logger.error(`Windows 托管关闭失败：${describeError(error)}`);
   }
   await sessionQueue.idle();
+  await cliRuntime.stopAll();
   database.close();
   logger.info('Aquarium 已关闭。');
 }
@@ -110,6 +160,7 @@ process.once('SIGINT', () => { void shutdown('SIGINT'); });
 process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
 
 configWatcher.on('changed', (config) => {
+  cliRuntime.sync(config.providers);
   logger.info('配置已热重载；后续收到的消息将使用新配置。');
   if (!hasEnabledSession(config)) logger.warn('当前没有启用任何会话。');
   if (accountSignature(config) !== accountSignature(initialConfig)) {
@@ -134,7 +185,10 @@ if (initialConfig.host.enabled && initialConfig.accounts.length === 0) {
       password: process.env.SNOWLUMA_WEBUI_PASSWORD ?? '',
       logDirectory: path.join(process.cwd(), 'data', 'logs'),
       getAdapterStatus: (uin) => adapterStatuses.get(uin),
-      onAdapterInjected: (uin) => adapters.find((adapter) => adapter.account === uin)?.retryNow(),
+      onAdapterInjected: (uin) => {
+        injectedUins.add(uin);
+        adapters.find((adapter) => adapter.account === uin)?.retryNow();
+      },
       log: (level, message) => logger[level](message),
     }),
     onWarning: (message) => logger.warn(message),
@@ -145,6 +199,11 @@ if (initialConfig.host.enabled && initialConfig.accounts.length === 0) {
     const hostForTray = managedHost;
     subscriptions.push(hostForTray.onStatus((status, message) => {
       logger.info(`Windows 托管状态：${status}${message ? `；${message}` : ''}`);
+      if (status === 'online') {
+        for (const adapter of adapters) {
+          if (adapterStatuses.get(adapter.account) === 'waiting_login') adapter.retryNow();
+        }
+      }
     }));
     const onTrayMenu = createTrayMenuActionHandler({
       panelPort: initialConfig.panel.port,
@@ -191,7 +250,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
   }
 
   adapters.push(adapter);
-  let currentStatus: AdapterStatus = 'connecting';
+  let currentStatus: AdapterStatus = managedHost ? 'waiting_login' : 'connecting';
   adapterStatuses.set(accountConfig.uin, currentStatus);
   panelAccounts.push({
     adapter,
@@ -216,6 +275,10 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     adapter,
     getNickname: () => adapter.nickname || String(adapter.account),
     isMuted: management.isMuted,
+    moodService,
+    affinityService,
+    impressionsService,
+    sleepWakeState,
     onError: (error, message) => {
       logger.error(`消息 ${message.messageId} 的辅助操作失败：${describeError(error)}`);
     },
@@ -242,18 +305,28 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
       });
     }
   }));
-  subscriptions.push(adapter.onMessage((message) => {
-    void sessionQueue.run(sessionId(message.session), async () => {
-      if (await management.handle(message)) return;
-      await pipeline(message);
-    })
-      .catch((error: unknown) => {
-        logger.error(`消息 ${message.messageId} 处理失败：${describeError(error)}`);
-      });
-  }));
+  const activityRouter = createAccountActivityRouter({
+    now: Date.now,
+    setTimer: (callback, delayMs) => setTimeout(callback, delayMs),
+    clearTimer: (timer) => clearTimeout(timer),
+    queue: sessionQueue,
+    getConfig: () => configWatcher.getConfig(),
+    management,
+    costToday: () => repository.costToday(),
+    processMessage: (message, processOptions) => pipeline(message, processOptions),
+    onError: (error, message) => {
+      logger.error(`消息 ${message.messageId} 处理失败：${describeError(error)}`);
+    },
+  });
+  subscriptions.push(() => activityRouter.close());
+  subscriptions.push(adapter.onMessage(activityRouter.route));
 
-  logger.info(`正在连接账号 ${accountConfig.uin} ...`);
-  adapter.start();
+  const managed = managedHost !== undefined;
+  const ready = managed && (injectedUins.has(accountConfig.uin) || managedHost?.status() === 'online');
+  startAdapterForHost(adapter, { managed, ready });
+  logger.info(managed && !ready
+    ? `账号 ${accountConfig.uin} 等待小号登录。`
+    : `正在连接账号 ${accountConfig.uin} ...`);
 });
 
 await startPanelWhileAccountStartupRuns(accountStartup, () => {
@@ -275,6 +348,8 @@ await startPanelWhileAccountStartupRuns(accountStartup, () => {
           },
           repository,
           accounts: () => panelAccounts,
+          sleepWakeState,
+          cliRuntime,
           management: () => managementControllers,
           replayMessage: (message) => {
             const pipeline = pipelines.get(message.session.account);

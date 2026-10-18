@@ -1,19 +1,24 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;700&display=swap');
 
 :root {
-  --bg: #F3F6F5;
+  --bg: #F4F5F2;
   --surface: #FFFFFF;
-  --surface-2: #EDF1F0;
-  --surface-accent: #EAF2F0;
-  --line: #D5DEDB;
-  --ink: #0F1E1D;
-  --ink-2: #3D4F4D;
-  --muted: #5B6B69;
-  --accent: #17605B;
-  --accent-soft: #DCEBE8;
-  --warn: #C2502A;
-  --warn-ink: #A8411F;
-  --warn-soft: #F8E3DA;
+  --surface-2: #EFF2EF;
+  --surface-accent: #EFF4F2;
+  --line: #DCE1DD;
+  --ink: #12201E;
+  --ink-2: #3D4B48;
+  --muted: #56635F;
+  --accent: #1C5F5A;
+  --accent-soft: #E1EEEB;
+  --warn: #A8461F;
+  --warn-ink: #A8461F;
+  --warn-soft: #F8E8E1;
+  --placeholder: #7C8884;
+  --mode-mention: #657D76;
+  --mode-natural: #B6C9C2;
+  --mode-active: #1C5F5A;
+  --mode-busy: #A8461F;
   --serif: 'Noto Serif SC', 'Songti SC', serif;
   --sans: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
   --mono: 'IBM Plex Mono', 'Cascadia Code', monospace;

@@ -51,6 +51,7 @@ test('costToday 只累计本地自然日内的用量', () => {
     const nextDay = new Date(2026, 9, 13).getTime();
     const record = (time: number, cost: number) => repository.recordUsage({
       time,
+      account: null,
       slot: 'reply',
       provider: 'deepseek',
       model: 'test-model',
@@ -153,5 +154,204 @@ test('lastSelfMessage 返回指定会话最近一条 bot 消息', () => {
     assert.equal(repository.lastSelfMessage(sessionKey)?.messageId, 'self-new');
     assert.equal(repository.latestSelfMessageForAccount(900000001)?.messageId, 'self-new');
     assert.equal(repository.lastSelfMessage('900000001:private:42'), undefined);
+  });
+});
+
+test('lastMessageBefore 只返回批次首条消息之前的最近会话消息', () => {
+  withRepository((repository) => {
+    const sessionKey = '900000001:group:123456';
+    repository.saveMessage(messageRecord('older', 1_000));
+    repository.saveMessage(messageRecord('same-time', 2_000));
+    repository.saveMessage(messageRecord('newer', 3_000));
+
+    assert.equal(repository.lastMessageBefore(sessionKey, 2_000)?.messageId, 'older');
+    assert.equal(repository.lastMessageBefore(sessionKey, 1_000), undefined);
+  });
+});
+
+test('情绪状态与事件读写往返一致', () => {
+  withRepository((repository) => {
+    assert.equal(repository.getMoodState(900000001), undefined);
+
+    repository.saveMoodState({
+      account: 900000001,
+      valence: 0.32,
+      arousal: 0.55,
+      updatedAt: 5_000,
+      band: 'happy',
+      bandSince: 4_000,
+      lastBandChangeAt: 3_000,
+    });
+    repository.saveMoodState({
+      account: 900000001,
+      valence: -0.28,
+      arousal: 0.71,
+      updatedAt: 6_000,
+      band: 'annoyed',
+      bandSince: 6_000,
+      lastBandChangeAt: 6_000,
+    });
+    assert.deepEqual(repository.getMoodState(900000001), {
+      account: 900000001,
+      valence: -0.28,
+      arousal: 0.71,
+      updatedAt: 6_000,
+      band: 'annoyed',
+      bandSince: 6_000,
+      lastBandChangeAt: 6_000,
+    });
+
+    repository.recordMoodEvent({
+      account: 900000001,
+      time: 7_000,
+      source: 'appraise',
+      sessionId: '900000001:group:123456',
+      senderId: 42,
+      dv: 0.12,
+      da: -0.05,
+      appliedDv: 0.12,
+      appliedDa: -0.05,
+      reason: '被说好话',
+      bandBefore: 'calm',
+      bandAfter: 'happy',
+    });
+    repository.recordMoodEvent({
+      account: 900000001,
+      time: 8_000,
+      source: 'rule',
+      sessionId: '900000001:private:42',
+      senderId: null,
+      dv: 0,
+      da: 0.05,
+      appliedDv: 0,
+      appliedDa: 0.05,
+      reason: '被叫',
+      bandBefore: null,
+      bandAfter: null,
+    });
+
+    const recent = repository.recentMoodEvents(900000001, 5);
+    assert.equal(recent.length, 2);
+    assert.equal(recent[0]?.time, 8_000);
+    assert.equal(recent[1]?.senderId, 42);
+    assert.equal(recent[1]?.bandBefore, 'calm');
+    assert.equal(recent[1]?.bandAfter, 'happy');
+    assert.equal(recent[0]?.sessionId, '900000001:private:42');
+    assert.deepEqual(repository.recentMoodEvents(900000001, 0), []);
+    assert.deepEqual(repository.recentMoodEvents(99999, 5), []);
+
+    const since = repository.moodEventsSince(900000001, 7_500);
+    assert.deepEqual(since.map((event) => event.time), [8_000]);
+  });
+});
+
+test('标签与提取进度读写往返一致', () => {
+  withRepository((repository) => {
+    const account = 900000001;
+    const groupSession = '900000001:group:123456';
+    assert.deepEqual(repository.listTagsForSubject(account, groupSession, null), []);
+    assert.equal(repository.getTagRun(account, groupSession), undefined);
+
+    const groupTagId = repository.insertTag({
+      account,
+      sessionId: groupSession,
+      userId: null,
+      text: '爱聊游戏',
+      norm: '爱聊游戏',
+      status: 'candidate',
+      source: 'auto',
+      samples: 1,
+      evidence: [{ messageId: 'm1', time: 1_000, quote: '今晚开黑吗' }],
+      firstSeen: 1_000,
+      lastSeen: 1_000,
+      supersededBy: null,
+      updatedAt: 1_000,
+    });
+    const memberTagId = repository.insertTag({
+      account,
+      sessionId: groupSession,
+      userId: 42,
+      text: '夜猫子',
+      norm: '夜猫子',
+      status: 'confirmed',
+      source: 'auto',
+      samples: 3,
+      evidence: [{ messageId: 'm2', time: 2_000, quote: '凌晨还在' }],
+      firstSeen: 1_000,
+      lastSeen: 2_000,
+      supersededBy: null,
+      updatedAt: 2_000,
+    });
+
+    const groupTags = repository.listTagsForSubject(account, groupSession, null);
+    assert.equal(groupTags.length, 1);
+    assert.equal(groupTags[0]?.id, groupTagId);
+    assert.equal(groupTags[0]?.userId, null);
+    assert.deepEqual(groupTags[0]?.evidence, [{ messageId: 'm1', time: 1_000, quote: '今晚开黑吗' }]);
+    const memberTags = repository.listTagsForSubject(account, groupSession, 42);
+    assert.equal(memberTags.length, 1);
+    assert.equal(memberTags[0]?.id, memberTagId);
+    assert.equal(memberTags[0]?.samples, 3);
+
+    repository.updateTag(groupTagId, {
+      status: 'confirmed',
+      samples: 2,
+      evidence: [
+        { messageId: 'm1', time: 1_000, quote: '今晚开黑吗' },
+        { messageId: 'm3', time: 3_000, quote: '组队走起' },
+      ],
+      lastSeen: 3_000,
+      updatedAt: 3_000,
+    });
+    const updated = repository.tagById(groupTagId);
+    assert.equal(updated?.status, 'confirmed');
+    assert.equal(updated?.samples, 2);
+    assert.equal(updated?.lastSeen, 3_000);
+    assert.equal(updated?.evidence.length, 2);
+    assert.equal(repository.tagById(99999), undefined);
+
+    repository.saveTagRun({ account, sessionId: groupSession, lastRunAt: 4_000, lastMessageTime: 3_500 });
+    repository.saveTagRun({ account, sessionId: groupSession, lastRunAt: 5_000, lastMessageTime: 4_500 });
+    assert.deepEqual(repository.getTagRun(account, groupSession), {
+      account,
+      sessionId: groupSession,
+      lastRunAt: 5_000,
+      lastMessageTime: 4_500,
+    });
+  });
+});
+
+test('好感度状态与事件读写往返一致', () => {
+  withRepository((repository) => {
+    const account = 900000001;
+    const userId = 42;
+    const state = {
+      account,
+      userId,
+      value: 72.5,
+      level: 'warm' as const,
+      levelSince: 2_000,
+      lastLevelChangeAt: 2_000,
+      lastInteractionAt: 3_000,
+      updatedAt: 3_000,
+    };
+    repository.saveAffinityState(state);
+    assert.deepEqual(repository.getAffinityState(account, userId), state);
+    assert.deepEqual(repository.listAffinityStates(account), [state]);
+
+    const event = {
+      account,
+      userId,
+      time: 4_000,
+      source: 'appraise' as const,
+      sessionId: '900000001:group:123456',
+      delta: 0.5,
+      applied: 0.5,
+      reason: '正向情绪事件',
+      levelBefore: 'neutral' as const,
+      levelAfter: 'warm' as const,
+    };
+    repository.recordAffinityEvent(event);
+    assert.deepEqual(repository.recentAffinityEvents(account, userId, 5), [{ id: 1, ...event }]);
   });
 });

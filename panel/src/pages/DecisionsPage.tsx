@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { apiRequest, replayDecision, type DecisionReplayView, type DecisionStep, type DecisionView, type PanelStatus, type PipelineStepTraceView, type SessionView, type TraceView } from '../api.ts';
-import { FishIcon } from '../components/FishIcon.tsx';
+import { activityDecisionMetrics } from '../decision-metrics.ts';
+import { InfoTip } from '../components/InfoTip.tsx';
 import { decisionLabel, decisionTone } from '../labels.ts';
 
 interface ChatEntry {
@@ -54,6 +55,7 @@ function ReplayTraceList({ entries, emptyText }: { entries: PipelineStepTraceVie
 export function DecisionsPage() {
   const [view, setView] = useState<'sandbox' | 'records'>('sandbox');
   const [sessions, setSessions] = useState<SessionView[]>([]);
+  const [panelStatus, setPanelStatus] = useState<PanelStatus>();
   const [sessionId, setSessionId] = useState('');
   const [asOwner, setAsOwner] = useState(false);
   const [ownerAvailable, setOwnerAvailable] = useState(true);
@@ -77,6 +79,7 @@ export function DecisionsPage() {
       apiRequest<PanelStatus>('/api/status'),
     ]).then(([sessionRows, decisionRows, status]) => {
       setSessions(sessionRows);
+      setPanelStatus(status);
       setSessionId(sessionRows.find((item) => item.kind === 'group')?.sessionId ?? sessionRows[0]?.sessionId ?? '');
       setDecisions(decisionRows);
       setOwnerAvailable(status.ownerConfigured);
@@ -162,12 +165,15 @@ export function DecisionsPage() {
   }
 
   const selectedSession = sessions.find((item) => item.sessionId === sessionId);
+  const accountId = selectedSession?.sessionId.split(':', 1)[0];
+  const botName = panelStatus?.accounts.find((item) => String(item.account) === accountId)?.name ?? '';
+  const botInitial = Array.from(botName)[0] ?? '水';
+  const selectedActivityMetrics = selectedDecision ? activityDecisionMetrics(selectedDecision.detail) : [];
 
   return (
     <div className="page">
       <header className="page-header">
-        <h1>试聊与决策</h1>
-        <p className="page-description">沿用真实会话的人设、提示词组装与 reply 槽位；试聊消息不会发到 QQ，也不会写入消息表。</p>
+        <div className="page-title-row"><h1>试聊与决策</h1><InfoTip label="试聊与决策说明" text="沿用真实会话的人设、提示词组装与 reply 槽位；试聊消息不会发到 QQ，也不会写入消息表。" /></div>
       </header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
       <div className="page-tabs" role="tablist" aria-label="试聊与决策视图">
@@ -189,7 +195,7 @@ export function DecisionsPage() {
             {messages.map((message) => message.role === 'user'
               ? <div className="chat-line chat-line-user" key={message.id}><div className="chat-bubble user-bubble">{message.text}</div></div>
               : <div className="chat-line chat-line-bot" key={message.id}>
-                <FishIcon className="bot-mark" />
+                <span className="avatar-initial">{botInitial}</span>
                 <button className={`chat-bubble bot-bubble ${steps === message.steps ? 'is-focused' : ''}`} type="button" onClick={() => setSteps(message.steps ?? [])} aria-label="查看这条回复的决策步骤">{message.text}</button>
                 <div className="chat-meta mono">{message.model ?? 'reply'} · {message.costCny === undefined ? '同轮' : `¥${message.costCny.toFixed(4)}`} · {message.partCount ?? 1} 条</div>
               </div>)}
@@ -236,6 +242,15 @@ export function DecisionsPage() {
         <aside className="panel-card trace-card">
           <h2>决策追踪</h2>
           {!selectedDecision && <p className="muted">选择一条决策查看详情。</p>}
+          {selectedDecision && selectedActivityMetrics.length > 0 && <section className="activity-metrics" aria-labelledby="activity-metrics-title">
+            <h3 id="activity-metrics-title">主动判断分值</h3>
+            <dl>
+              {selectedActivityMetrics.map((metric) => <div className="activity-metric" key={metric.key}>
+                <dt>{metric.label}</dt>
+                <dd>{metric.display}</dd>
+              </div>)}
+            </dl>
+          </section>}
           {selectedDecision && <div className="replay-toolbar">
             <button className="button button-secondary" type="button" onClick={() => void replaySelectedDecision()} disabled={replayBusy}>
               {replayBusy ? '重放中…' : '用当前配置重放'}

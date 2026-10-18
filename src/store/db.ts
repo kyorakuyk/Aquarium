@@ -95,6 +95,105 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 4,
+    up(database) {
+      database.exec(`
+        CREATE TABLE mood_state (
+          account INTEGER PRIMARY KEY,
+          valence REAL NOT NULL,
+          arousal REAL NOT NULL,
+          updated_at INTEGER NOT NULL,
+          band TEXT NOT NULL CHECK (band IN ('low', 'annoyed', 'calm', 'happy', 'excited')),
+          band_since INTEGER NOT NULL,
+          last_band_change_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE mood_events (
+          id INTEGER PRIMARY KEY,
+          account INTEGER NOT NULL,
+          time INTEGER NOT NULL,
+          source TEXT NOT NULL CHECK (source IN ('appraise', 'rule', 'band')),
+          session_id TEXT,
+          sender_id INTEGER,
+          dv REAL NOT NULL,
+          da REAL NOT NULL,
+          applied_dv REAL NOT NULL,
+          applied_da REAL NOT NULL,
+          reason TEXT NOT NULL,
+          band_before TEXT,
+          band_after TEXT
+        );
+        CREATE INDEX idx_mood_events_account_time ON mood_events (account, time);
+
+        CREATE TABLE tags (
+          id INTEGER PRIMARY KEY,
+          account INTEGER NOT NULL,
+          session_id TEXT NOT NULL,
+          user_id INTEGER,
+          text TEXT NOT NULL,
+          norm TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('candidate', 'confirmed', 'rejected', 'superseded')),
+          source TEXT NOT NULL CHECK (source IN ('auto', 'manual')),
+          samples INTEGER NOT NULL,
+          evidence_json TEXT NOT NULL,
+          first_seen INTEGER NOT NULL,
+          last_seen INTEGER NOT NULL,
+          superseded_by INTEGER,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX idx_tags_subject ON tags (account, session_id, user_id, status);
+
+        CREATE TABLE tag_runs (
+          account INTEGER NOT NULL,
+          session_id TEXT NOT NULL,
+          last_run_at INTEGER,
+          last_message_time INTEGER,
+          PRIMARY KEY (account, session_id)
+        );
+      `);
+    },
+  },
+  {
+    version: 5,
+    up(database) {
+      database.exec(`
+        CREATE TABLE affinity_state (
+          account INTEGER NOT NULL,
+          user_id INTEGER NOT NULL,
+          value REAL NOT NULL CHECK (value >= 0 AND value <= 100),
+          level TEXT NOT NULL CHECK (level IN ('cold', 'cool', 'neutral', 'warm', 'close')),
+          level_since INTEGER NOT NULL,
+          last_level_change_at INTEGER NOT NULL,
+          last_interaction_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY (account, user_id)
+        );
+
+        CREATE TABLE affinity_events (
+          id INTEGER PRIMARY KEY,
+          account INTEGER NOT NULL,
+          user_id INTEGER NOT NULL,
+          time INTEGER NOT NULL,
+          source TEXT NOT NULL CHECK (source IN ('appraise', 'called', 'manual', 'band')),
+          session_id TEXT,
+          delta REAL NOT NULL,
+          applied REAL NOT NULL,
+          reason TEXT NOT NULL,
+          level_before TEXT CHECK (level_before IS NULL OR level_before IN ('cold', 'cool', 'neutral', 'warm', 'close')),
+          level_after TEXT CHECK (level_after IS NULL OR level_after IN ('cold', 'cool', 'neutral', 'warm', 'close'))
+        );
+        CREATE INDEX idx_affinity_events_account_user_time ON affinity_events (account, user_id, time);
+      `);
+    },
+  },
+  {
+    version: 6,
+    up(database) {
+      const usageTable = database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage'").get();
+      if (usageTable) database.exec('ALTER TABLE usage ADD COLUMN account INTEGER;');
+    },
+  },
 ];
 
 export function openDatabase(databasePath = join(process.cwd(), 'data', 'aquarium.db')): DatabaseSync {

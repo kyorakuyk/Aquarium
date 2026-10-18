@@ -32,6 +32,15 @@ function parseCommand(value: string): ManagementCommand | undefined {
   return { type: 'mute', minutes };
 }
 
+function parseOwnerCommand(message: IncomingMessage, ownerId: number): ManagementCommand | undefined {
+  if (ownerId === 0 || message.senderId !== ownerId) return undefined;
+  return parseCommand(message.plainText);
+}
+
+export function isManagementCommand(message: IncomingMessage, ownerId: number): boolean {
+  return parseOwnerCommand(message, ownerId) !== undefined;
+}
+
 function budgetLabel(state: ReturnType<typeof budgetState>): string {
   switch (state) {
     case 'ok': return '正常';
@@ -112,8 +121,7 @@ export function createManagementCommands(options: {
 
   async function handle(message: IncomingMessage): Promise<boolean> {
     const config = options.getConfig();
-    if (config.owner === 0 || message.senderId !== config.owner) return false;
-    const command = parseCommand(message.plainText);
+    const command = parseOwnerCommand(message, config.owner);
     if (!command) return false;
 
     const inserted = options.repository.saveMessage({

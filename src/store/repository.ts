@@ -1,5 +1,18 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { createPanelQueries } from './panel-queries.ts';
+import {
+  createAffectQueries,
+  type AffinityEventRecord,
+  type AffinityStateRecord,
+  type MoodEventRecord,
+  type MoodStateRecord,
+  type StoredAffinityEvent,
+  type StoredMoodEvent,
+  type StoredTag,
+  type TagRecord,
+  type TagRunRecord,
+  type TagUpdate,
+} from './affect-repo.ts';
 
 export interface MessageStorageRecord {
   sessionId: string;
@@ -14,6 +27,7 @@ export interface MessageStorageRecord {
 
 export interface UsageRecord {
   time: number;
+  account: number | null;
   slot: string;
   provider: string;
   model: string;
@@ -34,6 +48,35 @@ export interface UsageSummary {
   outputTokens: number;
   costCny: number;
   averageLatencyMs: number;
+}
+
+export type UsageRange = 'today' | '7d' | '30d';
+
+export interface UsageSlotSummary {
+  slot: string;
+  calls: number;
+  costCny: number;
+  avgLatencyMs: number;
+}
+
+export interface UsageAccountSummary {
+  provider: string;
+  account: number | null;
+  calls: number;
+  costCny: number;
+  avgLatencyMs: number;
+  cacheHitRatio: number | null;
+  daily: number[];
+  bySlot: UsageSlotSummary[];
+}
+
+export interface UsageRangeSummary {
+  totals: {
+    costCny: number;
+    calls: number;
+    cacheHitRatio: number | null;
+  };
+  rows: UsageAccountSummary[];
 }
 
 export interface DecisionRecord {
@@ -80,6 +123,8 @@ export interface StoredPipelineTrace extends PipelineTraceRecord {
 export interface StoreRepository {
   saveMessage(message: MessageStorageRecord): boolean;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
+  lastMessageTime(sessionId: string): number | null;
+  lastMessageBefore(sessionId: string, beforeTime: number): MessageStorageRecord | undefined;
   messageBySessionAndId(sessionId: string, messageId: string): MessageStorageRecord | undefined;
   recentMessagesThrough(sessionId: string, messageId: string, count: number): MessageStorageRecord[];
   lastSelfMessage(sessionId: string): MessageStorageRecord | undefined;
@@ -89,7 +134,9 @@ export interface StoreRepository {
   costToday(): number;
   replyCountToday(): number;
   replyCountTodayForAccount(account: number): number;
+  replyCountLastHourForAccount(account: number, now: number): number;
   usageToday(): UsageSummary;
+  usageByRange(range: UsageRange, now: number): UsageRangeSummary;
   getCaption(key: string): string | undefined;
   setCaption(key: string, caption: string, time?: number): void;
   recordDecision(decision: DecisionRecord): void;
@@ -104,6 +151,27 @@ export interface StoreRepository {
   recordPipelineTrace(trace: PipelineTraceRecord): void;
   pipelineTraceFor(sessionId: string, messageId: string): StoredPipelineTrace | undefined;
   prunePipelineTraces(now: number, retainDays?: number): number;
+  getMoodState(account: number): MoodStateRecord | undefined;
+  saveMoodState(state: MoodStateRecord): void;
+  recordMoodEvent(event: MoodEventRecord): void;
+  recentMoodEvents(account: number, count: number): StoredMoodEvent[];
+  moodEventsSince(account: number, since: number): StoredMoodEvent[];
+  getAffinityState(account: number, userId: number): AffinityStateRecord | undefined;
+  listAffinityStates(account: number): AffinityStateRecord[];
+  saveAffinityState(state: AffinityStateRecord): void;
+  recordAffinityEvent(event: AffinityEventRecord): void;
+  recentAffinityEvents(account: number, userId: number, count: number): StoredAffinityEvent[];
+  affinityEventsSince(account: number, userId: number, since: number): StoredAffinityEvent[];
+  latestSenderNameForAccount(account: number, userId: number): string | undefined;
+  insertTag(tag: TagRecord): number;
+  tagById(id: number): StoredTag | undefined;
+  listTagsForSubject(account: number, sessionId: string, userId: number | null): StoredTag[];
+  listTagsForSession(account: number, sessionId: string): StoredTag[];
+  senderNameFor(sessionId: string, senderId: number): string | undefined;
+  updateTag(id: number, update: TagUpdate): void;
+  getTagRun(account: number, sessionId: string): TagRunRecord | undefined;
+  saveTagRun(run: TagRunRecord): void;
+  countMessagesAfter(sessionId: string, time: number): number;
 }
 
 function limitValue(count: number): number {
@@ -140,6 +208,9 @@ export function createRepository(
     ORDER BY time DESC, id DESC
     LIMIT ?
   `);
+  const selectLastMessageTime = database.prepare(
+    'SELECT MAX(time) AS latest_time FROM messages WHERE session_id = ?',
+  );
   const selectMessageBySessionAndId = database.prepare(`
     SELECT session_id, message_id, sender_id, sender_name, is_self, plain_text, segments_json, time
     FROM messages
@@ -165,10 +236,17 @@ export function createRepository(
     ORDER BY time DESC, id DESC
     LIMIT 1
   `);
+  const selectLastMessageBefore = database.prepare(`
+    SELECT session_id, message_id, sender_id, sender_name, is_self, plain_text, segments_json, time
+    FROM messages
+    WHERE session_id = ? AND time < ?
+    ORDER BY time DESC, id DESC
+    LIMIT 1
+  `);
   const insertUsage = database.prepare(`
     INSERT INTO usage
-      (time, slot, provider, model, input_tokens, cached_tokens, output_tokens, cost_cny, latency_ms, ok)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (time, account, slot, provider, model, input_tokens, cached_tokens, output_tokens, cost_cny, latency_ms, ok)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const selectTodayCost = database.prepare(`
     SELECT COALESCE(SUM(cost_cny), 0) AS total
@@ -222,6 +300,7 @@ export function createRepository(
 
   return {
     ...createPanelQueries(database, clock),
+    ...createAffectQueries(database),
     saveMessage(message) {
       const result = insertMessage.run(
         message.sessionId,
@@ -250,6 +329,28 @@ export function createRepository(
         segments: JSON.parse(stringValue(row.segments_json, 'segments_json')) as unknown[],
         time: numberValue(row.time, 'time'),
       }));
+    },
+
+    lastMessageTime(sessionId) {
+      const row = selectLastMessageTime.get(sessionId) as Record<string, unknown> | undefined;
+      if (!row || row.latest_time === null) return null;
+      return numberValue(row.latest_time, 'latest_time');
+    },
+
+    lastMessageBefore(sessionId, beforeTime) {
+      if (!Number.isFinite(beforeTime)) throw new RangeError('查询时间必须是有限数字');
+      const row = selectLastMessageBefore.get(sessionId, beforeTime) as Record<string, unknown> | undefined;
+      if (!row) return undefined;
+      return {
+        sessionId: stringValue(row.session_id, 'session_id'),
+        messageId: stringValue(row.message_id, 'message_id'),
+        senderId: numberValue(row.sender_id, 'sender_id'),
+        senderName: stringValue(row.sender_name, 'sender_name'),
+        isSelf: numberValue(row.is_self, 'is_self') === 1,
+        plainText: stringValue(row.plain_text, 'plain_text'),
+        segments: JSON.parse(stringValue(row.segments_json, 'segments_json')) as unknown[],
+        time: numberValue(row.time, 'time'),
+      };
     },
 
     messageBySessionAndId(sessionId, messageId) {
@@ -301,6 +402,7 @@ export function createRepository(
     recordUsage(usage) {
       insertUsage.run(
         usage.time,
+        usage.account,
         usage.slot,
         usage.provider,
         usage.model,

@@ -1,8 +1,34 @@
 import { useEffect, useState } from 'react';
-import { apiRequest, post, type DecisionView, type PanelStatus, type SessionView, type UsageView } from '../api.ts';
+import { apiRequest, type DecisionView, type MoodBand, type MoodEventView, type MoodView, type PanelStatus, type SessionView, type SleepView, type UsageView } from '../api.ts';
 import type { PageId } from '../components/Sidebar.tsx';
-import { FishIcon } from '../components/FishIcon.tsx';
 import { decisionLabel, decisionTone } from '../labels.ts';
+
+const MOOD_BAND_LABELS: Record<MoodBand, string> = {
+  low: '低落',
+  annoyed: '不爽',
+  calm: '平静',
+  happy: '开心',
+  excited: '很开心',
+};
+
+function moodEventLabel(event: MoodEventView): string {
+  if (event.source === 'band') {
+    const before = event.bandBefore ? MOOD_BAND_LABELS[event.bandBefore] : '未知';
+    const after = event.bandAfter ? MOOD_BAND_LABELS[event.bandAfter] : '未知';
+    return `换档：${before} → ${after}`;
+  }
+  if (event.source === 'rule') return '被叫到了';
+  const known: Record<string, string> = {
+    budget: '预算已满，跳过评估',
+    appraise_parse_error: '评估解析失败',
+    appraise_error: '评估调用失败',
+  };
+  return known[event.reason] ?? event.reason;
+}
+
+function signed(value: number): string {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}`;
+}
 
 function money(value: number): string {
   return `¥${value.toFixed(2)}`;
@@ -20,6 +46,7 @@ function fullTime(value: number): string {
 function connectionLabel(status: PanelStatus['accounts'][number]['connectionStatus']): string {
   if (status === 'online') return '在线';
   if (status === 'connecting') return '连接中';
+  if (status === 'waiting_login') return '等待小号登录';
   return '等待重连';
 }
 
@@ -28,7 +55,8 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const [sessions, setSessions] = useState<SessionView[]>([]);
   const [decisions, setDecisions] = useState<DecisionView[]>([]);
   const [usage, setUsage] = useState<UsageView>();
-  const [muted, setMuted] = useState(false);
+  const [mood, setMood] = useState<MoodView>();
+  const [sleep, setSleep] = useState<SleepView>();
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -37,24 +65,33 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
       apiRequest<SessionView[]>('/api/sessions'),
       apiRequest<DecisionView[]>('/api/decisions?limit=5'),
       apiRequest<UsageView>('/api/usage/today'),
-    ]).then(([nextStatus, nextSessions, nextDecisions, nextUsage]) => {
+      apiRequest<MoodView>('/api/mood'),
+    ]).then(([nextStatus, nextSessions, nextDecisions, nextUsage, nextMood]) => {
       setStatus(nextStatus);
       setSessions(nextSessions);
       setDecisions(nextDecisions);
       setUsage(nextUsage);
-      setMuted(nextStatus.allMuted);
+      setMood(nextMood);
       setError('');
     }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : '读取控制台数据失败'));
   }, []);
 
-  async function toggleMute() {
-    try {
-      await post(muted ? '/api/unmute-all' : '/api/mute-all');
-      setMuted(!muted);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '操作失败');
-    }
-  }
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      void apiRequest<SleepView>('/api/sleep').then((value) => {
+        if (active) setSleep(value);
+      }).catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : '读取作息状态失败');
+      });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   if (error && !status) return <div className="page"><div className="notice notice-warn" role="alert">{error}</div></div>;
   if (!status) return <div className="page"><p className="muted">正在读取本机状态…</p></div>;
@@ -68,8 +105,8 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const accountCount = status.accounts.length;
   const onlineAccountCount = status.accounts.filter((item) => item.connectionStatus === 'online').length;
   const tankDescription = accountCount === 0
-    ? '缸里还没有鱼。'
-    : `缸里有 ${accountCount} 条鱼，${onlineAccountCount} 条在游动。`;
+    ? '还没有眷属。'
+    : `${accountCount} 位眷属，${onlineAccountCount} 位在线。`;
 
   return (
     <div className="page">
@@ -80,9 +117,6 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
         </div>
         <div className="header-actions">
           <button className="button button-secondary" type="button" onClick={() => onNavigate('sandbox')}>去试聊</button>
-          <button className={`button ${muted ? 'button-secondary' : 'button-warn'}`} type="button" onClick={() => void toggleMute()}>
-            {muted ? '恢复发言' : '全部闭嘴'}
-          </button>
         </div>
       </header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
@@ -91,12 +125,12 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
       )}
 
       <section className="section-block">
-        <div className="section-heading"><h2>鱼缸</h2><span className="muted">{status.accounts.length} 个账号</span></div>
+        <div className="section-heading"><h2>眷属</h2><span className="muted">{status.accounts.length} 个账号</span></div>
         <div className="tank-grid">
           {status.accounts.map((account) => (
             <article className="tank-card" key={account.account}>
               <div className="tank-card-top">
-                <FishIcon className="tank-fish" />
+                <span className="avatar-initial">{Array.from(account.name)[0] ?? '水'}</span>
                 <span className={`status-pill status-${account.connectionStatus}`}>{connectionLabel(account.connectionStatus)}</span>
               </div>
               <h3>{account.name}</h3>
@@ -114,7 +148,7 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
           ))}
           <div className="tank-card tank-card-placeholder" aria-label="多账号功能即将开放">
             <span className="placeholder-mark">＋</span>
-            <strong>放入新的鱼</strong>
+            <strong>添加新眷属</strong>
             <span className="m2-tag">M3 多账号</span>
           </div>
         </div>
@@ -146,6 +180,66 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
           <p className="stat-foot">运行 {Math.floor(status.runtime.uptimeSeconds / 60)} 分钟</p>
         </article>
       </section>
+
+      <div className="overview-state-grid section-block">
+      <section className="panel-card mood-card">
+        <div className="section-heading">
+          <div><h2>心情</h2></div>
+          <span className="muted">
+            {mood && (mood.bandSince === null ? '基线状态' : `从 ${shortTime(mood.bandSince)} 起`)}
+          </span>
+        </div>
+        {!mood && <p className="muted">正在读取…</p>}
+        {mood && (
+          <div className="mood-layout">
+            <div className="mood-summary">
+              <div className="mood-band-name">{MOOD_BAND_LABELS[mood.band]}</div>
+              <div className="metric-row"><span>愉悦度</span><strong className="mono">{mood.valence.toFixed(2)}</strong></div>
+              <div className="metric-row"><span>兴奋度</span><strong className="mono">{mood.arousal.toFixed(2)}</strong></div>
+            </div>
+            <div className="mood-events">
+              <div className="small-heading">最近事件</div>
+              {mood.events.slice(0, 5).map((event) => (
+                <div className="mood-event" key={event.id}>
+                  <span className="mono muted">{fullTime(event.time)}</span>
+                  <span>{moodEventLabel(event)}</span>
+                  <span className="mono muted">{signed(event.appliedDv)} / {signed(event.appliedDa)}</span>
+                </div>
+              ))}
+              {mood.events.length === 0 && <p className="muted">还没有评估记录。</p>}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="panel-card mood-card sleep-card" aria-labelledby="sleep-card-title">
+        <div className="section-heading">
+          <div><h2 id="sleep-card-title">作息</h2></div>
+          {sleep && <span className="result-pill result-neutral">{sleep.enabled ? '已启用' : '已关闭'}</span>}
+        </div>
+        {!sleep && <p className="muted">正在读取作息状态…</p>}
+        {sleep && (
+          <div className="sleep-layout">
+            <div className="sleep-status-row">
+              <span className="muted">当前状态</span>
+              <strong>{sleep.status === 'asleep' ? '睡着' : sleep.status === 'woken' ? '被叫醒' : sleep.enabled ? '醒着' : '作息已关闭'}</strong>
+            </div>
+            <div className="sleep-energy-row">
+              <div className="metric-row"><span>精力</span><strong className="mono">{sleep.energy === null ? '—' : `${Math.round(sleep.energy * 100)}%`}</strong></div>
+              <div className="progress-track" role="progressbar" aria-label="当前精力" aria-valuenow={Math.round((sleep.energy ?? 0) * 100)} aria-valuemin={0} aria-valuemax={100} aria-valuetext={sleep.energy === null ? '睡着时不计算' : `${Math.round(sleep.energy * 100)}%`}>
+                <span style={{ width: `${Math.round((sleep.energy ?? 0) * 100)}%` }} />
+              </div>
+              {sleep.energy === null && <span className="muted sleep-energy-note">睡着时不计算精力</span>}
+            </div>
+            <div className="sleep-next-change">
+              <span className="muted">{sleep.status === 'asleep' ? '预计醒来' : sleep.status === 'woken' ? '被叫醒状态结束' : '下次入睡'}</span>
+              <strong className="mono">{sleep.nextChangeAt === null ? '未设置' : shortTime(sleep.nextChangeAt)}</strong>
+            </div>
+            {sleep.account !== null && <span className="muted sleep-energy-note">精力按 QQ {sleep.account} 的近 60 分钟回复统计</span>}
+          </div>
+        )}
+      </section>
+      </div>
 
       <section className="section-block panel-card table-card">
         <div className="section-heading">

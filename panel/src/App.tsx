@@ -7,6 +7,8 @@ import { SessionsPage } from './pages/SessionsPage.tsx';
 import { PersonasPage } from './pages/PersonasPage.tsx';
 import { DecisionsPage } from './pages/DecisionsPage.tsx';
 import { UsagePage } from './pages/UsagePage.tsx';
+import { ImpressionsPage } from './pages/ImpressionsPage.tsx';
+import { ModelsPage } from './pages/ModelsPage.tsx';
 
 export function App() {
   const [authenticated, setAuthenticated] = useState(
@@ -40,8 +42,10 @@ export function App() {
         {page === 'overview' && <OverviewPage onNavigate={setPage} />}
         {page === 'sessions' && <SessionsPage />}
         {page === 'personas' && <PersonasPage onNavigate={setPage} />}
+        {page === 'models' && <ModelsPage />}
         {page === 'sandbox' && <DecisionsPage />}
         {page === 'usage' && <UsagePage />}
+        {page === 'impressions' && <ImpressionsPage />}
       </main>
     </div>
   );

@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import type { AquariumConfig } from '../config/schema.ts';
 import { getProviderClient } from './client.ts';
 import { budgetState } from './budget.ts';
+import { buildCliInput, getCliRuntime, type CliRuntime } from './cli.ts';
 
 const retryableNetworkCodes = new Set([
   'ECONNABORTED',
@@ -18,6 +19,7 @@ const retryableNetworkCodes = new Set([
 
 export interface UsageAttempt {
   time: number;
+  account: number | null;
   slot: string;
   provider: string;
   model: string;
@@ -31,11 +33,13 @@ export interface UsageAttempt {
 
 export interface SlotCallOptions {
   config: AquariumConfig;
+  account: number | null;
   costToday: () => number;
   recordUsage: (usage: UsageAttempt) => void;
   getClient?: (provider: string) => OpenAI;
   now?: () => number;
   timeoutMs?: number;
+  cliRuntime?: CliRuntime;
   debugTrace?: SlotDebugTraceContext;
 }
 
@@ -67,11 +71,18 @@ export interface SlotUsage {
   costCny: number;
 }
 
+export interface SlotRequestParams {
+  temperature?: number;
+  maxTokens?: number;
+  reasoning?: 'low' | 'medium' | 'high';
+}
+
 export interface SlotResult {
   text: string;
   provider: string;
   model: string;
   usage: SlotUsage;
+  params?: SlotRequestParams;
 }
 
 function tokenCount(value: unknown): number {
@@ -166,21 +177,47 @@ export async function callSlot(
   for (let index = 0; index < chain.length; index += 1) {
     const entry = chain[index];
     if (!entry) continue;
+    const provider = options.config.providers[entry.provider];
+    if (!provider) throw new Error(`未配置模型服务商：${entry.provider}`);
     const price = options.config.pricing[entry.model];
-    if (!price) throw new Error(`模型 ${entry.model} 缺少价格配置，拒绝发送请求`);
+    if (provider.kind === 'api' && !price) {
+      throw new Error(`模型 ${entry.model} 缺少价格配置，拒绝发送请求`);
+    }
+    const sentParams: SlotRequestParams = provider.kind === 'api' ? {
+      ...(entry.temperature !== undefined ? { temperature: entry.temperature } : {}),
+      ...(entry.maxTokens !== undefined ? { maxTokens: entry.maxTokens } : {}),
+      ...(entry.reasoning !== 'off' && provider.reasoningField !== 'none'
+        ? { reasoning: entry.reasoning }
+        : {}),
+    } : {};
+    const requestBody = {
+      model: entry.model,
+      messages,
+      ...(sentParams.temperature !== undefined ? { temperature: sentParams.temperature } : {}),
+      ...(sentParams.maxTokens !== undefined ? { max_tokens: sentParams.maxTokens } : {}),
+      ...(sentParams.reasoning !== undefined && provider.kind === 'api'
+        ? { [provider.reasoningField]: sentParams.reasoning }
+        : {}),
+    } as OpenAI.ChatCompletionCreateParamsNonStreaming;
 
     const startedAt = now();
     let response: OpenAI.ChatCompletion | undefined;
+    let cliText: string | undefined;
     let attemptError: unknown;
     let failed = false;
     try {
-      const client = options.getClient
-        ? options.getClient(entry.provider)
-        : getProviderClient(options.config, entry.provider);
-      response = await client.chat.completions.create(
-        { model: entry.model, messages },
-        { timeout: timeoutMs, maxRetries: 0 },
-      );
+      if (provider.kind === 'cli') {
+        cliText = await (options.cliRuntime ?? getCliRuntime()).call(
+          entry.provider,
+          provider,
+          buildCliInput(messages),
+        );
+      } else {
+        const client = options.getClient
+          ? options.getClient(entry.provider)
+          : getProviderClient(options.config, entry.provider);
+        response = await client.chat.completions.create(requestBody, { timeout: timeoutMs, maxRetries: 0 });
+      }
     } catch (error) {
       failed = true;
       attemptError = error;
@@ -191,6 +228,7 @@ export async function callSlot(
     if (failed) {
       options.recordUsage({
         time: completedAt,
+        account: options.account,
         slot,
         provider: entry.provider,
         model: entry.model,
@@ -210,15 +248,17 @@ export async function callSlot(
         detail: debugErrorDetails(attemptError),
       });
       lastError = attemptError;
-      if (!canFallback(attemptError) || index === chain.length - 1) throw attemptError;
+      if (provider.kind === 'api' && !canFallback(attemptError) || index === chain.length - 1) throw attemptError;
       continue;
     }
 
-    if (!response) throw new Error(`模型 ${entry.model} 没有返回结果`);
-    const responseText = typeof response.choices[0]?.message.content === 'string'
-      ? response.choices[0].message.content
-      : '';
-    const usage = response.usage;
+    if (provider.kind === 'api' && !response) throw new Error(`模型 ${entry.model} 没有返回结果`);
+    const responseText = provider.kind === 'cli'
+      ? cliText ?? ''
+      : typeof response?.choices[0]?.message.content === 'string'
+        ? response.choices[0].message.content
+        : '';
+    const usage = response?.usage;
     const inputTokens = tokenCount(usage?.prompt_tokens);
     const outputTokens = tokenCount(usage?.completion_tokens);
     const extendedUsage = usage as (typeof usage & {
@@ -227,15 +267,18 @@ export async function callSlot(
     const cachedValue = extendedUsage?.prompt_cache_hit_tokens
       ?? usage?.prompt_tokens_details?.cached_tokens;
     const cachedTokens = Math.min(inputTokens, tokenCount(cachedValue));
-    const costCny = (
-      (inputTokens - cachedTokens) * price.input
-      + cachedTokens * price.cachedInput
-      + outputTokens * price.output
-    ) / 1_000_000;
+    const costCny = provider.kind === 'cli' || !price
+      ? 0
+      : (
+        (inputTokens - cachedTokens) * price.input
+        + cachedTokens * price.cachedInput
+        + outputTokens * price.output
+      ) / 1_000_000;
     const slotUsage = { inputTokens, cachedTokens, outputTokens, costCny };
 
     options.recordUsage({
       time: completedAt,
+      account: options.account,
       slot,
       provider: entry.provider,
       model: entry.model,
@@ -257,6 +300,7 @@ export async function callSlot(
       provider: entry.provider,
       model: entry.model,
       usage: slotUsage,
+      params: sentParams,
     };
   }
 

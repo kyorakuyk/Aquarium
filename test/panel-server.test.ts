@@ -3,166 +3,26 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import yaml from 'yaml';
 import { loadConfig } from '../src/config/load.ts';
-import { AquariumConfigSchema } from '../src/config/schema.ts';
 import { resolveSession } from '../src/config/resolve.ts';
 import { watchConfig } from '../src/config/watch.ts';
 import { writeConfig } from '../src/config/write.ts';
-import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../src/core/events.ts';
+import { sessionId, type SessionKey } from '../src/core/events.ts';
 import { createManagementCommands } from '../src/core/management.ts';
-import type { ProtocolAdapter, ContactFriend, ContactGroup } from '../src/adapters/types.ts';
 import { createPanelApp } from '../src/panel-server/app.ts';
 import { assertLoopbackHost } from '../src/panel-server/server.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
-import type { SlotCallOptions, SlotResult } from '../src/llm/slots.ts';
-
-const exampleConfig = AquariumConfigSchema.parse(yaml.parse(
-  fs.readFileSync(path.resolve('config.example.yaml'), 'utf8'),
-));
-const account = exampleConfig.accounts[0]?.uin ?? 10001;
-const groupSession: SessionKey = { account, kind: 'group', peer: 123456 };
-const testPassword = ['panel', 'test', 'only'].join('-');
-const now = new Date(2026, 9, 13, 12, 0).getTime();
-
-class FakeAdapter implements ProtocolAdapter {
-  readonly account = account;
-  readonly nickname = 'Aquarium 测试';
-  readonly sent: Array<{ session: SessionKey; segments: Segment[] }> = [];
-  readonly recalled: string[] = [];
-  groups: ContactGroup[] = [{ groupId: groupSession.peer, name: '测试群', memberCount: 9 }];
-  friends: ContactFriend[] = [{ userId: 42, nickname: '好友', remark: '好友备注' }];
-  groupListFails = false;
-  friendListFails = false;
-
-  async connect(): Promise<void> {}
-  close(): void {}
-  onMessage(): () => void { return () => {}; }
-  onStatus(): () => void { return () => {}; }
-  async send(session: SessionKey, segments: Segment[]): Promise<{ messageId: string }> {
-    this.sent.push({ session, segments });
-    return { messageId: `out-${this.sent.length}` };
-  }
-  async listGroups(): Promise<ContactGroup[]> {
-    if (this.groupListFails) throw new Error('group contact lookup failed');
-    return this.groups;
-  }
-  async listFriends(): Promise<ContactFriend[]> {
-    if (this.friendListFails) throw new Error('friend contact lookup failed');
-    return this.friends;
-  }
-  async history(): Promise<[]> { return []; }
-  async markRead(): Promise<void> {}
-  async setTyping(): Promise<void> {}
-  async recall(messageId: string): Promise<void> { this.recalled.push(messageId); }
-}
-
-async function withPanel<T>(
-  run: (options: {
-    app: ReturnType<typeof createPanelApp>;
-    repository: ReturnType<typeof createRepository>;
-    adapter: FakeAdapter;
-    modelSlots: string[];
-    replayedMessages: IncomingMessage[];
-    getConfig: () => ReturnType<typeof AquariumConfigSchema.parse>;
-    getSavedConfig: () => ReturnType<typeof AquariumConfigSchema.parse> | undefined;
-  }) => Promise<T>,
-  ownerId = exampleConfig.owner,
-): Promise<T> {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-panel-test-'));
-  fs.mkdirSync(path.join(root, 'personas'), { recursive: true });
-  fs.mkdirSync(path.join(root, 'panel', 'dist'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'panel', 'dist', 'index.html'), '<html></html>', 'utf8');
-  fs.writeFileSync(path.join(root, 'personas', 'default.md'), '# Aquarium\n默认人设。', 'utf8');
-  const database = openDatabase(path.join(root, 'aquarium.db'));
-  const repository = createRepository(database, () => new Date(now));
-  let config = AquariumConfigSchema.parse({
-    ...exampleConfig,
-    owner: ownerId,
-    defaults: { ...exampleConfig.defaults, enabled: true, groupNote: '全局说明' },
-    sessions: {
-      ...exampleConfig.sessions,
-      [sessionId(groupSession)]: { enabled: true, groupNote: '本会话说明' },
-    },
-  });
-  let savedConfig: ReturnType<typeof AquariumConfigSchema.parse> | undefined;
-  const adapter = new FakeAdapter();
-  const modelSlots: string[] = [];
-  const replayedMessages: IncomingMessage[] = [];
-  const management = createManagementCommands({
-    getConfig: () => config,
-    repository,
-    adapter,
-    now: () => now,
-  });
-  const app = createPanelApp({
-    password: testPassword,
-    getConfig: () => config,
-    saveConfig: (next) => { config = next; savedConfig = next; },
-    repository,
-    accounts: () => [{ adapter, getStatus: () => 'online', getNickname: () => adapter.nickname }],
-    management: () => [management],
-    root,
-    now: () => now,
-    callModel: async (slot: string, _messages: unknown[], options: SlotCallOptions): Promise<SlotResult> => {
-      modelSlots.push(slot);
-      options.recordUsage({
-        time: now,
-        slot: 'reply',
-        provider: 'deepseek',
-        model: 'deepseek-flash',
-        inputTokens: 10,
-        cachedTokens: 0,
-        outputTokens: 4,
-        costCny: 0.001,
-        latencyMs: 12,
-        ok: true,
-      });
-      return {
-        text: '试聊回复。',
-        provider: 'deepseek',
-        model: 'deepseek-flash',
-        usage: { inputTokens: 10, cachedTokens: 0, outputTokens: 4, costCny: 0.001 },
-      };
-    },
-    replayMessage: async (message: IncomingMessage) => {
-      replayedMessages.push(message);
-      return {
-        replied: false,
-        reason: 'replay',
-        replay: {
-          wouldReply: true,
-          reason: 'replied',
-          replyText: '当前配置生成的新回复。',
-          trace: [{ step: 'gate', startedAt: now, durationMs: 2, summary: 'next' }],
-          provider: 'fake',
-          model: 'fake-model',
-          replyCostCny: 0.002,
-          totalCostCny: 0.005,
-        },
-      };
-    },
-  });
-  try {
-    return await run({
-      app,
-      repository,
-      adapter,
-      modelSlots,
-      replayedMessages,
-      getConfig: () => config,
-      getSavedConfig: () => savedConfig,
-    });
-  } finally {
-    database.close();
-    fs.rmSync(root, { recursive: true, force: true });
-  }
-}
-
-function authHeaders(): HeadersInit {
-  return { Authorization: `Bearer ${testPassword}` };
-}
+import {
+  account,
+  authHeaders,
+  exampleConfig,
+  FakeAdapter,
+  groupSession,
+  now,
+  testPassword,
+  withPanel,
+} from './panel-test-helpers.ts';
 
 test('本地面板只允许绑定 loopback 地址', () => {
   assert.doesNotThrow(() => assertLoopbackHost('127.0.0.1'));
@@ -420,6 +280,43 @@ test('PATCH 会话字段设为 null 时删除覆盖并恢复继承', async () =>
   });
 });
 
+test('PATCH 会话时间表后由会话 API 返回并支持恢复继承', async () => {
+  await withPanel(async ({ app, getConfig }) => {
+    const id = sessionId(groupSession);
+    const schedule = [
+      { from: '08:30', to: '12:00', mode: 'active' },
+      { from: '12:00', to: '18:00', mode: 'busy' },
+    ] as const;
+    const patchResponse = await app.request(`/api/sessions/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modeSchedule: schedule }),
+    });
+
+    assert.equal(patchResponse.status, 200);
+    assert.deepEqual(getConfig().sessions[id]?.modeSchedule, schedule);
+
+    const sessionResponse = await app.request('/api/sessions', { headers: authHeaders() });
+    const sessions = await sessionResponse.json() as Array<{
+      sessionId: string;
+      overrides: string[];
+      effective: { modeSchedule: unknown[] };
+    }>;
+    const group = sessions.find((session) => session.sessionId === id);
+    assert.deepEqual(group?.effective.modeSchedule, schedule);
+    assert.ok(group?.overrides.includes('modeSchedule'));
+
+    const restoreResponse = await app.request(`/api/sessions/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modeSchedule: null }),
+    });
+    assert.equal(restoreResponse.status, 200);
+    assert.equal(getConfig().sessions[id]?.modeSchedule, undefined);
+    assert.deepEqual(resolveSession(getConfig(), groupSession).modeSchedule, []);
+  });
+});
+
 test('并发 PATCH 保留彼此修改的会话字段', async () => {
   await withPanel(async ({ app, getConfig }) => {
     const url = `/api/sessions/${encodeURIComponent(sessionId(groupSession))}`;
@@ -481,6 +378,15 @@ test('PATCH 原子写入配置并立即更新热重载中的有效值', async ()
     assert.equal(response.status, 200);
     assert.equal(watcher.getConfig().sessions[sessionId(groupSession)]?.enabled, true);
     assert.equal(loadConfig({ configPath, examplePath, logger }).sessions[sessionId(groupSession)]?.enabled, true);
+
+    const defaultsResponse = await app.request('/api/defaults', {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groupNote: '全局配置已持久化' }),
+    });
+    assert.equal(defaultsResponse.status, 200);
+    assert.equal(watcher.getConfig().defaults.groupNote, '全局配置已持久化');
+    assert.equal(loadConfig({ configPath, examplePath, logger }).defaults.groupNote, '全局配置已持久化');
   } finally {
     watcher.close();
     database.close();
@@ -534,31 +440,14 @@ test('owner 未设置时试聊不会把扮演者伪标为主人', async () => {
   }, 0);
 });
 
-test('人设导入校验路径 ID、写入后可读回，并拒绝冲突', async () => {
+test('人设导入拒绝路径穿越文件名', async () => {
   await withPanel(async ({ app }) => {
     const invalid = await app.request('/api/personas/import', {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: '../escape.md', markdown: '# 不可写' }),
+      body: JSON.stringify({ filename: '../escape.md', text: '来源文本' }),
     });
     assert.equal(invalid.status, 400);
-
-    const imported = await app.request('/api/personas/import', {
-      method: 'POST',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: 'new-card.md', markdown: '# 新人设\n你好。' }),
-    });
-    assert.equal(imported.status, 201);
-    const readBack = await app.request('/api/personas/new-card', { headers: authHeaders() });
-    assert.equal(readBack.status, 200);
-    assert.equal((await readBack.json() as { markdown: string }).markdown, '# 新人设\n你好。');
-
-    const conflict = await app.request('/api/personas/import', {
-      method: 'POST',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: 'new-card.md', markdown: '# 覆盖' }),
-    });
-    assert.equal(conflict.status, 409);
   });
 });
 

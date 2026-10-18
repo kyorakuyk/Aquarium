@@ -63,6 +63,8 @@
 2. 尚未在用户机器上实际连通 SnowLuma 验证。
 3. 上述文件尚未提交（`git status` 显示 `.gitignore`、`DESIGN.md` 已修改，其余未跟踪）。
 
+**托管登录识别延迟（V12 待验证假设）**：SnowLuma 通过 QQ 快速登录端口（4301–4310）的 `pt_get_uins` 识别账号；当前推测是它只在返回恰好一个 UIN 时确认身份，主号和小号同时登录可能返回两个 UIN 而暂时被判为未知。此判断须由 PID 探测诊断日志验证，按 SnowLuma 侧行为处理，不改动 `reference/SnowLuma/`；Aquarium 侧以缩短等待扫描间隔和记录探测结果来减少等待并确认原因。
+
 ---
 
 ## 3. 架构与目录（M1 目标形态）
@@ -331,3 +333,44 @@ AQUARIUM_PANEL_PASSWORD=
 - （2026-10-12 审查）**`config` ↔ `core` 目录互相引用**：`config` 只用到 `core/logger.ts` 与 `core/events.ts`。将来把这两个文件移到 `src/shared/`，使依赖变为单向。
 - （2026-10-12 审查）**`core` 依赖 OpenAI 类型**：`core/pipeline.ts`、`core/prompt.ts` 直接使用 `openai` 包的消息类型。接入 CLI 后端（M4）前，在 `src/llm/` 定义自有的 `ChatMessage` 类型并替换。
 - （2026-10-12 审查）**适配器断线重连后不再校验登录账号**：只在首次 `connect` 时校验。
+
+## 9. 好感度数据流（M2-C）
+- 主键为 `(account,userId)`，群聊和私聊共用关系；bot 自身不建档。
+- 被叫通过频率限制后记 `called`，每人每天最多 3 次，原始 +0.5 仍受自动事件日上限约束。
+- 情绪评估成功后，非零 `appliedDv` 按 ×20 转为好感变化，单次最多 ±3。
+- 自动事件分别记入 `affinity_events` 的原始 `delta` 与限额后的 `applied`；状态写入 `affinity_state`。
+- 查询值按距上次自动互动天数向 50 回落；只在新自动事件发生时写回回落结果。
+- 五档使用共享 `nextLevel` 防抖；档位转换另记 `band` 事件。
+- 回复仅注入触发发送者的非 neutral `affinity` 块，名字以 JSON 引号包裹。
+- 控制台手动设置写 `manual` 事件，不受自动上限或档位防抖影响。
+
+## 10. 性格底色数据流（M2-D）
+- 人设 YAML `traits` 加载后剥离，不进入 persona 正文；无头默认为全 0，非法档位报 `persona_error`。
+- 非 0 档位按 `order → morality → talk → mind` 取 `prompts/traits.md` 句子，traits 块位于 persona 后、rules 前。
+- 有效话量 `talk' = clamp(persona.talk + session.talkOffset, −2, 2)`；缺省 offset 为 0。
+- 主动判断阈值在原值上减 `0.05 × talk'`，再限制到 `[0.2, 0.9]`。
+- 拆条上限：`talk' ≤ −2` 为 1 条，`talk' = −1` 为 2 条，其余 3 条；溢出内容并入最后一条。
+- `talkOffset` 从全局默认继承，可按群覆盖；面板私聊不显示该控制项。
+
+## 11. 作息与精力数据流
+
+- 顶层 `sleep` 默认关闭，时间为本地 `HH:mm`；`sleepPlan` 支持跨午夜，非法或相同时间视为醒着，`cycleKey` 为入睡日期。
+- 入睡后消息仍先持久化，再以 `asleep` 跳过回复和主动判断；重放不拦截。主人在叫 bot 的消息里含醒词可叫醒 30 分钟，主人发言续期；重启丢失，非主人无效。
+- 每分钟检测 awake→sleep；对近 2 小时 bot 发过言的已启用会话取最近前 2，随机发送 `prompts/sleep.md`，不调模型，复用 deliverStep/闭嘴/频率限制；cycleKey 内存去重并记 `goodnight` decision，启动已睡不补发，关机清理定时器。
+- 醒着时 `energy=clamp(1−0.8×(now−wakeAt)/(bedAt−wakeAt)−0.01×account近60分钟回复数,0,1)`；作息关闭恒为 1，睡着时不计算。
+- `energy<0.35` 时 float 加“有点困”（与 arousal 词用顿号）；`energy<0.25` 时在 talk 偏移后、阈值限幅前加 0.1。控制台通过 `/api/sleep` GET/PATCH 配置，作息卡显示状态、精力和下次变化时间。
+
+## 12. 模型接入、CLI 预热与人设文件（T10）
+
+- API provider 位于 `providers.<id>`，声明 `kind: api`、`baseUrl`、`apiKeyEnv`；真实凭据值仅放本机 `.env`。
+- 模型接口只返回密钥状态 `keyStatus.set/last4` 和 `apiKeyEnv` 名，不返回密钥原文。
+- `slots.<name>` 是按顺序尝试的降级链；条目可设置 `temperature`、`maxTokens` 与 `reasoning`；`reasoningField: 'none'` 不发送 reasoning 参数；调用追踪只记录安全参数。
+- CLI provider 使用 `kind: cli`、`command`、`args`、`timeoutSec`、`prewarm`；命令参数数组执行，不经过 shell。
+- `prewarm` 为每个 CLI provider 保留一个空闲进程；调用后替换，空闲 stdout/stderr 持续排空。
+- 空闲进程意外退出后按指数退避重启；关机时调用 `stopAll()` 清理，自动测试只用假命令。
+- 内置人设位于 `personas/<id>.md`，用户版本位于 `data/personas/<id>.md` 并优先读取。
+- 可选 YAML front matter 的 `traits.order/morality/talk/mind` 为 -2..2 整数，缺省为 0。
+- 主标题用 `# ...`，开头说明紧随其后；运行时剥离 YAML 并将 `{{name}}` 替换为昵称。
+- 标准 `##` 小节依次为：身份、年龄、背景、说话方式、口头禅、常用表情、对熟人、对陌生人、对主人、底线。
+- 口头禅、常用表情、底线用逐行 `- ` 列表；未知 `##` 小节按原顺序保留。
+- 导入使用 `extract` 槽和 `prompts/persona-import.md` 生成未保存草稿；接受后仍需显式保存。

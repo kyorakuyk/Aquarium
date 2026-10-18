@@ -133,6 +133,7 @@ test('callSlot 记录完整 prompt、原始响应和稳定 prompt hash', async (
 
     await callSlot('reply', messages, {
       config,
+      account: groupSession.account,
       costToday: () => 0,
       getClient: () => client,
       now: () => now,
@@ -165,6 +166,7 @@ test('debug 未开启时 callSlot 不写入提示词或响应全文', async () =
 
     await callSlot('reply', [{ role: 'user', content: '不应入库的提示词' }], {
       config,
+      account: groupSession.account,
       costToday: () => 0,
       getClient: () => client,
       now: () => now,
@@ -187,6 +189,7 @@ test('callSlot 为失败降级尝试和成功尝试分别记录 trace', async ()
 
     await callSlot('reply', [{ role: 'user', content: '测试失败 trace' }], {
       config,
+      account: groupSession.account,
       costToday: () => 0,
       getClient: () => client,
       now: () => now,

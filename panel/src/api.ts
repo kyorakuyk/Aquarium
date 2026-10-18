@@ -1,3 +1,5 @@
+import { redactSensitiveText } from './sensitive-text.ts';
+
 export const PASSWORD_KEY = 'aquarium-panel-password';
 export const UNAUTHORIZED_EVENT = 'aquarium-panel-unauthorized';
 
@@ -6,7 +8,7 @@ export interface PanelAccount {
   name: string;
   persona: string;
   snowlumaConfigured: boolean;
-  connectionStatus: 'connecting' | 'online' | 'offline';
+  connectionStatus: 'connecting' | 'online' | 'offline' | 'waiting_login';
   degraded: boolean;
   todayReplyCount: number;
   lastReplyAt: number | null;
@@ -24,6 +26,40 @@ export interface PanelStatus {
   runtime: { pid: number; port: number; uptimeSeconds: number };
 }
 
+export type SessionMode = 'mention_only' | 'active' | 'natural' | 'busy';
+
+export interface ModeScheduleEntry {
+  from: string;
+  to: string;
+  mode: SessionMode;
+}
+
+export interface SessionSettings {
+  mode: SessionMode;
+  modeSchedule: ModeScheduleEntry[];
+  proactiveCooldownSec: number;
+  talkOffset: number;
+  nicknames: string[];
+  contextMessages: number;
+  rate: {
+    perUserPerMinute: number;
+    perSessionPerMinute: number;
+    minIntervalSec: number;
+  };
+  groupNote: string;
+}
+
+export interface PersonaTraits {
+  order: number;
+  morality: number;
+  talk: number;
+  mind: number;
+}
+
+export interface DefaultsView extends SessionSettings {
+  enabled: boolean;
+}
+
 export interface SessionView {
   sessionId: string;
   name: string;
@@ -31,18 +67,9 @@ export interface SessionView {
   degraded: boolean;
   memberCount?: number;
   enabled: boolean;
+  lastMessageAt: number | null;
   overrides: string[];
-  effective: {
-    mode: 'mention_only' | 'active' | 'natural' | 'busy';
-    nicknames: string[];
-    contextMessages: number;
-    rate: {
-      perUserPerMinute: number;
-      perSessionPerMinute: number;
-      minIntervalSec: number;
-    };
-    groupNote: string;
-  };
+  effective: SessionSettings;
 }
 
 export interface DecisionView {
@@ -58,6 +85,100 @@ export interface DecisionView {
   detail: unknown;
   hasDebugTrace: boolean;
   hasPipelineTrace: boolean;
+}
+
+export type MoodBand = 'low' | 'annoyed' | 'calm' | 'happy' | 'excited';
+
+export interface MoodEventView {
+  id: number;
+  time: number;
+  source: 'appraise' | 'rule' | 'band';
+  sessionId: string | null;
+  senderId: number | null;
+  dv: number;
+  da: number;
+  appliedDv: number;
+  appliedDa: number;
+  reason: string;
+  bandBefore: MoodBand | null;
+  bandAfter: MoodBand | null;
+}
+
+export interface MoodView {
+  valence: number;
+  arousal: number;
+  band: MoodBand;
+  bandSince: number | null;
+  events: MoodEventView[];
+}
+
+export type SleepStatus = 'awake' | 'asleep' | 'woken';
+
+export interface SleepView {
+  enabled: boolean;
+  bedtime: string;
+  wake: string;
+  wakeWords: string[];
+  goodnight: boolean;
+  status: SleepStatus;
+  energy: number | null;
+  nextChangeAt: number | null;
+  cycleKey: string;
+  account: number | null;
+}
+
+export type TagStatus = 'candidate' | 'confirmed' | 'rejected' | 'superseded';
+
+export interface TagEvidenceView {
+  messageId: string;
+  time: number;
+  quote: string;
+}
+
+export interface TagView {
+  id: number;
+  text: string;
+  status: TagStatus;
+  source: 'auto' | 'manual';
+  samples: number;
+  activation: number;
+  evidence: TagEvidenceView[];
+  firstSeen: number;
+  lastSeen: number;
+}
+
+export interface ImpressionsView {
+  sessionId: string;
+  groupTags: TagView[];
+  members: Array<{ userId: number; name: string; affinity: AffinityView; tags: TagView[] }>;
+}
+
+export type AffinityLevel = 'cold' | 'cool' | 'neutral' | 'warm' | 'close';
+
+export interface AffinityView {
+  userId: number;
+  name: string;
+  value: number;
+  level: AffinityLevel;
+  lastInteractionAt: number | null;
+}
+
+export interface AffinityEventView {
+  id: number;
+  account: number;
+  userId: number;
+  time: number;
+  source: 'appraise' | 'called' | 'manual' | 'band';
+  sessionId: string | null;
+  delta: number;
+  applied: number;
+  reason: string;
+  levelBefore: AffinityLevel | null;
+  levelAfter: AffinityLevel | null;
+}
+
+export interface AffinityDetailView extends AffinityView {
+  events: AffinityEventView[];
 }
 
 export interface TraceView {
@@ -79,6 +200,7 @@ export interface PipelineStepTraceView {
   startedAt: number;
   durationMs: number;
   summary: string;
+  detail?: unknown;
 }
 
 export interface DecisionReplayView {
@@ -111,6 +233,78 @@ export interface UsageView {
   outputTokens: number;
   costCny: number;
   averageLatencyMs: number;
+}
+
+export type UsageRange = 'today' | '7d' | '30d';
+
+export interface UsageSlotView {
+  slot: string;
+  calls: number;
+  costCny: number;
+  avgLatencyMs: number;
+}
+
+export interface UsageRowView {
+  provider: string;
+  account: number | null;
+  calls: number;
+  costCny: number;
+  avgLatencyMs: number;
+  cacheHitRatio: number | null;
+  daily: number[];
+  bySlot: UsageSlotView[];
+}
+
+export interface UsageRangeView {
+  totals: {
+    costCny: number;
+    calls: number;
+    cacheHitRatio: number | null;
+    budgetToday: { used: number; limit: number };
+  };
+  rows: UsageRowView[];
+}
+
+export type ModelReasoning = 'off' | 'low' | 'medium' | 'high';
+export type CliRuntimeState = 'stopped' | 'starting' | 'ready' | 'busy' | 'restarting';
+
+export interface KeyStatusView {
+  set: boolean;
+  last4: string;
+}
+
+export interface CliRuntimeView {
+  state: CliRuntimeState;
+  pid: number | null;
+  served: number;
+}
+
+export interface ModelProviderView {
+  id: string;
+  kind: 'api' | 'cli';
+  label: string;
+  keyStatus: KeyStatusView;
+  baseUrl?: string;
+  reasoningField?: string;
+  apiKeyEnv?: string;
+  command?: string;
+  args?: string[];
+  prewarm?: boolean;
+  timeoutSec?: number;
+  runtime?: CliRuntimeView;
+}
+
+export interface ModelSlotEntryView {
+  provider: string;
+  model: string;
+  temperature?: number;
+  maxTokens?: number;
+  reasoning: ModelReasoning;
+}
+
+export interface ModelsView {
+  providers: ModelProviderView[];
+  slots: Record<string, ModelSlotEntryView[]>;
 }
 
 export interface DecisionStep {
@@ -151,7 +345,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     let message = `请求失败（${response.status}）`;
     try {
       const body = await response.json() as { error?: unknown };
-      if (typeof body.error === 'string') message = body.error;
+      if (typeof body.error === 'string') message = redactSensitiveText(body.error);
     } catch {
       // Keep the generic status message for non-JSON errors.
     }

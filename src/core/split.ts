@@ -167,7 +167,7 @@ function mergeAdjacentParts(parts: ReplyPart[]): ReplyPart[] {
   return merged;
 }
 
-export function splitReply(text: string): string[] {
+export function splitReply(text: string, maxParts: 1 | 2 | 3 = MAX_PARTS): string[] {
   if (characterCount(text) <= MAX_PART_LENGTH) return text === '' ? [] : [text];
 
   const paragraphs = text.split(/\r\n|\r|\n/u);
@@ -183,10 +183,10 @@ export function splitReply(text: string): string[] {
     })));
   });
   const merged = mergeAdjacentParts(attachPunctuationOnlyParts(parts));
-  if (merged.length <= MAX_PARTS) return merged.map((part) => part.text);
+  if (merged.length <= maxParts) return merged.map((part) => part.text);
 
-  let last = merged[MAX_PARTS - 1];
-  if (!last) return merged.slice(0, MAX_PARTS).map((part) => part.text);
-  for (const extra of merged.slice(MAX_PARTS)) last = joinParts(last, extra);
-  return [...merged.slice(0, MAX_PARTS - 1), last].map((part) => part.text);
+  let last = merged[maxParts - 1];
+  if (!last) return merged.slice(0, maxParts).map((part) => part.text);
+  for (const extra of merged.slice(maxParts)) last = joinParts(last, extra);
+  return [...merged.slice(0, maxParts - 1), last].map((part) => part.text);
 }

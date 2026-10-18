@@ -2,8 +2,13 @@ import { createRateLimiter } from './rate-limit.ts';
 import { promptTemplateStore } from './prompt-templates.ts';
 import { hashPromptMessages } from './prompt.ts';
 import { isDebugEnabled } from '../config/debug.ts';
+import { createIdleBackoff } from './activity/backoff.ts';
+import { createActivityThreshold } from './activity/threshold.ts';
+import { resolveMode } from './activity/mode.ts';
+import { createSleepWakeState } from './sleep.ts';
 import { callSlot } from '../llm/slots.ts';
-import { sessionId, type IncomingMessage } from './events.ts';
+import { resolveSession } from '../config/resolve.ts';
+import { sessionId, type IncomingMessage, type SessionKey } from './events.ts';
 import { contextStep } from './steps/context.ts';
 import { deliverStep, replayDeliverStep } from './steps/deliver.ts';
 import { gateStep } from './steps/gate.ts';
@@ -40,6 +45,12 @@ const steps: Array<(ctx: StepContext) => Promise<StepResult>> = [
 ];
 
 export function createMessagePipeline(options: MessagePipelineOptions) {
+  const pipelineOptions: MessagePipelineOptions = {
+    ...options,
+    idleBackoff: options.idleBackoff ?? createIdleBackoff(),
+    activityThreshold: options.activityThreshold ?? createActivityThreshold(),
+    sleepWakeState: options.sleepWakeState ?? createSleepWakeState(),
+  };
   const now = options.now ?? Date.now;
   const wait = options.wait ?? ((milliseconds: number) => new Promise<void>((resolve) => {
     setTimeout(resolve, milliseconds);
@@ -48,7 +59,75 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
   const modelCall = options.callModel ?? callSlot;
   const rateLimiter = createRateLimiter(now);
 
-  return async function processMessage(
+  async function sendSystemReply(session: SessionKey, text: string, cycleKey: string): Promise<boolean> {
+    const config = pipelineOptions.getConfig();
+    const settings = resolveSession(config, session);
+    if (!config.sleep.enabled || !config.sleep.goodnight || !settings.enabled || pipelineOptions.isMuted?.(session)) {
+      return false;
+    }
+
+    const sentAt = now();
+    if (!rateLimiter.check(session, config.owner, settings.rate).allowed) return false;
+    const currentSessionId = sessionId(session);
+    const nickname = pipelineOptions.getNickname().trim() || String(session.account);
+    const message: IncomingMessage = {
+      session,
+      messageId: `sleep-goodnight-${cycleKey}-${session.kind}-${session.peer}`,
+      senderId: config.owner,
+      senderName: nickname,
+      segments: [{ type: 'text', text }],
+      plainText: text,
+      mentionsSelf: false,
+      replyToSelf: false,
+      time: sentAt,
+    };
+    const context: StepContext = {
+      message,
+      processOptions: { quoteReplyTo: false },
+      currentSessionId,
+      options: pipelineOptions,
+      now,
+      wait,
+      random,
+      modelCall,
+      rateLimiter,
+      trace: [],
+      state: {
+        config,
+        settings: { ...settings, mode: resolveMode(settings, sentAt) },
+        nickname,
+        result: {
+          text,
+          provider: 'local',
+          model: 'sleep-goodnight',
+          usage: { inputTokens: 0, cachedTokens: 0, outputTokens: 0, costCny: 0 },
+        },
+        replyText: text,
+        sentMessageIds: [],
+        promptTemplates: pipelineOptions.getPromptTemplates?.() ?? promptTemplateStore.get(),
+        promptFingerprints: [],
+      },
+    };
+    const result = await deliverStep(context);
+    if (context.state.sentMessageIds.length > 0) {
+      try {
+        pipelineOptions.repository.recordDecision({
+          time: now(),
+          sessionId: currentSessionId,
+          messageId: message.messageId,
+          replied: true,
+          reason: 'goodnight',
+          detail: { cycleKey, sentMessageIds: [...context.state.sentMessageIds] },
+        });
+      } catch (error) {
+        pipelineOptions.onError?.(error, message);
+      }
+    }
+    if (result.next) return false;
+    return result.reason === 'replied' && result.replied === true;
+  }
+
+  async function processMessage(
     message: IncomingMessage,
     processOptions: ProcessMessageOptions = {},
   ): Promise<PipelineResult> {
@@ -61,9 +140,9 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
       const state: StepContext['state'] = { sentMessageIds: [], promptTemplates, promptFingerprints };
       runState = state;
       const trackedModelCall: PipelineModelCall = async (slot, messages, callOptions) => {
-        const templateVersion = slot === 'vision'
-          ? promptTemplates.vision.version
-          : promptTemplates.replySystem.version;
+        const templateVersion = slot === 'judge'
+          ? promptTemplates.judge.version
+          : slot === 'vision' ? promptTemplates.vision.version : promptTemplates.replySystem.version;
         const promptHash = hashPromptMessages(messages);
         promptFingerprints.push({ slot, templateVersion, promptHash });
         state.promptHash = promptHash;
@@ -73,7 +152,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
         message,
         processOptions,
         currentSessionId,
-        options,
+        options: pipelineOptions,
         now,
         wait,
         random,
@@ -86,10 +165,14 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
         const fingerprint = {
           templateVersion: promptTemplates.replySystem.version,
           visionTemplateVersion: promptTemplates.vision.version,
+          judgeTemplateVersion: promptTemplates.judge.version,
+          affectTemplateVersion: promptTemplates.affect.version,
           ...(ctx.state.promptHash ? { promptHash: ctx.state.promptHash } : {}),
           ...(ctx.state.promptFingerprints.length > 0
             ? { promptFingerprints: [...ctx.state.promptFingerprints] }
             : {}),
+          ...(ctx.state.promptBlocks ? { promptBlocks: [...ctx.state.promptBlocks] } : {}),
+          ...(ctx.state.droppedTags ? { droppedTags: ctx.state.droppedTags } : {}),
         };
         if (typeof detail === 'object' && detail !== null && !Array.isArray(detail)) {
           return { ...detail, ...fingerprint };
@@ -101,6 +184,14 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
         detail: unknown = {},
         replied = false,
       ): PipelineResult => {
+        const decisionDetail = runState?.activityDecisionDetail
+          ? {
+            ...runState.activityDecisionDetail,
+            ...(typeof detail === 'object' && detail !== null && !Array.isArray(detail)
+              ? detail as Record<string, unknown>
+              : detail === undefined ? {} : { detail }),
+          }
+          : detail;
         if (!processOptions.replay) {
           options.repository.recordDecision({
             time: now(),
@@ -108,7 +199,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
             messageId: message.messageId,
             replied,
             reason,
-            detail: withPromptFingerprint(detail),
+            detail: withPromptFingerprint(decisionDetail),
           });
           return { replied, reason };
         }
@@ -135,12 +226,45 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
       const activeSteps = processOptions.replay
         ? [...steps.slice(0, -1), replayDeliverStep]
         : steps;
+      const appraiseAfterReply = (): void => {
+        const moodTask = pipelineOptions.moodService?.afterReply({
+          account: message.session.account,
+          sessionId: currentSessionId,
+          senderId: message.senderId,
+          now: now(),
+          template: promptTemplates.appraise,
+        });
+        if (!moodTask) return;
+        void moodTask.catch((error: unknown) => {
+          try {
+            options.onError?.(error, message);
+          } catch {
+            // 后台情绪评估失败不能影响回复。
+          }
+        });
+      };
       for (const step of activeSteps) {
         const result = await step(ctx);
-        if (!result.next) return recordDecision(result.reason, result.detail, result.replied ?? false);
+        if (!result.next) {
+          const decision = recordDecision(result.reason, result.detail, result.replied ?? false);
+          if (!processOptions.replay && result.reason === 'replied' && result.replied === true) {
+            appraiseAfterReply();
+          }
+          return decision;
+        }
       }
       return recordDecision('replied', {}, true);
     } finally {
+      if (!processOptions.replay && runState && runState.sentMessageIds.length > 0) {
+        pipelineOptions.idleBackoff?.recordReply(currentSessionId);
+        if (runState.proactiveMode) {
+          pipelineOptions.activityThreshold?.recordProactiveReply(
+            currentSessionId,
+            runState.proactiveMode,
+            now(),
+          );
+        }
+      }
       try {
         const config = runState?.config ?? options.getConfig();
         if (!processOptions.replay && isDebugEnabled(config, currentSessionId)) {
@@ -155,5 +279,6 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
         options.onError?.(error, message);
       }
     }
-  };
+  }
+  return Object.assign(processMessage, { sendSystemReply });
 }

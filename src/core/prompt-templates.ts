@@ -12,6 +12,8 @@ export interface ReplySystemTemplate extends PromptTemplate {
   system: string;
   groupNote: string;
   request: string;
+  groupTags: string;
+  memberTags: string;
 }
 
 export interface VisionPromptTemplate extends PromptTemplate {
@@ -19,9 +21,70 @@ export interface VisionPromptTemplate extends PromptTemplate {
   user: string;
 }
 
+export interface JudgePromptTemplate extends PromptTemplate {
+  system: string;
+  user: string;
+}
+
+export interface AppraisePromptTemplate extends PromptTemplate {
+  system: string;
+  user: string;
+}
+
+export interface ExtractTagsPromptTemplate extends PromptTemplate {
+  system: string;
+  user: string;
+}
+
+export interface PersonaImportPromptTemplate extends PromptTemplate {
+  system: string;
+  user: string;
+}
+
+export interface AffectPromptTemplate extends PromptTemplate {
+  mood: {
+    low: string;
+    annoyed: string;
+    calm: string;
+    happy: string;
+    excited: string;
+  };
+  float: {
+    arousalLow: string;
+    arousalHigh: string;
+    wrap: string;
+  };
+  affinity: {
+    cold: string;
+    cool: string;
+    warm: string;
+    close: string;
+  };
+}
+
+export type TraitPromptLevel = 'm2' | 'm1' | 'p1' | 'p2';
+
+export interface TraitsPromptTemplate extends PromptTemplate {
+  order: Record<TraitPromptLevel, string>;
+  morality: Record<TraitPromptLevel, string>;
+  talk: Record<TraitPromptLevel, string>;
+  mind: Record<TraitPromptLevel, string>;
+}
+
+export interface SleepPromptTemplate extends PromptTemplate {
+  goodnight: readonly string[];
+}
+
 export interface PromptTemplateSet {
   replySystem: ReplySystemTemplate;
+  judge: JudgePromptTemplate;
   vision: VisionPromptTemplate;
+  appraise: AppraisePromptTemplate;
+  affect: AffectPromptTemplate;
+  traits: TraitsPromptTemplate;
+  sleep: SleepPromptTemplate;
+  extractTags: ExtractTagsPromptTemplate;
+  personaImport: PersonaImportPromptTemplate;
 }
 
 export interface PromptTemplateStore {
@@ -62,18 +125,24 @@ function parseReplySystemTemplate(template: PromptTemplate): ReplySystemTemplate
   const fields = parseTemplateFields(template, 'reply-system.md');
   if (typeof fields.system !== 'string' || fields.system.length === 0
     || typeof fields.groupNote !== 'string' || fields.groupNote.length === 0
-    || typeof fields.request !== 'string' || fields.request.length === 0) {
-    throw new Error('reply-system.md 必须包含非空 system、groupNote 和 request 文本');
+    || typeof fields.request !== 'string' || fields.request.length === 0
+    || typeof fields.groupTags !== 'string' || fields.groupTags.length === 0
+    || typeof fields.memberTags !== 'string' || fields.memberTags.length === 0) {
+    throw new Error('reply-system.md 必须包含非空 system、groupNote、request、groupTags 和 memberTags 文本');
   }
   const replySystem = {
     ...template,
     system: fields.system,
     groupNote: fields.groupNote,
     request: fields.request,
+    groupTags: fields.groupTags,
+    memberTags: fields.memberTags,
   };
-  validatePlaceholders('reply-system.md', replySystem.system, ['ownerRule'], ['ownerRule']);
+  validatePlaceholders('reply-system.md', replySystem.system, ['ownerRule', 'modeHint'], ['ownerRule', 'modeHint']);
   validatePlaceholders('reply-system.md', replySystem.groupNote, ['groupNote'], ['groupNote']);
   validatePlaceholders('reply-system.md', replySystem.request, [], []);
+  validatePlaceholders('reply-system.md', replySystem.groupTags, ['tags'], ['tags']);
+  validatePlaceholders('reply-system.md', replySystem.memberTags, ['name', 'tags'], ['name', 'tags']);
   return replySystem;
 }
 
@@ -84,6 +153,132 @@ function parseVisionTemplate(template: PromptTemplate): VisionPromptTemplate {
     throw new Error('vision.md 必须包含非空 system 和 user 文本');
   }
   return { ...template, system: fields.system, user: fields.user };
+}
+
+function parseJudgeTemplate(template: PromptTemplate): JudgePromptTemplate {
+  const fields = parseTemplateFields(template, 'judge.md');
+  if (typeof fields.system !== 'string' || fields.system.length === 0
+    || typeof fields.user !== 'string' || fields.user.length === 0) {
+    throw new Error('judge.md 必须包含非空 system 和 user 文本');
+  }
+  const judge = { ...template, system: fields.system, user: fields.user };
+  validatePlaceholders('judge.md', judge.system, [], []);
+  validatePlaceholders('judge.md', judge.user, ['context'], ['context']);
+  return judge;
+}
+
+function parseAppraiseTemplate(template: PromptTemplate): AppraisePromptTemplate {
+  const fields = parseTemplateFields(template, 'appraise.md');
+  if (typeof fields.system !== 'string' || fields.system.length === 0
+    || typeof fields.user !== 'string' || fields.user.length === 0) {
+    throw new Error('appraise.md 必须包含非空 system 和 user 文本');
+  }
+  const appraise = { ...template, system: fields.system, user: fields.user };
+  validatePlaceholders('appraise.md', appraise.system, [], []);
+  validatePlaceholders('appraise.md', appraise.user, ['context'], ['context']);
+  return appraise;
+}
+
+const affectMoodKeys = ['low', 'annoyed', 'calm', 'happy', 'excited'] as const;
+const traitPromptLevels = ['m2', 'm1', 'p1', 'p2'] as const;
+
+function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
+  const fields = parseTemplateFields(template, 'affect.md');
+  const moodField = fields.mood;
+  const floatField = fields.float;
+  const affinityField = fields.affinity;
+  if (!moodField || typeof moodField !== 'object' || Array.isArray(moodField)
+    || !floatField || typeof floatField !== 'object' || Array.isArray(floatField)
+    || !affinityField || typeof affinityField !== 'object' || Array.isArray(affinityField)) {
+    throw new Error('affect.md 必须包含 mood、float 与 affinity 字段');
+  }
+  const moodRecord = moodField as Record<string, unknown>;
+  const mood = {} as AffectPromptTemplate['mood'];
+  for (const key of affectMoodKeys) {
+    const value = moodRecord[key];
+    if (typeof value !== 'string') throw new Error(`affect.md 缺少 mood.${key} 文本`);
+    mood[key] = value;
+  }
+  const floatRecord = floatField as Record<string, unknown>;
+  if (typeof floatRecord.arousalLow !== 'string' || typeof floatRecord.arousalHigh !== 'string'
+    || typeof floatRecord.wrap !== 'string') {
+    throw new Error('affect.md 必须包含 float.arousalLow、float.arousalHigh 与 float.wrap 文本');
+  }
+  const affinityRecord = affinityField as Record<string, unknown>;
+  const affinity = {} as AffectPromptTemplate['affinity'];
+  for (const key of ['cold', 'cool', 'warm', 'close'] as const) {
+    const value = affinityRecord[key];
+    if (typeof value !== 'string') throw new Error(`affect.md 缺少 affinity.${key} 文本`);
+    affinity[key] = value;
+    validatePlaceholders('affect.md', value, ['name'], ['name']);
+  }
+  const affect = {
+    ...template,
+    mood,
+    float: {
+      arousalLow: floatRecord.arousalLow,
+      arousalHigh: floatRecord.arousalHigh,
+      wrap: floatRecord.wrap,
+    },
+    affinity,
+  };
+  validatePlaceholders('affect.md', affect.float.wrap, ['floats'], ['floats']);
+  return affect;
+}
+
+function parseTraitsTemplate(template: PromptTemplate): TraitsPromptTemplate {
+  const fields = parseTemplateFields(template, 'traits.md');
+  const parsed = {} as Pick<TraitsPromptTemplate, 'order' | 'morality' | 'talk' | 'mind'>;
+  for (const dimension of ['order', 'morality', 'talk', 'mind'] as const) {
+    const field = fields[dimension];
+    if (!field || typeof field !== 'object' || Array.isArray(field)) {
+      throw new Error(`traits.md 必须包含 ${dimension} 档位文本`);
+    }
+    const values = field as Record<string, unknown>;
+    const levels = {} as Record<TraitPromptLevel, string>;
+    for (const level of traitPromptLevels) {
+      const value = values[level];
+      if (typeof value !== 'string' || value.length === 0) {
+        throw new Error(`traits.md 缺少 ${dimension}.${level} 文本`);
+      }
+      levels[level] = value;
+    }
+    parsed[dimension] = levels;
+  }
+  return { ...template, ...parsed };
+}
+
+function parseSleepTemplate(template: PromptTemplate): SleepPromptTemplate {
+  const fields = parseTemplateFields(template, 'sleep.md');
+  if (!Array.isArray(fields.goodnight) || fields.goodnight.length === 0
+    || fields.goodnight.some((value) => typeof value !== 'string' || value.trim().length === 0)) {
+    throw new Error('sleep.md 必须包含非空 goodnight 文本列表');
+  }
+  return { ...template, goodnight: fields.goodnight as string[] };
+}
+
+function parseExtractTagsTemplate(template: PromptTemplate): ExtractTagsPromptTemplate {
+  const fields = parseTemplateFields(template, 'extract-tags.md');
+  if (typeof fields.system !== 'string' || fields.system.length === 0
+    || typeof fields.user !== 'string' || fields.user.length === 0) {
+    throw new Error('extract-tags.md 必须包含非空 system 和 user 文本');
+  }
+  const extractTags = { ...template, system: fields.system, user: fields.user };
+  validatePlaceholders('extract-tags.md', extractTags.system, [], []);
+  validatePlaceholders('extract-tags.md', extractTags.user, ['context', 'existing'], ['context', 'existing']);
+  return extractTags;
+}
+
+function parsePersonaImportTemplate(template: PromptTemplate): PersonaImportPromptTemplate {
+  const fields = parseTemplateFields(template, 'persona-import.md');
+  if (typeof fields.system !== 'string' || fields.system.length === 0
+    || typeof fields.user !== 'string' || fields.user.length === 0) {
+    throw new Error('persona-import.md 必须包含非空 system 和 user 文本');
+  }
+  const personaImport = { ...template, system: fields.system, user: fields.user };
+  validatePlaceholders('persona-import.md', personaImport.system, [], []);
+  validatePlaceholders('persona-import.md', personaImport.user, ['text'], ['text']);
+  return personaImport;
 }
 
 function validatePlaceholders(
@@ -105,10 +300,24 @@ function validatePlaceholders(
 
 function readPromptTemplateSet(root: string): PromptTemplateSet {
   const replySystem = parseReplySystemTemplate(readTemplate(root, 'reply-system.md'));
+  const judge = parseJudgeTemplate(readTemplate(root, 'judge.md'));
   const vision = parseVisionTemplate(readTemplate(root, 'vision.md'));
+  const appraise = parseAppraiseTemplate(readTemplate(root, 'appraise.md'));
+  const affect = parseAffectTemplate(readTemplate(root, 'affect.md'));
+  const traits = parseTraitsTemplate(readTemplate(root, 'traits.md'));
+  const sleep = parseSleepTemplate(readTemplate(root, 'sleep.md'));
+  const extractTags = parseExtractTagsTemplate(readTemplate(root, 'extract-tags.md'));
+  const personaImport = parsePersonaImportTemplate(readTemplate(root, 'persona-import.md'));
   return Object.freeze({
     replySystem: Object.freeze(replySystem),
+    judge: Object.freeze(judge),
     vision: Object.freeze(vision),
+    appraise: Object.freeze(appraise),
+    affect: Object.freeze(affect),
+    traits: Object.freeze(traits),
+    sleep: Object.freeze({ ...sleep, goodnight: Object.freeze(sleep.goodnight) }),
+    extractTags: Object.freeze(extractTags),
+    personaImport: Object.freeze(personaImport),
   });
 }
 

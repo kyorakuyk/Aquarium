@@ -12,7 +12,7 @@ export interface ContactFriend {
   remark?: string;
 }
 
-export type AdapterStatus = 'connecting' | 'online' | 'offline';
+export type AdapterStatus = 'connecting' | 'online' | 'offline' | 'waiting_login';
 
 export interface ProtocolAdapter {
   readonly account: number;

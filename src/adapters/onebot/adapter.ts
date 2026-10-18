@@ -115,6 +115,9 @@ function numericMessageId(messageId: string): number {
 const INITIAL_RETRY_DELAY_MS = 2_000;
 const MAX_RETRY_DELAY_MS = 30_000;
 const ADAPTER_ACTION_TIMEOUT_MS = 10_000;
+const QUICK_RECONNECT_WINDOW_MS = 30_000;
+const QUICK_RETRY_DELAY_MS = 1_000;
+const QUICK_CONNECT_TIMEOUT_MS = 3_000;
 
 class AccountMismatchError extends Error {}
 
@@ -162,9 +165,11 @@ export class OneBotAdapter implements ProtocolAdapter {
   private connectionInFlight: Promise<void> | undefined;
   private retryAttemptInFlight: Promise<void> | undefined;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
+  private quickReconnectTimer: ReturnType<typeof setTimeout> | undefined;
   private retryAttempts = 0;
   private connectionGeneration = 0;
   private retryImmediatelyRequested = false;
+  private quickReconnectActive = false;
   private started = false;
 
   constructor(
@@ -243,6 +248,7 @@ export class OneBotAdapter implements ProtocolAdapter {
   }
 
   async connect(): Promise<void> {
+    if (this.status === 'waiting_login') throw new AdapterOfflineError(this.account);
     if (this.connectionInFlight) return this.connectionInFlight;
     const generation = this.connectionGeneration;
     const attempt = this.connectAndVerify(generation).finally(() => {
@@ -259,15 +265,28 @@ export class OneBotAdapter implements ProtocolAdapter {
     this.runRetryAttempt();
   }
 
+  waitForLogin(): void {
+    if (this.started) return;
+    this.started = true;
+    this.connectionGeneration += 1;
+    this.clearRetry();
+    this.clearQuickReconnectWindow();
+    this.accountVerified = false;
+    this.nickname = '';
+    this.setStatus('waiting_login');
+  }
+
   retryNow(): void {
     if (!this.started) return;
     if (this.status === 'online' && this.client.isConnected) return;
+    if (this.status === 'waiting_login') this.setStatus('offline');
     if (this.status === 'online') {
       this.clientRequiresReplacement = true;
       this.accountVerified = false;
       this.nickname = '';
       this.setStatus('offline');
     }
+    this.startQuickReconnectWindow();
     this.clearRetry();
     if (this.retryAttemptInFlight) {
       this.retryImmediatelyRequested = true;
@@ -281,10 +300,13 @@ export class OneBotAdapter implements ProtocolAdapter {
     if (this.clientRequiresReplacement) this.replaceClient();
     const client = this.client;
     this.setStatus('connecting');
+    const connectionTimeoutMs = this.quickReconnectActive
+      ? QUICK_CONNECT_TIMEOUT_MS
+      : ADAPTER_ACTION_TIMEOUT_MS;
     try {
-      await this.withActionTimeout('connect', () => client.connect(), false);
+      await this.withActionTimeout('connect', () => client.connect(), false, connectionTimeoutMs);
       if (client !== this.client || generation !== this.connectionGeneration) return;
-      const login = await this.withActionTimeout('get_login_info', () => client.getLoginInfo(), false);
+      const login = await this.withActionTimeout('get_login_info', () => client.getLoginInfo(), false, connectionTimeoutMs);
       if (client !== this.client || generation !== this.connectionGeneration) return;
       if (login.user_id !== this.account) {
         throw new AccountMismatchError(`登录账号 ${login.user_id} 与配置账号 ${this.account} 不一致，拒绝工作`);
@@ -293,6 +315,7 @@ export class OneBotAdapter implements ProtocolAdapter {
       this.nickname = login.nickname;
       this.retryAttempts = 0;
       this.clearRetry();
+      this.clearQuickReconnectWindow();
       this.retryImmediatelyRequested = false;
       this.setStatus('online');
     } catch (error) {
@@ -314,6 +337,7 @@ export class OneBotAdapter implements ProtocolAdapter {
     this.retryImmediatelyRequested = false;
     this.connectionGeneration += 1;
     this.clearRetry();
+    this.clearQuickReconnectWindow();
     this.clientRequiresReplacement = true;
     this.accountVerified = false;
     this.client.close();
@@ -342,12 +366,33 @@ export class OneBotAdapter implements ProtocolAdapter {
 
   private scheduleRetry(): void {
     if (!this.started || this.retryTimer !== undefined) return;
-    const delay = Math.min(INITIAL_RETRY_DELAY_MS * (2 ** this.retryAttempts), MAX_RETRY_DELAY_MS);
-    this.retryAttempts += 1;
+    const delay = this.quickReconnectActive
+      ? QUICK_RETRY_DELAY_MS
+      : Math.min(INITIAL_RETRY_DELAY_MS * (2 ** this.retryAttempts), MAX_RETRY_DELAY_MS);
+    if (!this.quickReconnectActive) this.retryAttempts += 1;
     this.retryTimer = this.setRetryTimer(() => {
       this.retryTimer = undefined;
       this.runRetryAttempt();
     }, delay);
+  }
+
+  private startQuickReconnectWindow(): void {
+    this.clearQuickReconnectWindow();
+    this.quickReconnectActive = true;
+    this.quickReconnectTimer = this.setRetryTimer(() => {
+      this.quickReconnectTimer = undefined;
+      this.quickReconnectActive = false;
+      if (this.retryTimer === undefined) return;
+      this.clearRetry();
+      this.scheduleRetry();
+    }, QUICK_RECONNECT_WINDOW_MS);
+  }
+
+  private clearQuickReconnectWindow(): void {
+    this.quickReconnectActive = false;
+    if (this.quickReconnectTimer === undefined) return;
+    this.clearRetryTimer(this.quickReconnectTimer);
+    this.quickReconnectTimer = undefined;
   }
 
   private clearRetry(): void {
@@ -473,13 +518,18 @@ export class OneBotAdapter implements ProtocolAdapter {
     if (this.status !== 'online' || !this.client.isConnected) throw new AdapterOfflineError(this.account);
   }
 
-  private async withActionTimeout<T>(action: string, run: () => Promise<T>, requireOnline = true): Promise<T> {
+  private async withActionTimeout<T>(
+    action: string,
+    run: () => Promise<T>,
+    requireOnline = true,
+    timeoutMs = ADAPTER_ACTION_TIMEOUT_MS,
+  ): Promise<T> {
     const client = this.client;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_resolve, reject) => {
       timer = this.setActionTimer(
-        () => reject(new AdapterTimeoutError(action, ADAPTER_ACTION_TIMEOUT_MS)),
-        ADAPTER_ACTION_TIMEOUT_MS,
+        () => reject(new AdapterTimeoutError(action, timeoutMs)),
+        timeoutMs,
       );
     });
     try {

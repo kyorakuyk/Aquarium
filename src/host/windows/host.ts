@@ -23,7 +23,7 @@ export interface WindowsHostOptions {
   clearTimer?: typeof globalThis.clearTimeout;
   setInterval?: typeof globalThis.setInterval;
   clearInterval?: typeof globalThis.clearInterval;
-  log?: (level: 'info' | 'warn' | 'error', message: string) => void;
+  log?: (level: 'debug' | 'info' | 'warn' | 'error', message: string) => void;
 }
 
 export function createWindowsHost(options: WindowsHostOptions): Host {
@@ -76,6 +76,7 @@ export function createWindowsHost(options: WindowsHostOptions): Host {
   const watcher = createQqWatcher({
     targetUins: options.accounts.map((account) => account.uin),
     scanIntervalSec: options.settings.scanIntervalSec,
+    getScanIntervalSec: () => currentStatus === 'waiting_qq_login' ? 2 : options.settings.scanIntervalSec,
     getClient: processManager.webuiClient,
     onScan: recomputeStatus,
     ...(options.onAdapterInjected ? { onInjected: options.onAdapterInjected } : {}),
@@ -86,6 +87,7 @@ export function createWindowsHost(options: WindowsHostOptions): Host {
     setInterval: options.setInterval,
     clearInterval: options.clearInterval,
     log: (message) => options.log?.('warn', message),
+    debug: (message) => options.log?.('debug', message),
   });
   stopWatcher = watcher.stop;
 

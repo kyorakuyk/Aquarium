@@ -1,6 +1,19 @@
-import { useEffect, useRef, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { apiRequest, type PanelStatus } from '../api.ts';
 import type { PageId } from '../components/Sidebar.tsx';
+import { redactSensitiveText } from '../sensitive-text.ts';
+import {
+  buildSections,
+  emptyPersonaSections,
+  parseSections,
+  personaSourceForEditor,
+  personaSourceFromEditor,
+  syncPersonaFormEdit,
+  type PersonaSectionsForm,
+} from '../persona-sections.ts';
+import { PersonaComparisonDialog } from './PersonaComparisonDialog.tsx';
+import { PersonaFields } from './PersonaFields.tsx';
+import { PersonaPreview, type PersonaPreviewResult } from './PersonaPreview.tsx';
 
 interface PersonaCard {
   id: string;
@@ -8,93 +21,237 @@ interface PersonaCard {
   source: 'data' | 'built-in';
 }
 
-function renderPlaceholders(line: string) {
-  return line.split(/(\{\{[^}]+\}\})/gu).map((part, index) => part.startsWith('{{') && part.endsWith('}}')
-    ? <mark className="placeholder-highlight" key={`${part}-${index}`}>{part}</mark>
-    : <span key={`${part}-${index}`}>{part}</span>);
+interface PersonaDocument {
+  markdown: string;
+  traits: PersonaSectionsForm['traits'] | null;
 }
 
-function MarkdownPreview({ markdown }: { markdown: string }) {
-  return (
-    <div className="markdown-preview">
-      {markdown.split(/\r?\n/u).map((line, index) => {
-        const heading = /^(#{1,3})\s+(.*)$/u.exec(line);
-        if (heading) {
-          const level = heading[1]?.length ?? 1;
-          const text = renderPlaceholders(heading[2] ?? '');
-          if (level === 1) return <h2 key={index}>{text}</h2>;
-          if (level === 2) return <h3 key={index}>{text}</h3>;
-          return <h4 key={index}>{text}</h4>;
-        }
-        return <p key={index}>{line ? renderPlaceholders(line) : <br />}</p>;
-      })}
-    </div>
-  );
+interface PersonaImportDraft {
+  filename: string;
+  source: string;
+  draft: string;
+  form: PersonaSectionsForm;
+  mappedCount: number;
+  otherCount: number;
 }
+
+const personaIdPattern = /^[a-z0-9_-]+$/u;
 
 export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => void }) {
   const [personas, setPersonas] = useState<PersonaCard[]>([]);
   const [accounts, setAccounts] = useState<PanelStatus['accounts']>([]);
   const [selectedId, setSelectedId] = useState('');
-  const [markdown, setMarkdown] = useState('');
-  const [newId, setNewId] = useState('');
+  const [previewAccountId, setPreviewAccountId] = useState<number | null>(null);
+  const [form, setForm] = useState<PersonaSectionsForm>(() => emptyPersonaSections());
+  const [sourceText, setSourceText] = useState(() => buildSections(emptyPersonaSections()));
+  const [sourceError, setSourceError] = useState('');
+  const [viewMode, setViewMode] = useState<'preview' | 'source'>('preview');
+  const [activeBlockId, setActiveBlockId] = useState('');
+  const [preview, setPreview] = useState<PersonaPreviewResult | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [newId, setNewId] = useState('');
+  const [importDraft, setImportDraft] = useState<PersonaImportDraft | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  async function loadLibrary(preferred?: string) {
+  const loadLibrary = useCallback(async (preferred?: string) => {
     const [items, status] = await Promise.all([
       apiRequest<PersonaCard[]>('/api/personas'),
       apiRequest<PanelStatus>('/api/status'),
     ]);
     setPersonas(items);
     setAccounts(status.accounts);
-    const next = preferred ?? selectedId;
-    if (!items.some((item) => item.id === next)) setSelectedId(items[0]?.id ?? '');
-  }
-
-  useEffect(() => {
-    void loadLibrary().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : '读取人设失败'));
+    setSelectedId((current) => {
+      if (preferred && items.some((item) => item.id === preferred)) return preferred;
+      if (current && items.some((item) => item.id === current)) return current;
+      return items[0]?.id ?? '';
+    });
   }, []);
 
+  const boundAccounts = accounts.filter((account) => account.persona === selectedId);
+  const previewAccount = boundAccounts.find((account) => account.account === previewAccountId) ?? boundAccounts[0];
+  const previewName = previewAccount?.name.trim() || '水族箱';
+
   useEffect(() => {
-    if (!selectedId) {
-      setMarkdown('');
-      return;
-    }
-    void apiRequest<{ markdown: string }>(`/api/personas/${encodeURIComponent(selectedId)}`)
-      .then((result) => { setMarkdown(result.markdown); setSaved(false); })
-      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : '读取人设失败'));
+    setPreviewAccountId(null);
   }, [selectedId]);
 
+  useEffect(() => {
+    let active = true;
+    void loadLibrary().catch((reason: unknown) => {
+      if (active) setError(reason instanceof Error ? reason.message : '读取人设失败');
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [loadLibrary]);
+
+  useEffect(() => {
+    setActiveBlockId('');
+    if (!selectedId) {
+      const empty = emptyPersonaSections();
+      setForm(empty);
+      setSourceText(buildSections(empty));
+      setSourceError('');
+      setViewMode('preview');
+      setDirty(false);
+      setSaved(false);
+      return;
+    }
+    let active = true;
+    void apiRequest<PersonaDocument>(`/api/personas/${encodeURIComponent(selectedId)}`)
+      .then((document) => {
+        if (!active) return;
+        setSourceText(document.markdown);
+        setDirty(false);
+        setSaved(false);
+        try {
+          setForm(parseSections(document.markdown));
+          setSourceError('');
+          setViewMode('preview');
+        } catch {
+          setForm(emptyPersonaSections());
+          setSourceError('源文件 YAML 或 traits 格式无效；请在源文件视图修复后再使用表单。');
+          setViewMode('source');
+        }
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : '读取人设失败');
+      });
+    return () => { active = false; };
+  }, [selectedId]);
+
+  const previewMarkdown = useMemo(() => buildSections(form), [form]);
+  useEffect(() => {
+    if (sourceError) {
+      setPreview(null);
+      setPreviewBusy(false);
+      setPreviewError('');
+      return;
+    }
+    let active = true;
+    const timer = setTimeout(() => {
+      setPreviewBusy(true);
+      setPreviewError('');
+      void apiRequest<PersonaPreviewResult>('/api/personas/preview', {
+        method: 'POST',
+        body: JSON.stringify({ content: previewMarkdown, name: previewName }),
+      }).then((result) => {
+        if (active) setPreview(result);
+      }).catch((reason: unknown) => {
+        if (active) setPreviewError(reason instanceof Error ? reason.message : '预览失败');
+      }).finally(() => {
+        if (active) setPreviewBusy(false);
+      });
+    }, 300);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [previewMarkdown, previewName, sourceError]);
+
+  function updateForm(next: PersonaSectionsForm) {
+    const synchronized = syncPersonaFormEdit(next, viewMode === 'source');
+    setForm(synchronized.form);
+    if (synchronized.sourceText !== undefined) {
+      setSourceText(synchronized.sourceText);
+      setSourceError('');
+    }
+    setDirty(true);
+    setSaved(false);
+    setError('');
+  }
+
+  function changeSource(value: string) {
+    const markdown = personaSourceFromEditor(value);
+    setSourceText(markdown);
+    setDirty(true);
+    setSaved(false);
+    setError('');
+    try {
+      setForm(parseSections(markdown));
+      setSourceError('');
+    } catch {
+      setSourceError('Markdown 或 YAML 暂不可解析；修正后即可切回表单和预览。');
+    }
+  }
+
+  function changeViewMode(next: 'preview' | 'source') {
+    if (next === viewMode) return;
+    if (next === 'source') {
+      setSourceText(buildSections(form));
+      setSourceError('');
+      setViewMode('source');
+      return;
+    }
+    try {
+      const parsed = parseSections(sourceText);
+      setForm(parsed);
+      setSourceError('');
+      setViewMode('preview');
+    } catch {
+      setSourceError('Markdown 或 YAML 暂不可解析；请修复源文件后再切回预览。');
+    }
+  }
+
   async function save() {
-    if (!selectedId) return;
+    if (!selectedId || busy || sourceError) return;
+    let markdown: string;
+    try {
+      if (viewMode === 'source') {
+        setForm(parseSections(sourceText));
+        markdown = sourceText;
+      } else {
+        markdown = buildSections(form);
+      }
+    } catch {
+      setSourceError('Markdown 或 YAML 暂不可解析；请修复后再保存。');
+      setViewMode('source');
+      return;
+    }
     setBusy(true);
     setError('');
+    let savedToServer = false;
     try {
       await apiRequest(`/api/personas/${encodeURIComponent(selectedId)}`, {
         method: 'PUT', body: JSON.stringify({ markdown }),
       });
+      savedToServer = true;
+      setSourceText(markdown);
+      setDirty(false);
       setSaved(true);
+      const savedDocument = await apiRequest<PersonaDocument>(`/api/personas/${encodeURIComponent(selectedId)}`);
+      const savedForm = parseSections(savedDocument.markdown);
+      setForm(savedForm);
+      setSourceText(savedDocument.markdown);
+      setSourceError('');
       await loadLibrary(selectedId);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '保存失败');
+      setError(savedToServer ? '人设已保存，但后续同步未完成。' : reason instanceof Error ? reason.message : '保存失败');
     } finally {
       setBusy(false);
     }
   }
 
   async function importFile(file: File) {
+    if (!file.name.toLowerCase().endsWith('.md')) {
+      setError('请导入 Markdown（.md）文件。');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
       const text = await file.text();
-      const imported = await apiRequest<{ id: string }>('/api/personas/import', {
-        method: 'POST', body: JSON.stringify({ filename: file.name, markdown: text }),
+      const imported = await apiRequest<{ draft: string; mappedCount: number; otherCount: number }>('/api/personas/import', {
+        method: 'POST', body: JSON.stringify({ filename: file.name, text }),
       });
-      await loadLibrary(imported.id);
-      setSelectedId(imported.id);
+      setImportDraft({ filename: file.name, source: text, draft: imported.draft, form: parseSections(imported.draft), mappedCount: imported.mappedCount, otherCount: imported.otherCount });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '导入失败');
     } finally {
@@ -103,21 +260,51 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
     }
   }
 
+  function acceptImport() {
+    if (!importDraft) return;
+    if (!selectedId) {
+      setError('请先创建或选择一个人设，再接受导入草稿。');
+      return;
+    }
+    setForm(importDraft.form);
+    setSourceText(importDraft.draft);
+    setSourceError('');
+    setViewMode('preview');
+    setDirty(true);
+    setSaved(false);
+    setImportDraft(null);
+    setCompareOpen(false);
+    setError('');
+  }
+
+  function selectPersona(id: string) {
+    if (id === selectedId) return;
+    if (dirty && !window.confirm('切换人设会放弃当前未保存更改，仍要继续吗？')) return;
+    setSelectedId(id);
+  }
+
   async function createPersona() {
     const id = newId.trim();
-    if (!/^[a-z0-9_-]+$/u.test(id)) {
+    if (!personaIdPattern.test(id)) {
       setError('人设 ID 只能包含小写英文字母、数字、下划线和连字符。');
       return;
     }
+    if (personas.some((persona) => persona.id === id)) {
+      setError('这个人设 ID 已存在。');
+      return;
+    }
+    if (dirty && !window.confirm('新建人设会放弃当前未保存更改，仍要继续吗？')) return;
+    const newForm = emptyPersonaSections();
+    newForm.introduction = '我是一个友善、自然的聊天伙伴。';
+    const markdown = buildSections(newForm);
     setBusy(true);
     setError('');
     try {
-      await apiRequest(`/api/personas/${encodeURIComponent(id)}`, {
-        method: 'PUT', body: JSON.stringify({ markdown: `# ${id}\n\n{{name}} 是一个友善、自然的聊天伙伴。` }),
-      });
+      await apiRequest(`/api/personas/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ markdown }) });
       setNewId('');
+      setDirty(false);
+      setSaved(false);
       await loadLibrary(id);
-      setSelectedId(id);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '新建失败');
     } finally {
@@ -128,57 +315,98 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   function onDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     const file = event.dataTransfer.files[0];
-    if (file && file.name.toLowerCase().endsWith('.md')) void importFile(file);
-    else setError('请拖入 Markdown（.md）文件。');
+    if (file) void importFile(file);
   }
 
   const selected = personas.find((persona) => persona.id === selectedId);
-  const boundAccounts = accounts.filter((account) => account.persona === selectedId);
+  const saveLabel = busy ? '处理中…' : dirty ? '未保存更改' : saved ? '已保存' : '已同步';
 
   return (
-    <div className="page">
+    <div className="page personas-page">
       <header className="page-header page-header-actions">
-        <div><h1>人设</h1><p className="page-description">把角色的语气、边界和背景写在这里。</p></div>
+        <div><h1>人设</h1><p className="page-description">整理角色背景、语气与边界，并核对实际注入内容。</p></div>
         <div className="header-actions">
-          <button className="button button-secondary" type="button" onClick={() => fileInput.current?.click()}>导入 Markdown</button>
-          <button className="button button-primary" type="button" onClick={() => setNewId(newId || 'new-persona')}>新建人设</button>
+          <button className="button button-secondary" type="button" disabled={busy} onClick={() => fileInput.current?.click()}>导入 Markdown</button>
+          <button className="button button-primary" type="button" disabled={busy} onClick={() => setNewId((current) => current || 'new-persona')}>新建人设</button>
         </div>
       </header>
-      {error && <div className="notice notice-warn" role="alert">{error}</div>}
-      {newId && <div className="new-persona-row"><label htmlFor="new-persona-id">新建 ID</label><input id="new-persona-id" value={newId} onChange={(event) => setNewId(event.currentTarget.value)} /><button className="button button-primary" type="button" disabled={busy} onClick={() => void createPersona()}>创建</button><button className="text-button" type="button" onClick={() => setNewId('')}>取消</button></div>}
-      <input id="persona-file" ref={fileInput} className="visually-hidden" type="file" accept=".md,text/markdown" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) void importFile(file); }} />
-      <div className="persona-workspace">
-        <section className="persona-library panel-card">
-          <div className="section-heading"><div><h2>人设库</h2><p className="muted">{personas.length} 个 Markdown 文件</p></div></div>
-          <div className="persona-list">
-            {personas.map((persona) => {
-              const bound = accounts.filter((account) => account.persona === persona.id);
-              return <button className={`persona-list-item ${selectedId === persona.id ? 'is-selected' : ''}`} type="button" key={persona.id} onClick={() => setSelectedId(persona.id)}>
-                <strong>{persona.id}</strong><span className="mono muted">{persona.filename}</span>
-                <span className="persona-summary">{bound.length ? `账号 ${bound.map((account) => account.account).join('、')} 在用` : persona.source === 'built-in' ? '内置人设' : '未绑定账号'}</span>
-              </button>;
-            })}
-          </div>
-          <label className="file-drop" htmlFor="persona-file" onDragOver={(event) => event.preventDefault()} onDrop={onDrop}>
-            <strong>把 .md 文件拖到这里导入</strong><span className="muted">或使用右上角按钮选择文件</span>
-          </label>
-        </section>
-        <section className="persona-editor panel-card">
-          {!selected && <div className="empty-state">选择或导入一个人设开始编辑。</div>}
-          {selected && <>
-            <div className="editor-heading">
-              <div><h2>{selected.id}</h2><span className="mono muted">{selected.filename}</span></div>
-              <div className="editor-actions"><span className="save-state">{busy ? '保存中…' : saved ? '已保存' : selected.source === 'built-in' ? '内置副本' : '未保存更改'}</span><button className="button button-primary" type="button" disabled={busy} onClick={() => void save()}>保存</button></div>
-            </div>
-            <div className="binding-row"><label htmlFor="persona-account">绑定账号</label><select id="persona-account" value={boundAccounts[0]?.account ?? ''} disabled aria-describedby="binding-note"><option value="">尚无账号使用</option>{accounts.map((account) => <option key={account.account} value={account.account}>QQ {account.account} · {account.persona}.md</option>)}</select><span id="binding-note" className="muted">账号绑定由配置文件管理</span></div>
-            <div className="editor-columns">
-              <label className="editor-column"><span className="small-heading">Markdown</span><textarea className="markdown-input mono" value={markdown} onChange={(event) => { setMarkdown(event.currentTarget.value); setSaved(false); }} spellCheck={false} aria-label="Markdown 人设内容" /></label>
-              <div className="editor-column"><div className="small-heading">预览</div><div className="preview-surface"><MarkdownPreview markdown={markdown} /></div></div>
-            </div>
-            <div className="editor-footer"><span className="muted">{boundAccounts.length ? `当前绑定：${boundAccounts.map((account) => `QQ ${account.account}`).join('、')}` : '尚无账号绑定此人设'}</span><button className="text-button" type="button" onClick={() => onNavigate('sandbox')} title="试聊将使用所选会话当前配置的人设">用当前会话试聊 →</button></div>
-          </>}
-        </section>
+      <input ref={fileInput} className="visually-hidden" type="file" accept=".md,text/markdown" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) void importFile(file); }} />
+      {error && <div className="notice notice-warn persona-page-notice" role="alert">{error}</div>}
+      {newId && <div className="new-persona-row"><label htmlFor="new-persona-id">新建 ID</label><input id="new-persona-id" value={newId} onChange={(event) => setNewId(event.currentTarget.value)} /><button className="button button-primary" type="button" disabled={busy} onClick={() => void createPersona()}>创建</button><button className="text-button" type="button" disabled={busy} onClick={() => setNewId('')}>取消</button></div>}
+
+      <div className="persona-library-row" role="tablist" aria-label="人设库">
+        {personas.map((persona) => {
+          const bound = accounts.filter((account) => account.persona === persona.id);
+          return (
+            <button
+              className={`persona-library-chip ${selectedId === persona.id ? 'is-selected' : ''}`}
+              type="button"
+              role="tab"
+              aria-selected={selectedId === persona.id}
+              key={persona.id}
+              disabled={busy}
+              onClick={() => selectPersona(persona.id)}
+            >
+              <strong>{persona.id}</strong><span className="mono">{persona.filename}</span>
+              {bound.length > 0 && <small>在用 · {bound.length}</small>}
+            </button>
+          );
+        })}
+        {!loading && personas.length === 0 && <p className="muted">还没有人设，先创建一个。</p>}
+        {loading && <p className="muted">正在读取人设库…</p>}
       </div>
+      <label className="persona-import-drop" htmlFor="persona-file" onDragOver={(event) => event.preventDefault()} onDrop={onDrop}>
+        拖入 .md 文件，或点击“导入 Markdown”
+      </label>
+
+      {importDraft && (
+        <section className="persona-import-banner" aria-label="人设导入草稿">
+          <div><strong>“{redactSensitiveText(importDraft.filename)}”已整理好</strong><p>拆进了 {importDraft.mappedCount} 个表单项，{importDraft.otherCount} 段放进了“其他小节”。确认前不会保存。</p></div>
+          <div className="persona-import-actions">
+            <button className="button button-secondary" type="button" disabled={busy} onClick={() => setCompareOpen(true)}>逐项对照</button>
+            <button className="text-button" type="button" disabled={busy} onClick={() => { setImportDraft(null); setCompareOpen(false); }}>放弃</button>
+            <button className="button button-primary" type="button" disabled={busy || !selectedId} onClick={acceptImport}>接受</button>
+          </div>
+        </section>
+      )}
+
+      {selected ? (
+        <>
+          <div className="persona-editor-heading">
+            <div><h2>{selected.id}</h2><p className="muted">{selected.source === 'built-in' ? '内置人设副本' : selected.filename} · {boundAccounts.length ? `绑定 QQ ${boundAccounts.map((account) => account.account).join('、')}` : '尚无账号绑定'}</p></div>
+            <div className="persona-save-actions"><span className={dirty ? 'is-dirty' : ''}>{saveLabel}</span><button className="button button-primary" type="button" disabled={busy || !dirty || Boolean(sourceError)} onClick={() => void save()}>保存</button></div>
+          </div>
+          <div className="persona-workspace-v2">
+            <PersonaFields form={form} onChange={updateForm} onFocus={setActiveBlockId} disabled={busy || Boolean(sourceError)} />
+            <PersonaPreview
+              mode={viewMode}
+              onModeChange={changeViewMode}
+              preview={preview}
+              previewBusy={previewBusy}
+              previewError={previewError}
+              activeBlockId={activeBlockId}
+              sourceText={personaSourceForEditor(sourceText)}
+              sourceError={sourceError}
+              onSourceChange={changeSource}
+              previewAccounts={boundAccounts}
+              previewAccountId={previewAccount?.account ?? null}
+              onPreviewAccountChange={setPreviewAccountId}
+              disabled={busy}
+              onTryChat={() => onNavigate('sandbox')}
+            />
+          </div>
+        </>
+      ) : (
+        <div className="persona-empty panel-card">{loading ? '正在读取人设…' : '选择或创建一个人设开始编辑。'}</div>
+      )}
+
+      <PersonaComparisonDialog
+        open={compareOpen && Boolean(importDraft)}
+        filename={importDraft?.filename ?? ''}
+        source={importDraft?.source ?? ''}
+        form={importDraft?.form ?? form}
+        onClose={() => setCompareOpen(false)}
+      />
     </div>
   );
 }

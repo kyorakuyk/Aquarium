@@ -2,7 +2,8 @@ import OpenAI from 'openai';
 import type { AquariumConfig } from '../config/schema.ts';
 
 type ProviderSettings = AquariumConfig['providers'][string];
-type ProviderClientFactory<TClient> = (name: string, provider: ProviderSettings) => TClient;
+type ApiProviderSettings = Extract<ProviderSettings, { kind: 'api' }>;
+type ProviderClientFactory<TClient> = (name: string, provider: ApiProviderSettings) => TClient;
 
 export interface ProviderClientRegistry<TClient> {
   get(config: AquariumConfig, name: string): TClient;
@@ -18,6 +19,7 @@ export function createProviderClientRegistry<TClient>(
     get(config, name) {
       const provider = config.providers[name];
       if (!provider) throw new Error(`未配置模型服务商：${name}`);
+      if (provider.kind !== 'api') throw new Error(`CLI 服务商不能作为 API 客户端使用：${name}`);
       const signature = `${provider.baseUrl}\u0000${provider.apiKeyEnv}`;
       const cached = clients.get(name);
       if (cached?.signature === signature) return cached.client;
@@ -33,7 +35,7 @@ export function createProviderClientRegistry<TClient>(
 }
 
 export function createOpenAIClient(
-  provider: ProviderSettings,
+  provider: ApiProviderSettings,
   env: NodeJS.ProcessEnv = process.env,
 ): OpenAI {
   const apiKey = env[provider.apiKeyEnv];
@@ -53,4 +55,8 @@ const providerClients = createProviderClientRegistry(
 
 export function getProviderClient(config: AquariumConfig, name: string): OpenAI {
   return providerClients.get(config, name);
+}
+
+export function clearProviderClients(): void {
+  providerClients.clear();
 }

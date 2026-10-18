@@ -1,6 +1,6 @@
 # Aquarium 施工计划书（唯一任务清单）
 
-> 写给接手编码的模型。最后更新：2026-10-14。
+> 写给接手编码的模型。最后更新：2026-10-16。**当前任务：§12 控制台 v2（V0–V10）；所有任务先遵守 §0.1 提速规则。**
 > **本文是唯一的任务清单。**文档优先级：`PLAN.md` > `HANDOFF.md`（只作为架构、接口、环境的参考）> `DESIGN.md`（设计依据）。
 > `REVIEW-2026-10-12.md` 与 `NIGHT-RUN.md` 已并入本文，**作废，不再阅读**。`MORNING.md` 只作为历史记录。
 > 开工前按顺序读：本文全文 → `HANDOFF.md` §1、§3、§4 → `DESIGN.md`（需要时查阅）。
@@ -31,6 +31,21 @@
 
 ---
 
+## 0.1 提速规则（2026-10-16 起生效，覆盖本文其他地方与之冲突的流程要求）
+
+近期每个任务耗时越来越长，主要花在流程上，不是写代码。从现在起：
+
+1. **不做**精确 staged review、SHA-256 记录、checkpoint tag、reviewer 子代理复审。每个任务提交前自己看一遍 `git diff`，就够了。只有任务标 🔍 时才做一轮独立 review（最多一轮）。阶段审查发现问题并修复后，**不需要第二轮独立审查，也不算审查失败**：修复提交通过 `npm run check` 即视为该阶段完成，在早上检查清单里列出修复内容即可，由用户或 Claude 事后复核。
+2. **测试分两档**：开发中只跑相关文件，`node --test test/<相关>.test.ts`；**提交前跑一次** `npm run check`。前端只在改了 `panel/` 时才跑 `npm run panel:build`。
+3. **测试只覆盖规格列出的测试点**，每点 1–2 条用例。不为“更完整”加额外用例，不做先红后绿的仪式记录。
+4. **记录从简**：§5 进度日志每个任务一行，不超过 60 字。任务条目下**不写**“进度”子项，提交信息一行。
+5. **不重读整份文档**：开工读 §0、§0.1 和当前任务所在节，HANDOFF 只查需要的部分。
+6. **小事自己定**：文件内部结构、私有函数名、变量名、报错文案直接决定，不用问，也不用记录理由。只有**行为或范围**不清楚时才停下来问。
+7. **不顺手重构**：与当前任务无关的代码一行不动。看到问题写进 §6，一句话即可。
+8. 一个任务卡住超过 3 次尝试：按 §7.2 处理，不要反复重试。
+
+---
+
 ## 1. 环境事实（已核实）
 
 - 用户 Windows 上的 Node 实际为 **v26.7.0**（`package.json` 的 `engines` 保持 `>=22.18`，不改）。
@@ -43,6 +58,11 @@
 
 - 阶段 A–C（R1–R13、C0、T7–T10）已完成；U1、U2 真实环境验证已由用户完成，U2 反馈无重大问题；代码已在 `main`。
 - T11 托管层调研已由用户确认；T12a spike 的四项独立 GUI 验收已由用户确认通过；T12b 非托盘实现与 probe-timeout 复测已完成。T12c 真实托盘代码提交 `f5f2dcffa699de3a2a34bef0376054e5a1ab28df`（review SHA-256 `f623dce543f1572d87a69902df8032f958bcebbe75e24e46540b28b7af415a3b`）；用户实测后新增面板启动顺序修复提交 `1f0f2b7668e5ffbaee08824de10b7527aa78bbfa`（review SHA-256 `9a7982774c5da99984a93647a8d3b88b664356c0cb752eea3b2fa9b1bcc9ea64`，当时 `npm run check` 通过 212 项）。follow-up 标签为 `checkpoint/dev-host-panel-startup-fix-2026-10-14-unverified`。真实 Windows 托盘/QQ/autostart 用户验收仍待执行，`autostart:install` 未运行。
+- §9.0 U1–U4 代码已提交到 `dev/m2-modes`（`638f1bcadd56af8f6988955f6d538af69241e073`）；当前停在停止点 U，等待用户在控制台确认四项体验，确认前不开始 A1。真实 QQ 调试日志未读取，U3 设备字段确认待用户执行。
+
+- 2026-10-18：M2-CDE（C0–E5、R1–R3）完成于 `dev/m2-persona`；新增 §12 控制台 v2。
+- 2026-10-18：M2-B（B0–B9）代码完成；新增 §11 长程任务包，从 `dev/m2-affect` 拉 `dev/m2-persona`。
+- 2026-10-16：M2-A（A1–A6）代码完成，真实小群验收待用户；新增 §10 M2-B，从 `dev/m2-modes` 拉 `dev/m2-affect` 开始 B1。`GOALS.md` 为远期愿景，**不是任务来源**，不要据此实现任何功能。
 
 ---
 
@@ -321,13 +341,13 @@
 
 ---
 
-## 4. 控制台视觉规范（T10 必须遵守）
+## 4. 控制台视觉规范（通用令牌与约束；V2 页面以参照页为准）
 
-> 设计稿是用户私有的 claude.ai 画布，接手模型可能打不开；**以本节文字为准**。
+> V2 页面结构、内容与交互以 `doc/design/console-v2/` 中五个参照页为准；本节通用令牌与可访问性约束继续适用。若 §4.3 的旧页面示例与 V2 参照冲突，以 V2 参照为准。
 
 ### 4.1 设计原则
 - 风格名：“深水观察室”。安静、克制、适合长时间查看。**不用渐变、发光、毛玻璃、emoji**。
-- 品牌标志：一条线描小鱼（SVG，见 4.4），每个 bot 账号用它表示。文案里可用“鱼缸”“游动中”等说法，界面本身保持素净。
+- 品牌标志：一条线描小鱼（SVG，见 4.4），**只作为项目标志**（侧栏、登录页、托盘）。**bot 账号不用鱼表示，文案里不把 bot 称作“鱼”**，不用“鱼缸”“游动中”“放入新的鱼”等说法；bot 一律用首字头像表示，统称“眷属”。（2026-10-16 修订）
 - 所有交互元素用真实的 `<button>` / `<a>` / `<input>` / `<label>`；点击区域不小于 44px 高；纯图标按钮必须有 `aria-label`。
 - 手机宽度下侧栏折叠到页面顶部；宽表格放在可横向滚动的容器里。
 
@@ -420,7 +440,63 @@
 | 2026-10-15 | N2 | 新增 reply-system/vision 模板，启动加载并随配置热重载原子替换；逐字 golden 测试保持旧提示词输出；每次 vision/reply 调用将模板版本与渲染后 prompt hash 写入决策 detail；重复占位符经 RED/GREEN 回归测试修复；`npm run check` 通过（239 项）；修订后精确 staged review 通过（SHA-256 `36beac126ec79f70396c14fc0b5e8488a3a9a10c067fb0282275dc5e05e45240`）；提交 `196271cd271509645f0f400cecf88064d142d856` / `checkpoint/night-m2-prep-n2-2026-10-15-unverified`；未执行真实模型/服务验收 |
 | 2026-10-15 | N3 | 新增 schema v3 `pipeline_traces`，仅 debug 启用时保存 N1 trace，按 `debug.retainDays` 清理；summary 使用逐 step allowlist，未知 reason 降为 `stopped`，并限制为 500 个 Unicode 字符；决策 API 增加受保护的 pipeline-trace endpoint，面板展示步骤时间线；`npm run check` 通过（248 项），`npm run panel:build` 成功（27 modules）；最终精确 staged review 通过（SHA-256 `cacf381bec7965bd9b047b745a0a97b34e66bd4fb4cb31034046962b7edbe0cb`）；提交 `e51f7a1d54d426672a8fc3ee55eb4d75b680d8ba` / `checkpoint/night-m2-prep-n3-2026-10-15-unverified`；仅 fake/offline 验证，未运行真实服务 |
 | 2026-10-15 | N4 | 增加受保护 replay endpoint 与决策详情对比；历史消息按原消息存储行 ID 截断，限流 preview 只读不消费额度，禁止发送及消息/决策/trace 持久化；reply 调用费用与重放总费用分列。`npm run check` 通过（253 项），`npm run panel:build` 成功（27 modules）；精确 review 通过（SHA-256 `3e34c8f3ff0232975b6c69461d80036f74fab3551763769e90364c5d17a12f66`，48,946 bytes，16 paths）；提交 `e668fb13afee9f3fbbcdeea34df2a9b2980fbea0` / `checkpoint/night-m2-prep-n4-2026-10-15-unverified`；仅 fake/offline 验证，真实模型/GUI 验收待用户 |
-| 2026-10-15 | N5 | 新增合成 JSONL 离线评测 CLI，只运行 N1 gate、不调用模型；10 条样例 precision 0.6667、recall 0.8000、F1 0.7273，TP=4/FP=2/TN=3/FN=1；`--with-judge` 仅解析并提示“将在 M2 实现”，样例 `messages` 校验但不消费；`npm run check` 通过（260 项）；精确 staged review 通过（SHA-256 `7ff522d83020d5930e5f390ef7fd953a1efa248d016e2dba938f9f6ddf0f5599`）；提交 `ad151ec07f43af4c409aad21546f34733b961244` / `checkpoint/night-m2-prep-n5-2026-10-15-unverified`；仅 synthetic/offline 验证 |
+| 2026-10-15 | N5 | 新增合成 JSONL 离线评测 CLI，只运行 N1 gate、不调用模型；10 条样例 precision 0.6667、recall 0.8000、F1 0.7273，TP=4/FP=2/TN=3/FN=1；`--with-judge` 仅解析并提示“将在 M2 实现”，样例 `messages` 校验但不消费；`npm run check` 通过（260 项）；精确 staged review 通过（SHA-256 `7ff522d83020d5930e5f390ef7fd953a1efa248d016e2dba938f9f6ddf0f5599`，18,079 bytes）；提交 `ad151ec07f43af4c409aad21546f34733b961244` / `checkpoint/night-m2-prep-n5-2026-10-15-unverified`；仅 synthetic/offline 验证 |
+| 2026-10-15 | A1 | 新增 `modeSchedule`（本地 `HH:mm`、数组整体覆盖、旧配置默认空、相同起止时间拒绝）与首个命中优先的跨午夜 `resolveMode`；`mention_only` 未被叫时记录 `mode_mention_only`；忙碌模式回复延迟 ×2.5 并追加模式提示；`npm run check` 通过（272 项测试） |
+| 2026-10-15 | A2 | 新增纯 `batcher.ts`（8 秒静默重计时、30 秒硬上限、按会话取消并保留有序批次）与 `backoff.ts`（连续不回第 2 次起按 15–300 秒指数退避、批量 ≥6 条绕过、回复后按会话归零）；注入时钟的 8 项测试通过；`npm run check` 通过（280 项测试）；尚未接入流水线（A5）；review 非阻塞建议已记入 A5：静默等待不得占住 per-session `sessionQueue` task |
+| 2026-10-15 | A3 | 新增规则粗筛权重与概率门（含 30 分钟 active / 20 分钟 cold 计算、问题标点、图片/表情独占与 @ 他人特征）；新增 judge 模板 hash、热重载版本更新与占位符校验、最近 8 条上下文、固定 judge 槽位调用与严格 JSON 解析（仅 probability/reason、概率 0–1、reason ≤20 字）；13 项定向测试通过，`npm run check` 通过（290 项测试）；仅注入调用验证，尚未接入 N1 gate（A5） |
+| 2026-10-15 | A4 | 新增 session rolling 60-minute 动态阈值、目标频率校准及 120 秒 proactive cooldown；8/8 定向测试、`npm run check` 298/298 通过；精确 review 通过（SHA-256 `feec7b6edb72d7b7fead2c22c8db0d8617eeeea65acaa69c5bc6b1fda217c2f2`）；提交 `ee6176cac97172f52edb7bec9cd81c4a94bec656` / `checkpoint/dev-m2-modes-a4-2026-10-15-unverified` |
+| 2026-10-15 | A5 | 将攒批、退避、prefilter、judge、动态阈值与决策 trace 接入 pipeline；`npm run check` 320/320、路由定向测试 3/3 通过；精确 review 通过（SHA-256 `dc1a73b040e2f746f7d2f66da90c488330b931de3cb9b117fab7d637bd3d9c14`）；提交 `1bb8c8e3a4ffe19f08a6e0168507a858d1ac1bc0` / `checkpoint/dev-m2-modes-a5-2026-10-15-unverified`；仅 fake/offline 验证 |
+| 2026-10-15 | A6 | 完成会话模式与时间表编辑、reason 中文标签及决策概率详情；`npm run check` 330/330、`npm run panel:build`（29 modules）、`git diff --check` 通过；精确 review 通过（SHA-256 `b8b303d8d483df6839ae91efdee1dcb90eb103ba4409822da3d7cdcb66d60441`，32,381 bytes，13 paths）；提交 `9c0c53f1a3acda1754f9b6c7c7befbf8e9377a05` / `checkpoint/dev-m2-modes-a6-2026-10-15-unverified`。两项非阻断建议（非法 schedule PATCH 路由负向测试、行内时间校验提示）保留后续；M2-A 真实小群验收待用户 |
+| 2026-10-15 | A6 schedule editor follow-up | 修复时间输入在延迟 state updater 中读取 `currentTarget` 导致编辑崩溃；未提交草稿按 session 存入 `sessionStorage`，刷新可恢复，成功 PATCH 后在刷新会话列表前清理对应草稿，失败 PATCH 保留；读取时拒绝格式错误时间与额外字段、保留空白编辑值。首轮 review 的两项逻辑问题均经 RED/GREEN 回归修复；`npm run check` 通过（336/336），`npm run panel:build` 成功（29 modules），`git diff --check` 通过；最终精确 review 通过（SHA-256 `ba661e5368015edcf33144291446190bfd0857001a12356786eaac854ecd660d`，21,264 bytes，3 paths，无 security concerns / logic errors）；提交 `3b7134902091c2168ea4a923b1fa7815ae989abf` / `checkpoint/dev-m2-schedule-editor-fix-2026-10-15-unverified`。Reviewer 的 mounted `SessionsPage` 回归测试建议为非阻断，未纳入本切片；未运行真实 GUI、QQ 或模型，M2-A 用户验收仍待执行 |
+| 2026-10-16 | U1 | 新增受保护的 `GET/PATCH /api/defaults`、严格部分更新与嵌套 rate 合并；生产 `writeConfig` 路径和 watcher 热更新经文件读回测试；全局默认入口固定显示并复用群聊设置项。`npm run check` 通过（340/340） |
+| 2026-10-16 | U2 | 按安全读写 `localStorage` 恢复会话/分组选择；`/api/sessions` 增加 SQLite `MAX(time)` 最近消息时间并按启用、活跃、名称排序；回归覆盖 null 活跃时间和名称平局，`npm run check` 通过（340/340） |
+| 2026-10-16 | U3 | 会话列表过滤 bot 自身及精确匹配设备昵称/备注，保留既有配置覆盖，并在联系人读取失败时仍隐藏自身私聊。未启动 QQ/GUI，未读取真实调试日志；按计划回退规则实现，已在当日早检清单注明待确认。`npm run check` 通过（340/340） |
+| 2026-10-16 | U4 | 私聊面板隐藏群模式/昵称配置，显示私聊说明并提供“对这个人的补充说明”；单一频率输入同步写入两个 rate 字段，群聊保留原有双限额输入，全局默认复用双限额输入。`npm run panel:build` 成功（30 modules）；总体验证 `npm run check` 340/340、`git diff --check` 通过。实现提交 `638f1bcadd56af8f6988955f6d538af69241e073`，tag `checkpoint/dev-m2-u1-u4-2026-10-16-unverified`；停在停止点 U，等待用户控制台确认，未开始 A1 |
+| 2026-10-16 | B0 | 总览状态句改眷属文案，账号子卡与试聊气泡换首字头像，删除无用 CSS；`npm run panel:build` 成功（30 modules），`npm run check` 340/340 |
+| 2026-10-16 | B1 | 提示词按固定顺序分块并跳过空块，promptBlocks 哈希入决策 detail；`npm run check` 342/342 |
+| 2026-10-16 | B2 | 迁移 v4 新增情绪与标签四表及索引，affect-repo 提供读写并往返测试；`npm run check` 345/345 |
+| 2026-10-16 | B3 | 情绪纯函数：衰减、发送者 60 分钟上限、静/滑动摩擦与停留防抖；`npm run check` 351/351 |
+| 2026-10-16 | B4 | 情绪接入：async 评估、被叫规则、affect/appraise 模板与 mood/float 提示词块；`npm run check` 355/355 |
+| 2026-10-16 | B5 | 标签纯函数：观察/独立性/转正、判重不复活、推翻、激活度与注入选择上限；`npm run check` 362/362 |
+| 2026-10-16 | B6 | 标签提取：两种触发与单飞、逐条校验、tag_runs 更新、groupTags/memberTags 注入；`npm run check` 367/367 |
+| 2026-10-16 | B7 | 控制台：心情卡片与印象页、mood/impressions/tags API；`npm run check` 370/370，`npm run panel:build` 成功（31 modules）；停在停止点 M2-B |
+| 2026-10-16 | B8 | 标签样本与证据修复、情绪完成时戳；check 374/374 |
+| 2026-10-16 | B9 | 主动冷却可配置；check 378/378 |
+| 2026-10-18 | C0 | 02:01–02:05 | 通用防抖抽取；check 380/380 |
+| 2026-10-18 | C1 | 02:07–02:32 | 好感迁移仓储；check 382/382 |
+| 2026-10-18 | C2 | 02:36–02:39 | 好感核心 387/387 |
+| 2026-10-18 | C3 | 02:40–02:55 | 好感联动与提示词；check 389/389 |
+| 2026-10-18 | C4 | 02:58–03:12 | check390，build32 |
+| 2026-10-18 | C5 | 03:13–03:16 | 好感数据流文档；check 390/390 |
+| 2026-10-18 | R1 | 03:17–03:22 | 修空互动时间；check 390/390 |
+| 2026-10-18 | D1 | 03:24–03:30 | 人设头解析；check 392/392 |
+| 2026-10-18 | D2 | 03:31–03:49 | check 400/400 |
+| 2026-10-18 | D3 | 03:50–04:06 | check404，build |
+| 2026-10-18 | D4 | 04:08–04:09 | check 404/404 |
+| 2026-10-18 | R2 | 04:12–04:17 | YAML 400 修复；check404 |
+| 2026-10-18 | E1 | 04:20–04:25 | 409/409 |
+| 2026-10-18 | E2 | 04:25–04:38 | check 413/413 |
+| 2026-10-18 | E3 | 04:38–05:06 | check 418/418 |
+| 2026-10-18 | E4 | 05:08–05:33 | check 425/425 |
+| 2026-10-18 | E5 | 05:35–05:37 | HANDOFF 7; 425/425 |
+| 2026-10-18 | R3 | 05:42–05:44 | E1–E5 pass |
+| 2026-10-18 | V0 | 17:52–18:16; check426/426; build109; 5c4079d |
+| 2026-10-18 | V1 | 18:21–18:56; check429/429; build113; 883833c |
+| 2026-10-18 | V2 | 18:56–19:46; check432/432; build115; a023715 |
+| 2026-10-18 | V3 | 19:49–20:39; 434/434; b116; a0f6451 |
+| 2026-10-18 | R4 | 20:44–20:47; review a0f6451 pass |
+| 2026-10-18 | V4 | 20:49–21:10; 443/443; b116 |
+| 2026-10-18 | V5 | 21:10–21:15; check450/450 |
+| 2026-10-18 | V6 | 21:15–21:19; build119 |
+| 2026-10-18 | R5 | 21:20–22:16; 457/457; cac59f8 |
+| 2026-10-18 | V7 | 22:19–22:51; 459/459 |
+| 2026-10-18 | V8 | 22:55–23:15; check462/462 |
+| 2026-10-18 | V9 | 23:23–23:45; build123; check463/463 |
+| 2026-10-18 | V10 | 23:50–23:56; docs14; 463/463 |
+| 2026-10-19 | R6 | 00:00–00:37 | 初审4项已修；466/466；build123；未二审 |
+| 2026-10-19 | V11 | 01:01–01:27; 468/468; panel123 |
+| 2026-10-19 | V12 | 01:35–02:05; 471/471; build123 |
+
 ---
 
 ## 6. 待评估清单
@@ -438,8 +514,8 @@
 
 > 适用：用户睡觉期间运行，无人能回答问题、无人能在 QQ 上做验证。
 
-### 7.1 范围（当前有效：§8 长程任务包）
-- **本次夜间运行的唯一范围是 §8 的 N0–N5**，按顺序执行。阶段 D 的 §7.1 旧范围已于 2026-10-15 完成，**不再执行、不再收尾**。
+### 7.1 范围（当前有效：§12）
+- **本次无人值守运行的唯一范围是 §12 的 V0 → R6**，按顺序执行；§8、§10、§11 已完成，不再执行。阶段 D 的 §7.1 旧范围已于 2026-10-15 完成，**不再执行、不再收尾**。
 - 所有【用户】验收步骤不执行，写进早上检查清单。
 
 ### 7.2 遇到问题时
@@ -458,10 +534,10 @@
 - T10 前端的依赖直接放在仓库根的 `package.json` 中，不另建 npm 工作区。
 
 ### 7.4 Git 与记录
-- 开始前：切换到分支 `dev/host`。所有提交都在这个分支上，**每个任务一个提交**。
-- 新建并维护 `doc/plans/MORNING-2026-10-14.md`，结构固定为：
+- 开始前：从 `dev/m2-persona` 新建并切换到分支 `dev/console-v2`。所有提交都在这个分支上，**每个任务一个提交**。
+- 新建并维护 `doc/plans/MORNING-console-v2.md`，结构固定为：
   ```
-  # 早上检查清单（2026-10-14）
+  # 早上检查清单（控制台 v2）
   ## 完成情况          （每个任务一行：编号 / 完成|跳过|失败 / 一句话说明 / 提交哈希）
   ## 需要用户操作的验证   （按任务列出【用户】步骤，写成可直接照做的编号步骤）
   ## 待确认问题          （问题 / 考虑过的选项 / 夜间采用的做法）
@@ -474,9 +550,9 @@
 - 涉及前端时额外要求 `npm run panel:build` 成功。
 
 ### 7.6 结束条件（满足任一即结束，并做最后一次提交）
-- 本次 §7.1 列出的阶段 D 夜间范围全部完成；
+- §12 的 V0 → R6 全部完成；
 - 剩余任务全部被跳过或失败；
-- 运行时间达到 9 小时。
+- 运行时间达到 16 小时。
 
 ---
 
@@ -517,6 +593,30 @@
 
 ---
 
+## 9.0 控制台会话页体验修复（在 §9 的 A1 之前完成，同一分支 `dev/m2-modes`）
+
+- [x] **U1 全局默认设置**
+  - 后端新增 `GET /api/defaults`、`PATCH /api/defaults`（请求体为 `defaults` 的部分字段；校验、原子写配置、热重载，规则与 `PATCH /api/sessions/:id` 一致，但不支持 `null` 恢复继承）。
+  - 前端：会话列表最上方固定一项“全局默认”（不随搜索与分组过滤消失，带“所有会话继承这里的设置”说明）。选中后右侧显示与会话相同的设置表单，但没有启用开关与“继承 / 覆盖”标注。
+  - 会话详情中“继承全局”文字改为可点击，点击后切换到“全局默认”。
+- [x] **U2 记住上次选择并优化排序**
+  - 用 `localStorage`（读写包在 try/catch 中）记住上次选中的 sessionId 与“群聊 / 好友”分组；进入会话页时恢复；该会话已不存在时回落到列表第一项。
+  - 列表排序：已启用在前；同组内按该会话最后一条消息时间倒序（后端 `/api/sessions` 每项新增 `lastMessageAt`，取 `messages` 表最大 `time`，没有则 `null` 排在后面）；再按名称。
+- [x] **U3 过滤自己与设备会话**
+  - `/api/sessions` 的好友列表排除：`userId` 等于该 bot 账号；昵称或备注**完全等于**“我的电脑”“我的手机”“我的Pad”“我的平板”之一的条目。
+  - 实现前先用 `npm start` 时的调试日志确认这些条目的真实字段（`userId`、`nickname`、`remark`）；若设备条目能用 `userId` 稳定识别，优先用 `userId` 规则，并在代码注释中写明依据。**此步骤需要真实数据，若无人值守则按名称规则实现并在早上检查清单中注明待确认。**
+  - 配置中已存在的、指向被排除条目的 `sessions` 覆盖项保持原样，不删除。
+- [x] **U4 私聊使用私聊的设置项**
+  - 选中私聊时，右侧表单：
+    - 隐藏“什么时候说话”（改为一行说明：“私聊里每条消息都会回复。”）；
+    - 隐藏“叫它的名字”；
+    - “在这个群里的补充说明”改名为“对这个人的补充说明”；
+    - 频率区只显示“每分钟最多”（写入 `perUserPerMinute` 与 `perSessionPerMinute` 两个字段，值相同）、“两次回复至少间隔（秒）”、“回复时参考最近几条”。
+  - 群聊表单保持不变。
+  - 前端不写测试；后端改动（U1、U2、U3）需有测试；完成后 `npm run panel:build` 成功。
+
+> **⛔ 停止点 U**：U4 完成后停下，用户在控制台确认四项体验后再开始 §9 的 A1。
+
 ## 9. M2-A：四种活跃模式（2026-10-15 编写）
 
 > 前置：M1 已合并到 `main`（含 §8 的 N1 分步流水线、N2 模板、N3 追踪）。从 `main` 新建分支 `dev/m2-modes`。
@@ -543,7 +643,7 @@
 4. **规则粗筛**（零成本）：`p0 = sigmoid(−0.6 + 1.2·active − 0.8·cold + 0.5·question − 1.0·mediaOnly − 0.9·atOther)`，其中 `active` = bot 在本会话最近 30 分钟内发过言；`cold` = 本批第一条消息之前该会话已沉默 ≥ 20 分钟；`question` = 文本含 `?` 或 `？`；`mediaOnly` = 只有图片或表情；`atOther` = @ 了别人。`p0 < 0.15` 则跳过，`reason='prefilter'`。权重写在独立文件 `src/core/activity/prefilter-weights.ts`，以便日后替换为拟合值。
 5. **模型精判**：用 `judge` 槽位与新模板 `prompts/judge.md`，上下文为最近 8 条消息。要求模型只输出 JSON：`{"probability": 0到1的数字, "reason": "不超过20字"}`。解析失败记 `reason='judge_parse_error'`；调用失败记 `reason='judge_error'`；两者都按“不回”计入退避。
 6. **动态阈值**：`probability ≥ 当前阈值` 才回复，否则 `reason='judge_skip'`（`n` 加 1）。每个会话在内存中维护过去 60 分钟的 `expected`（`probability ≥ 0.5` 的批次数）与 `actual`（实际主动回复数）。每次判断后：若 `expected ≥ 4` 且 `actual > expected × t`，阈值 +0.05；若 `actual < expected × t`，阈值 −0.05；限制在 [0.2, 0.9]。`expected < 4` 时使用 §9.1 的初始阈值。重启后重置。
-7. **硬上限**：同一会话两次主动回复间隔不得少于 120 秒，否则 `reason='proactive_cooldown'`。原有频率限制仍然生效。
+7. **硬上限**：同一会话主动回复间隔至少为有效配置 `proactiveCooldownSec`（全局默认 120 秒，群会话可覆盖；整数范围 0–3600，0 表示不施加此冷却），否则 `reason='proactive_cooldown'`。原有频率限制仍然生效。
 8. 通过后进入原有生成与发送步骤，上下文条数用 8（被叫时仍用 `contextMessages`），决策 `detail` 写入 `trigger: 'proactive'`、`p0`、`probability`、`threshold`。
 
 ### 9.3 按时间段切换模式
@@ -552,12 +652,626 @@
 
 ### 9.4 任务
 
-- [ ] **A1 模式与时间表**：schema 新增 `modeSchedule`；`resolveMode`；`gate` 步骤按 §9.1 处理被叫与 `mention_only`；忙碌模式节奏 ×2.5 与 `{{modeHint}}`。测试：时间段命中、跨午夜、无命中回落、四种模式的被叫行为。
-- [ ] **A2 攒批与退避**：`src/core/activity/batcher.ts`、`backoff.ts`（时间可注入）。测试：8 秒重新计时、30 秒上限、被叫取消批次、退避时间序列、≥6 条忽略退避、回复后归零。
-- [ ] **A3 粗筛与精判**：`prefilter.ts`、`judge.ts`、`prompts/judge.md`；JSON 解析严格（只接受数字在 0–1 之间）。测试：特征计算、`p0` 数值、解析成功 / 失败 / 越界、调用失败。
-- [ ] **A4 动态阈值与硬上限**：`threshold.ts`（滑动窗口，时间可注入）。测试：数据不足用初始值、超额上调、不足下调、上下限、120 秒冷却。
-- [ ] **A5 接入流水线**：把 A1–A4 接到 N1 的 `gate` 步骤；预算判断；决策 `detail` 字段；N3 追踪中记录 `p0`、`probability`、`threshold`、退避状态。测试：用假 judge 跑完整主动回复路径，以及每个 `reason` 至少一条。
-- [ ] **A6 控制台**：会话页去掉三个模式的“M2”灰显，可选择；新增“按时间段切换”编辑器（增删行，每行 from / to / 模式）；`panel/src/labels.ts` 增加新 `reason` 的中文标签：`mode_mention_only` 只在被叫时、`batched` 合并处理、`backoff` 退避中、`prefilter` 粗筛跳过、`judge_skip` 判断不接、`judge_parse_error` / `judge_error` 出错、`budget` 预算用尽、`proactive_cooldown` 主动冷却；决策详情显示 `p0` / `probability` / `threshold`。完成后 `npm run panel:build` 成功。
+- [x] **A1 模式与时间表**：schema 新增 `modeSchedule`；`resolveMode`；`gate` 步骤按 §9.1 处理被叫与 `mention_only`；忙碌模式节奏 ×2.5 与 `{{modeHint}}`。测试：时间段命中、跨午夜、无命中回落、四种模式的被叫行为。
+- [x] **A2 攒批与退避**：`src/core/activity/batcher.ts`、`backoff.ts`（时间可注入）。测试：8 秒重新计时、30 秒上限、被叫取消批次、退避时间序列、≥6 条忽略退避、回复后归零。
+- [x] **A3 粗筛与精判**：`prefilter.ts`、`judge.ts`、`prompts/judge.md`；JSON 解析严格（只接受数字在 0–1 之间）。测试：特征计算、`p0` 数值、解析成功 / 失败 / 越界、调用失败。
+- [x] **A4 动态阈值与硬上限**：`threshold.ts`（滑动窗口，时间可注入）。测试：数据不足用初始值、超额上调、不足下调、上下限、120 秒冷却。
+  - 进度：新增 `src/core/activity/threshold.ts` 与 `test/activity-threshold.test.ts`；8/8 定向测试通过，`npm run check` 的 typecheck、依赖边界检查及 298/298 全量测试通过，`git diff --check` 通过。当前判断先读取 `getThreshold`，`recordJudgment` 只更新后续判断的阈值；补测了恰好 60 分钟窗口边界及实际回复数等于目标频率时不调阈值。
+- [x] **A5 接入流水线**：把 A1–A4 接到 N1 的 `gate` 步骤；预算判断；决策 `detail` 字段；N3 追踪中记录 `p0`、`probability`、`threshold`、退避状态。测试：用假 judge 跑完整主动回复路径，以及每个 `reason` 至少一条；提示词 fingerprint 按 slot 匹配（`judge` → `judge.version`、`vision` → `vision.version`、`reply` → `replySystem.version`）；攒批静默等待不得占住 per-session `sessionQueue` task，确保等待期间新消息仍能重置计时器。
+  - 集成约束：接入 A4 时先保存用于当前决定的 `getThreshold` 值，再记录 `recordJudgment`（只更新后续判断阈值）。对照两处规范后，A5 以 §9.2 的“固定 p0 粗筛 → judge → 动态阈值”为执行顺序；已修订 DESIGN §5.2，明确区分 judge 前的 `p0` 粗筛分数与 judge 返回的 `probability`，消除动态阈值先于 judge 的歧义。
+  - 进度：完成应用层攒批路由与 N1/N3 集成；覆盖预算、batched、backoff、prefilter、judge 错误/跳过、动态阈值、cooldown、限流及按 slot fingerprint。`npm run check` 通过（typecheck、依赖边界检查、320/320 测试），路由定向测试 3/3，`git diff --check` 通过。精确 staged review 通过（SHA-256 `dc1a73b040e2f746f7d2d66da90c488330b931de3cb9b117fab7d637bd3d9c14`，73,337 bytes，21 paths）；首轮 review 发现 timer setup 失败会重复派发当前消息，已通过两条先红后绿的回归测试修复并复审通过。代码提交 `1bb8c8e3a4ffe19f08a6e0168507a858d1ac1bc0` / `checkpoint/dev-m2-modes-a5-2026-10-15-unverified`；仅假 judge/offline 验证，真实 QQ/模型与控制台验收待 M2-A。
+- [x] **A6 控制台**：会话页去掉三个模式的“M2”灰显，可选择；新增“按时间段切换”编辑器（增删行，每行 from / to / 模式）；`panel/src/labels.ts` 增加新 `reason` 的中文标签：`mode_mention_only` 只在被叫时、`batched` 合并处理、`backoff` 退避中、`prefilter` 粗筛跳过、`judge_skip` 判断不接、`judge_parse_error` / `judge_error` 出错、`budget` 预算用尽、`proactive_cooldown` 主动冷却；决策详情显示 `p0` / `probability` / `threshold`。完成后 `npm run panel:build` 成功。
+  - 进度：完成四种模式选择、schedule 编辑与 PATCH/schema 校验、decision reason 中文化及概率指标展示；schedule 草稿按 session 保留，行 key 与可编辑时间值分离。`npm run check` 通过（typecheck、依赖边界检查、330/330 测试），`npm run panel:build` 成功（29 modules），`git diff --check` 通过。前两轮 review 指出的草稿刷新丢失与输入行 remount 均经回归测试修复；最终精确 staged review 通过（SHA-256 `b8b303d8d483df6839ae91efdee1dcb90eb103ba4409822da3d7cdcb66d60441`，32,381 bytes，13 paths；无 security concerns / logic errors）。代码提交 `9c0c53f1a3acda1754f9b6c7c7befbf8e9377a05` / `checkpoint/dev-m2-modes-a6-2026-10-15-unverified`。Reviewer 的非法 PATCH 路由测试与行内校验提示建议为非阻断、未纳入本切片；真实 QQ/小群验收待用户。
 
 > **⛔ 停止点 M2-A**：A6 完成后停下。
 > **【用户】验收**：选一个测试小群设为 `active` → 群里正常聊天（不 @）半小时，bot 偶尔自然接话且两次间隔 ≥ 2 分钟 → 改为 `busy`，接话明显变少、变短 → 设置时间表让当前时段为 `mention_only`，不 @ 就完全不说话 → 控制台决策记录里能看到各种中文原因与概率数值 → 当天花费仍在预算内。
+
+---
+
+## 10. M2-B：简单情绪 + 群标签 + 群友标签（2026-10-16 编写）
+
+> 分支：从 `dev/m2-modes` 新建 `dev/m2-affect`。按 §0 与 §0.1 执行。
+> 设计依据：用户 2026-10-16 的决定，即**数值计算全部放在代码里**，模型只看到档位文字；档位切换带“静摩擦 / 滑动摩擦”防抖；提示词分块、按需整段替换。
+> 思路参考 `reference/ai-bot-groupmate`（记忆的候选→确认、半衰期）。**只借鉴思路，不复制代码。**
+> **本节不做**：好感度、性格演进、精力与作息、私聊信息分级、跨会话共享标签、向量检索。想到的写进 §6。
+
+### 10.1 通用约定
+- **角色键**：所有新表都带 `account INTEGER NOT NULL`（bot 的 QQ 号），代表“哪个角色”。目前只有一个账号，但必须带上，不得省略。
+- 时间一律毫秒时间戳。所有纯函数都接受注入的 `now`。
+- 新的模型调用都用已有的 `extract` 槽位，走现有用量记录与预算。`budgetState` 为 `exceeded` 时，所有新的后台调用跳过，原因记为 `budget`。
+- 后台任务（评估、提取）**不进** per-session `sessionQueue`，异步执行，失败只写日志与追踪，不影响回复。
+
+### 10.2 提示词分块（B1）
+`buildPromptMessages` 的 system 内容改为**按固定顺序排列的块**，空块跳过，块与块之间用 `\n\n` 连接。顺序按变化频率从低到高排，以便命中 DeepSeek 的前缀缓存：
+
+| 顺序 | 块 id | 内容 | 来源 |
+|---|---|---|---|
+| 1 | `persona` | 人设（底色） | 现有 |
+| 2 | `rules` | 固定规则（含 ownerRule、modeHint） | 现有 |
+| 3 | `groupNote` | 会话补充说明 | 现有 |
+| 4 | `groupTags` | 群标签 | §10.4 |
+| 5 | `mood` | 情绪偏移块，按档位整段替换 | §10.3 |
+| 6 | `memberTags` | 当前说话人的标签 | §10.4 |
+| 7 | `float` | 浮动值，单独一段，永远放最后 | §10.3 |
+
+- `buildPromptMessages` 新增可选参数 `blocks?: { groupTags?: string; mood?: string; memberTags?: string; float?: string }`，均为已经渲染好的文字。不传时输出必须与现在**逐字相同**，现有 prompt 测试不改就能通过。
+- 新增导出函数 `describePromptBlocks(...)`，返回 `[{ id, hash }]`（hash 为该块文字 sha256 的前 8 位，空块不列出）。生成步骤把结果写进现有 N3 追踪的 detail，字段名为 `promptBlocks`。
+- 测试：顺序正确；空块跳过；不传 blocks 时输出与旧版一致；`promptBlocks` 的 hash 稳定。
+
+### 10.3 简单情绪（B3、B4）
+**状态**：每个角色一份（不按会话区分，群里受的气私聊里也带着）。
+- `valence` 愉悦度，范围 [-1, 1]；`arousal` 兴奋度，范围 [0, 1]。
+- 基线默认 `valence 0.1`、`arousal 0.4`。
+- 配置新增顶层可选项 `mood: { enabled: true, baseline: { valence: 0.1, arousal: 0.4 }, halfLifeMin: 30 }`，有默认值，旧配置不填也能运行。
+
+**衰减**：读取时按真实时间计算，不用定时器。
+- `x = base + (x0 − base) × 2^(−Δt / halfLife)`，valence 和 arousal 各自独立计算。
+
+**事件**：
+1. **评估**（模型）：bot 在某会话**发出回复后**异步触发。同一会话两次评估至少间隔 90 秒，间隔内不评估、不排队。
+   - 输入：该会话最近 8 条消息（包括 bot 刚发的那条）。模板为 `prompts/appraise.md`。
+   - 要求模型只输出 JSON：`{"valence": -0.15~0.15, "arousal": -0.15~0.15, "reason": "不超过20字"}`。
+   - 解析严格：越界或缺字段都视为解析失败，记 `appraise_parse_error`，不改状态。
+   - 这次变化归到被回复消息的发送者名下。
+2. **规则**（零成本）：被叫时（私聊、@、叫名字），arousal +0.05，不归到任何人名下。
+
+**上限**：
+- 单次事件 |Δ| ≤ 0.15，由上面的 JSON 范围保证。
+- **同一发送者**过去 60 分钟内累计 |Δvalence| 不超过 0.3，超出部分截掉。实际生效的值记为 `applied`。
+- valence 和 arousal 最终裁剪到各自的范围内。
+
+**档位**（只看 valence）：
+
+| 档位 key | 区间 |
+|---|---|
+| `low` 低落 | v < −0.5 |
+| `annoyed` 不爽 | −0.5 ≤ v < −0.15 |
+| `calm` 平静 | −0.15 ≤ v < 0.15 |
+| `happy` 开心 | 0.15 ≤ v < 0.5 |
+| `excited` 很开心 | v ≥ 0.5 |
+
+**防抖（静摩擦 / 滑动摩擦）**：纯函数 `nextBand(state, v, now, cause)`，`cause` 为 `'event' | 'decay'`。
+- 当前档位为 B。只有当 v 越过 B 的边界并超出**余量 m** 时才换档：往上换需要 `v ≥ B上界 + m`，往下换需要 `v < B下界 − m`。满足条件时，新档位取 v 实际所在的档位，可以一次跨越多档。
+- **静摩擦**：默认 m = 0.08。
+- **滑动摩擦**：上次换档后 5 分钟内，m = 0.02，这样能连着变。
+- **最短停留**：`cause = 'decay'`（衰减慢慢漂过边界）时，当前档位必须已经保持了 ≥ 10 分钟才允许换档。`cause = 'event'` 时没有停留限制，这就是允许的“突变”。
+- 每次换档写一条 `mood_events`，`source = 'band'`，记录前后档位与原因。
+
+**提示词**：新模板 `prompts/affect.md`（YAML，纳入现有模板热重载与 `templateVersion`），键如下：
+- `mood.low` / `mood.annoyed` / `mood.calm` / `mood.happy` / `mood.excited`：每档一两句表现说明。`calm` 默认为空字符串，即不出块。初始文案：
+  - low：`你现在情绪低落，话少，不太想接梗，但不迁怒别人。`
+  - annoyed：`你现在有点不爽，说话更冲、更短，容易吐槽。`
+  - happy：`你现在心情不错，更愿意接话和开玩笑。`
+  - excited：`你现在心情很好，有点兴奋，话多一点，语气更跳。`
+- `float.arousalLow`：`有点懒洋洋`（arousal < 0.3）；`float.arousalHigh`：`很来劲`（arousal > 0.7）；在 0.3 到 0.7 之间时为空。
+- `float.wrap`：`（此刻状态：{{floats}}）`，`floats` 为空时整块不出。
+- 浮动值**不做防抖**，每次直接按当前值取词。
+
+**私聊与群聊都生效**。`mood.enabled = false` 时 mood 和 float 两块都不出，评估也不调用。
+
+### 10.4 群标签与群友标签（B5、B6）
+**对象**：
+- 群标签：主语为 (account, 群 sessionId)。
+- 群友标签：主语为 (account, 群 sessionId, userId)。
+- **只从群消息里提取，只在同一个群里注入**。本阶段私聊不提取、不注入任何标签。
+
+**字段**（表 `tags`）：
+
+| 字段 | 说明 |
+|---|---|
+| `id` | 主键 |
+| `account` | 角色键 |
+| `session_id` | 群 sessionId |
+| `user_id` | 群友 QQ 号；群标签为 NULL |
+| `text` | 2–16 字 |
+| `norm` | 规范化后的文字：去空白与标点、转小写，用于判重 |
+| `status` | `candidate` / `confirmed` / `rejected` / `superseded` |
+| `source` | `auto` / `manual` |
+| `samples` | 独立观察次数 |
+| `evidence_json` | 最近至多 5 条 `{messageId, time, quote}`，quote 不超过 40 字 |
+| `first_seen` | 首次观察时间 |
+| `last_seen` | 最近观察时间（取证据消息的时间） |
+| `superseded_by` | 被哪条标签推翻 |
+| `updated_at` | 更新时间 |
+
+**规则**（纯函数，放在 `src/core/impressions/`）：
+1. **观察**：证据 messageId 不在已有的 evidence 里，才算一次**独立观察**：`samples + 1`，`last_seen` 更新为该消息时间。同一 messageId 重复出现时不计数。
+2. **转正**：`candidate` 的 samples ≥ 2 时自动变为 `confirmed`。
+3. **新增**：同一主语下已有相同 `norm` 的标签时：
+   - 状态是 `rejected` 或 `superseded`：忽略，**不复活**；
+   - 其他状态：按“观察”处理。
+   - 没有相同 `norm` 的标签：新建 `candidate`，samples = 1。
+4. **推翻**：提取结果给出 `contradict: {id, text}`，且 id 属于同一主语、`source = auto`：旧标签改为 `superseded`、`superseded_by` 指向新标签，新标签为 `candidate`，samples = 1。`manual` 标签不会被自动推翻，这类条目直接丢弃。
+5. **淡忘**（不删除）：
+   - 激活度 = `2^(−(now − last_seen) / 半衰期)`；
+   - 半衰期：群友 30 天，群 14 天；samples ≥ 4 时乘 3；
+   - `manual` 标签激活度恒为 1。
+6. **注入选择**：
+   - 只取 `confirmed` 且激活度 ≥ 0.25 的标签；
+   - 排序：manual 优先 → samples 降序 → last_seen 降序；
+   - 群标签最多 6 条、总长不超过 120 字；
+   - 群友标签只取**触发消息的发送者**，最多 5 条、总长不超过 80 字；
+   - 因上限被丢掉的条数写进追踪的 `droppedTags`。
+7. 渲染模板放在 `prompts/reply-system.md` 新增键 `groupTags: 这个群的氛围：{{tags}}`、`memberTags: 关于{{name}}：{{tags}}`，标签之间用 `、` 连接，`name` 用 JSON 引号包住。
+
+**提取任务**（B6）：
+- 触发：每次持久化一条**已启用群**的非自己消息后，检查该群自上次提取以来的新消息数 `n` 和距上次提取的时间。满足以下任一条件就异步提取一次：
+  - `n ≥ 60` 且距上次 ≥ 30 分钟；
+  - `n ≥ 10` 且距上次 ≥ 6 小时。
+- 同一个群同一时间只允许一个提取在进行。
+- 进度存在表 `tag_runs (account, session_id, last_run_at, last_message_time)`。
+- 输入：
+  - 该群最近 80 条消息，格式同回复上下文，每行额外带 `#messageId` 与发送者 QQ 号；
+  - 现有的群标签，以及窗口内出现的发送者各自的标签（只含 `candidate` 与 `confirmed`，附 id）。
+- 模板 `prompts/extract-tags.md`。规则写在模板里：
+  - 只记稳定的兴趣、习惯、说话风格和群氛围，**不记一次性事件**，不把玩笑当事实；
+  - **不记**健康、性、政治立场、收入财务、住址、真实姓名、感情状况、家庭矛盾；
+  - 对已有标签优先用 observe，不要换个说法再新增一条。
+- 输出 JSON：
+  ```
+  {"group": {"observe": [{"id": 1, "messageId": "..."}], "new": [{"text": "...", "messageId": "..."}], "contradict": [{"id": 1, "text": "...", "messageId": "..."}]},
+   "members": [{"userId": 123, "observe": [...], "new": [...], "contradict": [...]}]}
+  ```
+- 校验：
+  - 整体解析失败：记 `extract_parse_error`，什么都不改，但 `tag_runs` 照常更新，避免同一批消息反复失败、反复花钱；
+  - 逐条校验：id 必须在提供的列表里且属于该主语；messageId 必须在窗口内；userId 必须是窗口内的非 bot 发送者；text 长 2–16 字；每个主语每次 `new` 最多 3 条；
+  - 不合格的条目单独丢弃，丢弃数写进追踪。
+- quote 取自证据消息的 plainText 前 40 字。
+
+### 10.5 数据库（B2）
+- 迁移 version 4，新增表：
+  - `mood_state(account PK, valence, arousal, updated_at, band, band_since, last_band_change_at)`
+  - `mood_events(id, account, time, source 'appraise'|'rule'|'band', session_id, sender_id NULL, dv, da, applied_dv, applied_da, reason, band_before, band_after)`
+  - `tags`（字段见 §10.4）
+  - `tag_runs`
+- 加必要的索引：`tags(account, session_id, user_id, status)`、`mood_events(account, time)`。
+- 读写函数放在 `src/store/repository.ts`，或新建同目录下的 `affect-repo.ts`，二选一。
+- 测试：迁移从 v3 升到 v4；读写往返一致。
+
+### 10.6 控制台（B7）
+- API（与现有接口相同的鉴权）：
+  - `GET /api/mood`：当前衰减后的值、档位、档位开始时间，以及最近 20 条 `mood_events`；
+  - `GET /api/impressions/:sessionId`：`{ groupTags, members: [{ userId, name, tags }] }`，含所有状态的标签、激活度和证据；
+  - `POST /api/tags`：请求体 `{ sessionId, userId | null, text }`，新建 `manual` + `confirmed` 标签；
+  - `PATCH /api/tags/:id`：请求体 `{ text?, status? }`，status 只允许 `confirmed`、`rejected`、`candidate`。手动改 text 时同步更新 `norm`，samples 不变。
+- 前端：
+  - 总览页加一张“心情”卡片：档位中文名、两个数值、最近 5 条事件及原因；
+  - 新页面“印象”：选择群 → 上方是群标签，下方是群友列表，每人显示标签；
+  - 每条标签显示：文字、状态、samples、激活度、可展开的证据；
+  - 操作：确认、否决、恢复为候选、改文字、手动新增；
+  - 否决的标签折叠显示。
+- 视觉遵守 §4。完成后跑 `npm run panel:build`。
+
+### 10.7 任务
+- [x] **B0 去掉“鱼”的称呼**（前端文案，B1 之前做，只改 `panel/`）：
+  - 总览状态句改为 `{N} 位眷属，{M} 位在线。`，N 为 0 时改为 `还没有眷属。`；卡片标题“鱼缸”改为“眷属”；“放入新的鱼”改为“添加新眷属”。
+  - 总览的账号子卡和试聊页的 bot 气泡不再用 `FishIcon`，改为与会话列表相同的首字头像（取 bot 昵称的第一个字，没有昵称时取“水”）。
+  - `FishIcon` 只保留在侧栏品牌区和登录页。CSS 里不再使用的 `.tank-fish`、`.bot-mark` 一并删除。
+  - 全仓 `panel/src` 中不得再出现“鱼”字（`FishIcon` 组件名除外）。测试数据中的昵称“小鱼”不改。完成后跑 `npm run panel:build`。
+- [x] **B1 提示词分块**（§10.2）
+- [x] **B2 数据库迁移 v4**（§10.5）
+- [x] **B3 情绪核心**（纯函数）：衰减、上限截断、`nextBand` 防抖。测试点：衰减数值；同一发送者每小时上限；静摩擦余量；5 分钟内的滑动摩擦；decay 换档受 10 分钟停留限制而 event 不受；一次跨多档。
+- [x] **B4 情绪接入**：评估调用与解析、被叫规则、`affect.md` 模板、mood 与 float 块接入生成、追踪。测试点：用假模型走完“回复 → 评估 → 换档 → 下一次提示词带新块”；90 秒间隔；解析失败不改状态；`enabled: false` 时完全不生效。
+- [x] **B5 标签核心**（纯函数）：观察、独立性、转正、新增判重（rejected 和 superseded 不复活）、推翻（manual 不可推翻）、激活度、注入选择与上限。测试点：上面每条规则 1–2 条用例。
+- [x] **B6 标签提取与注入**：触发条件、同群单飞、`tag_runs`、`extract-tags.md`、逐条校验、注入到 groupTags 与 memberTags 块、私聊不注入。测试点：假模型下的完整提取；两种触发条件；非法条目被丢弃且其余条目照常生效；解析失败时 `tag_runs` 仍然更新。
+- [x] **B7 控制台**（§10.6）。后端 API 要写测试，前端不写。
+
+- [x] **B8 审查修复**（2026-10-16 Claude 审查，B7 之后做，一个提交）
+  1. **一次提取最多加 1 次**（`src/core/impressions/service.ts` `applySubject`）：同一次提取里，同一标签的 samples 最多 +1，包括 new 命中已有标签的情况。本次已加过的，后续条目计为 dropped。原因：现在一段对话里出现两条证据，就能让候选标签直接转正，玩笑会变成事实。另外，observe 后要同步更新 `current` 里该标签的 samples / evidence / status；现在用的是旧值，同一轮第二次 observe 会覆盖掉第一次的证据。
+  2. **证据归属**：群友标签（`userId` 非空）的证据消息，发送者必须就是该 userId，否则丢弃（避免别人起哄的话变成这个人的标签）。群标签和群友标签都不得用 bot 自己的消息（`isSelf`）作证据。
+  3. `contradict` 产生的新标签也计入每个主语每次最多 3 条的上限。
+  4. `src/core/mood/service.ts` `afterReply`：模型返回后再取一次 `now()`，用它来 loadState、写事件和 saveState，不要继续用调用前的 `input.now`。
+  - 测试点：同一轮两条证据只加 1；同一轮两次 observe 后证据都保留；别人的消息作为某群友的证据会被丢弃；bot 消息作证据被丢弃；contradict 计入上限。
+- [x] **B9 主动冷却可配置**（用户提出，B8 之后做，一个提交）：默认 120 秒；支持全局默认和群会话覆盖/恢复继承；整数范围 0–3600 秒，0 关闭主动冷却但保留常规频率限制；控制台仅在全局默认与群会话显示，私聊不适用。测试点：旧配置默认及范围校验；API 全局/群级读写与继承；threshold 允许 0 关闭；pipeline 遵从自定义冷却。
+
+> **⛔ 停止点 M2-B**：B9 完成后停下。
+> **【用户】验收**：
+> 1. 在测试群聊天，让 bot 回几次；总览页的心情卡片里出现评估事件。故意气它一下，看档位是否切换，以及回复语气是否随之变化。
+> 2. 群里聊满 60 条且等待 30 分钟后，“印象”页出现候选标签。确认或否决几条；`@` bot 时，决策追踪的 `promptBlocks` 里能看到 groupTags 与 memberTags。
+> 3. 当天花费仍在预算内。
+
+---
+
+## 11. 长程任务包 M2-C/D/E：好感度、性格底色（静态）、作息与精力（2026-10-18 编写）
+
+> 分支：从 `dev/m2-affect` 新建 `dev/m2-persona`。按 §0.1 执行；无人值守时按 §7（§7.1 范围 = 本节 C0–E5）。
+> 顺序：C0 → C1…C5 → 🔍R1 → D1…D4 → 🔍R2 → E1…E5 → 🔍R3。每项一个提交。
+> **🔍 阶段审查**（R1/R2/R3）：这是 §0.1 第 1 条唯一允许的独立 review。读本阶段全部 diff，对照本节规格逐条核对，发现问题当场修复（一个 `fix` 提交），并在早上检查清单写出发现了什么。
+> **通用约定**同 §10.1：新表带 `account`；时间注入；不进 `sessionQueue`；预算 `exceeded` 时跳过新的模型调用。本节**不新增任何模型调用**。
+> **本节不做**：性格演进（Beta 计数）、私聊信息分级、表达方式学习、意图池。想到的写进 §6。
+
+### 11.0 通用防抖（C0）
+- 把 `src/core/mood/core.ts` 里的档位防抖抽成通用纯函数 `src/core/hysteresis.ts`：
+  ```
+  nextLevel({ current, since, lastChangeAt }, value, now, cause, params)
+  params = { bounds: number[]（升序边界）, staticMargin, slidingMargin, slidingWindowMs, decayDwellMs }
+  ```
+  档位用下标 0..bounds.length 表示。规则与 §10.3 完全一致（余量、滑动窗口、decay 才需要停留、可一次跨多档）。
+- 情绪改为调用它，**行为不变**，现有情绪测试不改就能通过。新增 2 条通用测试即可。
+
+### 11.1 好感度（C1–C5）
+**主语**：(account, userId)，**全局**，不区分群和私聊（关系是同一段关系）。bot 自己不建档。
+
+**数值**：`value` ∈ [0, 100]，初始值取配置 `affinity.initial`（默认 50）。配置新增顶层可选项 `affinity: { enabled: true, initial: 50 }`。
+
+**事件来源**（不调用模型）：
+1. **情绪评估**：每条 `source='appraise'`、`sender_id` 非空、`applied_dv ≠ 0` 的情绪事件，同时给该发送者产生一条好感事件，`delta = applied_dv × 20`（最大 ±3）。在情绪服务写入评估事件之后、同一同步流程内调用。
+2. **被叫**：某人叫 bot（私聊、@、叫名字）且通过频率限制时，`delta = +0.5`；同一人每个本地自然日最多计 3 次。
+3. **手动**：控制台直接设置数值，`source='manual'`，不受上限约束。
+
+**每日上限**（本地日期，以运行机器的时区为准）：同一人当天自动事件累计正向 `applied` 不超过 +5，负向不低于 −8，超出部分截掉。记录原始 `delta` 和实际 `applied`。
+
+**回落**：读取时计算，不用定时器。设距上次互动（任意自动事件）的天数为 d：
+- d ≤ 3 时不变；
+- d > 3 时，向 50 靠拢 `floor(d − 3)` 点，不越过 50。
+- 回落是**计算结果**，不改存储值；只有发生新事件时，才把当前计算值写回作为新的起点。
+
+**档位**：边界 `[20, 40, 60, 80]`，对应 5 档：
+
+| 下标 | key | 中文 |
+|---|---|---|
+| 0 | `cold` | 疏远 |
+| 1 | `cool` | 偏冷 |
+| 2 | `neutral` | 普通 |
+| 3 | `warm` | 熟络 |
+| 4 | `close` | 亲近 |
+
+**防抖参数**：用 C0 的函数，`staticMargin 3`、`slidingMargin 1`、`slidingWindowMs 1 天`、`decayDwellMs 3 天`。手动设置时直接按数值取档位，不经过防抖。
+
+**提示词**：
+- 新块 `affinity`，放在 `memberTags` 之后、`float` 之前；B1 的块顺序表相应更新为 `… mood → memberTags → affinity → float`。
+- 只针对**触发消息的发送者**；私聊和群聊都生效；`neutral` 档为空，不出块。
+- 文案放在 `prompts/affect.md` 新增的 `affinity` 键下，`{{name}}` 用 JSON 引号包住：
+  - cold：`你和{{name}}关系疏远，回应客气、简短，不主动开玩笑。`
+  - cool：`你和{{name}}不算熟，态度平淡一些。`
+  - warm：`你和{{name}}挺熟，说话随意，愿意接对方的梗。`
+  - close：`你和{{name}}很亲近，说话随意，会互损、会主动关心。`
+- `prompts/reply-system.md` 的 `system` 末尾追加一句：`不要向任何人说出你对别人的亲疏评价。`
+
+**数据库**（迁移 v5）：
+- `affinity_state(account, user_id, value, level, level_since, last_level_change_at, last_interaction_at, updated_at, PRIMARY KEY(account, user_id))`
+- `affinity_events(id, account, user_id, time, source 'appraise'|'called'|'manual'|'band', session_id NULL, delta, applied, reason, level_before NULL, level_after NULL)`
+- 索引：`affinity_events(account, user_id, time)`。
+
+**控制台**：
+- API：
+  - `GET /api/affinity`：所有人的列表，`{ userId, name, value, level, lastInteractionAt }`；`name` 取该用户在 `messages` 表里最近一次的 `sender_name`。
+  - `GET /api/affinity/:userId`：当前值，加最近 20 条事件。
+  - `PATCH /api/affinity/:userId`：请求体 `{ value }`，必须是 0–100 的整数。
+- “印象”页：
+  - 群友列表每人加好感度条和档位中文名，点开显示最近 5 条事件；
+  - 页面顶部新增一个分段“所有人”，列出全局好感度表，可以按数值排序，每行可以手动改值。
+
+**任务**：
+- [x] **C0 通用防抖**（§11.0）
+- [x] **C1 迁移 v5 与仓储**。测试点：v4 → v5 迁移；读写往返一致。
+- [x] **C2 好感度核心**（纯函数）：事件换算、每日上限、被叫每日 3 次、回落计算、档位。测试点：每条规则 1–2 条。
+- [x] **C3 接入**：情绪评估联动、被叫事件、affinity 块、rules 追加句、追踪中的 `promptBlocks` 包含 affinity。测试点：假模型下“评估 → 好感变化 → 下一次提示词带新块”；`affinity.enabled=false` 时完全不生效。
+- [x] **C4 控制台**（后端测试 + `panel:build`）。
+- [x] **C5 文档**：HANDOFF 加一段好感度数据流说明（≤10 行）。
+- [x] **🔍 R1 阶段审查**。
+
+### 11.2 性格底色，静态版（D1–D4）
+**人设文件头**：人设 `.md` 文件可以带 YAML 头。
+- 加载时剥掉文件头，不写进提示词。没有文件头时行为与现在**逐字相同**。
+- 格式：
+  ```
+  ---
+  traits:
+    order: 0      # 守序 -2 … +2 混沌
+    morality: 0   # 善良 -2 … +2 邪恶
+    talk: 0       # 文静 -2 … +2 话痨
+    mind: 0       # 思维 -2 … +2 情感
+  ---
+  ```
+- 每项都是 −2 到 2 的整数，缺省为 0。非法值让加载失败，报错写明字段名，行为与现有人设加载错误一致。
+- `loadPersona` 改为返回 `{ text, traits }`，所有调用处同步修改。
+
+**提示词**：
+- 新块 `traits`，放在 `persona` 之后、`rules` 之前。
+- 由 `prompts/traits.md` 渲染：每个维度取对应档位的一句话，0 档为空；四句之间用空格连接，全空时不出块。初始文案如下：
+
+| 维度 | −2 | −1 | +1 | +2 |
+|---|---|---|---|---|
+| order | 你很讲规矩，说话做事有条理，不爱乱开话题。 | 你比较守规矩，说话有分寸。 | 你有点随性，想到哪说到哪。 | 你很随性，爱跳话题、爱整活，不太按常理出牌。 |
+| morality | 你很善良，体贴别人，从不说伤人的话。 | 你心地好，吐槽也留着余地。 | 你有点坏心眼，爱开别人玩笑，但有分寸。 | 你爱恶作剧、嘴损、偶尔腹黑，但从不真的伤人、不拉踩、不碰别人的痛处。 |
+| talk | 你很文静，话很少，能一句说完绝不说两句。 | 你偏安静，话不多。 | 你挺爱说话。 | 你是个话痨，什么都想插一句。 |
+| mind | 你很理性，习惯讲道理、讲逻辑。 | 你偏理性，先想清楚再说。 | 你偏感性，在意别人的感受。 | 你很感性，情绪外露，容易共情。 |
+
+**话量的壳子效果**（talk 维度）：
+- 会话配置新增 `talkOffset`，取值 −2 到 2 的整数，默认 0，继承规则与其他字段相同。私聊不显示这一项，但仍按全局默认继承。
+- 有效值 `talk' = clamp(persona.talk + talkOffset, −2, 2)`。
+- 主动判断阈值：在 §9.2 第 6 步算出当前阈值后，再加 `−0.05 × talk'`，最后限制在 [0.2, 0.9]。
+- 拆条上限：`talk' ≤ −2` 时最多 1 条，`talk' = −1` 时最多 2 条，其余保持 3 条。
+- `traits` 块里的 talk 那一句按 `talk'` 选取，所以同一个人设在不同群里话量可以不同。
+
+**任务**：
+- [x] **D1 人设文件头解析**。测试点：无文件头时逐字不变；合法文件头；非法值报错；缺省为 0。
+- [x] **D2 traits 块与 talk 效果**。测试点：块位置与渲染；`talkOffset` 继承；阈值偏移与限幅；拆条上限。
+- [x] **D3 控制台**：
+  - 人设页编辑器上方加“性格底色”区：四个维度各一个 5 档分段选择，两端标注对应的中文词。改动写回文件头，保留正文不变。
+  - 会话设置加“在这里的话量”下拉，选项为 更安静 −2 / −1 / 不变 0 / +1 / 更话痨 +2，有继承 / 覆盖标注；私聊不显示。
+  - 后端：人设保存接口支持 traits，要写测试；完成后跑 `panel:build`。
+- [x] **D4 文档**：`personas/default.md` 加上全 0 的文件头作为示例；HANDOFF 加说明（≤8 行）。
+- [x] **🔍 R2 阶段审查**。
+
+### 11.3 作息与精力（E1–E5）
+**配置**：顶层可选项 `sleep: { enabled: false, bedtime: '02:00', wake: '09:00', wakeWords: ['起床', '醒醒', '别睡了'], goodnight: true }`，时间格式与 `modeSchedule` 相同，默认关闭。
+
+**是否在睡**：纯函数 `sleepPlan(now, bedtime, wake)`，按本地时间实时计算，支持跨午夜，**不存状态**。
+- 返回 `{ asleep, cycleKey, wakeAt, bedAt }`，`cycleKey` 为本次入睡时刻所在日期的 `YYYY-MM-DD`。
+- `bedtime === wake` 或格式非法时，一律视为醒着。
+
+**睡着时**：
+- 消息照常持久化；所有回复和主动判断都跳过，`reason='asleep'`（控制台中文标签“睡着了”）。
+- **叫醒**：主人（`owner`）在叫 bot 的消息里包含任一叫醒词时，进入“被叫醒”状态，持续 30 分钟，期间按醒着处理。这个状态只存内存，每次主人发言重新计时 30 分钟，重启后丢失。非主人一律不能叫醒。
+
+**晚安**（`goodnight: true` 时）：
+- 一个每分钟检查一次的定时器（启动时创建，关机时清理；时间可注入，便于测试）。发现刚从醒变成睡时，对**过去 2 小时内 bot 发过言的已启用会话**，按最近发言时间取最多 2 个，各发一条晚安。
+- 晚安语从 `prompts/sleep.md` 的 `goodnight` 列表里随机选一条，不调用模型。初始列表：`困了，先睡了`、`我去睡觉啦，晚安`、`撑不住了，晚安各位`。
+- 同一个 `cycleKey` 只发一轮（记在内存里，另写一条 `decisions` 记录 `reason='goodnight'`）。重启后，如果当前已经在睡，就不补发。
+- 发送走现有 deliver 路径，遵守闭嘴和频率限制。
+
+**精力**（醒着时才有，纯函数，读取时计算）：
+- `energy = clamp(1 − 0.8 × (now − 本次醒来时刻) / (入睡时刻 − 醒来时刻) − 0.01 × 过去 60 分钟本账号的回复数, 0, 1)`；
+- `sleep.enabled = false` 时 energy 恒为 1。
+- 效果：
+  - `energy < 0.35` 时，float 块加入词 `有点困`，与 arousal 的词用 `、` 连接；
+  - `energy < 0.25` 时，主动判断阈值再加 0.1（在 D2 的偏移之后、限幅之前）。
+
+**任务**：
+- [x] **E1 sleepPlan 与精力**（纯函数）。测试点：跨午夜；边界时刻；非法配置视为醒着；精力随时间和回复数下降；未启用时恒为 1。
+- [x] **E2 睡着拦截与叫醒**。测试点：睡着时被叫也不回；主人用叫醒词可以叫醒，30 分钟后恢复；非主人无效；重放不受影响。
+- [x] **E3 晚安定时器**。测试点：用假时钟走过入睡时刻，只发一轮、最多 2 个会话；闭嘴时不发；重启后不补发。
+- [x] **E4 精力接入与控制台**：
+  - float 词和阈值加成；
+  - 总览页心情卡片旁加“作息”卡片：醒着 / 睡着 / 被叫醒，精力条，下次入睡或醒来的时间；
+  - 全局设置区加作息设置：开关、入睡与醒来时间、晚安开关。写入顶层 `sleep`，走与 `/api/defaults` 相同的校验与热重载，新增 `GET/PATCH /api/sleep`。
+  - 后端要写测试；完成后跑 `panel:build`。
+- [x] **E5 文档**：HANDOFF 加说明（≤8 行）。
+- [x] **🔍 R3 阶段审查**。
+
+> **⛔ 停止点 M2-CDE**：R3 完成后停下。
+> **【用户】验收**：
+> 1. 在“所有人”里看到好感度；和 bot 聊几轮正面的话，好感上升，`promptBlocks` 里出现 affinity；把某人手动改到 10，它对这个人的态度明显冷淡。
+> 2. 人设页把 talk 设为 −2，回复只拆 1 条、主动接话变少；某个群的话量设为 +2，这个群里话变多。
+> 3. 把入睡时间设为 2 分钟后：到点时最近说过话的群收到一条晚安；之后 @ 它不回；主人说“醒醒”后它会回复。
+
+---
+
+## 12. 控制台 v2（2026-10-18 编写）
+
+> 分支：从 `dev/m2-persona` 新建 `dev/console-v2`。按 §0.1 执行；无人值守时按 §7（§7.1 范围 = 本节 V0–V10）。
+> **视觉参照**：`doc/design/console-v2/*.html`，是设计稿导出的静态页，用浏览器直接打开就能看。**结构、间距、配色、文案以它为准**，不要求逐像素一致。参照页里的数字和名字都是示意数据。
+> 顺序：V0 → V1 → V2 → V3 → 🔍R4 → V4 → V5 → V6 → 🔍R5 → V7 → V8 → V9 → V10 → 🔍R6。阶段审查的做法同 §11。
+> **本节不做**：多账号切换的实际功能（切换器只做外观，账号数为 1 时下拉禁用）、深色模式、CLI 的多轮会话。
+
+### 12.0 全局（V0）
+- `panel/src/styles/tokens.css` 改为新色板：
+  - 背景 `#F4F5F2`，卡片 `#FFFFFF`，边框 `#DCE1DD`
+  - 正文 `#12201E`，次要文字 `#56635F`
+  - 主色 `#1C5F5A`，主色浅底 `#E1EEEB`，选中底 `#EFF4F2`
+  - 警示 `#A8461F`
+- 统一的聚焦描边：`outline: 2px solid` 主色，`outline-offset: 1px`。占位文字用 `#7C8884`。
+- 卡片圆角 14px；页面标题下加一条 1px 分隔线。
+- **侧栏**（参照任一页）：
+  - Logo；
+  - 眷属切换器：头像、在线状态点、`在线 · {精力词}`；只有一个账号时不可点击；
+  - 导航分三组：日常（总览、会话、印象）、塑造（人设）、系统（模型、用量、试聊与决策），**删除“即将开放”分组**；
+  - 底部放三道线描水波 SVG（透明度 0.25，直接照抄参照页里的 path）和“全部闭嘴”按钮。原来总览页右上角的“全部闭嘴”删掉，功能不变。
+- 精力词：energy ≥ 0.6 为“精神不错”，≥ 0.35 为“有点累”，否则为“有点困”；未启用作息时显示“在线”。
+- 页面上常驻的长说明文字，改成字段旁的 ⓘ 提示，用 `title` 属性加 `aria-label` 实现。
+
+### 12.1 会话页（V1，参照 `SessionsV2.html`）
+- **布局**：
+  - 宽度 ≥ 1200px 时，列表固定 300px 并吸顶（sticky），详情占满剩余宽度；
+  - 窄于 1200px 时上下排列，两者都撑满整行。
+- **列表行**：首字头像、名称、号码与人数、右侧一个启用状态点（不再是开关）；有任何覆盖项时，名称后加一个小圆点。“全局默认”固定在最上方。
+- **详情顶部常驻**：
+  - 标题行：头像、名称、会话 id、“恢复全部继承”文字按钮、启用开关。
+  - “什么时候说话”：一行四格分段按钮，下方一行显示当前选中模式的说明。
+  - “叫它的名字”：可删除的标签，末尾一个圆形 ＋ 按钮，点击后就地出现输入框，回车添加、Esc 取消。
+  - “在这里的话量”：−2 到 +2 的 5 档滑块，两端标“更安静 / 更话痨”，中间标“不变”；私聊不显示。
+  - 被覆盖的字段，名称后加一个小圆点；悬停小圆点显示“恢复继承”菜单项。**删除**原来每组的“本群覆盖 · 恢复继承”字样。
+- **折叠组**（用 `<details>`，标题行写摘要，默认收起）：
+  - 时间表：摘要如 `23:00–06:00 只在被叫时 · 其余时间积极`，没有时段时写 `未设置`。展开后显示一条 24 小时色带，每种模式一种颜色，下面是图例和“编辑时段”按钮。点击后弹出对话框编辑，复用现有的时段编辑逻辑，**点“完成”立即保存**，去掉单独的“保存时段”按钮，草稿规则不变。
+  - 节奏与限制：摘要为 `每人 {n}/分 · 全群 {n}/分 · 间隔 {n} 秒 · 主动冷却 {n} 秒 · 参考 {n} 条`，展开后是数字输入网格。私聊只显示适用的几项。
+  - 补充说明：摘要为前 20 字，或 `未填写 · 继承全局`。
+- 展开 / 收起状态按会话记在 `localStorage` 里（读写包在 try/catch 中）。
+- 页面底部一行：`改动立刻生效 · HH:mm 已保存`。
+
+### 12.2 印象页（V2，参照 `ImpressionsV2.html`）
+- 顶部：分段“群聊 / 所有人”，加群选择下拉。
+- **群的氛围**：一行标签，末尾一个圆形 ＋ 按钮，点击后就地输入。
+- **群友**：每人一行，依次是头像、名字与 QQ、好感度条与档位名（宽 150px）、标签、＋ 按钮、`+N 已否决`（点击展开已否决的标签）。
+- **标签样式**：
+  - `confirmed`：主色浅底实线；
+  - `candidate`：白底虚线，带 `samples/2` 小字；
+  - `manual`：主色实底白字；
+  - `rejected`：默认不显示。
+- **点击标签**：弹出浮层，显示文字、状态、观察次数、激活度、最近 1–3 条证据（引文加时间），以及按钮 确认 / 否决 / 改字 / 恢复为候选（按当前状态显示合适的按钮）。点外部或按 Esc 关闭。
+- 删除原来的大输入框。“所有人”视图保持 C4 的功能，只换成新样式。
+- 后端不变。
+
+### 12.3 用量页（V3，参照 `UsageV2.html`）
+- **数据**：迁移 v6，`usage` 表加列 `account INTEGER NULL`。
+  - `recordUsage` 的所有调用处，凡是知道账号的（回复、判断、看图、评估、提取、试聊）都要填上；
+  - 旧数据保持 NULL，界面上显示为“未知”。
+- **API**：`GET /api/usage?range=today|7d|30d`，返回：
+  ```
+  { totals: { costCny, calls, cacheHitRatio, budgetToday: { used, limit } },
+    rows: [{ provider, account | null, calls, costCny, avgLatencyMs, cacheHitRatio, daily: number[], bySlot: [{ slot, calls, costCny, avgLatencyMs }] }] }
+  ```
+  - 分组键为 `(provider, account)`；
+  - `daily` 固定为 7 个点（最近 7 个本地日的调用次数），与 range 无关；
+  - `cacheHitRatio = cached_tokens / input_tokens`，input 为 0 时为 null；
+  - range 按本地日期计算。
+- **界面**：
+  - 右上角分段“今日 / 7 天 / 30 天”；
+  - 一张汇总卡：花费、调用、缓存命中，加今日预算进度条；
+  - 主体是表格：接入 · 眷属、调用、花费、平均耗时、缓存命中、7 天迷你折线（内联 SVG）。点一行展开按用途细分；
+  - CLI 接入的花费显示 `—`；
+  - 删除“关于用量记录”卡片。
+
+### 12.4 模型接入（V4–V6，参照 `ModelsV2.html`）
+**配置结构**（向后兼容，旧配置不改也能运行）：
+- `providers.<id>` 增加 `kind: 'api' | 'cli'`，默认 `'api'`。
+  - api：现有 `baseUrl`、`apiKeyEnv`；新增可选 `label`（显示名，默认用 id）、`reasoningField`（默认 `'reasoning_effort'`，设为 `'none'` 表示该接入不支持思考强度）。
+  - cli：`command`（字符串）、`args`（字符串数组，默认 `[]`）、`label`、`prewarm: boolean`（默认 false）、`timeoutSec`（默认 120）。
+- `slots.<slot>[]` 的每一项增加可选参数：`temperature`（0–2）、`maxTokens`（正整数）、`reasoning`（`'off' | 'low' | 'medium' | 'high'`，默认 `'off'`）。
+  - 调用 API 时：`temperature` 和 `maxTokens`（对应 `max_tokens`）只有设置了才传；
+  - `reasoning ≠ 'off'` 且该接入的 `reasoningField ≠ 'none'` 时，才以 `{ [reasoningField]: reasoning }` 加进请求体。
+- 价格表 `pricing` 不变；CLI 接入不计费，`cost_cny = 0`。
+- 实际发送的参数（temperature / maxTokens / reasoning，未设置的不列）写进 N3 追踪中 generate 步骤 detail 的 `params` 字段。
+
+**CLI 调用**（V5）：
+- **单次调用**：用 `spawn(command, args)`，不经过 shell。把 messages 拼成纯文本写进 stdin：每条消息之间空一行，system 消息在前加 `[系统]`，user 消息在前加 `[对话]`。写完关闭 stdin，读取全部 stdout 作为回复文本，去掉首尾空白。
+  - 退出码不为 0、超过 `timeoutSec`、或输出为空，都算失败，交给降级链里的下一项。
+- **预热**（`prewarm: true`，界面上叫“常驻后台”）：
+  - 始终保持**一个**已经启动、正在等待 stdin 的空闲进程；请求到来时直接用它，用完就结束它，同时立刻再启动一个新的。
+  - 这样省掉了启动时间，又**不会让上下文在请求之间累积**。这是用户“常驻”需求的实现方式，**不做多轮常驻会话**。
+  - 预热进程崩溃或意外退出时，按 2 秒到 30 秒的指数退避重启。
+  - 状态（运行中 / 已停止 / 重启中、预热进程的 pid、累计处理次数）放在内存里，供 API 读取。
+  - 关机时结束所有预热进程。
+- CLI 的调用同样写进 usage 表，token 数记 0。
+- 测试一律用假命令，比如 `node -e` 写的回显脚本，**不调用任何真实 CLI**。
+
+**密钥**：
+- `PUT /api/providers/:id/key`，请求体 `{ key }`：写入仓库根目录的 `.env`，键名为该接入的 `apiKeyEnv`。
+  - 已有这一行就原地替换，没有就追加；其他行与注释保持原样；先写临时文件再改名，保证原子写入。
+  - 同时更新 `process.env`。
+- **接口和日志都不得返回或打印密钥原文**。API 只返回 `{ set: boolean, last4 }`。
+
+**API**（V4）：
+- `GET /api/models`：所有接入（不含密钥，含 `keyStatus`，CLI 接入另含运行状态）和所有用途的配置。
+- `PATCH /api/providers/:id`、`POST /api/providers`、`DELETE /api/providers/:id`：被某个用途引用的接入不能删除，返回 409 并列出引用它的用途。
+- `PATCH /api/slots/:slot`：请求体是整条降级链数组，校验每一项引用的接入都存在。
+- `POST /api/providers/:id/test`：
+  - api：发一条 `max_tokens: 1` 的最小请求；cli：用单次调用发送“ping”；
+  - 返回 `{ ok, latencyMs, error? }`；
+  - 写进 usage 表，slot 记为 `'test'`；
+  - 测试中用假客户端。
+- 所有写操作都走现有的配置校验、原子写入和热重载。
+
+**界面**（V6）：新页面“模型”。
+- 上半部分是接入卡片网格：名称、类型徽标、地址或命令、密钥状态 `••••last4`，以及状态行。
+  - api 卡片：“测试连接”“编辑”；
+  - cli 卡片：“常驻后台”开关（就是 `prewarm`）、“重启”，状态显示 pid 和处理次数；
+  - 右上角“添加 API 接入”“添加 CLI 接入”，点击后打开同一个编辑对话框，内容按类型切换。
+- 下半部分是“用途”表：回复 / 主动判断 / 提取与评估 / 看图（对应 `reply` / `judge` / `extract` / `vision`）。
+  - 每行显示降级链（用“→”连接），点击打开编辑对话框：增删项目、上下移动、为每一项选择接入、填模型名，以及温度、思考强度、最大长度。
+- 用途表的标题行加一句提示：回复建议用 API，CLI 适合后台任务。
+
+### 12.5 人设（V7–V9，参照 `PersonaV2.html`）
+**文件格式**（`personas/*.md`）：
+```
+---
+traits: { order: 0, morality: 0, talk: 0, mind: 0 }
+---
+# {{name}}
+
+## 身份
+## 年龄
+## 背景
+## 说话方式
+## 口头禅        （每行一个 “- ”列表项）
+## 常用表情      （同上）
+## 对熟人
+## 对陌生人
+## 对主人
+## 底线          （同上）
+## <其他任意标题>  （进入“其他小节”）
+```
+- **表单字段与小节一一对应**，小节标题必须完全一致。标题顺序不限；保存时按上面的顺序写出，“其他小节”按原顺序排在最后。
+- 第一个 `##` 之前、`# {{name}}` 之后的正文，作为“开头说明”字段，原样保留。这一条用来兼容现有的 `default.md`。
+- 解析和生成写成纯函数 `src/persona/sections.ts`：`parseSections(md)`、`buildSections(form)`。
+  - 要求往返无损：`build(parse(x))` 再 `parse` 的结果，必须和第一次 parse 的结果相等。
+  - 空小节在写出时省略。
+- 运行时注入**不变**：仍然是去掉文件头后的正文，替换 `{{name}}`。所以表单只是编辑文件的另一种方式。
+
+**预览接口**（V7）：`POST /api/personas/preview`，请求体 `{ content }`，返回 `{ blocks: [{ id, label, text }], chars, estTokens }`。
+- persona 按小节拆成多块，label 为 `persona · 身份` 等；traits 一块。
+- 渲染使用运行时的同一套函数。
+- `estTokens = ceil(chars / 1.3)`。
+
+**导入**（V8）：`POST /api/personas/import`，请求体 `{ filename, text }`。
+- 用 `extract` 槽位调用新模板 `prompts/persona-import.md`，要求模型只输出 JSON：
+  ```
+  { "fields": { "身份": "", "年龄": "", "背景": "", "说话方式": "", "口头禅": [], "常用表情": [], "对熟人": "", "对陌生人": "", "对主人": "", "底线": [] },
+    "traits": { "order": 0, "morality": 0, "talk": 0, "mind": 0 },
+    "other": [{ "heading": "", "text": "" }] }
+  ```
+- 模板中要求：**只能改写原文已有的信息，不得编造**；对不上任何字段的段落，原样放进 `other`；traits 拿不准时填 0。
+- 服务端校验后，用 `buildSections` 生成草稿，返回 `{ draft, mappedCount, otherCount }`，**不保存**。
+- 解析失败返回 422，并附带原因。
+
+**界面**（V9）：
+- 顶部：人设库改成一排胶囊（当前使用的那个为实底），右侧是“未保存更改”和“保存”。
+- 导入后出现提示条：`“{文件名}”已整理好 · 拆进了 N 个表单项，M 段放进了“其他小节”。确认前不会保存。`，带三个按钮：
+  - **逐项对照**：打开对话框，左边原文，右边整理后的各字段；
+  - **放弃**；
+  - **接受**：载入表单，标记为未保存。
+- **左侧表单**分五组卡片：它是谁 / 性格底色 / 它怎么说话 / 它怎么对人 / 底线，最后是可折叠的“其他小节”（可增删）。
+  - 性格底色用 5 档滑块，两列排列；
+  - 口头禅、常用表情、底线用标签或列表加 ＋ 添加；
+  - 每个字段右上角用小字显示对应的小节名；
+  - 聚焦某个字段时，该字段和右侧对应的预览块同时高亮。
+- **右侧**：“实际注入”预览，带“预览 / 源文件”切换；源文件视图就是可直接编辑的 Markdown 文本框。
+  - 预览随编辑内容自动刷新，请求加 300ms 防抖；
+  - 底部显示字数和预计 token 数，以及“用它试聊 →”。
+  - 吸顶规则同会话页。
+- 表单和源文件编辑同一份内容：切换视图时，先用 `parseSections` / `buildSections` 同步。
+
+### 12.6 任务
+- [x] **V0 全局样式与侧栏**（§12.0）。把参照页复制进 `doc/design/console-v2/`，这一步已经完成，不用再做。
+- [x] **V1 会话页**（§12.1）
+- [x] **V2 印象页**（§12.2）
+- [x] **V3 用量**：迁移 v6、account 写入、API、页面。测试点：分组、range 边界、缓存命中率为 null、旧数据显示为“未知”。
+- [x] **🔍 R4 阶段审查**（V0–V3）
+- [x] **V4 模型配置与 API**：schema 扩展与兼容、参数注入、密钥写入 `.env`、增删改查与引用检查、测试连接。测试点：旧配置能加载；temperature / maxTokens / reasoning 是否注入请求体；`reasoningField: 'none'` 时不注入；`.env` 原地替换、追加、保留注释；任何接口都不返回密钥原文；删除被引用的接入返回 409。
+- [x] **V5 CLI 调用**：单次调用、预热、超时、失败后降级、退避重启、关机清理。测试点：用假命令覆盖以上每一项；预热进程用过一次就被替换。
+- [x] **V6 模型页**（§12.4 界面）
+- [x] **🔍 R5 阶段审查**（V4–V6）：初审发现项已修复并通过 457 项全测；按 §0.1 不做二次独立审查。
+- [x] **V7 人设小节与预览**：`sections.ts` 与预览接口；459/459。
+- [x] **V8 人设导入**：用假模型；测试非法 JSON、字段类型错误、traits 越界；462/462。
+- [x] **V9 人设页**（§12.5 界面）：表单、导入对照与实际注入预览；build123；463/463。
+- [x] **V10 文档**：HANDOFF 补充模型接入、CLI 预热、人设文件格式（14 行）；PLAN §4 指向 `doc/design/console-v2/`；463/463。
+- [x] **🔍 R6 阶段审查**（V7–V10）：初审发现 4 项问题，已在 cf9611b 修复；2026-10-19 由 Claude 复核通过：初审不通过，4 项已修复；按 §0.1 不二审，修复快照未获独立通过，剩余审查门槛失败，按 §7.6 停止。
+
+- [x] **V11 人设页对齐设计稿**（2026-10-19，用户验收后提出；在 R6 之后做，一个提交；参照 `doc/design/console-v2/PersonaV2.html`）
+  1. **布局**：
+     - 宽度 ≥ 1200px 时左右两栏：左边表单 `flex: 1 1 560px`，右边预览 `flex: 1 1 340px` 并吸顶；窄于 1200px 时上下排列，两者都撑满整行。
+     - 左栏五组卡片（它是谁 / 性格底色 / 它怎么说话 / 它怎么对人 / 底线）加“其他小节”，**从上到下排列，每组撑满左栏宽度**，组与组之间不得并排。
+     - 组内的短字段可以用 `repeat(auto-fit, minmax(220px, 1fr))` 两列排列，比如“名字 + 年龄”“对熟人 + 对陌生人”“口头禅 + 常用表情”。
+  2. **控件类型**：
+     - 名字、年龄、身份、对熟人、对陌生人、对主人：单行 `<input>`，高 42px；
+     - 开头说明、背景、说话方式：多行文本框，默认 2–3 行，可拉伸；
+     - 口头禅、常用表情：标签加圆形 ＋ 按钮；
+     - 底线：一条一行的列表，带 × 删除和“＋ 添加一条”。
+  3. **性格底色**：改成 5 档滑块，`<input type="range" min=-2 max=2 step=1>`。四个维度两列排列，每个维度上方是名称和当前值，下方两端各标一个词。删除现有的按钮组。
+  4. **两端的词固定写死**，与 §11.2 一致，不得改动：规矩 = 守序 / 混沌；善意 = 善良 / 邪恶；话量 = 文静 / 话痨；思维 = 理性 / 感性。
+     - 同时修正 `prompts/persona-import.md` 里对 traits 含义的描述：order 从守序到混沌，morality 从善良到邪恶（邪恶一端最多到损友、腹黑），talk 从文静到话痨，mind 从理性到感性。
+  5. **去掉“标题行 `{{name}}`”字段**，改为“名字”字段：
+     - 留空表示跟随小号的 QQ 昵称，占位文字为 `跟随 QQ 昵称`；
+     - 填了就是固定名字。保存时 `# ` 标题行写入该名字；留空时写 `# {{name}}`；
+     - 用户在界面上永远看不到 `{{name}}`。
+  - 测试点：名字留空 / 填写时 `buildSections` 的输出；traits 词表是常量（加一个快照测试）。前端只要求 `panel:build` 成功。
+
+- [x] **V12 小号上线更快、状态更准**（2026-10-19，用户实测日志；V11 之后做，一个提交）
+  - **现象**：小号 QQ 已经登录，`npm start` 后约 40 秒才上线，期间账号一直显示 `offline`。时间线：
+    1. 00:46:32–00:46:51，SnowLuma 的 probe-login 连续 4 次没认出 PID 32168 的身份；
+    2. 00:46:56 认出后注入，`retryNow` 立即重连，但 SnowLuma 的 WS 在 00:46:58 才开始监听，这次连接直到 10 秒超时才失败；
+    3. 随后进入指数退避，00:47:14 才连上。
+  1. **注入后快速重连**：`onAdapterInjected` 调用 `retryNow` 后，进入 30 秒的“快速重连窗口”。窗口内每次失败后 1 秒重试，连接超时设为 3 秒；窗口结束仍未连上，回到原有的指数退避。连上后窗口立即结束。
+  2. **未注入前不报 offline**：托管状态为 `waiting_qq_login` 时，该账号状态显示为新值 `waiting_login`，控制台中文为“等待小号登录”。这段时间里适配器不发起连接；收到注入回调或托管状态变成 online 后，才开始连接。非托管模式（`host.enabled=false`）行为不变。
+  3. **探测诊断日志**：qq-watcher 每次探测都记一条 debug 日志：`PID {pid} 探测结果：{null | 身份未知 | 其他账号 | 目标账号}`。托管状态为 `waiting_qq_login` 时，扫描间隔临时改为 2 秒，上线后恢复为 `scanIntervalSec`。
+  - **原因说明**（写进 HANDOFF，不需要修）：SnowLuma 通过 QQ 快速登录端口（4301–4310）的 `pt_get_uins` 识别账号，只有返回恰好 1 个账号时才判定身份。主号和小号同时登录时，推测会返回 2 个账号而判定失败，要多试几次才能认出来（用第 3 条的诊断日志确认）。这是 SnowLuma 的行为，我们只能靠缩短扫描间隔来减少等待。
+  - 测试点：用假时钟验证注入后 1 秒一次的重试与 3 秒超时、30 秒后回到退避；`waiting_login` 期间不连接；扫描间隔的切换。
+
+> **⛔ 停止点 V**：V12 完成后停下。
+> **【用户】验收**：
+> 1. 会话页：窄窗口时上下排列；折叠组的摘要正确；改时段点“完成”后立即生效。
+> 2. 印象页：点 ＋ 加标签；点标签弹出证据。
+> 3. 用量：切换时间范围；不同接入分行显示。
+> 4. 模型页：给某个用途设温度后试聊，决策追踪里能看到参数；在 `.env` 里确认密钥已写入，但界面只显示后四位。
+> 5. 导入一份随手写的人设 md，逐项对照后接受；表单与源文件切换后内容一致。

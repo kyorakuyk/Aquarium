@@ -4,14 +4,16 @@ import { createRepository } from '../store/repository.ts';
 import { callSlot } from '../llm/slots.ts';
 
 const config = loadConfig();
+const account = config.accounts[0]?.uin ?? null;
 const database = openDatabase();
 const repository = createRepository(database);
 
 try {
   const result = await callSlot('reply', [{ role: 'user', content: '你好' }], {
     config,
+    account,
     costToday: () => repository.costToday(),
-    recordUsage: (usage) => repository.recordUsage(usage),
+    recordUsage: (usage) => repository.recordUsage({ ...usage, account }),
   });
 
   console.log(`模型：${result.provider}/${result.model}`);

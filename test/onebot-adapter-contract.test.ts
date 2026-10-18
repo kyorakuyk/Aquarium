@@ -1,0 +1,160 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { OneBotAdapter } from '../src/adapters/onebot/adapter.ts';
+import {
+  account,
+  createFakeClient,
+  createFixture,
+  createTimerQueue,
+  groupEvent,
+} from './onebot-adapter-test-helpers.ts';
+test('离线时所有公开 OneBot 动作立即 fail fast', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => fake.client);
+  const session = { account, kind: 'group' as const, peer: 123456 };
+
+  await assert.rejects(adapter.send(session, []), /not online/u);
+  await assert.rejects(adapter.listGroups(), /not online/u);
+  await assert.rejects(adapter.listFriends(), /not online/u);
+  await assert.rejects(adapter.history(session, 1), /not online/u);
+  await assert.rejects(adapter.markRead(session), /not online/u);
+  await assert.rejects(adapter.setTyping(session), /not online/u);
+  await assert.rejects(adapter.recall('1'), /not online/u);
+  assert.equal(fake.state.connectCalls, 0);
+});
+
+test('读取首个 wsServers、关闭 SDK 重连并校验登录账号', async (t) => {
+  const root = createFixture(t, [
+    { host: '127.0.0.1', port: 3001, path: '/onebot' },
+    { host: '127.0.0.2', port: 3002, path: '/ignored' },
+  ]);
+  const fake = createFakeClient();
+  let capturedOptions: unknown;
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, (options: unknown) => {
+    capturedOptions = options;
+    return fake.client;
+  });
+  const statuses: string[] = [];
+  adapter.onStatus((status) => statuses.push(status));
+
+  await adapter.connect();
+
+  assert.deepEqual(capturedOptions, {
+    url: 'ws://127.0.0.1:3001/onebot',
+    accessToken: undefined,
+    requestTimeoutMs: 10_000,
+    reconnect: false,
+  });
+  assert.equal(fake.state.connectCalls, 1);
+  assert.deepEqual(statuses, ['connecting', 'online']);
+  adapter.close();
+  assert.equal(statuses.at(-1), 'offline');
+});
+
+test('连接后公开已校验登录账号的昵称供人设占位使用', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => fake.client);
+
+  await adapter.connect();
+
+  assert.equal(adapter.nickname, 'Aquarium');
+  adapter.close();
+});
+
+test('拒绝连接到与配置账号不一致的登录账号', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient(account + 1);
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => fake.client);
+  const statuses: string[] = [];
+  adapter.onStatus((status) => statuses.push(status));
+
+  await assert.rejects(adapter.connect(), /与配置账号 .* 不一致/);
+  assert.equal(fake.state.closeCalls, 1);
+  assert.deepEqual(statuses, ['connecting', 'offline']);
+});
+
+test('onMessage 忽略自身消息并支持取消订阅', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => fake.client);
+  const received: unknown[] = [];
+  const unsubscribe = adapter.onMessage((message) => received.push(message));
+
+  await adapter.connect();
+  fake.client.emitMessage(groupEvent(account, 10, 1_700_000_000));
+  fake.client.emitMessage(groupEvent(42, 11, 1_700_000_001));
+  unsubscribe();
+  fake.client.emitMessage(groupEvent(43, 12, 1_700_000_002));
+
+  assert.equal(received.length, 1);
+  assert.deepEqual(received[0], {
+    session: { account, kind: 'group', peer: 123456 },
+    messageId: '11',
+    senderId: 42,
+    senderName: 'user-42',
+    segments: [{ type: 'text', text: 'hello' }],
+    plainText: 'hello',
+    mentionsSelf: false,
+    replyToSelf: false,
+    time: 1_700_000_001_000,
+  });
+});
+
+test('发送、历史顺序与标记已读保持在当前会话范围内', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  fake.state.groupHistory.push(
+    groupEvent(42, 20, 1_700_000_002),
+    groupEvent(43, 19, 1_700_000_001),
+  );
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => fake.client);
+  const session = { account, kind: 'group' as const, peer: 123456 };
+
+  await adapter.connect();
+  const sent = await adapter.send(session, [
+    { type: 'text', text: 'hello' },
+    { type: 'unknown', raw: { type: 'video' } },
+  ]);
+  const history = await adapter.history(session, 2);
+  await adapter.markRead(session);
+
+  assert.deepEqual(sent, { messageId: '501' });
+  assert.deepEqual(fake.state.sentGroup, [[123456, [{ type: 'text', data: { text: 'hello' } }]]]);
+  assert.deepEqual(history.map((message) => message.messageId), ['19', '20']);
+  assert.deepEqual(fake.state.markedGroup, [[20, 123456]]);
+});
+
+test('好友与群列表使用 Aquarium 联系人字段', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => fake.client);
+
+  await adapter.connect();
+  assert.deepEqual(await adapter.listGroups(), [{ groupId: 123456, name: '测试群', memberCount: 8 }]);
+  assert.deepEqual(await adapter.listFriends(), [{ userId: 42, nickname: '朋友', remark: '老友' }]);
+});
+
+test('只给私聊设置输入状态，群聊不发送该动作', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => fake.client);
+
+  await adapter.connect();
+  await adapter.setTyping({ account, kind: 'group', peer: 123456 });
+  await adapter.setTyping({ account, kind: 'private', peer: 42 });
+
+  assert.deepEqual(fake.state.rawCalls, [['set_input_status', { user_id: 42, event_type: 1 }]]);
+});
+
+test('recall 将消息号转换为 OneBot 数字 ID', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => fake.client);
+
+  await adapter.connect();
+  await adapter.recall('123');
+
+  assert.deepEqual(fake.state.recalled, [[123]]);
+});
