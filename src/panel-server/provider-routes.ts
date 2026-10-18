@@ -115,6 +115,7 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
         ...(provider.kind === 'cli' ? { runtime: cliRuntime.status(id) } : {}),
       })),
       slots: config.slots,
+      pricing: config.pricing,
     });
   });
 

@@ -174,6 +174,23 @@ export interface ImpressionsView {
   members: Array<{ userId: number; name: string; affinity: AffinityView; tags: TagView[] }>;
 }
 
+export type HistoryImportPhase = 'fetching' | 'extracting' | 'done' | 'cancelled' | 'error';
+
+export interface HistoryImportJobView {
+  id: string;
+  sessionId: string;
+  phase: HistoryImportPhase;
+  fetched: number;
+  inserted: number;
+  windowsDone: number;
+  windowsTotal: number;
+  tagsInserted: number;
+  tagsObserved: number;
+  costCny: number;
+  error?: string;
+  cancelRequested?: boolean;
+}
+
 export type AffinityLevel = 'cold' | 'cool' | 'neutral' | 'warm' | 'close';
 
 export interface AffinityView {
@@ -326,6 +343,7 @@ export interface ModelSlotEntryView {
 export interface ModelsView {
   providers: ModelProviderView[];
   slots: Record<string, ModelSlotEntryView[]>;
+  pricing: Record<string, { input: number; cachedInput: number; output: number }>;
 }
 
 export interface DecisionStep {

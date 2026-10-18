@@ -126,10 +126,12 @@ test('models API and provider lifecycle manage configs without ever returning th
     const modelsBody = JSON.parse(modelsText) as {
       providers: Array<{ id: string; kind: string; keyStatus: { set: boolean; last4: string } }>;
       slots: Record<string, Array<{ provider: string }>>;
+      pricing: Record<string, { input: number; cachedInput: number; output: number }>;
     };
     assert.ok(modelsBody.providers.some((provider) => provider.id === 'local-cli'));
     assert.deepEqual(modelsBody.providers.find((provider) => provider.id === 'deepseek')?.keyStatus.set, false);
     assert.ok(modelsBody.slots.reply?.length);
+    assert.equal(typeof modelsBody.pricing['deepseek-flash']?.input, 'number');
 
     const deleteReferenced = await app.request('/api/providers/deepseek', { method: 'DELETE', headers: authHeaders() });
     assert.equal(deleteReferenced.status, 409);
