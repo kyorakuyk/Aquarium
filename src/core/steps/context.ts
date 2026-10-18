@@ -3,6 +3,7 @@ import { captionIncomingImages, messageTextWithImageCaptions } from '../images.t
 import { loadPersona } from '../../persona/load.ts';
 import { effectiveTalkLevel, renderTraitsBlock } from '../../persona/traits.ts';
 import { renderFloatBlock } from '../mood/render.ts';
+import { redactSensitiveText } from '../impressions/sensitive-text.ts';
 import { createSlotCallOptions } from './call-options.ts';
 import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep } from './types.ts';
@@ -100,8 +101,18 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     },
     replySystemTemplate: ctx.state.promptTemplates.replySystem,
   };
+  const injectedAffectBlocks = {
+    ...(moodBlocks.mood ? { mood: redactSensitiveText(moodBlocks.mood) } : {}),
+    ...(moodBlocks.float ? { float: redactSensitiveText(moodBlocks.float) } : {}),
+    ...(affinityBlock ? { affinity: redactSensitiveText(affinityBlock) } : {}),
+  };
+  if (Object.keys(injectedAffectBlocks).length > 0) {
+    ctx.state.injectedAffectBlocks = injectedAffectBlocks;
+  }
   ctx.state.prompt = buildPromptMessages(promptOptions);
   ctx.state.promptBlocks = describePromptBlocks(promptOptions);
   ctx.state.promptHash = hashPromptMessages(ctx.state.prompt);
-  return { next: true };
+  return Object.keys(injectedAffectBlocks).length > 0
+    ? { next: true, detail: { injectedAffectBlocks } }
+    : { next: true };
 });

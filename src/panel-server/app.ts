@@ -219,6 +219,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     getConfig: options.getConfig,
     repository: options.repository,
     accounts: options.accounts,
+    sleepWakeState: options.sleepWakeState,
     now,
   });
   registerSleepRoutes(app, {

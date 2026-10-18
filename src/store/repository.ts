@@ -142,6 +142,7 @@ export interface StoreRepository extends PersonaVersionRepository {
   setCaption(key: string, caption: string, time?: number): void;
   recordDecision(decision: DecisionRecord): void;
   recentDecisions(count: number): StoredDecision[];
+  latestReplyDecision(): StoredDecision | undefined;
   decisionMessageText(sessionId: string, messageId: string): string | undefined;
   decisionById(id: number): StoredDecision | undefined;
   hasDebugTrace(sessionId: string, messageId: string): boolean;
@@ -157,6 +158,7 @@ export interface StoreRepository extends PersonaVersionRepository {
   recordMoodEvent(event: MoodEventRecord): void;
   recentMoodEvents(account: number, count: number): StoredMoodEvent[];
   moodEventsSince(account: number, since: number): StoredMoodEvent[];
+  latestMoodEventAtOrBefore(account: number, time: number): StoredMoodEvent | undefined;
   getAffinityState(account: number, userId: number): AffinityStateRecord | undefined;
   listAffinityStates(account: number): AffinityStateRecord[];
   saveAffinityState(state: AffinityStateRecord): void;

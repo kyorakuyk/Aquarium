@@ -100,13 +100,22 @@ test('recentDecisions 返回最新决策并还原 detail JSON', () => {
       reason: 'replied',
       detail: { model: 'fake' },
     });
-
     const decisions = repository.recentDecisions(1);
 
     assert.equal(decisions.length, 1);
     assert.equal(decisions[0]?.messageId, 'b');
     assert.equal(decisions[0]?.replied, true);
     assert.deepEqual(decisions[0]?.detail, { model: 'fake' });
+
+    repository.recordDecision({
+      time: 3,
+      sessionId: '900000001:private:42',
+      messageId: 'skip-after-reply',
+      replied: false,
+      reason: 'disabled',
+      detail: {},
+    });
+    assert.equal(repository.latestReplyDecision()?.messageId, 'b');
   });
 });
 
@@ -214,6 +223,8 @@ test('情绪状态与事件读写往返一致', () => {
       reason: '被说好话',
       bandBefore: 'calm',
       bandAfter: 'happy',
+      valenceAfter: 0.16,
+      arousalAfter: 0.66,
     });
     repository.recordMoodEvent({
       account: 900000001,
@@ -228,6 +239,8 @@ test('情绪状态与事件读写往返一致', () => {
       reason: '被叫',
       bandBefore: null,
       bandAfter: null,
+      valenceAfter: -0.28,
+      arousalAfter: 0.76,
     });
 
     const recent = repository.recentMoodEvents(900000001, 5);
@@ -236,7 +249,10 @@ test('情绪状态与事件读写往返一致', () => {
     assert.equal(recent[1]?.senderId, 42);
     assert.equal(recent[1]?.bandBefore, 'calm');
     assert.equal(recent[1]?.bandAfter, 'happy');
+    assert.equal(recent[1]?.valenceAfter, 0.16);
+    assert.equal(recent[1]?.arousalAfter, 0.66);
     assert.equal(recent[0]?.sessionId, '900000001:private:42');
+    assert.equal(repository.latestMoodEventAtOrBefore(900000001, 7_500)?.id, 1);
     assert.deepEqual(repository.recentMoodEvents(900000001, 0), []);
     assert.deepEqual(repository.recentMoodEvents(99999, 5), []);
 

@@ -94,6 +94,11 @@ export interface PipelineState {
   callOptions?: SlotCallOptions;
   prompt?: OpenAI.ChatCompletionMessageParam[];
   promptBlocks?: PromptBlockHash[];
+  injectedAffectBlocks?: {
+    mood?: string;
+    float?: string;
+    affinity?: string;
+  };
   droppedTags?: number;
   result?: SlotResult;
   replyText?: string;
@@ -199,6 +204,7 @@ export async function traceStep(
   try {
     const result = await run();
     summary = traceSummary(step, result);
+    if (step === 'context') detail = contextTraceDetail(result.detail);
     if (step === 'generate') detail = generateTraceDetail(result.detail);
     return result;
   } finally {
@@ -210,6 +216,18 @@ export async function traceStep(
       ...(detail !== undefined ? { detail } : {}),
     });
   }
+}
+
+function contextTraceDetail(detail: unknown): { injectedAffectBlocks: NonNullable<PipelineState['injectedAffectBlocks']> } | undefined {
+  if (typeof detail !== 'object' || detail === null || Array.isArray(detail)) return undefined;
+  const rawBlocks = (detail as Record<string, unknown>).injectedAffectBlocks;
+  if (typeof rawBlocks !== 'object' || rawBlocks === null || Array.isArray(rawBlocks)) return undefined;
+  const source = rawBlocks as Record<string, unknown>;
+  const blocks: NonNullable<PipelineState['injectedAffectBlocks']> = {};
+  for (const key of ['mood', 'float', 'affinity'] as const) {
+    if (typeof source[key] === 'string' && source[key]) blocks[key] = source[key];
+  }
+  return Object.keys(blocks).length > 0 ? { injectedAffectBlocks: blocks } : undefined;
 }
 
 export function messageRecord(message: IncomingMessage, currentSessionId: string) {

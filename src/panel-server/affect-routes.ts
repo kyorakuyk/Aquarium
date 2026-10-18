@@ -2,12 +2,14 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AquariumConfig } from '../config/schema.ts';
 import { parseSessionId } from '../core/sessions.ts';
-import { bandOf, decayValue } from '../core/mood/core.ts';
+import { bandOf, decayValue, nextBand } from '../core/mood/core.ts';
+import { buildMoodSeriesPoints, distanceToNextBand } from '../core/mood/series.ts';
+import { sleepEnergy, sleepPlan, type SleepWakeState } from '../core/sleep.ts';
 import { normalizeTagText, tagActivation } from '../core/impressions/tags.ts';
 import { TAG_TEXT_MAX, TAG_TEXT_MIN } from '../core/impressions/service.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
 import { createAffinityService } from '../core/affinity/service.ts';
-import type { StoredTag } from '../store/affect-repo.ts';
+import type { MoodBand, StoredMoodEvent, StoredTag } from '../store/affect-repo.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import type { PanelAccountRuntime } from './types.ts';
 
@@ -15,6 +17,7 @@ export interface AffectRouteOptions {
   getConfig: () => AquariumConfig;
   repository: StoreRepository;
   accounts: () => PanelAccountRuntime[];
+  sleepWakeState?: SleepWakeState;
   now?: () => number;
 }
 
@@ -52,6 +55,46 @@ function tagView(tag: StoredTag, at: number) {
     firstSeen: tag.firstSeen,
     lastSeen: tag.lastSeen,
   };
+}
+
+type InjectedAffectBlocks = { mood?: string; float?: string; affinity?: string };
+
+function objectRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function injectedAffectBlocks(value: unknown): InjectedAffectBlocks | undefined {
+  const source = objectRecord(value);
+  if (!source) return undefined;
+  const blocks: InjectedAffectBlocks = {};
+  for (const key of ['mood', 'float', 'affinity'] as const) {
+    const block = source[key];
+    if (typeof block === 'string') blocks[key] = block;
+  }
+  return Object.keys(blocks).length > 0 ? blocks : undefined;
+}
+
+function contextTraceAffectBlocks(trace: readonly unknown[] | undefined): InjectedAffectBlocks | undefined {
+  if (!trace) return undefined;
+  for (const entry of trace) {
+    const row = objectRecord(entry);
+    if (row?.step !== 'context') continue;
+    const detail = objectRecord(row.detail);
+    const blocks = injectedAffectBlocks(detail?.injectedAffectBlocks);
+    if (blocks) return blocks;
+  }
+  return undefined;
+}
+
+function moodBandChanges(events: readonly StoredMoodEvent[], from: number, to: number) {
+  return events
+    .filter((event) => event.source === 'band'
+      && event.time >= from && event.time <= to
+      && event.bandBefore !== null && event.bandAfter !== null
+      && event.bandBefore !== event.bandAfter)
+    .map((event) => ({ time: event.time, from: event.bandBefore as MoodBand, to: event.bandAfter as MoodBand }));
 }
 
 export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): void {
@@ -94,6 +137,97 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
       band: state?.band ?? bandOf(baseline.valence),
       bandSince: state ? state.bandSince : null,
       events: options.repository.recentMoodEvents(account, 20),
+    });
+  });
+
+  app.get('/api/mood/series', (context) => {
+    const rawHours = context.req.query('hours');
+    const hours = rawHours === undefined ? 24 : Number(rawHours);
+    if (!Number.isSafeInteger(hours) || hours < 1 || hours > 168) {
+      return context.json({ error: 'Invalid mood series range' }, 400);
+    }
+
+    const config = options.getConfig();
+    const at = now();
+    const from = at - hours * 60 * 60_000;
+    const account = primaryAccount();
+    const events = options.repository.moodEventsSince(account, from);
+    const previous = options.repository.latestMoodEventAtOrBefore(account, from);
+    const points = buildMoodSeriesPoints({
+      from,
+      to: at,
+      halfLifeMin: config.mood.halfLifeMin,
+      baseline: config.mood.baseline,
+      ...(previous ? { previous } : {}),
+      events,
+    });
+
+    const state = options.repository.getMoodState(account);
+    const valence = state
+      ? decayValue(state.valence, config.mood.baseline.valence, at - state.updatedAt, config.mood.halfLifeMin)
+      : config.mood.baseline.valence;
+    const arousal = state
+      ? decayValue(state.arousal, config.mood.baseline.arousal, at - state.updatedAt, config.mood.halfLifeMin)
+      : config.mood.baseline.arousal;
+    const band = state ? nextBand(state, valence, at, 'decay') : bandOf(config.mood.baseline.valence);
+    const projectedBandChange = state !== undefined && band !== state.band;
+    const bandSince = state ? projectedBandChange ? at : state.bandSince : null;
+    const lastBandChangeAt = state ? projectedBandChange ? at : state.lastBandChangeAt : null;
+    const distance = distanceToNextBand({ band, valence, now: at, lastBandChangeAt });
+
+    const energyAt = (time: number, includeWakeOverride: boolean) => {
+      if (!config.sleep.enabled) return { value: 1, status: 'awake' as const };
+      const plan = sleepPlan(time, config.sleep.bedtime, config.sleep.wake);
+      const woken = includeWakeOverride && plan.asleep && (options.sleepWakeState?.isAwake(at) ?? false);
+      if (plan.asleep && !woken) return { value: null, status: 'asleep' as const };
+      return {
+        value: sleepEnergy(
+          time,
+          plan.wakeAt,
+          plan.bedAt,
+          options.repository.replyCountLastHourForAccount(account, time),
+          true,
+        ),
+        status: woken ? 'woken' as const : 'awake' as const,
+      };
+    };
+    const currentEnergy = energyAt(at, true);
+    const energyPoints = Array.from({ length: 7 }, (_, index) => {
+      const time = Math.round(from + (at - from) * index / 6);
+      return { time, value: energyAt(time, index === 6).value };
+    });
+
+    const latestDecision = options.repository.latestReplyDecision();
+    const decisionDetail = objectRecord(latestDecision?.detail);
+    const fallbackBlocks = injectedAffectBlocks(decisionDetail?.injectedAffectBlocks);
+    const trace = latestDecision
+      ? options.repository.pipelineTraceFor(latestDecision.sessionId, latestDecision.messageId)
+      : undefined;
+    const tracedBlocks = contextTraceAffectBlocks(trace?.trace);
+    const latestBlocks = { ...fallbackBlocks, ...tracedBlocks };
+    const latestReply = latestDecision ? {
+      id: latestDecision.id,
+      blocks: {
+        mood: latestBlocks.mood === undefined ? null : redactSensitiveText(latestBlocks.mood),
+        float: latestBlocks.float === undefined ? null : redactSensitiveText(latestBlocks.float),
+        affinity: latestBlocks.affinity === undefined ? null : redactSensitiveText(latestBlocks.affinity),
+      },
+    } : null;
+
+    return context.json({
+      from,
+      to: at,
+      points,
+      current: {
+        valence,
+        arousal,
+        band,
+        bandSince,
+        distanceToNextBand: distance,
+      },
+      bandChanges: moodBandChanges(events, from, at),
+      energy: { ...currentEnergy, points: energyPoints },
+      latestReply,
     });
   });
 

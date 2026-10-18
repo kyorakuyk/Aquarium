@@ -1,7 +1,7 @@
 import type { AquariumConfig } from '../../config/schema.ts';
 import { budgetState } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
-import type { MoodBand, StoredMoodEvent } from '../../store/affect-repo.ts';
+import type { MoodBand, MoodEventRecord } from '../../store/affect-repo.ts';
 import type { StoreRepository } from '../../store/repository.ts';
 import type { AffinityService } from '../affinity/service.ts';
 import type { AffectPromptTemplate, AppraisePromptTemplate } from '../prompt-templates.ts';
@@ -100,7 +100,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
   function recordEvent(
     account: number,
     time: number,
-    fields: Pick<StoredMoodEvent, 'source' | 'sessionId' | 'senderId' | 'dv' | 'da' | 'appliedDv' | 'appliedDa' | 'reason' | 'bandBefore' | 'bandAfter'>,
+    fields: Omit<MoodEventRecord, 'account' | 'time'>,
   ): void {
     options.repository.recordMoodEvent({ account, time, ...fields });
   }
@@ -134,6 +134,8 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
           reason: 'decay',
           bandBefore: current.band,
           bandAfter: band,
+          valenceAfter: current.valence,
+          arousalAfter: current.arousal,
         });
         saveState(input.account, input.now, {
           ...current,
@@ -161,6 +163,8 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
         reason: 'called',
         bandBefore: null,
         bandAfter: null,
+        valenceAfter: current.valence,
+        arousalAfter: arousal,
       });
     },
 
@@ -172,6 +176,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
       if (last !== undefined && input.now - last < APPRAISE_MIN_INTERVAL_MS) return;
 
       if (budgetState(config, options.repository.costToday()) === 'exceeded') {
+        const current = loadState(input.account, input.now);
         recordEvent(input.account, input.now, {
           source: 'appraise',
           sessionId: input.sessionId,
@@ -183,6 +188,8 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
           reason: 'budget',
           bandBefore: null,
           bandAfter: null,
+          valenceAfter: current.valence,
+          arousalAfter: current.arousal,
         });
         return;
       }
@@ -205,6 +212,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
         const completedAt = now();
 
         if (!result.ok) {
+          const current = loadState(input.account, completedAt);
           recordEvent(input.account, completedAt, {
             source: 'appraise',
             sessionId: input.sessionId,
@@ -216,6 +224,8 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
             reason: result.reason,
             bandBefore: null,
             bandAfter: null,
+            valenceAfter: current.valence,
+            arousalAfter: current.arousal,
           });
           return;
         }
@@ -239,6 +249,8 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
           reason: result.reason,
           bandBefore: null,
           bandAfter: null,
+          valenceAfter: clamped.valence,
+          arousalAfter: clamped.arousal,
         });
         options.affinityService?.recordAppraise({
           account: input.account,
@@ -262,6 +274,8 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
             reason: 'event',
             bandBefore: current.band,
             bandAfter: band,
+            valenceAfter: clamped.valence,
+            arousalAfter: clamped.arousal,
           });
           bandSince = completedAt;
           lastBandChangeAt = completedAt;

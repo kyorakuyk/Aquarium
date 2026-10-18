@@ -161,7 +161,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
         trace,
         state,
       };
-      const withPromptFingerprint = (detail: unknown): unknown => {
+      const withPromptFingerprint = (detail: unknown, includeAffectBlocks = false): unknown => {
         const fingerprint = {
           templateVersion: promptTemplates.replySystem.version,
           visionTemplateVersion: promptTemplates.vision.version,
@@ -172,6 +172,9 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
             ? { promptFingerprints: [...ctx.state.promptFingerprints] }
             : {}),
           ...(ctx.state.promptBlocks ? { promptBlocks: [...ctx.state.promptBlocks] } : {}),
+          ...(includeAffectBlocks && ctx.state.injectedAffectBlocks
+            ? { injectedAffectBlocks: { ...ctx.state.injectedAffectBlocks } }
+            : {}),
           ...(ctx.state.droppedTags ? { droppedTags: ctx.state.droppedTags } : {}),
         };
         if (typeof detail === 'object' && detail !== null && !Array.isArray(detail)) {
@@ -199,7 +202,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
             messageId: message.messageId,
             replied,
             reason,
-            detail: withPromptFingerprint(decisionDetail),
+            detail: withPromptFingerprint(decisionDetail, replied),
           });
           return { replied, reason };
         }

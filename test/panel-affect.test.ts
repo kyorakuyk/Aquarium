@@ -46,6 +46,8 @@ test('心情 API 返回衰减后的值、档位与最近事件', async () => {
       reason: '被夸了',
       bandBefore: null,
       bandAfter: null,
+      valenceAfter: 0.35,
+      arousalAfter: 0.65,
     });
 
     const body = await (await app.request('/api/mood', { headers: authHeaders() })).json() as {

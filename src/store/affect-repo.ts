@@ -31,10 +31,14 @@ export interface MoodEventRecord {
   reason: string;
   bandBefore: MoodBand | null;
   bandAfter: MoodBand | null;
+  valenceAfter: number;
+  arousalAfter: number;
 }
 
-export interface StoredMoodEvent extends MoodEventRecord {
+export interface StoredMoodEvent extends Omit<MoodEventRecord, 'valenceAfter' | 'arousalAfter'> {
   id: number;
+  valenceAfter: number | null;
+  arousalAfter: number | null;
 }
 
 export interface AffinityStateRecord {
@@ -110,7 +114,7 @@ export interface TagRunRecord {
 }
 
 export type AffectRepositoryQueries = Pick<StoreRepository,
-  'getMoodState' | 'saveMoodState' | 'recordMoodEvent' | 'recentMoodEvents' | 'moodEventsSince'
+  'getMoodState' | 'saveMoodState' | 'recordMoodEvent' | 'recentMoodEvents' | 'moodEventsSince' | 'latestMoodEventAtOrBefore'
   | 'getAffinityState' | 'listAffinityStates' | 'saveAffinityState' | 'recordAffinityEvent' | 'recentAffinityEvents' | 'affinityEventsSince' | 'latestSenderNameForAccount'
   | 'insertTag' | 'tagById' | 'listTagsForSubject' | 'listTagsForSession' | 'senderNameFor'
   | 'updateTag' | 'getTagRun' | 'saveTagRun'
@@ -165,6 +169,8 @@ function moodEventRecord(row: Record<string, unknown>): StoredMoodEvent {
     reason: stringValue(row.reason, 'reason'),
     bandBefore: nullableString(row.band_before, 'band_before') as MoodBand | null,
     bandAfter: nullableString(row.band_after, 'band_after') as MoodBand | null,
+    valenceAfter: nullableNumber(row.valence_after, 'valence_after'),
+    arousalAfter: nullableNumber(row.arousal_after, 'arousal_after'),
   };
 }
 
@@ -246,21 +252,29 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
   `);
   const insertMoodEvent = database.prepare(`
     INSERT INTO mood_events
-      (account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da, reason, band_before, band_after)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da, reason, band_before, band_after, valence_after, arousal_after)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const selectRecentMoodEvents = database.prepare(`
-    SELECT id, account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da, reason, band_before, band_after
+    SELECT id, account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da, reason, band_before, band_after, valence_after, arousal_after
     FROM mood_events
     WHERE account = ?
     ORDER BY time DESC, id DESC
     LIMIT ?
   `);
   const selectMoodEventsSince = database.prepare(`
-    SELECT id, account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da, reason, band_before, band_after
+    SELECT id, account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da, reason, band_before, band_after, valence_after, arousal_after
     FROM mood_events
     WHERE account = ? AND time >= ?
     ORDER BY time, id
+  `);
+  const selectLatestMoodEventAtOrBefore = database.prepare(`
+    SELECT id, account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da,
+      reason, band_before, band_after, valence_after, arousal_after
+    FROM mood_events
+    WHERE account = ? AND time <= ? AND valence_after IS NOT NULL AND arousal_after IS NOT NULL
+    ORDER BY time DESC, id DESC
+    LIMIT 1
   `);
   const selectAffinityState = database.prepare(`
     SELECT account, user_id, value, level, level_since, last_level_change_at, last_interaction_at, updated_at
@@ -389,6 +403,8 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
         event.reason,
         event.bandBefore,
         event.bandAfter,
+        event.valenceAfter,
+        event.arousalAfter,
       );
     },
 
@@ -405,6 +421,12 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
       if (!Number.isFinite(since)) throw new RangeError('查询时间必须是有限数字');
       const rows = selectMoodEventsSince.all(account, since) as Array<Record<string, unknown>>;
       return rows.map(moodEventRecord);
+    },
+
+    latestMoodEventAtOrBefore(account, time) {
+      if (!Number.isFinite(time)) throw new RangeError('查询时间必须是有限数字');
+      const row = selectLatestMoodEventAtOrBefore.get(account, time) as Record<string, unknown> | undefined;
+      return row ? moodEventRecord(row) : undefined;
     },
 
     getAffinityState(account, userId) {

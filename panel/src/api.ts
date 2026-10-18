@@ -121,6 +121,8 @@ export interface MoodEventView {
   reason: string;
   bandBefore: MoodBand | null;
   bandAfter: MoodBand | null;
+  valenceAfter: number | null;
+  arousalAfter: number | null;
 }
 
 export interface MoodView {
