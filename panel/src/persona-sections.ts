@@ -155,10 +155,12 @@ export function renderPersonaSectionBlocks(form: PersonaSectionsForm): PersonaSe
     if (content.length === 0) continue;
     blocks.push({ id: `persona-section-${heading}`, label: `persona · ${heading}`, text: `## ${heading}${form.lineEnding}${content}` });
   }
-  for (const section of form.other) {
+  for (let index = 0; index < form.other.length; index += 1) {
+    const section = form.other[index];
+    if (!section) continue;
     if (section.text.length === 0) continue;
     if (/[\r\n]/u.test(section.heading)) throw new Error('人设小节标题不能包含换行');
-    blocks.push({ id: `persona-section-${section.heading}`, label: `persona · ${section.heading}`, text: `## ${section.heading}${form.lineEnding}${section.text}` });
+    blocks.push({ id: `persona-other-section-${index}`, label: `persona · ${section.heading}`, text: `## ${section.heading}${form.lineEnding}${section.text}` });
   }
   return blocks;
 }
@@ -172,4 +174,23 @@ export function buildSections(form: PersonaSectionsForm): string {
   const markdown = frontmatter + body;
   parseSections(markdown);
   return markdown;
+}
+
+export function syncPersonaFormEdit(
+  form: PersonaSectionsForm,
+  sourceMode: true,
+): { form: PersonaSectionsForm; sourceText: string };
+export function syncPersonaFormEdit(
+  form: PersonaSectionsForm,
+  sourceMode: false,
+): { form: PersonaSectionsForm; sourceText: undefined };
+export function syncPersonaFormEdit(
+  form: PersonaSectionsForm,
+  sourceMode: boolean,
+): { form: PersonaSectionsForm; sourceText: string | undefined };
+export function syncPersonaFormEdit(
+  form: PersonaSectionsForm,
+  sourceMode: boolean,
+): { form: PersonaSectionsForm; sourceText: string | undefined } {
+  return { form, sourceText: sourceMode ? buildSections(form) : undefined };
 }

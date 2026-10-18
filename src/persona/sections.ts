@@ -169,11 +169,13 @@ export function renderPersonaSectionBlocks(form: PersonaSectionsForm): PersonaSe
       text: `## ${heading}${form.lineEnding}${content}`,
     });
   }
-  for (const section of form.other) {
+  for (let index = 0; index < form.other.length; index += 1) {
+    const section = form.other[index];
+    if (!section) continue;
     if (section.text.length === 0) continue;
     if (/[\r\n]/u.test(section.heading)) throw new Error('人设小节标题不能包含换行');
     blocks.push({
-      id: `persona-section-${section.heading}`,
+      id: `persona-other-section-${index}`,
       label: `persona · ${section.heading}`,
       text: `## ${section.heading}${form.lineEnding}${section.text}`,
     });

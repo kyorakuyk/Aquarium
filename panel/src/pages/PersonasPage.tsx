@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { apiRequest, type PanelStatus } from '../api.ts';
 import type { PageId } from '../components/Sidebar.tsx';
 import { redactSensitiveText } from '../sensitive-text.ts';
-import { buildSections, emptyPersonaSections, parseSections, type PersonaSectionsForm } from '../persona-sections.ts';
+import { buildSections, emptyPersonaSections, parseSections, syncPersonaFormEdit, type PersonaSectionsForm } from '../persona-sections.ts';
 import { PersonaComparisonDialog } from './PersonaComparisonDialog.tsx';
 import { PersonaFields } from './PersonaFields.tsx';
 import { PersonaPreview, type PersonaPreviewResult } from './PersonaPreview.tsx';
@@ -33,6 +33,7 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const [personas, setPersonas] = useState<PersonaCard[]>([]);
   const [accounts, setAccounts] = useState<PanelStatus['accounts']>([]);
   const [selectedId, setSelectedId] = useState('');
+  const [previewAccountId, setPreviewAccountId] = useState<number | null>(null);
   const [form, setForm] = useState<PersonaSectionsForm>(() => emptyPersonaSections());
   const [sourceText, setSourceText] = useState(() => buildSections(emptyPersonaSections()));
   const [sourceError, setSourceError] = useState('');
@@ -64,6 +65,14 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
       return items[0]?.id ?? '';
     });
   }, []);
+
+  const boundAccounts = accounts.filter((account) => account.persona === selectedId);
+  const previewAccount = boundAccounts.find((account) => account.account === previewAccountId) ?? boundAccounts[0];
+  const previewName = previewAccount?.name.trim() || '水族箱';
+
+  useEffect(() => {
+    setPreviewAccountId(null);
+  }, [selectedId]);
 
   useEffect(() => {
     let active = true;
@@ -124,7 +133,7 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
       setPreviewError('');
       void apiRequest<PersonaPreviewResult>('/api/personas/preview', {
         method: 'POST',
-        body: JSON.stringify({ content: previewMarkdown }),
+        body: JSON.stringify({ content: previewMarkdown, name: previewName }),
       }).then((result) => {
         if (active) setPreview(result);
       }).catch((reason: unknown) => {
@@ -137,10 +146,15 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
       active = false;
       clearTimeout(timer);
     };
-  }, [previewMarkdown, sourceError]);
+  }, [previewMarkdown, previewName, sourceError]);
 
   function updateForm(next: PersonaSectionsForm) {
-    setForm(next);
+    const synchronized = syncPersonaFormEdit(next, viewMode === 'source');
+    setForm(synchronized.form);
+    if (synchronized.sourceText !== undefined) {
+      setSourceText(synchronized.sourceText);
+      setSourceError('');
+    }
     setDirty(true);
     setSaved(false);
     setError('');
@@ -296,7 +310,6 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   }
 
   const selected = personas.find((persona) => persona.id === selectedId);
-  const boundAccounts = accounts.filter((account) => account.persona === selectedId);
   const saveLabel = busy ? '处理中…' : dirty ? '未保存更改' : saved ? '已保存' : '已同步';
 
   return (
@@ -355,7 +368,7 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
             <div className="persona-save-actions"><span className={dirty ? 'is-dirty' : ''}>{saveLabel}</span><button className="button button-primary" type="button" disabled={busy || !dirty || Boolean(sourceError)} onClick={() => void save()}>保存</button></div>
           </div>
           <div className="persona-workspace-v2">
-            <PersonaFields form={form} onChange={updateForm} onFocus={setActiveBlockId} disabled={busy} />
+            <PersonaFields form={form} onChange={updateForm} onFocus={setActiveBlockId} disabled={busy || Boolean(sourceError)} />
             <PersonaPreview
               mode={viewMode}
               onModeChange={changeViewMode}
@@ -366,6 +379,9 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
               sourceText={sourceText}
               sourceError={sourceError}
               onSourceChange={changeSource}
+              previewAccounts={boundAccounts}
+              previewAccountId={previewAccount?.account ?? null}
+              onPreviewAccountChange={setPreviewAccountId}
               disabled={busy}
               onTryChat={() => onNavigate('sandbox')}
             />

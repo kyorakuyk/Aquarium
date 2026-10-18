@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { redactSensitiveText } from '../src/core/impressions/sensitive-text.ts';
 import { promptTemplateStore } from '../src/core/prompt-templates.ts';
 import { parsePersonaMarkdown } from '../src/persona/load.ts';
 import { buildSections, parseSections, renderPersonaSectionBlocks } from '../src/persona/sections.ts';
@@ -96,15 +97,27 @@ test('persona preview returns section blocks and the runtime trait renderer outp
   const form = parseSections(content);
   const personaBlocks = renderPersonaSectionBlocks(form);
   const traits = renderTraitsBlock(form.traits, effectiveTalkLevel(form.traits.talk, 0), promptTemplateStore.get().traits);
-  const expectedBlocks = [...personaBlocks, ...(traits ? [{ id: 'traits', label: 'traits', text: traits }] : [])];
-  const personaText = personaBlocks.map((block) => block.text).join(`${form.lineEnding}${form.lineEnding}`);
+  const previewName = '小青';
+  const expectedPersonaBlocks = personaBlocks.map((block) => ({
+    ...block,
+    text: block.text.replaceAll('{{name}}', () => previewName),
+  }));
+  const expectedBlocks = [...expectedPersonaBlocks, ...(traits ? [{ id: 'traits', label: 'traits', text: traits }] : [])]
+    .map((block) => ({
+      id: block.id,
+      label: redactSensitiveText(block.label),
+      text: redactSensitiveText(block.text),
+    }));
+  const rawPersonaText = personaBlocks.map((block) => block.text).join(`${form.lineEnding}${form.lineEnding}`);
+  const personaText = rawPersonaText.replaceAll('{{name}}', () => previewName);
   const previewText = personaText + (traits ? `\n\n${traits}` : '');
+  const safePreviewText = redactSensitiveText(previewText);
 
   await withPanel(async ({ app }) => {
     const response = await app.request('/api/personas/preview', {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, name: previewName }),
     });
     assert.equal(response.status, 200);
     const preview = await response.json() as {
@@ -115,12 +128,29 @@ test('persona preview returns section blocks and the runtime trait renderer outp
     assert.deepEqual(preview.blocks, expectedBlocks);
     assert.ok(preview.blocks.some((block) => block.label === 'persona · 身份'));
     assert.ok(preview.blocks.some((block) => block.id === 'traits'));
-    assert.equal(preview.chars, previewText.length);
+    assert.equal(preview.chars, safePreviewText.length);
     assert.equal(preview.estTokens, Math.ceil(preview.chars / 1.3));
     assert.equal(
-      personaText,
+      rawPersonaText,
       parsePersonaMarkdown(buildSections(form)).text,
     );
+  });
+});
+
+test('persona preview redacts credential-shaped text from its API response', async () => {
+  const credential = ['sk', 'test', 'preview', 'synthetic-value-1234567890'].join('-');
+  const content = `# {{name}}\n\n## 身份\n测试凭据 ${credential}`;
+
+  await withPanel(async ({ app }) => {
+    const response = await app.request('/api/personas/preview', {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, name: '小青' }),
+    });
+    assert.equal(response.status, 200);
+    const responseText = await response.text();
+    assert.equal(responseText.includes(credential), false);
+    assert.match(responseText, /\[敏感内容已隐藏\]/u);
   });
 });
 
@@ -196,6 +226,7 @@ test('persona import returns 422 with a reason for invalid JSON and schema value
     'not JSON',
     JSON.stringify({ ...valid, fields: { ...valid.fields, 身份: 7 } }),
     JSON.stringify({ ...valid, traits: { ...valid.traits, order: 3 } }),
+    JSON.stringify({ ...valid, traits: { order: 0, morality: 0, talk: 0 } }),
   ];
   let responseIndex = 0;
 

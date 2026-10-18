@@ -212,7 +212,7 @@ export function PersonaFields({
                   id={`persona-other-heading-${index}`}
                   value={section.heading}
                   disabled={disabled}
-                  onFocus={() => onFocus(`persona-section-${section.heading}`)}
+                  onFocus={() => onFocus(`persona-other-section-${index}`)}
                   onChange={(event) => setOther(index, { heading: event.currentTarget.value })}
                 />
                 <div className="persona-field-heading"><label htmlFor={`persona-other-text-${index}`}>小节内容</label><span>原文保留</span></div>
@@ -221,7 +221,7 @@ export function PersonaFields({
                   value={section.text}
                   rows={3}
                   disabled={disabled}
-                  onFocus={() => onFocus(`persona-section-${section.heading}`)}
+                  onFocus={() => onFocus(`persona-other-section-${index}`)}
                   onChange={(event) => setOther(index, { text: event.currentTarget.value })}
                 />
                 <button className="text-button persona-remove-other" type="button" disabled={disabled} onClick={() => onChange({ ...form, other: form.other.filter((_, itemIndex) => itemIndex !== index) })}>删除小节</button>

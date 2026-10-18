@@ -17,6 +17,9 @@ export function PersonaPreview({
   sourceText,
   sourceError,
   onSourceChange,
+  previewAccounts,
+  previewAccountId,
+  onPreviewAccountChange,
   disabled,
   onTryChat,
 }: {
@@ -29,16 +32,36 @@ export function PersonaPreview({
   sourceText: string;
   sourceError: string;
   onSourceChange: (text: string) => void;
+  previewAccounts: Array<{ account: number; name: string }>;
+  previewAccountId: number | null;
+  onPreviewAccountChange: (account: number) => void;
   disabled: boolean;
   onTryChat: () => void;
 }) {
   return (
     <section className="persona-preview-card panel-card" aria-labelledby="persona-preview-title">
       <div className="persona-preview-heading">
-        <div><h2 id="persona-preview-title">实际注入</h2><p className="muted">按运行时顺序显示人设与性格底色。</p></div>
-        <div className="persona-view-toggle" role="group" aria-label="人设内容视图">
-          <button className={mode === 'preview' ? 'is-active' : ''} type="button" onClick={() => onModeChange('preview')}>预览</button>
-          <button className={mode === 'source' ? 'is-active' : ''} type="button" onClick={() => onModeChange('source')}>源文件</button>
+        <div>
+          <h2 id="persona-preview-title">实际注入</h2>
+          <p className="muted">
+            {previewAccounts.length === 0
+              ? '未绑定账号，昵称占位符使用默认值。'
+              : `按 QQ ${previewAccountId} 的昵称“${previewAccounts.find((item) => item.account === previewAccountId)?.name ?? '水族箱'}”预览。`}
+          </p>
+        </div>
+        <div className="persona-preview-controls">
+          {previewAccounts.length > 1 && (
+            <label className="persona-preview-account">
+              <span>预览账号</span>
+              <select value={previewAccountId ?? ''} onChange={(event) => onPreviewAccountChange(Number(event.currentTarget.value))}>
+                {previewAccounts.map((account) => <option key={account.account} value={account.account}>QQ {account.account} · {account.name}</option>)}
+              </select>
+            </label>
+          )}
+          <div className="persona-view-toggle" role="group" aria-label="人设内容视图">
+            <button className={mode === 'preview' ? 'is-active' : ''} type="button" onClick={() => onModeChange('preview')}>预览</button>
+            <button className={mode === 'source' ? 'is-active' : ''} type="button" onClick={() => onModeChange('source')}>源文件</button>
+          </div>
         </div>
       </div>
       {mode === 'preview' ? (

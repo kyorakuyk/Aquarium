@@ -33,6 +33,12 @@ const personaTraitsSchema: z.ZodType<PersonaTraits> = z.object({
   talk: z.number().int().min(-2).max(2).default(0),
   mind: z.number().int().min(-2).max(2).default(0),
 }).strict();
+const personaImportTraitsSchema = z.object({
+  order: z.number().int().min(-2).max(2),
+  morality: z.number().int().min(-2).max(2),
+  talk: z.number().int().min(-2).max(2),
+  mind: z.number().int().min(-2).max(2),
+}).strict();
 const personaBodySchema = z.object({
   markdown: z.string().max(100_000),
   traits: personaTraitsSchema.optional(),
@@ -41,7 +47,10 @@ const personaImportSchema = z.object({
   filename: z.string().min(1).max(255),
   text: z.string().min(1).max(100_000),
 }).strict();
-const personaPreviewSchema = z.object({ content: z.string().max(100_000) }).strict();
+const personaPreviewSchema = z.object({
+  content: z.string().max(100_000),
+  name: z.string().max(100).optional(),
+}).strict();
 const personaImportFieldsSchema = z.object({
   身份: z.string().max(10_000),
   年龄: z.string().max(10_000),
@@ -56,7 +65,7 @@ const personaImportFieldsSchema = z.object({
 }).strict();
 const personaImportResultSchema = z.object({
   fields: personaImportFieldsSchema,
-  traits: personaTraitsSchema,
+  traits: personaImportTraitsSchema,
   other: z.array(z.object({
     heading: z.string().max(255).refine((value) => !/[\r\n]/u.test(value)),
     text: z.string().max(100_000),
@@ -126,10 +135,16 @@ export function registerPersonaRoutes(app: Hono, root: string, options: PersonaR
     if (!body) return context.json({ error: 'Invalid persona preview' }, 400);
     try {
       const form = parseSections(body.content);
-      const personaText = parsePersonaMarkdown(buildSections(form)).text;
-      const personaBlocks = renderPersonaSectionBlocks(form);
-      const renderedPersonaText = personaBlocks.map((block) => block.text).join(`${form.lineEnding}${form.lineEnding}`);
-      if (renderedPersonaText !== personaText) return context.json({ error: 'Invalid persona preview' }, 400);
+      const rawPersonaText = parsePersonaMarkdown(buildSections(form)).text;
+      const rawPersonaBlocks = renderPersonaSectionBlocks(form);
+      const renderedPersonaText = rawPersonaBlocks.map((block) => block.text).join(`${form.lineEnding}${form.lineEnding}`);
+      if (renderedPersonaText !== rawPersonaText) return context.json({ error: 'Invalid persona preview' }, 400);
+      const displayName = body.name?.trim() || '水族箱';
+      const personaText = rawPersonaText.replaceAll('{{name}}', () => displayName);
+      const personaBlocks = rawPersonaBlocks.map((block) => ({
+        ...block,
+        text: block.text.replaceAll('{{name}}', () => displayName),
+      }));
       const traits = renderTraitsBlock(
         form.traits,
         effectiveTalkLevel(form.traits.talk, 0),
@@ -137,8 +152,13 @@ export function registerPersonaRoutes(app: Hono, root: string, options: PersonaR
       );
       const blocks = [...personaBlocks, ...(traits ? [{ id: 'traits', label: 'traits', text: traits }] : [])];
       const promptText = personaText + (traits ? `\n\n${traits}` : '');
-      const chars = promptText.length;
-      return context.json({ blocks, chars, estTokens: Math.ceil(chars / 1.3) });
+      const safeBlocks = blocks.map((block) => ({
+        id: block.id,
+        label: redactSensitiveText(block.label),
+        text: redactSensitiveText(block.text),
+      }));
+      const chars = redactSensitiveText(promptText).length;
+      return context.json({ blocks: safeBlocks, chars, estTokens: Math.ceil(chars / 1.3) });
     } catch {
       return context.json({ error: 'Invalid persona preview' }, 400);
     }

@@ -53,6 +53,9 @@
 .persona-preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .persona-preview-heading h2 { margin: 0 0 4px; font-size: 16px; }
 .persona-preview-heading p { margin: 0; font-size: 10px; }
+.persona-preview-controls { display: flex; align-items: center; gap: 8px; }
+.persona-preview-account { display: grid; gap: 3px; color: var(--muted); font-size: 9px; }
+.persona-preview-account select { min-height: 44px; max-width: 190px; padding: 7px 9px; font-size: 10px; }
 .persona-view-toggle { display: flex; gap: 3px; padding: 3px; border-radius: 10px; background: var(--surface-2); }
 .persona-view-toggle button { min-width: 62px; min-height: 44px; padding: 0 9px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; font-size: 11px; }
 .persona-view-toggle button.is-active { background: var(--surface); color: var(--accent); font-weight: 700; }
@@ -95,4 +98,5 @@
   .persona-form-grid, .persona-trait-grid, .persona-compare-columns { grid-template-columns: minmax(0, 1fr); }
   .persona-form-card:nth-child(2), .persona-other-card { grid-column: auto; }
   .persona-preview-heading { align-items: flex-start; flex-direction: column; }
+  .persona-preview-controls { width: 100%; justify-content: space-between; }
 }

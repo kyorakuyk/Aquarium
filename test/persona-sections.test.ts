@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildSections, parseSections } from '../src/persona/sections.ts';
+import { buildSections, parseSections, renderPersonaSectionBlocks } from '../src/persona/sections.ts';
 
 test('parseSections and buildSections preserve fields, opening text, traits, and other-section order', () => {
   const source = [
@@ -45,4 +45,20 @@ test('parseSections and buildSections preserve fields, opening text, traits, and
   assert.ok(built.indexOf('## 其他A') < built.indexOf('## 其他B'));
   assert.match(built, /custom: keep/u);
   assert.deepEqual(parseSections(built), form);
+});
+
+test('repeated other-section headings receive unique preview block IDs', () => {
+  const form = parseSections([
+    '# {{name}}',
+    '',
+    '## 记录',
+    '第一条。',
+    '',
+    '## 记录',
+    '第二条。',
+  ].join('\n'));
+  const ids = renderPersonaSectionBlocks(form)
+    .filter((block) => block.label === 'persona · 记录')
+    .map((block) => block.id);
+  assert.equal(new Set(ids).size, 2);
 });
