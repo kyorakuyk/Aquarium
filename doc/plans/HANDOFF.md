@@ -357,3 +357,18 @@ AQUARIUM_PANEL_PASSWORD=
 - 每分钟检测 awake→sleep；对近 2 小时 bot 发过言的已启用会话取最近前 2，随机发送 `prompts/sleep.md`，不调模型，复用 deliverStep/闭嘴/频率限制；cycleKey 内存去重并记 `goodnight` decision，启动已睡不补发，关机清理定时器。
 - 醒着时 `energy=clamp(1−0.8×(now−wakeAt)/(bedAt−wakeAt)−0.01×account近60分钟回复数,0,1)`；作息关闭恒为 1，睡着时不计算。
 - `energy<0.35` 时 float 加“有点困”（与 arousal 词用顿号）；`energy<0.25` 时在 talk 偏移后、阈值限幅前加 0.1。控制台通过 `/api/sleep` GET/PATCH 配置，作息卡显示状态、精力和下次变化时间。
+
+## 12. 模型接入、CLI 预热与人设文件（T10）
+
+- API provider 位于 `providers.<id>`，声明 `kind: api`、`baseUrl`、`apiKeyEnv`；真实凭据值仅放本机 `.env`。
+- 模型接口只返回密钥状态 `keyStatus.set/last4` 和 `apiKeyEnv` 名，不返回密钥原文。
+- `slots.<name>` 是按顺序尝试的降级链；条目可设置 `temperature`、`maxTokens` 与 `reasoning`；`reasoningField: 'none'` 不发送 reasoning 参数；调用追踪只记录安全参数。
+- CLI provider 使用 `kind: cli`、`command`、`args`、`timeoutSec`、`prewarm`；命令参数数组执行，不经过 shell。
+- `prewarm` 为每个 CLI provider 保留一个空闲进程；调用后替换，空闲 stdout/stderr 持续排空。
+- 空闲进程意外退出后按指数退避重启；关机时调用 `stopAll()` 清理，自动测试只用假命令。
+- 内置人设位于 `personas/<id>.md`，用户版本位于 `data/personas/<id>.md` 并优先读取。
+- 可选 YAML front matter 的 `traits.order/morality/talk/mind` 为 -2..2 整数，缺省为 0。
+- 主标题用 `# ...`，开头说明紧随其后；运行时剥离 YAML 并将 `{{name}}` 替换为昵称。
+- 标准 `##` 小节依次为：身份、年龄、背景、说话方式、口头禅、常用表情、对熟人、对陌生人、对主人、底线。
+- 口头禅、常用表情、底线用逐行 `- ` 列表；未知 `##` 小节按原顺序保留。
+- 导入使用 `extract` 槽和 `prompts/persona-import.md` 生成未保存草稿；接受后仍需显式保存。
