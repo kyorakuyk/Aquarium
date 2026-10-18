@@ -153,9 +153,8 @@ function standardSectionText(heading: PersonaSectionHeading, fields: PersonaSect
 
 export function renderPersonaSectionBlocks(form: PersonaSectionsForm): PersonaSectionBlock[] {
   const blocks: PersonaSectionBlock[] = [];
-  const opening = form.title
-    ? form.introduction ? `${form.title}${form.lineEnding}${form.introduction}` : form.title
-    : form.introduction;
+  const title = form.title.replace(/^#[ \t]*/u, '').trim() ? form.title : '# {{name}}';
+  const opening = form.introduction ? `${title}${form.lineEnding}${form.introduction}` : title;
   if (opening.length > 0) {
     blocks.push({ id: 'persona-opening', label: 'persona · 开头说明', text: opening });
   }

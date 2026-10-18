@@ -6,8 +6,14 @@ import {
   renderPersonaSectionBlocks as renderServerPersonaSectionBlocks,
 } from '../src/persona/sections.ts';
 import {
+  PERSONA_TRAIT_LABELS,
   buildSections,
   parseSections,
+  personaNameFromTitle,
+  personaSourceForEditor,
+  personaSourceFromEditor,
+  personaTitleForDisplay,
+  personaTitleFromName,
   renderPersonaSectionBlocks,
   syncPersonaFormEdit,
 } from '../panel/src/persona-sections.ts';
@@ -52,6 +58,7 @@ test('panel persona sections stay compatible with server parsing and building', 
   );
   assert.equal(buildSections(panelForm), buildServerSections(serverForm));
   assert.deepEqual(parseSections(buildSections(panelForm)), panelForm);
+  assert.equal(buildSections({ ...panelForm, title: '' }), buildServerSections({ ...serverForm, title: '' }));
 });
 
 test('editing a form field in source mode serializes the same form before save', () => {
@@ -62,4 +69,37 @@ test('editing a form field in source mode serializes the same form before save',
   assert.equal(synchronized.sourceText, buildSections(changed));
   assert.deepEqual(parseSections(synchronized.sourceText), changed);
   assert.equal(syncPersonaFormEdit(changed, false).sourceText, undefined);
+});
+
+test('blank and fixed persona names serialize correctly without exposing the template token', () => {
+  const form = parseSections('# {{name}}');
+  const blank = { ...form, title: personaTitleFromName('') };
+  const blankMarkdown = buildSections(blank);
+  const blankSource = personaSourceForEditor(blankMarkdown);
+
+  assert.ok(blankMarkdown.endsWith('# {{name}}'));
+  assert.ok(buildSections({ ...form, title: '' }).endsWith('# {{name}}'));
+  assert.equal(personaNameFromTitle(blank.title), '');
+  assert.equal(personaTitleForDisplay(blank.title), '跟随 QQ 昵称');
+  assert.equal(blankSource.includes('{{name}}'), false);
+  assert.ok(blankSource.endsWith('# [跟随 QQ 昵称]'));
+  assert.equal(buildSections(parseSections(personaSourceFromEditor(blankSource))), blankMarkdown);
+
+  const titlelessSource = personaSourceForEditor('开头说明\n\n## 身份\n小鱼');
+  assert.equal(titlelessSource.includes('{{name}}'), false);
+  assert.ok(titlelessSource.startsWith('# [跟随 QQ 昵称]\n开头说明'));
+  assert.ok(personaSourceFromEditor(titlelessSource).startsWith('# {{name}}\n开头说明'));
+
+  const fixed = { ...form, title: personaTitleFromName('小青') };
+  assert.ok(buildSections(fixed).endsWith('# 小青'));
+  assert.equal(personaNameFromTitle(fixed.title), '小青');
+});
+
+test('persona trait endpoint vocabulary stays fixed', () => {
+  assert.deepEqual(PERSONA_TRAIT_LABELS, [
+    { key: 'order', title: '规矩', low: '守序', high: '混沌' },
+    { key: 'morality', title: '善意', low: '善良', high: '邪恶' },
+    { key: 'talk', title: '话量', low: '文静', high: '话痨' },
+    { key: 'mind', title: '思维', low: '理性', high: '感性' },
+  ]);
 });

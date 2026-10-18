@@ -29,6 +29,18 @@ export type PersonaSectionFields = {
   底线: string[];
 };
 
+export const PERSONA_TRAIT_LABELS = [
+  { key: 'order', title: '规矩', low: '守序', high: '混沌' },
+  { key: 'morality', title: '善意', low: '善良', high: '邪恶' },
+  { key: 'talk', title: '话量', low: '文静', high: '话痨' },
+  { key: 'mind', title: '思维', low: '理性', high: '感性' },
+] as const satisfies ReadonlyArray<{
+  key: keyof PersonaTraits;
+  title: string;
+  low: string;
+  high: string;
+}>;
+
 export interface OtherPersonaSection {
   heading: string;
   text: string;
@@ -67,6 +79,37 @@ export function emptyPersonaSections(title = '# {{name}}'): PersonaSectionsForm 
     metadata: {},
     lineEnding: '\n',
   };
+}
+
+export function personaNameFromTitle(title: string): string {
+  const name = title.replace(/^#[ \t]*/u, '');
+  return name.trim() === '{{name}}' ? '' : name;
+}
+
+export function personaTitleFromName(name: string): string {
+  const fixedName = name.trim();
+  return `# ${fixedName && fixedName !== '{{name}}' ? fixedName : '{{name}}'}`;
+}
+
+export function personaTitleForDisplay(title: string): string {
+  return personaNameFromTitle(title).trim() || '跟随 QQ 昵称';
+}
+
+export function personaSourceForEditor(source: string): string {
+  const frontmatter = frontmatterPattern.exec(source)?.[0] ?? '';
+  if (!frontmatter && /^---[ \t]*\r?\n/u.test(source)) {
+    return source.replace(/^#[ \t]*\{\{name\}\}[ \t]*\r?$/gmu, '# [跟随 QQ 昵称]');
+  }
+  const body = source.slice(frontmatter.length);
+  const hasTitle = /^#[ \t]+[^\r\n]*(?:\r?\n|$)/u.test(body);
+  const normalizedBody = hasTitle
+    ? body
+    : `# [跟随 QQ 昵称]${body ? `${source.includes('\r\n') ? '\r\n' : '\n'}${body}` : ''}`;
+  return frontmatter + normalizedBody.replace(/^#[ \t]*\{\{name\}\}[ \t]*\r?$/gmu, '# [跟随 QQ 昵称]');
+}
+
+export function personaSourceFromEditor(source: string): string {
+  return source.replace(/^#[ \t]*\[跟随 QQ 昵称\][ \t]*\r?$/gmu, '# {{name}}');
 }
 
 function isPersonaSectionHeading(value: string): value is PersonaSectionHeading {
@@ -146,9 +189,8 @@ function standardSectionText(heading: PersonaSectionHeading, fields: PersonaSect
 
 export function renderPersonaSectionBlocks(form: PersonaSectionsForm): PersonaSectionBlock[] {
   const blocks: PersonaSectionBlock[] = [];
-  const opening = form.title
-    ? form.introduction ? `${form.title}${form.lineEnding}${form.introduction}` : form.title
-    : form.introduction;
+  const title = form.title.replace(/^#[ \t]*/u, '').trim() ? form.title : '# {{name}}';
+  const opening = form.introduction ? `${title}${form.lineEnding}${form.introduction}` : title;
   if (opening.length > 0) blocks.push({ id: 'persona-opening', label: 'persona · 开头说明', text: opening });
   for (const heading of PERSONA_SECTION_HEADINGS) {
     const content = standardSectionText(heading, form.fields, form.lineEnding);

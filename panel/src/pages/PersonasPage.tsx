@@ -2,7 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { apiRequest, type PanelStatus } from '../api.ts';
 import type { PageId } from '../components/Sidebar.tsx';
 import { redactSensitiveText } from '../sensitive-text.ts';
-import { buildSections, emptyPersonaSections, parseSections, syncPersonaFormEdit, type PersonaSectionsForm } from '../persona-sections.ts';
+import {
+  buildSections,
+  emptyPersonaSections,
+  parseSections,
+  personaSourceForEditor,
+  personaSourceFromEditor,
+  syncPersonaFormEdit,
+  type PersonaSectionsForm,
+} from '../persona-sections.ts';
 import { PersonaComparisonDialog } from './PersonaComparisonDialog.tsx';
 import { PersonaFields } from './PersonaFields.tsx';
 import { PersonaPreview, type PersonaPreviewResult } from './PersonaPreview.tsx';
@@ -161,12 +169,13 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   }
 
   function changeSource(value: string) {
-    setSourceText(value);
+    const markdown = personaSourceFromEditor(value);
+    setSourceText(markdown);
     setDirty(true);
     setSaved(false);
     setError('');
     try {
-      setForm(parseSections(value));
+      setForm(parseSections(markdown));
       setSourceError('');
     } catch {
       setSourceError('Markdown 或 YAML 暂不可解析；修正后即可切回表单和预览。');
@@ -286,7 +295,7 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
     }
     if (dirty && !window.confirm('新建人设会放弃当前未保存更改，仍要继续吗？')) return;
     const newForm = emptyPersonaSections();
-    newForm.introduction = '{{name}} 是一个友善、自然的聊天伙伴。';
+    newForm.introduction = '我是一个友善、自然的聊天伙伴。';
     const markdown = buildSections(newForm);
     setBusy(true);
     setError('');
@@ -376,7 +385,7 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
               previewBusy={previewBusy}
               previewError={previewError}
               activeBlockId={activeBlockId}
-              sourceText={sourceText}
+              sourceText={personaSourceForEditor(sourceText)}
               sourceError={sourceError}
               onSourceChange={changeSource}
               previewAccounts={boundAccounts}
