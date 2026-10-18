@@ -12,7 +12,10 @@ import {
 import path from 'node:path';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { promptTemplateStore } from '../core/prompt-templates.ts';
+import { effectiveTalkLevel, renderTraitsBlock } from '../persona/traits.ts';
 import { parsePersonaMarkdown, updatePersonaTraits, type PersonaTraits } from '../persona/load.ts';
+import { buildSections, parseSections, renderPersonaSectionBlocks } from '../persona/sections.ts';
 
 const personaTraitsSchema: z.ZodType<PersonaTraits> = z.object({
   order: z.number().int().min(-2).max(2).default(0),
@@ -28,6 +31,7 @@ const personaImportSchema = z.object({
   filename: z.string().min(1).max(255),
   markdown: z.string().max(100_000),
 }).strict();
+const personaPreviewSchema = z.object({ content: z.string().max(100_000) }).strict();
 
 function validPersonaId(value: string): boolean {
   return /^[a-z0-9_-]+$/u.test(value);
@@ -86,6 +90,31 @@ export function registerPersonaRoutes(app: Hono, root: string): void {
       filename: `${id}.md`,
       source: existsSync(personaPath(root, 'data/personas', id)) ? 'data' : 'built-in',
     })));
+  });
+
+  app.post('/api/personas/preview', async (context) => {
+    let rawBody: unknown;
+    try { rawBody = await context.req.json(); } catch { return context.json({ error: 'Invalid JSON' }, 400); }
+    const body = parseBody(rawBody, personaPreviewSchema);
+    if (!body) return context.json({ error: 'Invalid persona preview' }, 400);
+    try {
+      const form = parseSections(body.content);
+      const personaText = parsePersonaMarkdown(buildSections(form)).text;
+      const personaBlocks = renderPersonaSectionBlocks(form);
+      const renderedPersonaText = personaBlocks.map((block) => block.text).join(`${form.lineEnding}${form.lineEnding}`);
+      if (renderedPersonaText !== personaText) return context.json({ error: 'Invalid persona preview' }, 400);
+      const traits = renderTraitsBlock(
+        form.traits,
+        effectiveTalkLevel(form.traits.talk, 0),
+        promptTemplateStore.get().traits,
+      );
+      const blocks = [...personaBlocks, ...(traits ? [{ id: 'traits', label: 'traits', text: traits }] : [])];
+      const promptText = personaText + (traits ? `\n\n${traits}` : '');
+      const chars = promptText.length;
+      return context.json({ blocks, chars, estTokens: Math.ceil(chars / 1.3) });
+    } catch {
+      return context.json({ error: 'Invalid persona preview' }, 400);
+    }
   });
 
   app.get('/api/personas/:id', (context) => {
