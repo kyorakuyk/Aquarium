@@ -499,6 +499,7 @@
 | 2026-10-19 | V13a | 03:04–03:24; 471/471; build123 |
 | 2026-10-19 | V13b | 03:24–04:26; 474/474; panel126 |
 | 2026-10-19 | V13c | 04:26–05:16; 475/475; panel127 |
+| 2026-10-19 | V14a | check 482/482; boundaries passed |
 
 ---
 
@@ -1316,10 +1317,10 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
 - [ ] **V14 印象页：拉取群聊历史并建立画像**（2026-10-19，V13 之后做，同一分支；拆成 V14a 后端、V14b 前端两个提交）
   - **用途**：一键从 QQ 拉取某个群过去的聊天记录，存进消息表，再分批跑印象提取，快速建立群标签和群友标签。方便测试，也方便新群冷启动。
   - **只支持群聊**。私聊不拉取，与 §10.4“私聊不提取”保持一致。
-  - [ ] **适配器**（V14a）：`history(session, count)` 扩展为 `history(session, { count, beforeMessageId? })`，旧调用保持兼容。
+  - [x] **适配器**（V14a）：`history(session, count)` 扩展为 `history(session, { count, beforeMessageId? })`，旧调用保持兼容。
     - 群聊时调用 SnowLuma 的 `get_group_msg_history`，参数为 `{ group_id, count, message_id: beforeMessageId ?? 0, reverse_order: true }`。传了 `message_id` 时，返回的是锚点本身及更早的消息，所以要**去掉与锚点相同的那条**。
     - 依据：`reference/SnowLuma/packages/onebot/src/actions/extended.ts` 中 `get_group_msg_history` 的定义。message_id 是有符号 int32，**可能是负数**，不要做非负校验。
-  - [ ] **拉取任务**（V14a，`src/core/impressions/history-import.ts`）：
+  - [x] **拉取任务**（V14a，`src/core/impressions/history-import.ts`）：
     - 输入 `{ sessionId, target }`，`target` ∈ {200, 500, 1000, 2000} 条。每页 50 条，以上一页最早一条的 message_id 为锚点向前翻，两页之间间隔 500ms。满足任一条件即停止：达到 target、一页少于 2 条新消息（说明到头了）、连续 3 页出错。
     - 消息写入：调用 `repository.saveMessage`，按 `(session_id, message_id)` 幂等，已有的记录跳过。**完全不经过流水线**：不回复、不做主动判断、不评估情绪、不计好感，也不写 decisions。
     - 拉取完成后**分批提取**：
@@ -1328,7 +1329,7 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
       - 全部完成后，把 `tag_runs` 的 `last_run_at` 设为当前时间，`last_message_time` 设为最新一条消息的时间，避免常规提取再重复处理同一批。
     - 同一个群同一时间只能有一个导入任务；与常规提取共用 §10.4 的“同群单飞”锁。
     - 任务状态放在内存里：`{ id, sessionId, phase: 'fetching' | 'extracting' | 'done' | 'cancelled' | 'error', fetched, inserted, windowsDone, windowsTotal, tagsInserted, tagsObserved, costCny, error? }`。
-  - [ ] **API**（V14a）：
+  - [x] **API**（V14a）：
     - `POST /api/impressions/:sessionId/import`，请求体 `{ target }`：返回任务 id。群未启用时返回 409，任务已在进行时也返回 409。
     - `GET /api/impressions/import/:jobId`：返回任务状态。
     - `POST /api/impressions/import/:jobId/cancel`：取消。当前这页或当前窗口做完后停下，已写入的消息和标签保留。

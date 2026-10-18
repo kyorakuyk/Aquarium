@@ -6,7 +6,10 @@ import { AquariumConfigSchema } from '../src/config/schema.ts';
 import { createManagementCommands } from '../src/core/management.ts';
 import { createSleepWakeState } from '../src/core/sleep.ts';
 import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../src/core/events.ts';
-import type { ContactFriend, ContactGroup, ProtocolAdapter } from '../src/adapters/types.ts';
+import type { ContactFriend, ContactGroup, HistoryOptions, ProtocolAdapter } from '../src/adapters/types.ts';
+import { createHistoryImportService } from '../src/core/impressions/history-import.ts';
+import { createImpressionsService } from '../src/core/impressions/service.ts';
+import type { ExtractTagsPromptTemplate } from '../src/core/prompt-templates.ts';
 import { createPanelApp, type PanelServerOptions } from '../src/panel-server/app.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
@@ -30,6 +33,11 @@ export class FakeAdapter implements ProtocolAdapter {
   friends: ContactFriend[] = [{ userId: 42, nickname: '好友', remark: '好友备注' }];
   groupListFails = false;
   friendListFails = false;
+  status: 'connecting' | 'online' | 'offline' | 'waiting_login' = 'online';
+  historyPages: IncomingMessage[][] = [];
+  historyCalls: Array<{ session: SessionKey; request: number | HistoryOptions }> = [];
+  historyError = false;
+  historyGate?: Promise<IncomingMessage[]>;
 
   async connect(): Promise<void> {}
   close(): void {}
@@ -47,7 +55,16 @@ export class FakeAdapter implements ProtocolAdapter {
     if (this.friendListFails) throw new Error('friend contact lookup failed');
     return this.friends;
   }
-  async history(): Promise<[]> { return []; }
+  async history(session: SessionKey, request: number | HistoryOptions): Promise<IncomingMessage[]> {
+    this.historyCalls.push({ session, request });
+    if (this.historyError) throw new Error('history unavailable');
+    if (this.historyGate) {
+      const gate = this.historyGate;
+      this.historyGate = undefined;
+      return gate;
+    }
+    return this.historyPages.shift() ?? [];
+  }
   async markRead(): Promise<void> {}
   async setTyping(): Promise<void> {}
   async recall(messageId: string): Promise<void> { this.recalled.push(messageId); }
@@ -58,6 +75,7 @@ export async function withPanel<T>(
     app: ReturnType<typeof createPanelApp>;
     repository: ReturnType<typeof createRepository>;
     adapter: FakeAdapter;
+    historyImports: ReturnType<typeof createHistoryImportService>;
     modelSlots: string[];
     replayedMessages: IncomingMessage[];
     sleepWakeState: ReturnType<typeof createSleepWakeState>;
@@ -91,6 +109,30 @@ export async function withPanel<T>(
   });
   let savedConfig: ReturnType<typeof AquariumConfigSchema.parse> | undefined;
   const adapter = new FakeAdapter();
+  const impressionsService = createImpressionsService({
+    repository,
+    getConfig: () => config,
+    callModel: async () => ({
+      text: '{"group":{"observe":[],"new":[],"contradict":[]},"members":[]}',
+      provider: 'fake',
+      model: 'fake-model',
+      usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+    }),
+  });
+  const extractTemplate: ExtractTagsPromptTemplate = {
+    source: 'fixture',
+    version: 'fixture-v1',
+    system: '提取群聊印象。',
+    user: '上下文：{{context}}\n现有：{{existing}}',
+  };
+  const historyImports = createHistoryImportService({
+    repository,
+    getConfig: () => config,
+    impressionsService,
+    getTemplate: () => extractTemplate,
+    now: () => now,
+    wait: async () => {},
+  });
   const sleepWakeState = createSleepWakeState();
   const modelSlots: string[] = [];
   const replayedMessages: IncomingMessage[] = [];
@@ -105,7 +147,8 @@ export async function withPanel<T>(
     getConfig: () => config,
     saveConfig: (next) => { config = next; savedConfig = next; },
     repository,
-    accounts: () => [{ adapter, getStatus: () => 'online', getNickname: () => adapter.nickname }],
+    accounts: () => [{ adapter, getStatus: () => adapter.status, getNickname: () => adapter.nickname }],
+    historyImports,
     sleepWakeState,
     management: () => [management],
     root,
@@ -159,6 +202,7 @@ export async function withPanel<T>(
       app,
       repository,
       adapter,
+      historyImports,
       modelSlots,
       replayedMessages,
       sleepWakeState,

@@ -124,6 +124,7 @@ export interface StoredPipelineTrace extends PipelineTraceRecord {
 export interface StoreRepository extends PersonaVersionRepository {
   saveMessage(message: MessageStorageRecord): boolean;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
+  messagesInRange(sessionId: string, fromTime: number, toTime: number): MessageStorageRecord[];
   lastMessageTime(sessionId: string): number | null;
   lastMessageBefore(sessionId: string, beforeTime: number): MessageStorageRecord | undefined;
   messageBySessionAndId(sessionId: string, messageId: string): MessageStorageRecord | undefined;
@@ -210,6 +211,12 @@ export function createRepository(
     WHERE session_id = ?
     ORDER BY time DESC, id DESC
     LIMIT ?
+  `);
+  const selectMessagesInRange = database.prepare(`
+    SELECT session_id, message_id, sender_id, sender_name, is_self, plain_text, segments_json, time
+    FROM messages
+    WHERE session_id = ? AND time >= ? AND time <= ?
+    ORDER BY time, id
   `);
   const selectLastMessageTime = database.prepare(
     'SELECT MAX(time) AS latest_time FROM messages WHERE session_id = ?',
@@ -324,6 +331,23 @@ export function createRepository(
       if (limit === 0) return [];
       const rows = selectRecentMessages.all(sessionId, limit) as Array<Record<string, unknown>>;
       return rows.reverse().map((row) => ({
+        sessionId: stringValue(row.session_id, 'session_id'),
+        messageId: stringValue(row.message_id, 'message_id'),
+        senderId: numberValue(row.sender_id, 'sender_id'),
+        senderName: stringValue(row.sender_name, 'sender_name'),
+        isSelf: numberValue(row.is_self, 'is_self') === 1,
+        plainText: stringValue(row.plain_text, 'plain_text'),
+        segments: JSON.parse(stringValue(row.segments_json, 'segments_json')) as unknown[],
+        time: numberValue(row.time, 'time'),
+      }));
+    },
+
+    messagesInRange(sessionId, fromTime, toTime) {
+      if (!Number.isFinite(fromTime) || !Number.isFinite(toTime) || toTime < fromTime) {
+        throw new RangeError('消息时间范围无效');
+      }
+      const rows = selectMessagesInRange.all(sessionId, fromTime, toTime) as Array<Record<string, unknown>>;
+      return rows.map((row) => ({
         sessionId: stringValue(row.session_id, 'session_id'),
         messageId: stringValue(row.message_id, 'message_id'),
         senderId: numberValue(row.sender_id, 'sender_id'),

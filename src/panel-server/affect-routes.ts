@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AquariumConfig } from '../config/schema.ts';
 import { parseSessionId } from '../core/sessions.ts';
+import { resolveSession } from '../config/resolve.ts';
 import { bandOf, decayValue, nextBand } from '../core/mood/core.ts';
 import { buildMoodSeriesPoints, distanceToNextBand } from '../core/mood/series.ts';
 import { sleepEnergy, sleepPlan, type SleepWakeState } from '../core/sleep.ts';
@@ -12,11 +13,13 @@ import { createAffinityService } from '../core/affinity/service.ts';
 import type { MoodBand, StoredMoodEvent, StoredTag } from '../store/affect-repo.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import type { PanelAccountRuntime } from './types.ts';
+import type { HistoryImportService } from '../core/impressions/history-import.ts';
 
 export interface AffectRouteOptions {
   getConfig: () => AquariumConfig;
   repository: StoreRepository;
   accounts: () => PanelAccountRuntime[];
+  historyImports?: HistoryImportService;
   sleepWakeState?: SleepWakeState;
   now?: () => number;
 }
@@ -33,6 +36,9 @@ const tagPatchSchema = z.object({
 }).strict();
 
 const affinityPatchSchema = z.object({ value: z.number().int().min(0).max(100) }).strict();
+const historyImportSchema = z.object({
+  target: z.union([z.literal(200), z.literal(500), z.literal(1_000), z.literal(2_000)]),
+}).strict();
 
 function parseJsonBody<T>(body: unknown, schema: z.ZodType<T>): T | undefined {
   const result = schema.safeParse(body);
@@ -100,6 +106,7 @@ function moodBandChanges(events: readonly StoredMoodEvent[], from: number, to: n
 export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): void {
   const now = options.now ?? Date.now;
   const affinityService = createAffinityService({ repository: options.repository, getConfig: options.getConfig });
+  const historyImports = options.historyImports;
 
   function primaryAccount(): number {
     return options.accounts()[0]?.adapter.account ?? options.getConfig().accounts[0]?.uin ?? 0;
@@ -294,6 +301,37 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
       };
     });
     return context.json({ sessionId: id, groupTags, members });
+  });
+
+  app.post('/api/impressions/:sessionId/import', async (context) => {
+    if (!historyImports) return context.json({ error: '历史导入暂不可用' }, 503);
+    const id = context.req.param('sessionId');
+    const key = parseSessionId(id);
+    if (!key || key.kind !== 'group') return context.json({ error: '仅支持群聊历史导入' }, 400);
+    let rawBody: unknown;
+    try { rawBody = await context.req.json(); } catch { return context.json({ error: 'Invalid JSON' }, 400); }
+    const body = parseJsonBody(rawBody, historyImportSchema);
+    if (!body) return context.json({ error: 'Invalid target' }, 400);
+
+    const runtime = options.accounts().find((candidate) => candidate.adapter.account === key.account);
+    if (!runtime) return context.json({ error: 'Unknown account' }, 404);
+    if (runtime.getStatus() !== 'online') return context.json({ error: '小号不在线' }, 503);
+    if (!resolveSession(options.getConfig(), key).enabled) return context.json({ error: '该群未启用' }, 409);
+    if (historyImports.isRunning(id)) return context.json({ error: '该群已有导入任务' }, 409);
+
+    const job = historyImports.start({ session: key, target: body.target, adapter: runtime.adapter });
+    if (!job) return context.json({ error: '该群已有印象提取任务' }, 409);
+    return context.json({ id: job.id }, 202);
+  });
+
+  app.get('/api/impressions/import/:jobId', (context) => {
+    const job = historyImports?.get(context.req.param('jobId'));
+    return job ? context.json(job) : context.json({ error: 'Import job not found' }, 404);
+  });
+
+  app.post('/api/impressions/import/:jobId/cancel', (context) => {
+    const job = historyImports?.cancel(context.req.param('jobId'));
+    return job ? context.json(job) : context.json({ error: 'Import job not found or already finished' }, 404);
   });
 
   app.post('/api/tags', async (context) => {

@@ -7,7 +7,7 @@ import yaml from 'yaml';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
 import { sessionId, type IncomingMessage, type SessionKey } from '../src/core/events.ts';
 import { createSessionQueue } from '../src/core/session-queue.ts';
-import type { ProtocolAdapter, ContactFriend, ContactGroup } from '../src/adapters/types.ts';
+import type { ProtocolAdapter, ContactFriend, ContactGroup, HistoryOptions } from '../src/adapters/types.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
 import { createHistoryCatchUp } from '../src/core/history-catchup.ts';
@@ -71,7 +71,8 @@ class FakeAdapter implements ProtocolAdapter {
   async send(): Promise<{ messageId: string }> { return { messageId: 'out' }; }
   async listGroups(): Promise<ContactGroup[]> { return this.groups; }
   async listFriends(): Promise<ContactFriend[]> { return this.friends; }
-  async history(session: SessionKey, count: number): Promise<IncomingMessage[]> {
+  async history(session: SessionKey, request: number | HistoryOptions): Promise<IncomingMessage[]> {
+    const count = typeof request === 'number' ? request : request.count;
     this.historyCalls.push({ session, count });
     return this.histories.get(sessionId(session)) ?? [];
   }

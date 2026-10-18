@@ -11,6 +11,7 @@ import type {
   AdapterStatus,
   ContactFriend,
   ContactGroup,
+  HistoryOptions,
   ProtocolAdapter,
 } from '../types.ts';
 import {
@@ -31,7 +32,12 @@ interface OneBotClient {
   sendPrivateMessage(userId: number, message: unknown): Promise<{ message_id: number }>;
   getGroupList(): Promise<JsonObject[]>;
   getFriendList(): Promise<JsonObject[]>;
-  getGroupMessageHistory(params: { group_id: number; count: number }): Promise<{ messages: JsonObject[] }>;
+  getGroupMessageHistory(params: {
+    group_id: number;
+    count: number;
+    message_id: number;
+    reverse_order: boolean;
+  }): Promise<{ messages: JsonObject[] }>;
   getFriendMessageHistory(params: { user_id: number; count: number }): Promise<{ messages: JsonObject[] }>;
   markGroupMessageAsRead(messageId: number, groupId?: number): Promise<null>;
   markPrivateMessageAsRead(messageId: number, userId?: number): Promise<null>;
@@ -451,15 +457,24 @@ export class OneBotAdapter implements ProtocolAdapter {
     });
   }
 
-  async history(session: SessionKey, count: number): Promise<IncomingMessage[]> {
+  async history(session: SessionKey, request: number | HistoryOptions): Promise<IncomingMessage[]> {
     this.assertSessionAccount(session);
     this.assertOnline();
-    return this.withActionTimeout('get_message_history', () => this.loadHistory(session, count));
+    const options = typeof request === 'number' ? { count: request } : request;
+    const beforeMessageId = options.beforeMessageId === undefined
+      ? undefined
+      : numericMessageId(String(options.beforeMessageId));
+    return this.withActionTimeout('get_message_history', () => this.loadHistory(session, options.count, beforeMessageId));
   }
 
-  private async loadHistory(session: SessionKey, count: number): Promise<IncomingMessage[]> {
+  private async loadHistory(session: SessionKey, count: number, beforeMessageId?: number): Promise<IncomingMessage[]> {
     const result = session.kind === 'group'
-      ? await this.client.getGroupMessageHistory({ group_id: session.peer, count })
+      ? await this.client.getGroupMessageHistory({
+        group_id: session.peer,
+        count,
+        message_id: beforeMessageId ?? 0,
+        reverse_order: true,
+      })
       : await this.client.getFriendMessageHistory({ user_id: session.peer, count });
 
     return result.messages
@@ -467,6 +482,7 @@ export class OneBotAdapter implements ProtocolAdapter {
       .filter((event) => session.kind === 'group'
         ? event.message_type === 'group' && event.group_id === session.peer
         : event.message_type === 'private' && event.user_id === session.peer)
+      .filter((event) => session.kind !== 'group' || beforeMessageId === undefined || event.message_id !== beforeMessageId)
       .map((event) => convertIncomingMessage(event, this.account))
       .sort((left, right) => left.time - right.time);
   }

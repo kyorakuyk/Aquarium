@@ -15,6 +15,7 @@ import { createSessionQueue } from '../core/session-queue.ts';
 import { createAffinityService } from '../core/affinity/service.ts';
 import { createMoodService } from '../core/mood/service.ts';
 import { createImpressionsService } from '../core/impressions/service.ts';
+import { createHistoryImportService } from '../core/impressions/history-import.ts';
 import { createSleepWakeState } from '../core/sleep.ts';
 import { createSleepGoodnightScheduler } from '../core/sleep/goodnight.ts';
 import { getCliRuntime } from '../llm/cli.ts';
@@ -105,6 +106,12 @@ const impressionsService = createImpressionsService({
       `印象提取 ${summary.sessionId}：${summary.status}，新增 ${summary.inserted}、观察 ${summary.observed}、推翻 ${summary.superseded}、丢弃 ${summary.dropped}。`,
     );
   },
+});
+const historyImports = createHistoryImportService({
+  repository,
+  getConfig: () => configWatcher.getConfig(),
+  impressionsService,
+  getTemplate: () => promptTemplateStore.get().extractTags,
 });
 let panelServer: ReturnType<typeof startPanelServer> | undefined;
 let managedHost: Host | undefined;
@@ -348,6 +355,7 @@ await startPanelWhileAccountStartupRuns(accountStartup, () => {
           },
           repository,
           accounts: () => panelAccounts,
+          historyImports,
           sleepWakeState,
           cliRuntime,
           management: () => managementControllers,

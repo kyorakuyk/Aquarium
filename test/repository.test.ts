@@ -45,6 +45,22 @@ test('saveMessage 去重并让 recentMessages 由旧到新返回', () => {
   });
 });
 
+test('messagesInRange returns only the inclusive time window in ascending order', () => {
+  withRepository((repository) => {
+    const session = '900000001:group:123456';
+    repository.saveMessage(messageRecord('before', 999));
+    repository.saveMessage(messageRecord('end', 2500));
+    repository.saveMessage(messageRecord('middle', 2000));
+    repository.saveMessage(messageRecord('start', 1500));
+    repository.saveMessage({ ...messageRecord('other-session', 1800), sessionId: '900000001:group:654321' });
+
+    const records = repository.messagesInRange(session, 1500, 2500);
+
+    assert.deepEqual(records.map((record) => record.messageId), ['start', 'middle', 'end']);
+    assert.throws(() => repository.messagesInRange(session, 2500, 1500), /时间范围/u);
+  });
+});
+
 test('costToday 只累计本地自然日内的用量', () => {
   withRepository((repository) => {
     const dayStart = new Date(2026, 9, 12).getTime();

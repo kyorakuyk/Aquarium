@@ -126,6 +126,28 @@ test('发送、历史顺序与标记已读保持在当前会话范围内', async
   assert.deepEqual(fake.state.markedGroup, [[20, 123456]]);
 });
 
+test('群聊历史分页传递负数锚点并去掉重复锚点消息', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  fake.state.groupHistory.push(
+    groupEvent(42, -123, 1_700_000_002),
+    groupEvent(43, -456, 1_700_000_001),
+  );
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => fake.client);
+  const session = { account, kind: 'group' as const, peer: 123456 };
+
+  await adapter.connect();
+  const history = await adapter.history(session, { count: 50, beforeMessageId: -123 });
+
+  assert.deepEqual(fake.state.groupHistoryCalls, [{
+    group_id: 123456,
+    count: 50,
+    message_id: -123,
+    reverse_order: true,
+  }]);
+  assert.deepEqual(history.map((message) => message.messageId), ['-456']);
+});
+
 test('好友与群列表使用 Aquarium 联系人字段', async (t) => {
   const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
   const fake = createFakeClient();

@@ -75,6 +75,7 @@ export function createFakeClient(loginUserId = account, failedConnections = 0, h
     rawCalls: [] as unknown[],
     recalled: [] as unknown[],
     groupHistory: [] as unknown[],
+    groupHistoryCalls: [] as Array<{ group_id: number; count: number; message_id: number; reverse_order: boolean }>,
     friendHistory: [] as unknown[],
   };
 
@@ -147,7 +148,8 @@ export function createFakeClient(loginUserId = account, failedConnections = 0, h
       async getFriendList() {
         return [{ user_id: 42, nickname: '朋友', remark: '老友' }];
       },
-      async getGroupMessageHistory() {
+      async getGroupMessageHistory(params: { group_id: number; count: number; message_id: number; reverse_order: boolean }) {
+        state.groupHistoryCalls.push(params);
         return { messages: state.groupHistory };
       },
       async getFriendMessageHistory() {
