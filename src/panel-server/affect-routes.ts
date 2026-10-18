@@ -5,6 +5,7 @@ import { parseSessionId } from '../core/sessions.ts';
 import { bandOf, decayValue } from '../core/mood/core.ts';
 import { normalizeTagText, tagActivation } from '../core/impressions/tags.ts';
 import { TAG_TEXT_MAX, TAG_TEXT_MIN } from '../core/impressions/service.ts';
+import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
 import { createAffinityService } from '../core/affinity/service.ts';
 import type { StoredTag } from '../store/affect-repo.ts';
 import type { StoreRepository } from '../store/repository.ts';
@@ -42,12 +43,12 @@ function textLength(text: string): number {
 function tagView(tag: StoredTag, at: number) {
   return {
     id: tag.id,
-    text: tag.text,
+    text: redactSensitiveText(tag.text),
     status: tag.status,
     source: tag.source,
     samples: tag.samples,
     activation: tagActivation(tag, at),
-    evidence: tag.evidence,
+    evidence: tag.evidence.map((item) => ({ ...item, quote: redactSensitiveText(item.quote) })),
     firstSeen: tag.firstSeen,
     lastSeen: tag.lastSeen,
   };
@@ -73,7 +74,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
   function affinityView(account: number, userId: number, at: number) {
     return {
       ...affinityService.getCurrent(account, userId, at),
-      name: options.repository.latestSenderNameForAccount(account, userId) ?? String(userId),
+      name: redactSensitiveText(options.repository.latestSenderNameForAccount(account, userId) ?? String(userId)),
     };
   }
 
@@ -102,7 +103,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     const at = now();
     const people = affinityService.listCurrent(account, at).map((person) => ({
       ...person,
-      name: options.repository.latestSenderNameForAccount(account, person.userId) ?? String(person.userId),
+      name: redactSensitiveText(options.repository.latestSenderNameForAccount(account, person.userId) ?? String(person.userId)),
     }));
     return context.json(people);
   });
@@ -114,7 +115,10 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     if (account === undefined) return context.json({ error: 'Invalid account' }, 400);
     return context.json({
       ...affinityView(account, userId, now()),
-      events: options.repository.recentAffinityEvents(account, userId, 20),
+      events: options.repository.recentAffinityEvents(account, userId, 20).map((event) => ({
+        ...event,
+        reason: redactSensitiveText(event.reason),
+      })),
     });
   });
 
@@ -131,7 +135,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     const current = affinityService.setManual({ account, userId, value: body.value, now: now() });
     return context.json({
       ...current,
-      name: options.repository.latestSenderNameForAccount(account, userId) ?? String(userId),
+      name: redactSensitiveText(options.repository.latestSenderNameForAccount(account, userId) ?? String(userId)),
     });
   });
 
@@ -147,7 +151,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
       tags.map((tag) => tag.userId).filter((userId): userId is number => userId !== null),
     )];
     const members = memberIds.map((userId) => {
-      const name = options.repository.senderNameFor(id, userId) ?? String(userId);
+      const name = redactSensitiveText(options.repository.senderNameFor(id, userId) ?? String(userId));
       return {
         userId,
         name,

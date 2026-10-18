@@ -39,6 +39,12 @@
   .affinity-person-row { grid-template-columns: 1fr; gap: 9px; }
   .affinity-person-main { grid-template-columns: auto auto; }
   .affinity-person-main progress { grid-column: 1 / -1; }
+  .impressions-controls { align-items: stretch; flex-direction: column; gap: 8px; }
+  .impressions-controls .page-tabs { width: 100%; flex: auto; }
+  .impressions-group-select { width: 100%; }
+  .group-vibe-card { grid-template-columns: 1fr; gap: 10px; }
+  .member-row { grid-template-columns: minmax(0, 1fr) 150px; gap: 8px; }
+  .member-row .tag-collection { grid-column: 1 / -1; }
 }
 
 @media (max-width: 480px) {

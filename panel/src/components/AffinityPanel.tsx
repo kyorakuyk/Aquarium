@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { apiRequest, patch, type AffinityDetailView, type AffinityEventView, type AffinityLevel, type AffinityView } from '../api.ts';
+import { redactSensitiveText } from '../sensitive-text.ts';
 
 const LEVEL_LABELS: Record<AffinityLevel, string> = {
   cold: '疏远',
@@ -31,7 +32,7 @@ function eventSummary(event: AffinityEventView): string {
   const change = event.applied === event.delta
     ? formatDelta(event.applied)
     : `${formatDelta(event.applied)} / ${formatDelta(event.delta)} 原始`;
-  return `${SOURCE_LABELS[event.source]} · ${change} · ${event.reason}`;
+  return `${SOURCE_LABELS[event.source]} · ${change} · ${redactSensitiveText(event.reason)}`;
 }
 
 export function MemberAffinity({ affinity, account }: { affinity: AffinityView; account: number }) {
@@ -58,11 +59,10 @@ export function MemberAffinity({ affinity, account }: { affinity: AffinityView; 
 
   return (
     <div className="member-affinity">
-      <button className="member-affinity-toggle" type="button" aria-expanded={expanded} onClick={() => void toggle()}>
-        <span>好感</span>
-        <progress max={100} value={affinity.value} aria-label={`好感度 ${affinity.value}`} />
-        <strong>{affinity.value} · {LEVEL_LABELS[affinity.level]}</strong>
-        <span className="muted">{expanded ? '收起' : '最近 5 条事件'}</span>
+      <button className="member-affinity-toggle" type="button" aria-expanded={expanded} aria-label={`好感度 ${affinity.value}，${LEVEL_LABELS[affinity.level]}；${expanded ? '收起事件' : '查看最近 5 条事件'}`} title="查看最近 5 条好感事件" onClick={() => void toggle()}>
+        <progress max={100} value={affinity.value} aria-hidden="true" />
+        <strong>{LEVEL_LABELS[affinity.level]}</strong>
+        <span className="affinity-chevron" aria-hidden="true">{expanded ? '⌃' : '⌄'}</span>
       </button>
       {expanded && (loading
         ? <p className="muted">正在读取…</p>
@@ -130,13 +130,14 @@ export function AffinityPanel() {
       {sortedPeople.length === 0
         ? <p className="empty-state">还没有记录好感的群友。</p>
         : <div className="affinity-person-list">
-          {sortedPeople.map((person) => (
-            <article className="affinity-person-row" key={person.userId}>
+          {sortedPeople.map((person) => {
+            const safeName = redactSensitiveText(person.name);
+            return <article className="affinity-person-row" key={person.userId}>
               <div className="affinity-person-main">
-                <strong>{person.name}</strong>
+                <strong>{safeName}</strong>
                 <span className="mono muted">QQ {person.userId}</span>
                 <span>{person.value} · {LEVEL_LABELS[person.level]}</span>
-                <progress max={100} value={person.value} aria-label={`${person.name} 好感度 ${person.value}`} />
+                <progress max={100} value={person.value} aria-label={`${safeName} 好感度 ${person.value}`} />
                 <span className="muted">最近互动 · {formatTime(person.lastInteractionAt)}</span>
               </div>
               <form className="affinity-manual-form" onSubmit={(event) => void save(event, person.userId)}>
@@ -146,14 +147,14 @@ export function AffinityPanel() {
                   max="100"
                   step="1"
                   value={drafts[person.userId] ?? String(person.value)}
-                  aria-label={`设置${person.name}的好感度`}
+                  aria-label={`设置${safeName}的好感度`}
                   disabled={busyUser !== undefined}
                   onChange={(event) => setDrafts((current) => ({ ...current, [person.userId]: event.currentTarget.value }))}
                 /></label>
                 <button className="button button-secondary" type="submit" disabled={busyUser !== undefined}>保存</button>
               </form>
-            </article>
-          ))}
+            </article>;
+          })}
         </div>}
     </section>
   );

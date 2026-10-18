@@ -148,6 +148,34 @@ test('印象 API 返回群标签、成员名与全部状态标签', async () => 
   });
 });
 
+test('印象 API 在标签名与证据引文中隐藏凭据样式文本', async () => {
+  await withPanel(async ({ app, repository }) => {
+    const key = sessionId(groupSession);
+    const fakeCredential = 'K9m4R2p8T1v6';
+    repository.insertTag({
+      account,
+      sessionId: key,
+      userId: null,
+      text: fakeCredential,
+      norm: fakeCredential,
+      status: 'confirmed',
+      source: 'auto',
+      samples: 1,
+      evidence: [{ messageId: 'private-evidence', time: now, quote: `token=${fakeCredential}` }],
+      firstSeen: now,
+      lastSeen: now,
+      supersededBy: null,
+      updatedAt: now,
+    });
+
+    const response = await app.request(`/api/impressions/${key}`, { headers: authHeaders() });
+    assert.equal(response.status, 200);
+    const body = await response.text();
+    assert.equal(body.includes(fakeCredential), false);
+    assert.equal(body.split('[敏感内容已隐藏]').length - 1, 2);
+  });
+});
+
 test('标签 API：手动新增、改文字与改状态', async () => {
   await withPanel(async ({ app, repository }) => {
     const key = sessionId(groupSession);
@@ -226,7 +254,7 @@ test('好感 API 按全局用户读取回落值与事件，并手动设置档位
       sessionId: sessionId(groupSession),
       delta: 2,
       applied: 2,
-      reason: '正向情绪',
+      reason: '正向情绪 token=K9m4R2p8T1v6',
       levelBefore: null,
       levelAfter: null,
     });
@@ -260,7 +288,7 @@ test('好感 API 按全局用户读取回落值与事件，并手动设置档位
     assert.equal(detailResponse.status, 200);
     const detail = await detailResponse.json() as { events: Array<{ reason: string }> };
     assert.equal(detail.events.length, 1);
-    assert.equal(detail.events[0]?.reason, '正向情绪');
+    assert.equal(detail.events[0]?.reason, '正向情绪 [敏感内容已隐藏]');
 
     const updateResponse = await app.request('/api/affinity/42', {
       method: 'PATCH',

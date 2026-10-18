@@ -1,3 +1,5 @@
+import { redactSensitiveText } from './sensitive-text.ts';
+
 export const PASSWORD_KEY = 'aquarium-panel-password';
 export const UNAUTHORIZED_EVENT = 'aquarium-panel-unauthorized';
 
@@ -270,7 +272,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     let message = `请求失败（${response.status}）`;
     try {
       const body = await response.json() as { error?: unknown };
-      if (typeof body.error === 'string') message = body.error;
+      if (typeof body.error === 'string') message = redactSensitiveText(body.error);
     } catch {
       // Keep the generic status message for non-JSON errors.
     }
