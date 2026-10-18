@@ -9,11 +9,13 @@ interface QqWatcherClient {
 export interface QqWatcherOptions {
   targetUins: number[];
   scanIntervalSec: number;
+  getScanIntervalSec?: () => number;
   getClient: () => QqWatcherClient | undefined;
   onScan?: () => void;
   onInjected?: (uin: number) => void;
   onFatalError?: (error: SnowLumaWebUIError) => void;
   log?: (message: string) => void;
+  debug?: (message: string) => void;
   setInterval?: typeof globalThis.setInterval;
   clearInterval?: typeof globalThis.clearInterval;
 }
@@ -32,6 +34,7 @@ export function createQqWatcher(options: QqWatcherOptions) {
   const setTimer = options.setInterval ?? globalThis.setInterval;
   const clearTimer = options.clearInterval ?? globalThis.clearInterval;
   let timer: ReturnType<typeof setInterval> | undefined;
+  let timerDelayMs: number | undefined;
   let scanInFlight: Promise<void> | undefined;
   let startInFlight: Promise<void> | undefined;
   let startRequested = false;
@@ -60,15 +63,32 @@ export function createQqWatcher(options: QqWatcherOptions) {
     for (const process of processes) {
       if (stopRequested) return;
       if (!Number.isSafeInteger(process.pid) || process.pid <= 0 || dispositions.has(process.pid)) continue;
+      let info: SnowLumaLoginInfo | null;
       try {
-        const info = await client.probeLogin(process.pid);
-        if (stopRequested) return;
-        if (!info || !info.identityKnown) continue;
-        const matchedUin = [...targetUins].find((uin) => String(uin) === info.uin);
-        if (matchedUin === undefined) {
-          dispositions.set(process.pid, { kind: 'ignored' });
-          continue;
-        }
+        info = await client.probeLogin(process.pid);
+      } catch (error) {
+        options.debug?.(`PID ${process.pid} 探测结果：身份未知`);
+        if (reportFatalAuthError(error)) return;
+        options.log?.(`QQ 目标进程 PID ${process.pid} 身份探测失败；下一轮将重试。`);
+        continue;
+      }
+      if (stopRequested) return;
+      if (!info) {
+        options.debug?.(`PID ${process.pid} 探测结果：null`);
+        continue;
+      }
+      if (!info.identityKnown) {
+        options.debug?.(`PID ${process.pid} 探测结果：身份未知`);
+        continue;
+      }
+      const matchedUin = [...targetUins].find((uin) => String(uin) === info.uin);
+      if (matchedUin === undefined) {
+        options.debug?.(`PID ${process.pid} 探测结果：其他账号`);
+        dispositions.set(process.pid, { kind: 'ignored' });
+        continue;
+      }
+      options.debug?.(`PID ${process.pid} 探测结果：目标账号`);
+      try {
         const result = await client.load(process.pid);
         if (stopRequested) return;
         if (result.success) {
@@ -83,7 +103,7 @@ export function createQqWatcher(options: QqWatcherOptions) {
         }
       } catch (error) {
         if (reportFatalAuthError(error)) return;
-        options.log?.(`QQ 目标进程 PID ${process.pid} 身份探测或加载失败；下一轮将重试。`);
+        options.log?.(`QQ 目标进程 PID ${process.pid} 加载失败；下一轮将重试。`);
       }
     }
   }
@@ -108,8 +128,24 @@ export function createQqWatcher(options: QqWatcherOptions) {
       } catch {
         options.log?.('QQ watcher 状态回调失败。');
       }
+      syncTimer();
     });
     return scanInFlight;
+  }
+
+  function syncTimer(): void {
+    if (!startRequested || stopRequested) return;
+    const intervalSec = options.getScanIntervalSec?.() ?? options.scanIntervalSec;
+    if (!Number.isSafeInteger(intervalSec) || intervalSec <= 0) {
+      options.log?.('QQ watcher 动态扫描间隔无效；使用配置间隔。');
+    }
+    const delayMs = (Number.isSafeInteger(intervalSec) && intervalSec > 0
+      ? intervalSec
+      : options.scanIntervalSec) * 1_000;
+    if (timer !== undefined && timerDelayMs === delayMs) return;
+    if (timer !== undefined) clearTimer(timer);
+    timer = setTimer(() => { void scanOnce(); }, delayMs);
+    timerDelayMs = delayMs;
   }
 
   function start(): Promise<void> {
@@ -119,9 +155,7 @@ export function createQqWatcher(options: QqWatcherOptions) {
     stopRequested = false;
     startInFlight = (async () => {
       await scanOnce();
-      if (startRequested && timer === undefined) {
-        timer = setTimer(() => { void scanOnce(); }, options.scanIntervalSec * 1_000);
-      }
+      syncTimer();
     })().finally(() => { startInFlight = undefined; });
     return startInFlight;
   }
@@ -132,6 +166,7 @@ export function createQqWatcher(options: QqWatcherOptions) {
     if (timer !== undefined) {
       clearTimer(timer);
       timer = undefined;
+      timerDelayMs = undefined;
     }
   }
 

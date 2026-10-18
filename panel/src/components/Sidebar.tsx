@@ -27,6 +27,7 @@ function NavIcon({ page }: { page: PageId }) {
 function connectionLabel(status: PanelStatus['accounts'][number]['connectionStatus'] | undefined): string {
   if (status === 'online') return '在线';
   if (status === 'connecting') return '连接中';
+  if (status === 'waiting_login') return '等待小号登录';
   return '等待重连';
 }
 
@@ -92,7 +93,7 @@ export function Sidebar({
         </div>
       </div>
       <button className="account-switcher" type="button" disabled={accounts.length <= 1} aria-label={`切换眷属；${account?.name ?? '尚无眷属'}，${presence}${sleep?.enabled ? ` · ${energy}` : ''}`}>
-        <span className="account-avatar" aria-hidden="true">{Array.from(account?.name ?? '眷')[0] ?? '眷'}<span className={`connection-dot ${account?.connectionStatus === 'online' ? 'is-online' : account?.connectionStatus === 'connecting' ? 'is-connecting' : ''}`} /></span>
+        <span className="account-avatar" aria-hidden="true">{Array.from(account?.name ?? '眷')[0] ?? '眷'}<span className={`connection-dot ${account?.connectionStatus === 'online' ? 'is-online' : account?.connectionStatus === 'connecting' ? 'is-connecting' : account?.connectionStatus === 'waiting_login' ? 'is-waiting' : ''}`} /></span>
         <span className="account-copy"><span className="account-name">{account?.name ?? '尚无眷属'}</span><span className="account-presence">{sleep?.enabled ? `${presence} · ${energy}` : presence}</span></span>
         <svg className="account-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M7 10l5-5 5 5M7 14l5 5 5-5" /></svg>
       </button>

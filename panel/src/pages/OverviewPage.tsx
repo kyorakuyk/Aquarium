@@ -46,6 +46,7 @@ function fullTime(value: number): string {
 function connectionLabel(status: PanelStatus['accounts'][number]['connectionStatus']): string {
   if (status === 'online') return '在线';
   if (status === 'connecting') return '连接中';
+  if (status === 'waiting_login') return '等待小号登录';
   return '等待重连';
 }
 

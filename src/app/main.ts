@@ -27,6 +27,7 @@ import type { Host } from '../host/types.ts';
 import { bindHostTrayAfterLoad, createWindowsTray } from '../host/tray.ts';
 import { createWindowsHost } from '../host/windows/host.ts';
 import { createAccountActivityRouter } from './activity-routing.ts';
+import { startAdapterForHost } from './adapter-start.ts';
 import {
   createHostLifecycleQueue,
   createSnowLumaRestartHandler,
@@ -57,6 +58,7 @@ pruneTraces();
 const debugPruneTimer = setInterval(pruneTraces, 6 * 60 * 60 * 1000);
 debugPruneTimer.unref();
 const adapters: OneBotAdapter[] = [];
+const injectedUins = new Set<number>();
 const panelAccounts: PanelAccountRuntime[] = [];
 const managementControllers: ManagementCommands[] = [];
 const pipelines = new Map<number, ReturnType<typeof createMessagePipeline>>();
@@ -183,7 +185,10 @@ if (initialConfig.host.enabled && initialConfig.accounts.length === 0) {
       password: process.env.SNOWLUMA_WEBUI_PASSWORD ?? '',
       logDirectory: path.join(process.cwd(), 'data', 'logs'),
       getAdapterStatus: (uin) => adapterStatuses.get(uin),
-      onAdapterInjected: (uin) => adapters.find((adapter) => adapter.account === uin)?.retryNow(),
+      onAdapterInjected: (uin) => {
+        injectedUins.add(uin);
+        adapters.find((adapter) => adapter.account === uin)?.retryNow();
+      },
       log: (level, message) => logger[level](message),
     }),
     onWarning: (message) => logger.warn(message),
@@ -194,6 +199,11 @@ if (initialConfig.host.enabled && initialConfig.accounts.length === 0) {
     const hostForTray = managedHost;
     subscriptions.push(hostForTray.onStatus((status, message) => {
       logger.info(`Windows 托管状态：${status}${message ? `；${message}` : ''}`);
+      if (status === 'online') {
+        for (const adapter of adapters) {
+          if (adapterStatuses.get(adapter.account) === 'waiting_login') adapter.retryNow();
+        }
+      }
     }));
     const onTrayMenu = createTrayMenuActionHandler({
       panelPort: initialConfig.panel.port,
@@ -240,7 +250,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
   }
 
   adapters.push(adapter);
-  let currentStatus: AdapterStatus = 'connecting';
+  let currentStatus: AdapterStatus = managedHost ? 'waiting_login' : 'connecting';
   adapterStatuses.set(accountConfig.uin, currentStatus);
   panelAccounts.push({
     adapter,
@@ -311,8 +321,12 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
   subscriptions.push(() => activityRouter.close());
   subscriptions.push(adapter.onMessage(activityRouter.route));
 
-  logger.info(`正在连接账号 ${accountConfig.uin} ...`);
-  adapter.start();
+  const managed = managedHost !== undefined;
+  const ready = managed && (injectedUins.has(accountConfig.uin) || managedHost?.status() === 'online');
+  startAdapterForHost(adapter, { managed, ready });
+  logger.info(managed && !ready
+    ? `账号 ${accountConfig.uin} 等待小号登录。`
+    : `正在连接账号 ${accountConfig.uin} ...`);
 });
 
 await startPanelWhileAccountStartupRuns(accountStartup, () => {

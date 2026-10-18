@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { startAdapterForHost } from '../src/app/adapter-start.ts';
 import { OneBotAdapter } from '../src/adapters/onebot/adapter.ts';
 import {
   account,
@@ -8,6 +9,14 @@ import {
   createTimerQueue,
   groupEvent,
 } from './onebot-adapter-test-helpers.ts';
+
+function runTimerWithDelay(timers: ReturnType<typeof createTimerQueue>, delay: number): void {
+  const entry = [...timers.pending.entries()].find(([, timer]) => timer.delay === delay);
+  assert.ok(entry, `expected a ${delay}ms timer`);
+  timers.pending.delete(entry[0]);
+  entry[1].callback();
+}
+
 test('start 在连接失败后按指数退避重试，直到连接成功', async (t) => {
   const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
   const fake = createFakeClient(account, 3);
@@ -19,7 +28,7 @@ test('start 在连接失败后按指数退避重试，直到连接成功', async
   const statuses: string[] = [];
   adapter.onStatus((status) => statuses.push(status));
 
-  adapter.start();
+  startAdapterForHost(adapter, { managed: false, ready: false });
   await new Promise<void>((resolve) => setImmediate(resolve));
   assert.equal(fake.state.connectCalls, 1);
   assert.equal(fake.state.closeCalls, 0);
@@ -60,6 +69,63 @@ test('retryNow 清除退避并立即重试', async (t) => {
   assert.equal(adapter.nickname, 'Aquarium');
   assert.equal(retryTimers.pending.size, 0);
   adapter.close();
+});
+
+test('托管账号等待注入，注入后按 3 秒超时和 1 秒间隔快速重连', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient(account, 0, true);
+  const retryTimers = createTimerQueue();
+  const actionTimers = createTimerQueue();
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => fake.client, {
+    setRetryTimer: retryTimers.set,
+    clearRetryTimer: retryTimers.clear,
+    setActionTimer: actionTimers.set,
+    clearActionTimer: actionTimers.clear,
+  });
+  const statuses: string[] = [];
+  adapter.onStatus((status) => statuses.push(status));
+
+  startAdapterForHost(adapter, { managed: true, ready: false });
+  assert.equal(statuses.at(-1), 'waiting_login');
+  assert.equal(fake.state.connectCalls, 0);
+
+  startAdapterForHost(adapter, { managed: true, ready: true });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(fake.state.connectCalls, 1);
+  assert.deepEqual([...actionTimers.pending.values()].map((timer) => timer.delay), [3_000]);
+  assert.deepEqual([...retryTimers.pending.values()].map((timer) => timer.delay), [30_000]);
+
+  assert.equal(actionTimers.runNext(), 3_000);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.deepEqual([...retryTimers.pending.values()].map((timer) => timer.delay).sort((a, b) => a - b), [1_000, 30_000]);
+  runTimerWithDelay(retryTimers, 1_000);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
+  assert.equal(fake.state.connectCalls, 2);
+  assert.equal(statuses.at(-1), 'online');
+  assert.equal(retryTimers.pending.size, 0);
+  adapter.close();
+});
+
+test('30 秒快速重连窗口结束后恢复指数退避', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient(account, 10);
+  const retryTimers = createTimerQueue();
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => fake.client, {
+    setRetryTimer: retryTimers.set,
+    clearRetryTimer: retryTimers.clear,
+  });
+
+  adapter.waitForLogin();
+  adapter.retryNow();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(fake.state.connectCalls, 1);
+  assert.deepEqual([...retryTimers.pending.values()].map((timer) => timer.delay).sort((a, b) => a - b), [1_000, 30_000]);
+
+  runTimerWithDelay(retryTimers, 30_000);
+  assert.deepEqual([...retryTimers.pending.values()].map((timer) => timer.delay), [2_000]);
+  adapter.close();
+  assert.equal(retryTimers.pending.size, 0);
 });
 
 test('retryNow 会修复状态仍在线但底层 socket 已断开的竞态', async (t) => {

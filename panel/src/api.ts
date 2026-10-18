@@ -8,7 +8,7 @@ export interface PanelAccount {
   name: string;
   persona: string;
   snowlumaConfigured: boolean;
-  connectionStatus: 'connecting' | 'online' | 'offline';
+  connectionStatus: 'connecting' | 'online' | 'offline' | 'waiting_login';
   degraded: boolean;
   todayReplyCount: number;
   lastReplyAt: number | null;

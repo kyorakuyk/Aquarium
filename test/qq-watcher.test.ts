@@ -194,6 +194,57 @@ test('并发 start 只创建一个轮询计时器，stop 清理它', async () =>
   assert.equal(clearCalls, 1);
 });
 
+test('等待小号登录时每两秒扫描并记录探测结果，连接后恢复配置间隔', async () => {
+  const processes = [301, 302, 303, 304].map((pid) => ({ ...processInfo, pid }));
+  const debugMessages: string[] = [];
+  const intervals = new Map<number, { callback: () => void; delay: number }>();
+  let nextId = 1;
+  let waitingForLogin = true;
+  let scanCount = 0;
+  const client = {
+    listProcesses: async () => processes,
+    probeLogin: async (pid: number) => {
+      if (pid === 301) return null;
+      if (pid === 302) return { port: 4302, uin: '10001', identityKnown: false };
+      if (pid === 303) return { port: 4303, uin: '20002', identityKnown: true };
+      return { port: 4304, uin: '10001', identityKnown: true };
+    },
+    load: async () => ({ success: true }),
+  };
+  const watcher = createQqWatcher({
+    targetUins: [10001],
+    scanIntervalSec: 5,
+    getScanIntervalSec: () => waitingForLogin ? 2 : 5,
+    getClient: () => client as never,
+    onScan: () => {
+      scanCount += 1;
+      if (scanCount === 2) waitingForLogin = false;
+    },
+    debug: (message: string) => debugMessages.push(message),
+    setInterval: ((callback: () => void, delay: number) => {
+      const id = nextId++;
+      intervals.set(id, { callback, delay });
+      return id as never;
+    }) as never,
+    clearInterval: ((timer: number) => { intervals.delete(timer); }) as never,
+  });
+
+  await watcher.start();
+  assert.deepEqual([...intervals.values()].map((timer) => timer.delay), [2_000]);
+  assert.deepEqual(debugMessages.slice(0, 4), [
+    'PID 301 探测结果：null',
+    'PID 302 探测结果：身份未知',
+    'PID 303 探测结果：其他账号',
+    'PID 304 探测结果：目标账号',
+  ]);
+
+  [...intervals.values()][0]?.callback();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.deepEqual([...intervals.values()].map((timer) => timer.delay), [5_000]);
+  watcher.stop();
+  assert.equal(intervals.size, 0);
+});
+
 test('stop 在身份探测返回后阻止启动新的注入请求', async () => {
   let releaseProbe: ((value: { port: number; uin: string; identityKnown: boolean }) => void) | undefined;
   let probeStartedResolve: (() => void) | undefined;
