@@ -1,21 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { DefaultsView, ModeScheduleEntry, SessionSettings, SessionView } from '../api.ts';
-import { InfoTip } from '../components/InfoTip.tsx';
-import {
-  addModeScheduleEntry,
-  changeModeScheduleDraft,
-  createModeScheduleEntryChangeFromInput,
-  discardModeScheduleDraft,
-  getModeScheduleDraft,
-  getModeScheduleRowKeys,
-  readModeScheduleDrafts,
-  removeModeScheduleEntry,
-  saveModeScheduleDraft,
-  SESSION_MODE_OPTIONS,
-  writeModeScheduleDrafts,
-  type ModeScheduleDrafts,
-  type ModeScheduleRowKeys,
-} from '../session-mode.ts';
+import { useEffect, useState, type ReactNode } from 'react';
+import type { DefaultsView, SessionSettings, SessionView } from '../api.ts';
+import { PersistedDetails } from '../components/PersistedDetails.tsx';
+import { SESSION_MODE_OPTIONS } from '../session-mode.ts';
+import { SessionFieldHeading } from './SessionFieldHeading.tsx';
+import { SessionScheduleEditor } from './SessionScheduleEditor.tsx';
 
 export const GLOBAL_DEFAULT_ID = '__global-defaults__';
 
@@ -37,44 +25,6 @@ interface SessionSettingsPanelProps {
   onPatch: (target: SessionSettingsTarget, values: Record<string, unknown>) => Promise<void>;
   onRefresh: (target: SessionSettingsTarget) => Promise<void>;
   onError: (error: unknown) => void;
-  onNavigateToDefaults: () => void;
-}
-
-function readModeScheduleDraftSnapshot(): ModeScheduleDrafts {
-  try {
-    return readModeScheduleDrafts(window.sessionStorage);
-  } catch {
-    return new Map();
-  }
-}
-
-function writeModeScheduleDraftSnapshot(drafts: ModeScheduleDrafts): boolean {
-  try {
-    return writeModeScheduleDrafts(window.sessionStorage, drafts);
-  } catch {
-    return false;
-  }
-}
-
-function FieldHeading({ title, help, fields, target, onReset, onNavigateToDefaults }: {
-  title: string;
-  help?: string;
-  fields: SessionField[];
-  target: SessionSettingsTarget;
-  onReset: (fields: SessionField[]) => void;
-  onNavigateToDefaults: () => void;
-}) {
-  const headingTitle = <div className="field-heading-title"><h3>{title}</h3>{help && <InfoTip label={`${title}说明`} text={help} />}</div>;
-  if (target.kind === 'global') return <div className="field-heading">{headingTitle}</div>;
-  const overridden = fields.some((field) => target.overrides.includes(field));
-  return (
-    <div className="field-heading">
-      {headingTitle}
-      {overridden
-        ? <button className="inherit-button is-overridden" type="button" onClick={() => onReset(fields)}>{target.kind === 'private' ? '本会话覆盖' : '本群覆盖'} · 恢复继承</button>
-        : <button className="inherit-button" type="button" onClick={onNavigateToDefaults}>继承全局</button>}
-    </div>
-  );
 }
 
 function SettingGroup({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -109,39 +59,37 @@ export function SessionSettingsPanel({
   onPatch,
   onRefresh,
   onError,
-  onNavigateToDefaults,
 }: SessionSettingsPanelProps) {
-  const [nicknames, setNicknames] = useState(target.settings.nicknames.join(', '));
+  const [nicknames, setNicknames] = useState(target.settings.nicknames);
+  const [nicknameDraft, setNicknameDraft] = useState('');
+  const [nicknameInputOpen, setNicknameInputOpen] = useState(false);
+  const [talkOffsetDraft, setTalkOffsetDraft] = useState(target.settings.talkOffset);
   const [groupNote, setGroupNote] = useState(target.settings.groupNote);
   const [rateDraft, setRateDraft] = useState(target.settings.rate);
   const [contextMessagesDraft, setContextMessagesDraft] = useState(target.settings.contextMessages);
   const [proactiveCooldownDraft, setProactiveCooldownDraft] = useState(String(target.settings.proactiveCooldownSec));
-  const [modeScheduleDrafts, setModeScheduleDrafts] = useState<ModeScheduleDrafts>(readModeScheduleDraftSnapshot);
-  const modeScheduleDraftsRef = useRef(modeScheduleDrafts);
-  const [modeScheduleRowKeys, setModeScheduleRowKeys] = useState<ModeScheduleRowKeys>(() => new Map());
-  const [draftPersistenceError, setDraftPersistenceError] = useState('');
   const [savedAt, setSavedAt] = useState('');
-  const nextScheduleRowKey = useRef(0);
-
-  const scheduleEntries = getModeScheduleDraft(modeScheduleDrafts, target.id, target.settings.modeSchedule);
-  const scheduleRowKeys = getModeScheduleRowKeys(modeScheduleRowKeys, target.id, scheduleEntries);
-  const scheduleIsDirty = JSON.stringify(scheduleEntries) !== JSON.stringify(target.settings.modeSchedule);
+  const [scheduleIsDirty, setScheduleIsDirty] = useState(false);
+  const restoreFields: SessionField[] = ['enabled', 'mode', 'modeSchedule', 'nicknames', 'contextMessages', 'proactiveCooldownSec', 'talkOffset', 'rate', 'groupNote'];
 
   useEffect(() => {
-    setNicknames(target.settings.nicknames.join(', '));
+    setNicknames(target.settings.nicknames);
+    setTalkOffsetDraft(target.settings.talkOffset);
     setGroupNote(target.settings.groupNote);
     setRateDraft(target.settings.rate);
     setContextMessagesDraft(target.settings.contextMessages);
     setProactiveCooldownDraft(String(target.settings.proactiveCooldownSec));
-  }, [target.id, target.settings.nicknames, target.settings.groupNote, target.settings.rate, target.settings.contextMessages, target.settings.proactiveCooldownSec]);
+  }, [target.id, target.settings.nicknames, target.settings.talkOffset, target.settings.groupNote, target.settings.rate, target.settings.contextMessages, target.settings.proactiveCooldownSec]);
 
-  async function update(values: Record<string, unknown>) {
+  async function update(values: Record<string, unknown>): Promise<boolean> {
     try {
       await onPatch(target, values);
       await onRefresh(target);
       setSavedAt(new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date()));
+      return true;
     } catch (error) {
       onError(error);
+      return false;
     }
   }
 
@@ -149,53 +97,47 @@ export function SessionSettingsPanel({
     void update(Object.fromEntries(fields.map((field) => [field, null])));
   }
 
-  function replaceModeScheduleDrafts(drafts: ModeScheduleDrafts, storageError: string) {
-    modeScheduleDraftsRef.current = drafts;
-    setModeScheduleDrafts(drafts);
-    setDraftPersistenceError(writeModeScheduleDraftSnapshot(drafts) ? '' : storageError);
+  function restoreAll() {
+    void update(Object.fromEntries(restoreFields.map((field) => [field, null])));
   }
 
-  function updateScheduleDraft(change: (entries: readonly ModeScheduleEntry[]) => ModeScheduleEntry[]) {
-    replaceModeScheduleDrafts(changeModeScheduleDraft(
-      modeScheduleDraftsRef.current,
-      target.id,
-      target.settings.modeSchedule,
-      change,
-    ), '当前标签页无法保留未提交的时段草稿；请点击“保存时段”。');
+  function commitTalkOffset() {
+    if (talkOffsetDraft !== target.settings.talkOffset) void update({ talkOffset: talkOffsetDraft });
   }
 
-  function addScheduleEntry() {
-    const rowKey = `${target.id}:new:${nextScheduleRowKey.current++}`;
-    updateScheduleDraft(addModeScheduleEntry);
-    setModeScheduleRowKeys((rowKeys) => new Map(rowKeys).set(
-      target.id,
-      [...getModeScheduleRowKeys(rowKeys, target.id, scheduleEntries), rowKey],
-    ));
+  function heading(title: string, fields: SessionField[], help?: string) {
+    return <SessionFieldHeading
+      title={title}
+      help={help}
+      kind={target.kind}
+      overridden={fields.some((field) => target.overrides.includes(field))}
+      onRestore={() => restore(fields)}
+    />;
   }
 
-  function removeScheduleEntry(index: number) {
-    updateScheduleDraft((entries) => removeModeScheduleEntry(entries, index));
-    setModeScheduleRowKeys((rowKeys) => new Map(rowKeys).set(
-      target.id,
-      getModeScheduleRowKeys(rowKeys, target.id, scheduleEntries)
-        .filter((_, currentIndex) => currentIndex !== index),
-    ));
-  }
-
-  async function saveSchedule() {
-    try {
-      await saveModeScheduleDraft(
-        () => onPatch(target, { modeSchedule: scheduleEntries }),
-        () => replaceModeScheduleDrafts(
-          discardModeScheduleDraft(modeScheduleDraftsRef.current, target.id),
-          '时段已保存，但无法清理当前标签页的草稿副本。',
-        ),
-        () => onRefresh(target),
-      );
-      setSavedAt(new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date()));
-    } catch (error) {
-      onError(error);
+  async function addNickname() {
+    const nickname = nicknameDraft.trim();
+    if (!nickname) return;
+    if (await update({ nicknames: [...nicknames, nickname] })) {
+      setNicknameDraft('');
+      setNicknameInputOpen(false);
     }
+  }
+
+  async function removeNickname(index: number) {
+    await update({ nicknames: nicknames.filter((_, currentIndex) => currentIndex !== index) });
+  }
+
+  function noteSummary(): string {
+    if (groupNote.trim()) return groupNote.trim().slice(0, 20);
+    return target.kind !== 'global' && !target.overrides.includes('groupNote') ? '未填写 · 继承全局' : '未填写';
+  }
+
+  function rateSummary(): string {
+    if (target.kind === 'private') {
+      return `每人 ${rateDraft.perUserPerMinute}/分 · 间隔 ${rateDraft.minIntervalSec} 秒 · 参考 ${contextMessagesDraft} 条`;
+    }
+    return `每人 ${rateDraft.perUserPerMinute}/分 · 全群 ${rateDraft.perSessionPerMinute}/分 · 间隔 ${rateDraft.minIntervalSec} 秒 · 主动冷却 ${proactiveCooldownDraft} 秒 · 参考 ${contextMessagesDraft} 条`;
   }
 
   async function setRate(field: RateField, rawValue: string) {
@@ -233,120 +175,112 @@ export function SessionSettingsPanel({
     setRateDraft((rate) => ({ ...rate, perUserPerMinute: value, perSessionPerMinute: value }));
   }
 
+  const selectedMode = SESSION_MODE_OPTIONS.find((option) => option.mode === target.settings.mode);
+  const noteTitle = target.kind === 'private' ? '对这个人的补充说明' : '在这个群里的补充说明';
+
   return (
     <>
       <div className="detail-title-row">
-        <div>
-          <div className="eyebrow">{target.kind === 'global' ? '所有会话' : target.kind === 'group' ? '群聊' : '好友'}</div>
-          <h2>{target.name}</h2>
-          {target.kind !== 'global' && <span className={`result-pill ${target.enabled ? 'result-positive' : 'result-neutral'}`}>{target.enabled ? '已启用' : '已停用'}</span>}
+        <div className="detail-title-main">
+          <span className="detail-avatar">{Array.from(target.name)[0] ?? '全'}</span>
+          <div className="detail-title-copy">
+            <div className="eyebrow">{target.kind === 'global' ? '所有会话' : target.kind === 'group' ? '群聊' : '好友'}</div>
+            <h2>{target.name}</h2>
+            <span className="mono muted">{target.kind === 'global' ? '所有会话' : target.id}</span>
+          </div>
         </div>
-        {target.kind !== 'global' && <button className={`switch switch-large ${target.enabled ? 'is-on' : ''}`} type="button" role="switch" aria-checked={target.enabled} aria-label="启用会话" disabled={busy} onClick={() => void update({ enabled: !target.enabled })}><span /></button>}
+        <div className="detail-title-actions">
+          {target.kind !== 'global' && <button className="inherit-button" type="button" disabled={busy || target.overrides.length === 0} onClick={restoreAll}>恢复全部继承</button>}
+          {target.kind !== 'global' && <button className={`switch switch-large ${target.enabled ? 'is-on' : ''}`} type="button" role="switch" aria-checked={target.enabled} aria-label="启用会话" disabled={busy} onClick={() => void update({ enabled: !target.enabled })}><span /></button>}
+        </div>
       </div>
 
       {target.kind === 'private'
         ? <SettingGroup className="private-mode-note"><p>私聊里每条消息都会回复。</p></SettingGroup>
         : <>
+          <SettingGroup>
+            {heading('什么时候说话', ['mode'])}
+            <div className="mode-segmented" role="group" aria-label="什么时候说话">
+              {SESSION_MODE_OPTIONS.map((option) => <button
+                className={target.settings.mode === option.mode ? 'is-current' : ''}
+                key={option.mode}
+                type="button"
+                disabled={busy}
+                aria-pressed={target.settings.mode === option.mode}
+                onClick={() => void update({ mode: option.mode })}
+              >{option.title}</button>)}
+            </div>
+            <p className="mode-description">{selectedMode?.note}</p>
+          </SettingGroup>
+
+          <SettingGroup>
+            {heading('在这里的话量', ['talkOffset'], '群聊可单独覆盖全局默认；私聊不显示。')}
+            <input className="talk-offset-slider" id="session-talk-offset" type="range" min={-2} max={2} step={1} value={talkOffsetDraft} disabled={busy} aria-label="在这里的话量" onChange={(event) => setTalkOffsetDraft(Number(event.currentTarget.value))} onPointerUp={commitTalkOffset} onKeyUp={commitTalkOffset} onBlur={commitTalkOffset} />
+            <div className="talk-offset-labels"><span>更安静</span><span>不变</span><span>更话痨</span></div>
+          </SettingGroup>
+
+          <SettingGroup>
+            <SessionScheduleEditor
+              target={target}
+              busy={busy}
+              onPatch={onPatch}
+              onRefresh={onRefresh}
+              onError={onError}
+              onRestore={() => restore(['modeSchedule'])}
+              onDirtyChange={setScheduleIsDirty}
+              onSaved={() => setSavedAt(new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date()))}
+            />
+          </SettingGroup>
+
+          <SettingGroup>
+            {heading('叫它的名字', ['nicknames'])}
+            <div className="nickname-tags">
+              {nicknames.map((nickname, index) => <span className="nickname-chip" key={`${index}:${nickname}`}>
+                <span>{nickname}</span>
+                <button type="button" aria-label={`删除名字 ${nickname}`} disabled={busy} onClick={() => void removeNickname(index)}>×</button>
+              </span>)}
+              {nicknameInputOpen
+                ? <div className="nickname-add-editor">
+                  <input autoFocus value={nicknameDraft} aria-label="输入要添加的名字" disabled={busy} onChange={(event) => setNicknameDraft(event.currentTarget.value)} onKeyDown={(event) => {
+                    if (event.key === 'Enter') { event.preventDefault(); void addNickname(); }
+                    if (event.key === 'Escape') { setNicknameDraft(''); setNicknameInputOpen(false); }
+                  }} />
+                  <button className="button button-primary" type="button" disabled={busy || !nicknameDraft.trim()} onClick={() => void addNickname()}>添加</button>
+                  <button className="text-button" type="button" disabled={busy} onClick={() => { setNicknameDraft(''); setNicknameInputOpen(false); }}>取消</button>
+                </div>
+                : <button className="nickname-add-button" type="button" aria-label="添加名字" title="添加名字" disabled={busy} onClick={() => setNicknameInputOpen(true)}>＋</button>}
+            </div>
+          </SettingGroup>
+        </>}
+
       <SettingGroup>
-        <FieldHeading title="什么时候说话" fields={['mode']} target={target} onReset={restore} onNavigateToDefaults={onNavigateToDefaults} />
-        <div className="mode-grid">
-          {SESSION_MODE_OPTIONS.map((option) => (
-            <button
-              className={`mode-card ${target.settings.mode === option.mode ? 'is-current' : ''}`}
-              key={option.mode}
-              type="button"
-              disabled={busy}
-              onClick={() => void update({ mode: option.mode })}
-            ><strong>{option.title}</strong><span>{option.note}</span></button>
-          ))}
+        <div className="session-details-row">
+          {heading(noteTitle, ['groupNote'])}
+          <PersistedDetails className="session-persisted-details" sessionId={target.id} section="note" summary={<span className="details-summary-copy">{noteSummary()}</span>}>
+            <textarea rows={3} value={groupNote} onChange={(event) => setGroupNote(event.currentTarget.value)} onBlur={() => void update({ groupNote })} aria-label={noteTitle} />
+          </PersistedDetails>
         </div>
       </SettingGroup>
 
       <SettingGroup>
-        <FieldHeading title="在这里的话量" fields={['talkOffset']} target={target} onReset={restore} onNavigateToDefaults={onNavigateToDefaults} />
-        <div className="field-label-row"><label className="field-label" htmlFor="session-talk-offset">调整这个会话里的话量</label><InfoTip label="话量设置说明" text="按人设底色叠加，群聊可单独覆盖全局默认；私聊不显示。" /></div>
-        <select
-          id="session-talk-offset"
-          className="talk-offset-select"
-          value={target.settings.talkOffset}
-          disabled={busy}
-          onChange={(event) => void update({ talkOffset: Number(event.currentTarget.value) })}
-        >
-          <option value={-2}>更安静 −2</option>
-          <option value={-1}>−1</option>
-          <option value={0}>不变 0</option>
-          <option value={1}>+1</option>
-          <option value={2}>更话痨 +2</option>
-        </select>
-      </SettingGroup>
-
-      <SettingGroup>
-        <FieldHeading title="按时间段切换" help="按列表顺序首个匹配项生效，支持跨午夜；没有匹配时使用上方默认模式。未提交草稿会在当前标签页刷新后保留，点击“保存时段”才写入配置。" fields={['modeSchedule']} target={target} onReset={restore} onNavigateToDefaults={onNavigateToDefaults} />
-        {draftPersistenceError && <p className="schedule-help" role="alert">{draftPersistenceError}</p>}
-        {scheduleEntries.length > 0
-          ? <div className="schedule-list">
-            {scheduleEntries.map((entry, index) => (
-              <div className="schedule-row" key={scheduleRowKeys[index]}>
-                <label>
-                  <span>开始</span>
-                  <input type="time" value={entry.from} aria-label={`第 ${index + 1} 个时段开始时间`} disabled={busy} onChange={(event) => updateScheduleDraft(createModeScheduleEntryChangeFromInput(event, index, 'from'))} />
-                </label>
-                <label>
-                  <span>结束</span>
-                  <input type="time" value={entry.to} aria-label={`第 ${index + 1} 个时段结束时间`} disabled={busy} onChange={(event) => updateScheduleDraft(createModeScheduleEntryChangeFromInput(event, index, 'to'))} />
-                </label>
-                <label className="schedule-mode">
-                  <span>模式</span>
-                  <select value={entry.mode} aria-label={`第 ${index + 1} 个时段模式`} disabled={busy} onChange={(event) => updateScheduleDraft(createModeScheduleEntryChangeFromInput(event, index, 'mode'))}>
-                    {SESSION_MODE_OPTIONS.map((option) => <option value={option.mode} key={option.mode}>{option.title}</option>)}
-                  </select>
-                </label>
-                <button className="text-button schedule-remove" type="button" aria-label={`删除第 ${index + 1} 个时段`} disabled={busy} onClick={() => removeScheduleEntry(index)}>删除</button>
-              </div>
-            ))}
-          </div>
-          : <p className="empty-state schedule-empty">尚未设置时段，将始终使用上方默认模式。</p>}
-        <div className="schedule-actions">
-          <button className="text-button" type="button" disabled={busy} onClick={addScheduleEntry}>添加时段</button>
-          <div>
-            {scheduleIsDirty && <span className="schedule-dirty" role="status">有未保存改动</span>}
-            <button className="button button-secondary" type="button" disabled={busy || !scheduleIsDirty} onClick={() => void saveSchedule()}>保存时段</button>
-          </div>
+        <div className="session-details-row">
+          {heading('节奏与限制', target.kind === 'private' ? ['rate', 'contextMessages'] : ['rate', 'contextMessages', 'proactiveCooldownSec'], '主动冷却设为 0 可关闭主动冷却；常规频率限制仍生效。')}
+          <PersistedDetails className="session-persisted-details" sessionId={target.id} section="rhythm" summary={<span className="details-summary-copy">{rateSummary()}</span>}>
+            <div className="number-grid">
+              {target.kind === 'private'
+                ? <label><span>每分钟最多</span><input type="number" min="1" value={rateDraft.perUserPerMinute} disabled={busy} onBlur={(event) => void setRateLimit(event.currentTarget.value)} onChange={(event) => changeRateLimitDraft(Number(event.currentTarget.value))} /></label>
+                : <>
+                  <label><span>每人每分钟最多</span><input type="number" min="1" value={rateDraft.perUserPerMinute} disabled={busy} onBlur={(event) => void setRate('perUserPerMinute', event.currentTarget.value)} onChange={(event) => changeRateDraft('perUserPerMinute', Number(event.currentTarget.value))} /></label>
+                  <label><span>整个群每分钟最多</span><input type="number" min="1" value={rateDraft.perSessionPerMinute} disabled={busy} onBlur={(event) => void setRate('perSessionPerMinute', event.currentTarget.value)} onChange={(event) => changeRateDraft('perSessionPerMinute', Number(event.currentTarget.value))} /></label>
+                </>}
+              <label><span>两次回复至少间隔（秒）</span><input type="number" min="0.1" step="0.1" value={rateDraft.minIntervalSec} disabled={busy} onBlur={(event) => void setRate('minIntervalSec', event.currentTarget.value)} onChange={(event) => changeRateDraft('minIntervalSec', Number(event.currentTarget.value))} /></label>
+              <label><span>{target.kind === 'group' ? '参考最近几条' : '回复时参考最近几条'}</span><input type="number" min="1" value={contextMessagesDraft} disabled={busy} onBlur={() => void update({ contextMessages: Number(contextMessagesDraft) })} onChange={(event) => setContextMessagesDraft(Number(event.currentTarget.value))} /></label>
+              {target.kind !== 'private' && <label><span>主动回复至少间隔（秒）</span><input type="number" min="0" max="3600" step="1" value={proactiveCooldownDraft} disabled={busy} onBlur={(event) => void setProactiveCooldown(event.currentTarget.value)} onChange={(event) => setProactiveCooldownDraft(event.currentTarget.value)} /></label>}
+            </div>
+          </PersistedDetails>
         </div>
       </SettingGroup>
-      </>}
-
-      {target.kind !== 'private' && <SettingGroup>
-        <FieldHeading title="叫它的名字" fields={['nicknames']} target={target} onReset={restore} onNavigateToDefaults={onNavigateToDefaults} />
-        <label className="field-label" htmlFor="session-nicknames">多个名字用逗号分开</label>
-        <input id="session-nicknames" value={nicknames} onChange={(event) => setNicknames(event.currentTarget.value)} onBlur={() => void update({ nicknames: nicknames.split(',').map((name) => name.trim()).filter(Boolean) })} />
-      </SettingGroup>}
-
-      <SettingGroup>
-        <FieldHeading title={target.kind === 'private' ? '对这个人的补充说明' : '在这个群里的补充说明'} fields={['groupNote']} target={target} onReset={restore} onNavigateToDefaults={onNavigateToDefaults} />
-        <textarea rows={3} value={groupNote} onChange={(event) => setGroupNote(event.currentTarget.value)} onBlur={() => void update({ groupNote })} aria-label="会话补充说明" />
-      </SettingGroup>
-
-      <SettingGroup>
-        <FieldHeading title="频率与上下文" fields={['rate', 'contextMessages']} target={target} onReset={restore} onNavigateToDefaults={onNavigateToDefaults} />
-        <div className="number-grid">
-          {target.kind === 'private'
-            ? <label><span>每分钟最多</span><input type="number" min="1" value={rateDraft.perUserPerMinute} disabled={busy} onBlur={(event) => void setRateLimit(event.currentTarget.value)} onChange={(event) => changeRateLimitDraft(Number(event.currentTarget.value))} /></label>
-            : <>
-              <label><span>{target.kind === 'global' ? '每个用户每分钟最多' : '每人每分钟最多'}</span><input type="number" min="1" value={rateDraft.perUserPerMinute} disabled={busy} onBlur={(event) => void setRate('perUserPerMinute', event.currentTarget.value)} onChange={(event) => changeRateDraft('perUserPerMinute', Number(event.currentTarget.value))} /></label>
-              <label><span>{target.kind === 'global' ? '每个会话每分钟最多' : '整个群每分钟最多'}</span><input type="number" min="1" value={rateDraft.perSessionPerMinute} disabled={busy} onBlur={(event) => void setRate('perSessionPerMinute', event.currentTarget.value)} onChange={(event) => changeRateDraft('perSessionPerMinute', Number(event.currentTarget.value))} /></label>
-            </>}
-          <label><span>两次回复至少间隔（秒）</span><input type="number" min="0.1" step="0.1" value={rateDraft.minIntervalSec} disabled={busy} onBlur={(event) => void setRate('minIntervalSec', event.currentTarget.value)} onChange={(event) => changeRateDraft('minIntervalSec', Number(event.currentTarget.value))} /></label>
-          <label><span>{target.kind === 'group' ? '参考最近几条' : '回复时参考最近几条'}</span><input type="number" min="1" value={contextMessagesDraft} disabled={busy} onBlur={() => void update({ contextMessages: Number(contextMessagesDraft) })} onChange={(event) => setContextMessagesDraft(Number(event.currentTarget.value))} /></label>
-        </div>
-      </SettingGroup>
-      {target.kind !== 'private' && <SettingGroup>
-        <FieldHeading title="主动回复冷却" help="范围 0–3600 秒；设为 0 可关闭主动冷却，现有频率限制仍生效。" fields={['proactiveCooldownSec']} target={target} onReset={restore} onNavigateToDefaults={onNavigateToDefaults} />
-        <div className="number-grid">
-          <label><span>两次主动回复至少间隔（秒）</span><input type="number" min="0" max="3600" step="1" value={proactiveCooldownDraft} disabled={busy} onBlur={(event) => void setProactiveCooldown(event.currentTarget.value)} onChange={(event) => setProactiveCooldownDraft(event.currentTarget.value)} /></label>
-        </div>
-      </SettingGroup>}
-      <div className="save-state" aria-live="polite">{busy ? '正在保存…' : scheduleIsDirty ? '时间段尚未写入配置' : savedAt ? `已保存 · ${savedAt}` : '其他设置自动保存；时间段需点击“保存时段”'}</div>
+      <div className="save-state" aria-live="polite">{busy ? '正在保存…' : scheduleIsDirty ? '时间段尚未完成保存' : savedAt ? `改动立刻生效 · ${savedAt} 已保存` : '改动立刻生效；时间段在“编辑时段”中点“完成”保存'}</div>
     </>
   );
 }

@@ -15,6 +15,10 @@
   --warn-ink: #A8461F;
   --warn-soft: #F8E8E1;
   --placeholder: #7C8884;
+  --mode-mention: #657D76;
+  --mode-natural: #B6C9C2;
+  --mode-active: #1C5F5A;
+  --mode-busy: #A8461F;
   --serif: 'Noto Serif SC', 'Songti SC', serif;
   --sans: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
   --mono: 'IBM Plex Mono', 'Cascadia Code', monospace;

@@ -7,6 +7,60 @@ export const SESSION_MODE_OPTIONS: readonly { mode: SessionMode; title: string; 
   { mode: 'busy', title: '忙碌', note: '回复更少、更短' },
 ];
 
+export interface ModeScheduleSegment {
+  startMinute: number;
+  endMinute: number;
+  mode: SessionMode;
+}
+
+function validMinuteOfDay(value: string): number | undefined {
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) return undefined;
+  const [hours, minutes] = value.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function scheduleMatchesMinute(entry: ModeScheduleEntry, minute: number): boolean {
+  const from = validMinuteOfDay(entry.from);
+  const to = validMinuteOfDay(entry.to);
+  if (from === undefined || to === undefined || from === to) return false;
+  return from < to
+    ? minute >= from && minute < to
+    : minute >= from || minute < to;
+}
+
+export function modeScheduleTimeline(
+  entries: readonly ModeScheduleEntry[],
+  defaultMode: SessionMode,
+): ModeScheduleSegment[] {
+  const boundaries = new Set([0, 1440]);
+  for (const entry of entries) {
+    const from = validMinuteOfDay(entry.from);
+    const to = validMinuteOfDay(entry.to);
+    if (from !== undefined) boundaries.add(from);
+    if (to !== undefined) boundaries.add(to);
+  }
+  const minutes = [...boundaries].sort((first, second) => first - second);
+  const segments: ModeScheduleSegment[] = [];
+  for (let index = 0; index < minutes.length - 1; index += 1) {
+    const startMinute = minutes[index]!;
+    const endMinute = minutes[index + 1]!;
+    const mode = entries.find((entry) => scheduleMatchesMinute(entry, startMinute))?.mode ?? defaultMode;
+    const previous = segments.at(-1);
+    if (previous?.mode === mode && previous.endMinute === startMinute) previous.endMinute = endMinute;
+    else segments.push({ startMinute, endMinute, mode });
+  }
+  return segments;
+}
+
+export function modeScheduleSummary(entries: readonly ModeScheduleEntry[], defaultMode: SessionMode): string {
+  const validEntries = entries.filter((entry) => validMinuteOfDay(entry.from) !== undefined
+    && validMinuteOfDay(entry.to) !== undefined && entry.from !== entry.to);
+  if (validEntries.length === 0) return '未设置';
+  const label = (mode: SessionMode) => SESSION_MODE_OPTIONS.find((option) => option.mode === mode)?.title ?? mode;
+  const periods = validEntries.map((entry) => `${entry.from}–${entry.to} ${label(entry.mode)}`);
+  return [...periods, `其余时间${label(defaultMode)}`].join(' · ');
+}
+
 export type ModeScheduleDrafts = ReadonlyMap<string, readonly ModeScheduleEntry[]>;
 export type ModeScheduleRowKeys = ReadonlyMap<string, readonly string[]>;
 

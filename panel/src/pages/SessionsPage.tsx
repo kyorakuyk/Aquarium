@@ -133,16 +133,6 @@ export function SessionsPage() {
     setError(reason instanceof Error ? reason.message : '保存失败');
   }
 
-  async function updateSession(session: SessionView, values: Record<string, unknown>) {
-    const target = createSessionSettingsTarget(session);
-    try {
-      await patchSettings(target, values);
-      await refreshSettings(target);
-    } catch {
-      // The failed request or refresh is already shown in the page notice.
-    }
-  }
-
   const groupCount = sessions.filter((item) => item.kind === 'group').length;
   const friendCount = sessions.filter((item) => item.kind === 'private').length;
 
@@ -177,6 +167,7 @@ export function SessionsPage() {
                 <span className="avatar-initial">全</span>
                 <span className="session-row-copy"><strong>全局默认</strong><span className="muted">所有会话继承此处设置</span></span>
               </button>
+              <span className={`session-state-dot ${defaults ? defaults.enabled ? 'is-enabled' : 'is-disabled' : 'is-unknown'}`} role="img" aria-label={!defaults ? '正在读取全局默认状态' : defaults.enabled ? '全局默认已启用' : '全局默认已停用'} />
             </div>
             {visible.map((item) => (
               <div className={`session-row ${selectedId === item.sessionId ? 'is-selected' : ''}`} key={item.sessionId}>
@@ -187,18 +178,12 @@ export function SessionsPage() {
                   aria-pressed={selectedId === item.sessionId}
                 >
                   <span className="avatar-initial">{Array.from(item.name)[0] ?? '会'}</span>
-                  <span className="session-row-copy"><strong>{item.name}</strong><span className="mono muted">{item.sessionId}{item.memberCount === undefined ? '' : ` · ${item.memberCount} 人`}</span></span>
+                  <span className="session-row-copy">
+                    <span className="session-name-line"><strong>{item.name}</strong>{item.overrides.length > 0 && <span className="session-override-dot" role="img" title="有覆盖项" aria-label="有会话覆盖项" />}</span>
+                    <span className="mono muted">{item.sessionId}{item.memberCount === undefined ? '' : ` · ${item.memberCount} 人`}</span>
+                  </span>
                 </button>
-                <button
-                  className={`switch ${item.enabled ? 'is-on' : ''}`}
-                  type="button"
-                  role="switch"
-                  aria-checked={item.enabled}
-                  aria-label={`${item.name}${item.enabled ? '已启用' : '已停用'}`}
-                  disabled={busy}
-                  onClick={() => void updateSession(item, { enabled: !item.enabled })}
-                ><span /></button>
-                <span className={`override-tag ${item.overrides.length ? 'is-overridden' : ''}`}>{item.overrides.length ? (item.kind === 'private' ? '本会话覆盖' : '本群覆盖') : '继承全局'}</span>
+                <span className={`session-state-dot ${item.enabled ? 'is-enabled' : 'is-disabled'}`} role="img" aria-label={`${item.name}${item.enabled ? '已启用' : '已停用'}`} />
               </div>
             ))}
             {visible.length === 0 && <p className="empty-state">没有找到会话。</p>}
@@ -214,7 +199,6 @@ export function SessionsPage() {
               onPatch={patchSettings}
               onRefresh={refreshSettings}
               onError={reportError}
-              onNavigateToDefaults={() => setSelectedId(GLOBAL_DEFAULT_ID)}
             />
             : <div className="empty-state">{selectedId === GLOBAL_DEFAULT_ID ? '正在读取全局默认设置…' : '选择一个会话查看设置。'}</div>}
           {selected?.kind === 'global' && <SleepSettingsPanel />}

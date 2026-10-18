@@ -22,7 +22,7 @@
   .stats-grid { grid-template-columns: 1fr; }
   .overview-state-grid, .sleep-settings-grid { grid-template-columns: 1fr; }
   .session-workspace, .persona-workspace, .sandbox-layout, .decision-records-layout { grid-template-columns: 1fr; }
-  .session-detail { order: -1; }
+  .session-details-row { grid-template-columns: 1fr; gap: 0; }
   .persona-workspace { gap: 12px; }
   .persona-library { order: 1; }
   .persona-trait-grid { grid-template-columns: 1fr; }
