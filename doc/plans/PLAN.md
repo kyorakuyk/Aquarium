@@ -1,6 +1,6 @@
 # Aquarium 施工计划书（唯一任务清单）
 
-> 写给接手编码的模型。最后更新：2026-10-16。**当前任务：§12.6 的 V13–V15（分支 `dev/persona-v13`）；所有任务先遵守 §0.1 提速规则。**
+> 写给接手编码的模型。最后更新：2026-10-16。**当前任务：§12.6 的 V13–V16（分支 `dev/persona-v13`）；所有任务先遵守 §0.1 提速规则。**
 > **本文是唯一的任务清单。**文档优先级：`PLAN.md` > `HANDOFF.md`（只作为架构、接口、环境的参考）> `DESIGN.md`（设计依据）。
 > `REVIEW-2026-10-12.md` 与 `NIGHT-RUN.md` 已并入本文，**作废，不再阅读**。`MORNING.md` 只作为历史记录。
 > 开工前按顺序读：本文全文 → `HANDOFF.md` §1、§3、§4 → `DESIGN.md`（需要时查阅）。
@@ -1360,7 +1360,29 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
     3. 降级链不止一项时，三个参数格下方用小字注明“第 1 项；其余项在编辑中设置”。
   - 测试：前端不写测试，`panel:build` 成功即可；如果后端没有改动，就不新增测试。
 
-> **⛔ 停止点 V13**：V15 完成后停下。（V1–V12 已于 2026-10-19 合并到 main。）
+- [ ] **V16 从接入拉取模型列表，并按能力显示参数**（2026-10-19，用户需求；V15 之后做；拆成 V16a 后端、V16b 前端两个提交）
+  - **说明**：OpenAI 兼容接口的 `GET {baseUrl}/models` 一般**只返回模型 id**，不返回“支持哪些参数”。少数聚合平台（如 OpenRouter）会额外返回 `supported_parameters`。因此参数能力按三级来源确定，**不得凭空编造**某个模型支持什么。
+  - **V16a 后端**：
+    - `GET /api/providers/:id/models`：仅限 api 接入。用该接入的密钥请求 `{baseUrl}/models`（超时 10 秒），解析 `data[].id`；如果条目里有 `supported_parameters` 数组，一并保留。结果按接入缓存 10 分钟；带 `?refresh=1` 时强制刷新。
+      - 返回 `{ models: [{ id, params: { temperature, maxTokens, reasoning } }], fetchedAt }`，其中每个参数的取值为 `'supported' | 'unsupported' | 'unknown'`。
+      - 失败（401、超时、格式不对）时返回 `{ models: [], error }`，HTTP 状态仍为 200，由前端提示。CLI 接入返回 `{ models: [], cli: true }`。
+      - 这个请求不写 usage 表（不花 token）。**密钥不得出现在错误信息或日志里。**
+    - **参数能力三级来源**，按优先级：
+      1. 接口返回了 `supported_parameters`：按其映射，`temperature` → temperature，`max_tokens` → maxTokens，`reasoning` 或 `reasoning_effort` → reasoning；没有列出的参数记为 `unsupported`。
+      2. 配置里的覆盖：`providers.<id>.modelParams.<modelId>` 写成 `{ temperature?: bool, maxTokens?: bool, reasoning?: bool }`（可选项，schema 要能兼容旧配置）。用户在界面上切换后写回这里。
+      3. 都没有时一律为 `unknown`。**不内置任何厂商或模型的能力表。**
+    - 测试点：解析普通列表；解析带 `supported_parameters` 的列表；配置覆盖优先于 unknown；缓存与强制刷新；错误信息中没有密钥（用假 fetch 测试）。
+  - **V16b 前端**（`SlotDialog` 和 V15 的表内编辑）：
+    - 模型名输入改为**可搜索的下拉框**：打开时拉取该接入的模型列表，可以输入关键字过滤；**仍允许手动输入列表里没有的 id**，下拉末尾显示“使用自定义：xxx”。旁边放一个刷新按钮。
+      - 拉取失败时，退回普通文本输入，并显示一行错误提示。CLI 接入始终是文本输入。
+    - **参数按能力显示**：
+      - `supported`：正常可编辑；
+      - `unsupported`：置灰，悬停提示“该模型不支持”；
+      - `unknown`：可编辑，但字段旁显示小字“未声明，可能被忽略”，并提供一个开关“我确认支持 / 不支持”，选择后写入配置覆盖。
+    - V15 的表内编辑同样遵守上面的能力判断，取的是降级链第一项的模型。
+    - `panel:build` 成功即可。
+
+> **⛔ 停止点 V13**：V16b 完成后停下。（V1–V12 已于 2026-10-19 合并到 main。）
 > **【用户】验收**：
 > 1. 会话页：窄窗口时上下排列；折叠组的摘要正确；改时段点“完成”后立即生效。
 > 2. 印象页：点 ＋ 加标签；点标签弹出证据。
