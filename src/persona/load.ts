@@ -7,6 +7,9 @@ export interface PersonaTraits {
   morality: number;
   talk: number;
   mind: number;
+  humor: number;
+  openness: number;
+  imitation: number;
 }
 
 export interface LoadedPersona {
@@ -18,7 +21,8 @@ export interface LoadPersonaOptions {
   root?: string;
 }
 
-const traitFields = ['order', 'morality', 'talk', 'mind'] as const;
+const zeroTraits: PersonaTraits = { order: 0, morality: 0, talk: 0, mind: 0, humor: 0, openness: 0, imitation: 0 };
+const traitFields = ['order', 'morality', 'talk', 'mind', 'humor', 'openness', 'imitation'] as const;
 const frontmatterPattern = /^---[ \t]*\r?\n([\s\S]*?)^---[ \t]*(?:\r?\n|$)/m;
 
 function parseTraits(frontmatter: string): PersonaTraits {
@@ -55,7 +59,7 @@ export function parsePersonaMarkdown(source: string): LoadedPersona {
   const match = frontmatterPattern.exec(source);
   return {
     text: match ? source.slice(match[0].length) : source,
-    traits: match ? parseTraits(match[1] ?? '') : { order: 0, morality: 0, talk: 0, mind: 0 },
+    traits: match ? parseTraits(match[1] ?? '') : { ...zeroTraits },
   };
 }
 

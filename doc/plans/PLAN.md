@@ -496,6 +496,7 @@
 | 2026-10-19 | R6 | 00:00–00:37 | 初审4项已修；466/466；build123；未二审 |
 | 2026-10-19 | V11 | 01:01–01:27; 468/468; panel123 |
 | 2026-10-19 | V12 | 01:35–02:05; 471/471; build123 |
+| 2026-10-19 | V13a | 03:04–03:24; 471/471; build123 |
 
 ---
 
@@ -1269,7 +1270,7 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
   - 测试点：用假时钟验证注入后 1 秒一次的重试与 3 秒超时、30 秒后回到退避；`waiting_login` 期间不连接；扫描间隔的切换。
 
 - [ ] **V13 七维性格、性格变化组件、总览“此刻”卡片**（2026-10-19；控制台 v2 已合并进 main，从 `main` 新建分支 `dev/persona-v13`；拆成 V13a / V13b / V13c 三个提交；参照 `doc/design/console-v2/PersonaV2.html` 右栏下方）
-  - **V13a 新增三个维度**（顺序固定，排在现有四个之后，共七维）：
+  - [x] **V13a 新增三个维度**（顺序固定，排在现有四个之后，共七维）：
     - `humor`：正经 −2 … +2 脱线；`openness`：保守 −2 … +2 好奇。中文名分别为“脱线”和“好奇”，两端的词写死。
     - 涉及：traits schema（缺省 0，旧文件兼容）、`prompts/traits.md`、`prompts/persona-import.md`（traits 结构和含义说明）、人设页滑块（共七个，两列排列）、traits 词表快照测试。
     - 文案：
@@ -1280,7 +1281,7 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
       - **锁定**：这一维永远不随经历变化，只能手动设置。性格演进阶段必须跳过它。界面上，滑块名后标“锁定”，在“性格的变化”组件里始终是一条平线，并注明“不随经历变化”。
       - 以后做“表达方式学习”时，用它控制学到的群内说法注入的条数和频率；本阶段只影响提示词。
     - 这三个维度暂时只影响提示词，没有壳子效果。
-  - **V13b 人设版本与“性格的变化”组件**：
+  - [ ] **V13b 人设版本与“性格的变化”组件**：
     - 迁移 v7：新表 `persona_versions(id, persona_id, saved_at, markdown, traits_json, note NULL)`。每次在控制台保存人设都写一条，同一人设最多保留 50 条，超出的删除最旧的。没有任何版本时，第一次打开就以当前文件写入一条“初始版本”。
     - API：
       - `GET /api/personas/:id/versions`：返回列表，不含 markdown；每条带 `traitsDelta`，即相对上一版本七个维度的差值，并附一句自动摘要，比如“规矩 0→−1；改写了 说话方式”。改写了哪些小节，用 `parseSections` 逐节比较得出。
@@ -1300,7 +1301,7 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
       - 来源：置灰占位。
     - 七个维度的颜色依次为 `#1C5F5A #C2702B #3B6EA8 #8A4F7D #5E7F2E #A23E48 #7A6A2E`，图例写在图下方。
     - 图用内联 SVG 手写，不引入图表库。
-  - **V13c 总览“此刻”卡片**：
+  - [ ] **V13c 总览“此刻”卡片**：
     - 迁移 v7 同时给 `mood_events` 加两列 `valence_after REAL NULL`、`arousal_after REAL NULL`：每次写评估事件和规则事件时，记录写入后的状态值。
     - `GET /api/mood/series?hours=24`：返回 24 小时的点列，事件点之间按半衰期在服务端补算，每 15 分钟一个点；另外返回当前档位、档位开始时间，以及“距下次换档还差多少”（按当前的静摩擦或滑动摩擦余量计算）。
     - 卡片放在总览页统计卡之后，内容：
@@ -1313,10 +1314,10 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
 - [ ] **V14 印象页：拉取群聊历史并建立画像**（2026-10-19，V13 之后做，同一分支；拆成 V14a 后端、V14b 前端两个提交）
   - **用途**：一键从 QQ 拉取某个群过去的聊天记录，存进消息表，再分批跑印象提取，快速建立群标签和群友标签。方便测试，也方便新群冷启动。
   - **只支持群聊**。私聊不拉取，与 §10.4“私聊不提取”保持一致。
-  - **适配器**（V14a）：`history(session, count)` 扩展为 `history(session, { count, beforeMessageId? })`，旧调用保持兼容。
+  - [ ] **适配器**（V14a）：`history(session, count)` 扩展为 `history(session, { count, beforeMessageId? })`，旧调用保持兼容。
     - 群聊时调用 SnowLuma 的 `get_group_msg_history`，参数为 `{ group_id, count, message_id: beforeMessageId ?? 0, reverse_order: true }`。传了 `message_id` 时，返回的是锚点本身及更早的消息，所以要**去掉与锚点相同的那条**。
     - 依据：`reference/SnowLuma/packages/onebot/src/actions/extended.ts` 中 `get_group_msg_history` 的定义。message_id 是有符号 int32，**可能是负数**，不要做非负校验。
-  - **拉取任务**（V14a，`src/core/impressions/history-import.ts`）：
+  - [ ] **拉取任务**（V14a，`src/core/impressions/history-import.ts`）：
     - 输入 `{ sessionId, target }`，`target` ∈ {200, 500, 1000, 2000} 条。每页 50 条，以上一页最早一条的 message_id 为锚点向前翻，两页之间间隔 500ms。满足任一条件即停止：达到 target、一页少于 2 条新消息（说明到头了）、连续 3 页出错。
     - 消息写入：调用 `repository.saveMessage`，按 `(session_id, message_id)` 幂等，已有的记录跳过。**完全不经过流水线**：不回复、不做主动判断、不评估情绪、不计好感，也不写 decisions。
     - 拉取完成后**分批提取**：
@@ -1325,12 +1326,12 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
       - 全部完成后，把 `tag_runs` 的 `last_run_at` 设为当前时间，`last_message_time` 设为最新一条消息的时间，避免常规提取再重复处理同一批。
     - 同一个群同一时间只能有一个导入任务；与常规提取共用 §10.4 的“同群单飞”锁。
     - 任务状态放在内存里：`{ id, sessionId, phase: 'fetching' | 'extracting' | 'done' | 'cancelled' | 'error', fetched, inserted, windowsDone, windowsTotal, tagsInserted, tagsObserved, costCny, error? }`。
-  - **API**（V14a）：
+  - [ ] **API**（V14a）：
     - `POST /api/impressions/:sessionId/import`，请求体 `{ target }`：返回任务 id。群未启用时返回 409，任务已在进行时也返回 409。
     - `GET /api/impressions/import/:jobId`：返回任务状态。
     - `POST /api/impressions/import/:jobId/cancel`：取消。当前这页或当前窗口做完后停下，已写入的消息和标签保留。
     - 账号离线时返回 503，附带“小号不在线”。
-  - **界面**（V14b）：
+  - [ ] **界面**（V14b）：
     - 印象页选中群后，群选择下拉右侧加一个次按钮“拉取历史”。点开对话框：
       - 选择条数：200 / 500 / 1000 / 2000；
       - 下方显示预计花费，按 `ceil(条数 / 80)` 次提取、每次约 6000 输入 token、用 extract 槽位的单价估算，写成“约 ¥0.0x”；
@@ -1362,7 +1363,7 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
 
 - [ ] **V16 从接入拉取模型列表，并按能力显示参数**（2026-10-19，用户需求；V15 之后做；拆成 V16a 后端、V16b 前端两个提交）
   - **说明**：OpenAI 兼容接口的 `GET {baseUrl}/models` 一般**只返回模型 id**，不返回“支持哪些参数”。少数聚合平台（如 OpenRouter）会额外返回 `supported_parameters`。因此参数能力按三级来源确定，**不得凭空编造**某个模型支持什么。
-  - **V16a 后端**：
+  - [ ] **V16a 后端**：
     - `GET /api/providers/:id/models`：仅限 api 接入。用该接入的密钥请求 `{baseUrl}/models`（超时 10 秒），解析 `data[].id`；如果条目里有 `supported_parameters` 数组，一并保留。结果按接入缓存 10 分钟；带 `?refresh=1` 时强制刷新。
       - 返回 `{ models: [{ id, params: { temperature, maxTokens, reasoning } }], fetchedAt }`，其中每个参数的取值为 `'supported' | 'unsupported' | 'unknown'`。
       - 失败（401、超时、格式不对）时返回 `{ models: [], error }`，HTTP 状态仍为 200，由前端提示。CLI 接入返回 `{ models: [], cli: true }`。
@@ -1372,7 +1373,7 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
       2. 配置里的覆盖：`providers.<id>.modelParams.<modelId>` 写成 `{ temperature?: bool, maxTokens?: bool, reasoning?: bool }`（可选项，schema 要能兼容旧配置）。用户在界面上切换后写回这里。
       3. 都没有时一律为 `unknown`。**不内置任何厂商或模型的能力表。**
     - 测试点：解析普通列表；解析带 `supported_parameters` 的列表；配置覆盖优先于 unknown；缓存与强制刷新；错误信息中没有密钥（用假 fetch 测试）。
-  - **V16b 前端**（`SlotDialog` 和 V15 的表内编辑）：
+  - [ ] **V16b 前端**（`SlotDialog` 和 V15 的表内编辑）：
     - 模型名输入改为**可搜索的下拉框**：打开时拉取该接入的模型列表，可以输入关键字过滤；**仍允许手动输入列表里没有的 id**，下拉末尾显示“使用自定义：xxx”。旁边放一个刷新按钮。
       - 拉取失败时，退回普通文本输入，并显示一行错误提示。CLI 接入始终是文本输入。
     - **参数按能力显示**：

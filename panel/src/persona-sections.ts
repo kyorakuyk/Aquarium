@@ -34,11 +34,15 @@ export const PERSONA_TRAIT_LABELS = [
   { key: 'morality', title: '善意', low: '善良', high: '邪恶' },
   { key: 'talk', title: '话量', low: '文静', high: '话痨' },
   { key: 'mind', title: '思维', low: '理性', high: '感性' },
+  { key: 'humor', title: '脱线', low: '正经', high: '脱线' },
+  { key: 'openness', title: '好奇', low: '保守', high: '好奇' },
+  { key: 'imitation', title: '模仿', low: '自我', high: '模仿', locked: true },
 ] as const satisfies ReadonlyArray<{
   key: keyof PersonaTraits;
   title: string;
   low: string;
   high: string;
+  locked?: boolean;
 }>;
 
 export interface OtherPersonaSection {
@@ -70,7 +74,7 @@ export function emptyPersonaSections(title = '# {{name}}'): PersonaSectionsForm 
   return {
     title,
     introduction: '',
-    traits: { order: 0, morality: 0, talk: 0, mind: 0 },
+    traits: { order: 0, morality: 0, talk: 0, mind: 0, humor: 0, openness: 0, imitation: 0 },
     fields: {
       身份: '', 年龄: '', 背景: '', 说话方式: '', 口头禅: [],
       常用表情: [], 对熟人: '', 对陌生人: '', 对主人: '', 底线: [],

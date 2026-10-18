@@ -54,6 +54,9 @@ export interface PersonaTraits {
   morality: number;
   talk: number;
   mind: number;
+  humor: number;
+  openness: number;
+  imitation: number;
 }
 
 export interface DefaultsView extends SessionSettings {

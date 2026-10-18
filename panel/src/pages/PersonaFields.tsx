@@ -210,7 +210,7 @@ export function PersonaFields({
           {PERSONA_TRAIT_LABELS.map((field) => (
             <div className="persona-trait-field" key={field.key}>
               <div className="persona-trait-label">
-                <strong>{field.title}</strong>
+                <strong>{field.title}{'locked' in field && field.locked ? ' · 锁定' : ''}</strong>
                 <output>{form.traits[field.key] > 0 ? `+${form.traits[field.key]}` : form.traits[field.key]}</output>
               </div>
               <input
@@ -220,7 +220,7 @@ export function PersonaFields({
                 max={2}
                 step={1}
                 value={form.traits[field.key]}
-                aria-label={`${field.title}，${field.low}到${field.high}`}
+                aria-label={`${field.title}${'locked' in field && field.locked ? '，锁定' : ''}，${field.low}到${field.high}`}
                 disabled={disabled}
                 onFocus={() => onFocus('traits')}
                 onChange={(event) => setTrait(field.key, Number(event.currentTarget.value))}

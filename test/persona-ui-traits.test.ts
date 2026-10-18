@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parsePersonaTraits, updatePersonaMarkdownTraits } from '../panel/src/persona-traits.ts';
 
-const traits = { order: -2, morality: 1, talk: 0, mind: 2 };
+const traits = { order: -2, morality: 1, talk: 0, mind: 2, humor: 1, openness: -1, imitation: 2 };
 
 test('persona UI trait edits add or update YAML and preserve Markdown body exactly', () => {
   const body = '\r\n# 标题  \r\n\r\n正文末尾空格  \r\n';

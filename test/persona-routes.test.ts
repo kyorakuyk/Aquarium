@@ -24,10 +24,10 @@ test('persona API accepts traits, preserves Markdown body, and reads back the sa
     assert.equal(get.status, 200);
     const saved = await get.json() as {
       markdown: string;
-      traits: { order: number; morality: number; talk: number; mind: number };
+      traits: { order: number; morality: number; talk: number; mind: number; humor: number; openness: number; imitation: number };
     };
-    assert.equal(saved.markdown, `---\ntraits:\n  order: -2\n  morality: 1\n  talk: 0\n  mind: 2\n---\n${bodyText}`);
-    assert.deepEqual(saved.traits, { order: -2, morality: 1, talk: 0, mind: 2 });
+    assert.equal(saved.markdown, `---\ntraits:\n  order: -2\n  morality: 1\n  talk: 0\n  mind: 2\n  humor: 0\n  openness: 0\n  imitation: 0\n---\n${bodyText}`);
+    assert.deepEqual(saved.traits, { order: -2, morality: 1, talk: 0, mind: 2, humor: 0, openness: 0, imitation: 0 });
 
     const malformed = await app.request('/api/personas/custom-traits', {
       method: 'PUT',
@@ -67,7 +67,7 @@ test('persona API accepts traits, preserves Markdown body, and reads back the sa
     assert.equal(repaired.status, 200);
     const repairedReadBack = await app.request('/api/personas/broken-traits', { headers: authHeaders() });
     const repairedDocument = await repairedReadBack.json() as { markdown: string; traits: unknown };
-    assert.deepEqual(repairedDocument.traits, { order: 0, morality: 0, talk: 1, mind: 0 });
+    assert.deepEqual(repairedDocument.traits, { order: 0, morality: 0, talk: 1, mind: 0, humor: 0, openness: 0, imitation: 0 });
     assert.ok(repairedDocument.markdown.endsWith('可修复正文。'));
   });
 });
@@ -171,7 +171,7 @@ test('persona import uses the extract slot and returns a redacted unsaved draft'
       对主人: '',
       底线: [],
     },
-    traits: { order: 1, morality: 0, talk: -1, mind: 0 },
+    traits: { order: 1, morality: 0, talk: -1, mind: 0, humor: 1, openness: 0, imitation: 2 },
     other: [{ heading: '经历', text: '后来搬到海边。' }, { heading: '', text: '' }],
   };
 
@@ -183,7 +183,7 @@ test('persona import uses the extract slot and returns a redacted unsaved draft'
     });
     assert.equal(response.status, 200);
     const result = await response.json() as { draft: string; mappedCount: number; otherCount: number };
-    assert.equal(result.mappedCount, 5);
+    assert.equal(result.mappedCount, 7);
     assert.equal(result.otherCount, 1);
     assert.ok(!result.draft.includes(syntheticSecret), 'draft must not expose imported credential text');
     assert.ok(result.draft.includes('[敏感内容已隐藏]'));
@@ -219,7 +219,7 @@ test('persona import returns 422 with a reason for invalid JSON and schema value
       身份: '', 年龄: '', 背景: '', 说话方式: '', 口头禅: [], 常用表情: [],
       对熟人: '', 对陌生人: '', 对主人: '', 底线: [],
     },
-    traits: { order: 0, morality: 0, talk: 0, mind: 0 },
+    traits: { order: 0, morality: 0, talk: 0, mind: 0, humor: 0, openness: 0, imitation: 0 },
     other: [],
   };
   const invalidResponses = [

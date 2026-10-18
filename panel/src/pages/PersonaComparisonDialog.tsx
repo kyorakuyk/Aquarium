@@ -49,7 +49,7 @@ export function PersonaComparisonDialog({
               const text = redactSensitiveText(Array.isArray(value) ? value.join('\n') : value);
               return <section key={heading}><h4>{heading}</h4><p>{text || '—'}</p></section>;
             })}
-            <section><h4>性格底色</h4><p>{`规矩 ${form.traits.order} · 善意 ${form.traits.morality} · 话量 ${form.traits.talk} · 思维 ${form.traits.mind}`}</p></section>
+            <section><h4>性格底色</h4><p>{`规矩 ${form.traits.order} · 善意 ${form.traits.morality} · 话量 ${form.traits.talk} · 思维 ${form.traits.mind} · 脱线 ${form.traits.humor} · 好奇 ${form.traits.openness} · 模仿 ${form.traits.imitation}`}</p></section>
             {form.other.map((section, index) => (
               <section key={index}><h4>{redactSensitiveText(section.heading || '其他小节')}</h4><p>{redactSensitiveText(section.text) || '—'}</p></section>
             ))}

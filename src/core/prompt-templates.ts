@@ -69,6 +69,9 @@ export interface TraitsPromptTemplate extends PromptTemplate {
   morality: Record<TraitPromptLevel, string>;
   talk: Record<TraitPromptLevel, string>;
   mind: Record<TraitPromptLevel, string>;
+  humor: Record<TraitPromptLevel, string>;
+  openness: Record<TraitPromptLevel, string>;
+  imitation: Record<TraitPromptLevel, string>;
 }
 
 export interface SleepPromptTemplate extends PromptTemplate {
@@ -228,8 +231,8 @@ function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
 
 function parseTraitsTemplate(template: PromptTemplate): TraitsPromptTemplate {
   const fields = parseTemplateFields(template, 'traits.md');
-  const parsed = {} as Pick<TraitsPromptTemplate, 'order' | 'morality' | 'talk' | 'mind'>;
-  for (const dimension of ['order', 'morality', 'talk', 'mind'] as const) {
+  const parsed = {} as Pick<TraitsPromptTemplate, 'order' | 'morality' | 'talk' | 'mind' | 'humor' | 'openness' | 'imitation'>;
+  for (const dimension of ['order', 'morality', 'talk', 'mind', 'humor', 'openness', 'imitation'] as const) {
     const field = fields[dimension];
     if (!field || typeof field !== 'object' || Array.isArray(field)) {
       throw new Error(`traits.md 必须包含 ${dimension} 档位文本`);

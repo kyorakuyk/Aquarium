@@ -32,12 +32,18 @@ const personaTraitsSchema: z.ZodType<PersonaTraits> = z.object({
   morality: z.number().int().min(-2).max(2).default(0),
   talk: z.number().int().min(-2).max(2).default(0),
   mind: z.number().int().min(-2).max(2).default(0),
+  humor: z.number().int().min(-2).max(2).default(0),
+  openness: z.number().int().min(-2).max(2).default(0),
+  imitation: z.number().int().min(-2).max(2).default(0),
 }).strict();
 const personaImportTraitsSchema = z.object({
   order: z.number().int().min(-2).max(2),
   morality: z.number().int().min(-2).max(2),
   talk: z.number().int().min(-2).max(2),
   mind: z.number().int().min(-2).max(2),
+  humor: z.number().int().min(-2).max(2),
+  openness: z.number().int().min(-2).max(2),
+  imitation: z.number().int().min(-2).max(2),
 }).strict();
 const personaBodySchema = z.object({
   markdown: z.string().max(100_000),
