@@ -1,4 +1,4 @@
-import type { Hono } from 'hono';
+import type { Context, Hono } from 'hono';
 import { z } from 'zod';
 import {
   AquariumConfigSchema,
@@ -245,10 +245,10 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
     });
   });
 
-  app.put('/api/slots/:slot', async (context) => {
-    const slot = context.req.param('slot');
-    const slotName = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/).safeParse(slot);
+  const updateSlot = async (context: Context) => {
+    const slotName = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/).safeParse(context.req.param('slot'));
     if (!slotName.success) return context.json({ error: 'Unknown slot' }, 404);
+    const slot = slotName.data;
     let rawBody: unknown;
     try { rawBody = await context.req.json(); } catch { return context.json({ error: 'Invalid JSON' }, 400); }
     const chain = parseJsonBody(rawBody, z.object({ chain: z.array(SlotEntryConfigSchema).min(1).max(8) }).strict());
@@ -266,7 +266,9 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
       await options.saveConfig(next.data);
       return context.json({ chain: next.data.slots[slot] });
     });
-  });
+  };
+  app.put('/api/slots/:slot', updateSlot);
+  app.patch('/api/slots/:slot', updateSlot);
 
   app.post('/api/providers/:id/test', async (context) => {
     const id = context.req.param('id');

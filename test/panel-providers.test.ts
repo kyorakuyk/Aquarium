@@ -212,6 +212,14 @@ test('slot updates validate references and provider tests record usage without e
     assert.equal(updatedBody.chain[0]?.temperature, 0.7);
     assert.equal(updatedBody.chain[0]?.reasoning, 'medium');
 
+    const patched = await app.request('/api/slots/reply', {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ chain: [{ ...chain[0], temperature: 1.2 }] }),
+    });
+    assert.equal(patched.status, 200);
+    assert.equal(((await patched.json()) as { chain: Array<{ temperature?: number }> }).chain[0]?.temperature, 1.2);
+
     const unknown = await app.request('/api/slots/reply', {
       method: 'PUT',
       headers,

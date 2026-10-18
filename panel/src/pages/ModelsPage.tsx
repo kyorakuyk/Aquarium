@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiRequest, patch, post, type ModelProviderView, type ModelsView } from '../api.ts';
-import { chainSummary, MODEL_SLOT_DEFS, providerMeta, providerStatus, reasoningLabel } from '../models-view.ts';
+import { MODEL_SLOT_DEFS, providerMeta, providerStatus } from '../models-view.ts';
 import { KeyDialog, ProviderDialog, SlotDialog } from './ModelDialogs.tsx';
+import { InlineSlotRow } from './InlineSlotRow.tsx';
 
 interface TestState {
   busy?: boolean;
@@ -70,6 +71,7 @@ export function ModelsPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [tests, setTests] = useState<Record<string, TestState>>({});
+  const slotSaveInFlight = useRef(false);
   const [providerDialog, setProviderDialog] = useState<{ mode: 'create' | 'edit'; kind: 'api' | 'cli'; provider?: ModelProviderView }>();
   const [keyTarget, setKeyTarget] = useState<ModelProviderView>();
   const [slotDialog, setSlotDialog] = useState<string>();
@@ -102,6 +104,26 @@ export function ModelsPage() {
       setError(errorMessage(reason));
       return false;
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveSlotChain(slot: string, chain: ModelsView['slots'][string]): Promise<string | undefined> {
+    if (busy || slotSaveInFlight.current) return '另一个设置正在保存。';
+    slotSaveInFlight.current = true;
+    setBusy(true);
+    try {
+      const saved = await patch<{ chain: ModelsView['slots'][string] }>(`/api/slots/${encodeURIComponent(slot)}`, { chain });
+      setView((current) => current ? {
+        ...current,
+        slots: { ...current.slots, [slot]: saved.chain },
+      } : current);
+      await load();
+      return undefined;
+    } catch (reason) {
+      return errorMessage(reason);
+    } finally {
+      slotSaveInFlight.current = false;
       setBusy(false);
     }
   }
@@ -156,18 +178,19 @@ export function ModelsPage() {
           <div className="panel-card table-card">
             <div className="table-scroll">
               <table className="models-slot-table">
-                <thead><tr><th>用途</th><th>使用的模型（按顺序降级）</th><th>温度</th><th>思考强度</th><th>最大长度</th></tr></thead>
+                <thead><tr><th>用途</th><th>使用的模型（按顺序降级）</th><th>温度</th><th>思考强度</th><th>最大长度</th><th>操作</th></tr></thead>
                 <tbody>
                   {MODEL_SLOT_DEFS.map((definition) => {
                     const chain = view.slots[definition.slot] ?? [];
-                    const first = chain[0];
-                    return <tr key={definition.slot}>
-                      <td><strong>{definition.title}</strong><span className="slot-description">{definition.description}</span></td>
-                      <td><button className="slot-chain-button" type="button" onClick={() => setSlotDialog(definition.slot)}>{chainSummary(chain, providers)}</button></td>
-                      <td className="mono">{first?.temperature ?? '默认'}</td>
-                      <td>{reasoningLabel(first?.reasoning)}</td>
-                      <td className="mono">{first?.maxTokens ?? '默认'}</td>
-                    </tr>;
+                    return <InlineSlotRow
+                      key={definition.slot}
+                      definition={definition}
+                      chain={chain}
+                      providers={providers}
+                      disabled={busy}
+                      onEdit={() => setSlotDialog(definition.slot)}
+                      onSave={(nextChain) => saveSlotChain(definition.slot, nextChain)}
+                    />;
                   })}
                 </tbody>
               </table>
