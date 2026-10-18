@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { createPanelQueries } from './panel-queries.ts';
+import { createPersonaVersionRepository, type PersonaVersionRepository } from './persona-version-repo.ts';
 import {
   createAffectQueries,
   type AffinityEventRecord,
@@ -120,7 +121,7 @@ export interface StoredPipelineTrace extends PipelineTraceRecord {
   id: number;
 }
 
-export interface StoreRepository {
+export interface StoreRepository extends PersonaVersionRepository {
   saveMessage(message: MessageStorageRecord): boolean;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
   lastMessageTime(sessionId: string): number | null;
@@ -301,6 +302,7 @@ export function createRepository(
   return {
     ...createPanelQueries(database, clock),
     ...createAffectQueries(database),
+    ...createPersonaVersionRepository(database, clock),
     saveMessage(message) {
       const result = insertMessage.run(
         message.sessionId,

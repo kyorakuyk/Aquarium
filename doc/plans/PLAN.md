@@ -497,6 +497,7 @@
 | 2026-10-19 | V11 | 01:01–01:27; 468/468; panel123 |
 | 2026-10-19 | V12 | 01:35–02:05; 471/471; build123 |
 | 2026-10-19 | V13a | 03:04–03:24; 471/471; build123 |
+| 2026-10-19 | V13b | 03:24–04:26; 474/474; panel126 |
 
 ---
 
@@ -1281,8 +1282,8 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
       - **锁定**：这一维永远不随经历变化，只能手动设置。性格演进阶段必须跳过它。界面上，滑块名后标“锁定”，在“性格的变化”组件里始终是一条平线，并注明“不随经历变化”。
       - 以后做“表达方式学习”时，用它控制学到的群内说法注入的条数和频率；本阶段只影响提示词。
     - 这三个维度暂时只影响提示词，没有壳子效果。
-  - [ ] **V13b 人设版本与“性格的变化”组件**：
-    - 迁移 v7：新表 `persona_versions(id, persona_id, saved_at, markdown, traits_json, note NULL)`。每次在控制台保存人设都写一条，同一人设最多保留 50 条，超出的删除最旧的。没有任何版本时，第一次打开就以当前文件写入一条“初始版本”。
+  - [x] **V13b 人设版本与“性格的变化”组件**：
+    - 迁移 v7（V13b/V13c 共用一次）：新表 `persona_versions(id, persona_id, saved_at, markdown, traits_json, note NULL)`，并预加 V13c 所需的 `mood_events.valence_after/arousal_after REAL NULL`。每次在控制台保存人设都写一条，同一人设最多保留 50 条，超出的删除最旧的。没有任何版本时，第一次打开就以当前文件写入一条“初始版本”。
     - API：
       - `GET /api/personas/:id/versions`：返回列表，不含 markdown；每条带 `traitsDelta`，即相对上一版本七个维度的差值，并附一句自动摘要，比如“规矩 0→−1；改写了 说话方式”。改写了哪些小节，用 `parseSections` 逐节比较得出。
       - `GET /api/personas/:id/versions/:vid`：返回完整内容。
@@ -1302,7 +1303,7 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
     - 七个维度的颜色依次为 `#1C5F5A #C2702B #3B6EA8 #8A4F7D #5E7F2E #A23E48 #7A6A2E`，图例写在图下方。
     - 图用内联 SVG 手写，不引入图表库。
   - [ ] **V13c 总览“此刻”卡片**：
-    - 迁移 v7 同时给 `mood_events` 加两列 `valence_after REAL NULL`、`arousal_after REAL NULL`：每次写评估事件和规则事件时，记录写入后的状态值。
+    - `mood_events` 的 `valence_after REAL NULL`、`arousal_after REAL NULL` 已由 V13b 统一迁移 v7 预置；本阶段每次写评估事件和规则事件时，记录写入后的状态值。
     - `GET /api/mood/series?hours=24`：返回 24 小时的点列，事件点之间按半衰期在服务端补算，每 15 分钟一个点；另外返回当前档位、档位开始时间，以及“距下次换档还差多少”（按当前的静摩擦或滑动摩擦余量计算）。
     - 卡片放在总览页统计卡之后，内容：
       - 愉悦度 24 小时曲线：背景按五档上色，当前档位高亮，换档线画成虚线；

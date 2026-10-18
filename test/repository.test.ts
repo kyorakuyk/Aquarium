@@ -355,3 +355,22 @@ test('好感度状态与事件读写往返一致', () => {
     assert.deepEqual(repository.recentAffinityEvents(account, userId, 5), [{ id: 1, ...event }]);
   });
 });
+
+test('人设版本存储读写往返一致', () => {
+  withRepository((repository) => {
+    const markdown = '# 归档人设\n\n## 说话方式\n简洁。';
+    const traitsJson = JSON.stringify({ order: 0, morality: 0, talk: 1, mind: 0, humor: 0, openness: 0, imitation: 0 });
+    const id = repository.recordPersonaVersion('archive', markdown, traitsJson);
+
+    assert.deepEqual(repository.personaVersions('archive', 50), [{
+      id,
+      personaId: 'archive',
+      savedAt: new Date(2026, 9, 12, 12, 0, 0).getTime(),
+      markdown,
+      traitsJson,
+      note: null,
+    }]);
+    assert.equal(repository.personaVersion('archive', id)?.markdown, markdown);
+    assert.equal(repository.personaVersion('other', id), undefined);
+  });
+});

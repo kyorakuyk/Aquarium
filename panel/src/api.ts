@@ -59,6 +59,22 @@ export interface PersonaTraits {
   imitation: number;
 }
 
+export interface PersonaVersionSummary {
+  id: number;
+  savedAt: number;
+  traits: PersonaTraits;
+  traitsDelta: PersonaTraits;
+  summary: string;
+}
+
+export interface PersonaVersionDocument {
+  id: number;
+  savedAt: number;
+  markdown: string;
+  traits: PersonaTraits;
+  note: string | null;
+}
+
 export interface DefaultsView extends SessionSettings {
   enabled: boolean;
 }
