@@ -1207,7 +1207,7 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
 - 表单和源文件编辑同一份内容：切换视图时，先用 `parseSections` / `buildSections` 同步。
 
 ### 12.6 任务
-- [ ] **V0 全局样式与侧栏**（§12.0）。把参照页复制进 `doc/design/console-v2/`，这一步已经完成，不用再做。
+- [x] **V0 全局样式与侧栏**（§12.0）。把参照页复制进 `doc/design/console-v2/`，这一步已经完成，不用再做。
 - [ ] **V1 会话页**（§12.1）
 - [ ] **V2 印象页**（§12.2）
 - [ ] **V3 用量**：迁移 v6、account 写入、API、页面。测试点：分组、range 边界、缓存命中率为 null、旧数据显示为“未知”。

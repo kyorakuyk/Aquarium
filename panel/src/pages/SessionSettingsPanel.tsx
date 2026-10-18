@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { DefaultsView, ModeScheduleEntry, SessionSettings, SessionView } from '../api.ts';
+import { InfoTip } from '../components/InfoTip.tsx';
 import {
   addModeScheduleEntry,
   changeModeScheduleDraft,
@@ -55,18 +56,20 @@ function writeModeScheduleDraftSnapshot(drafts: ModeScheduleDrafts): boolean {
   }
 }
 
-function FieldHeading({ title, fields, target, onReset, onNavigateToDefaults }: {
+function FieldHeading({ title, help, fields, target, onReset, onNavigateToDefaults }: {
   title: string;
+  help?: string;
   fields: SessionField[];
   target: SessionSettingsTarget;
   onReset: (fields: SessionField[]) => void;
   onNavigateToDefaults: () => void;
 }) {
-  if (target.kind === 'global') return <div className="field-heading"><h3>{title}</h3></div>;
+  const headingTitle = <div className="field-heading-title"><h3>{title}</h3>{help && <InfoTip label={`${title}说明`} text={help} />}</div>;
+  if (target.kind === 'global') return <div className="field-heading">{headingTitle}</div>;
   const overridden = fields.some((field) => target.overrides.includes(field));
   return (
     <div className="field-heading">
-      <h3>{title}</h3>
+      {headingTitle}
       {overridden
         ? <button className="inherit-button is-overridden" type="button" onClick={() => onReset(fields)}>{target.kind === 'private' ? '本会话覆盖' : '本群覆盖'} · 恢复继承</button>
         : <button className="inherit-button" type="button" onClick={onNavigateToDefaults}>继承全局</button>}
@@ -261,7 +264,7 @@ export function SessionSettingsPanel({
 
       <SettingGroup>
         <FieldHeading title="在这里的话量" fields={['talkOffset']} target={target} onReset={restore} onNavigateToDefaults={onNavigateToDefaults} />
-        <label className="field-label" htmlFor="session-talk-offset">调整这个会话里的话量</label>
+        <div className="field-label-row"><label className="field-label" htmlFor="session-talk-offset">调整这个会话里的话量</label><InfoTip label="话量设置说明" text="按人设底色叠加，群聊可单独覆盖全局默认；私聊不显示。" /></div>
         <select
           id="session-talk-offset"
           className="talk-offset-select"
@@ -275,12 +278,10 @@ export function SessionSettingsPanel({
           <option value={1}>+1</option>
           <option value={2}>更话痨 +2</option>
         </select>
-        <p className="schedule-help">按人设底色叠加，群聊可单独覆盖全局默认；私聊不显示。</p>
       </SettingGroup>
 
       <SettingGroup>
-        <FieldHeading title="按时间段切换" fields={['modeSchedule']} target={target} onReset={restore} onNavigateToDefaults={onNavigateToDefaults} />
-        <p className="schedule-help">按列表顺序首个匹配项生效，支持跨午夜；没有匹配时使用上方默认模式。未提交草稿会在当前标签页刷新后保留，点击“保存时段”才写入配置。</p>
+        <FieldHeading title="按时间段切换" help="按列表顺序首个匹配项生效，支持跨午夜；没有匹配时使用上方默认模式。未提交草稿会在当前标签页刷新后保留，点击“保存时段”才写入配置。" fields={['modeSchedule']} target={target} onReset={restore} onNavigateToDefaults={onNavigateToDefaults} />
         {draftPersistenceError && <p className="schedule-help" role="alert">{draftPersistenceError}</p>}
         {scheduleEntries.length > 0
           ? <div className="schedule-list">
@@ -340,11 +341,10 @@ export function SessionSettingsPanel({
         </div>
       </SettingGroup>
       {target.kind !== 'private' && <SettingGroup>
-        <FieldHeading title="主动回复冷却" fields={['proactiveCooldownSec']} target={target} onReset={restore} onNavigateToDefaults={onNavigateToDefaults} />
+        <FieldHeading title="主动回复冷却" help="范围 0–3600 秒；设为 0 可关闭主动冷却，现有频率限制仍生效。" fields={['proactiveCooldownSec']} target={target} onReset={restore} onNavigateToDefaults={onNavigateToDefaults} />
         <div className="number-grid">
           <label><span>两次主动回复至少间隔（秒）</span><input type="number" min="0" max="3600" step="1" value={proactiveCooldownDraft} disabled={busy} onBlur={(event) => void setProactiveCooldown(event.currentTarget.value)} onChange={(event) => setProactiveCooldownDraft(event.currentTarget.value)} /></label>
         </div>
-        <p className="schedule-help">范围 0–3600 秒；设为 0 可关闭主动冷却，现有频率限制仍生效。</p>
       </SettingGroup>}
       <div className="save-state" aria-live="polite">{busy ? '正在保存…' : scheduleIsDirty ? '时间段尚未写入配置' : savedAt ? `已保存 · ${savedAt}` : '其他设置自动保存；时间段需点击“保存时段”'}</div>
     </>

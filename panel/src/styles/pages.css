@@ -1,5 +1,5 @@
 .tank-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-.tank-card { min-width: 0; padding: 19px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface-accent); }
+.tank-card { min-width: 0; padding: 19px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 .tank-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .tank-card h3 { margin-bottom: 4px; overflow-wrap: anywhere; }
 .tank-card p { margin-bottom: 5px; font-size: 12px; }
@@ -72,7 +72,7 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .mode-card { display: flex; min-height: 70px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 5px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; text-align: left; }
 .mode-card.is-current { border-color: var(--accent); background: var(--surface-accent); color: var(--accent); }
-.mode-card:disabled { color: #899491; }
+.mode-card:disabled { color: var(--placeholder); }
 .mode-card span { color: var(--muted); font-size: 11px; line-height: 1.4; }
 .schedule-help { margin: -3px 0 12px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .schedule-list { display: grid; gap: 4px; }
@@ -123,7 +123,6 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .trait-segments { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
 .trait-segments button { min-height: 44px; padding: 0 4px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--ink-2); cursor: pointer; font-size: 11px; }
 .trait-segments button.is-selected { border-color: var(--accent); background: var(--surface-accent); color: var(--accent); font-weight: 700; }
-.trait-segments button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .editor-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .editor-column { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
 .markdown-input { min-height: 370px; border-radius: 10px; font-size: 12px; line-height: 1.7; }

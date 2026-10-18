@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { apiRequest, replayDecision, type DecisionReplayView, type DecisionStep, type DecisionView, type PanelStatus, type PipelineStepTraceView, type SessionView, type TraceView } from '../api.ts';
 import { activityDecisionMetrics } from '../decision-metrics.ts';
+import { InfoTip } from '../components/InfoTip.tsx';
 import { decisionLabel, decisionTone } from '../labels.ts';
 
 interface ChatEntry {
@@ -172,8 +173,7 @@ export function DecisionsPage() {
   return (
     <div className="page">
       <header className="page-header">
-        <h1>试聊与决策</h1>
-        <p className="page-description">沿用真实会话的人设、提示词组装与 reply 槽位；试聊消息不会发到 QQ，也不会写入消息表。</p>
+        <div className="page-title-row"><h1>试聊与决策</h1><InfoTip label="试聊与决策说明" text="沿用真实会话的人设、提示词组装与 reply 槽位；试聊消息不会发到 QQ，也不会写入消息表。" /></div>
       </header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
       <div className="page-tabs" role="tablist" aria-label="试聊与决策视图">

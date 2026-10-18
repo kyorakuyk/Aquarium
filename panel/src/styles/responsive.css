@@ -1,14 +1,17 @@
 @media (max-width: 760px) {
   .app-shell { display: block; }
-  .sidebar { position: relative; inset: auto; width: 100%; padding: 13px 14px 10px; border-right: 0; border-bottom: 1px solid var(--line); }
-  .brand-lockup { padding: 0 7px 10px; }
-  .brand-fish { width: 35px; }
+  .sidebar { position: relative; inset: auto; width: 100%; gap: 10px; padding: 13px 14px 10px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .brand-lockup { padding: 0 7px; }
+  .brand-fish { width: 36px; }
+  .account-switcher { max-width: 320px; }
   .main-nav { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; }
+  .nav-group { display: contents; }
+  .nav-group-label { display: none; }
   .nav-item { width: auto; min-width: max-content; min-height: 44px; padding: 0 12px; }
-  .coming-soon { display: flex; align-items: center; gap: 4px; margin-top: 7px; overflow-x: auto; }
-  .coming-soon .section-eyebrow { flex: none; padding: 0 6px; }
-  .coming-soon .nav-item { min-height: 44px; padding: 0 9px; font-size: 11px; }
-  .logout-button { position: absolute; top: 13px; right: 14px; min-height: 44px; padding: 0 11px; font-size: 12px; }
+  .sidebar-footer { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; margin-top: 0; }
+  .sidebar-waves { display: none; }
+  .sidebar-muted-button { flex: 1; max-width: 240px; }
+  .logout-button { min-height: 44px; padding: 0 11px; font-size: 12px; }
   .main-content { width: 100%; margin-left: 0; }
   .page { padding: 26px 18px 40px; }
   .page-header-actions { flex-direction: column; gap: 12px; }

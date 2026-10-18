@@ -41,6 +41,7 @@ export function App() {
         {page === 'overview' && <OverviewPage onNavigate={setPage} />}
         {page === 'sessions' && <SessionsPage />}
         {page === 'personas' && <PersonasPage onNavigate={setPage} />}
+        {page === 'models' && <div className="page"><header className="page-header"><h1>模型</h1></header><p className="muted">模型接入与分配将在 V6 中开放。</p></div>}
         {page === 'sandbox' && <DecisionsPage />}
         {page === 'usage' && <UsagePage />}
         {page === 'impressions' && <ImpressionsPage />}

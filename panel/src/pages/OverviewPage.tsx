@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { apiRequest, post, type DecisionView, type MoodBand, type MoodEventView, type MoodView, type PanelStatus, type SessionView, type SleepView, type UsageView } from '../api.ts';
+import { apiRequest, type DecisionView, type MoodBand, type MoodEventView, type MoodView, type PanelStatus, type SessionView, type SleepView, type UsageView } from '../api.ts';
 import type { PageId } from '../components/Sidebar.tsx';
 import { decisionLabel, decisionTone } from '../labels.ts';
 
@@ -56,7 +56,6 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const [usage, setUsage] = useState<UsageView>();
   const [mood, setMood] = useState<MoodView>();
   const [sleep, setSleep] = useState<SleepView>();
-  const [muted, setMuted] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -72,7 +71,6 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
       setDecisions(nextDecisions);
       setUsage(nextUsage);
       setMood(nextMood);
-      setMuted(nextStatus.allMuted);
       setError('');
     }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : '读取控制台数据失败'));
   }, []);
@@ -93,15 +91,6 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
       window.clearInterval(timer);
     };
   }, []);
-
-  async function toggleMute() {
-    try {
-      await post(muted ? '/api/unmute-all' : '/api/mute-all');
-      setMuted(!muted);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '操作失败');
-    }
-  }
 
   if (error && !status) return <div className="page"><div className="notice notice-warn" role="alert">{error}</div></div>;
   if (!status) return <div className="page"><p className="muted">正在读取本机状态…</p></div>;
@@ -127,9 +116,6 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
         </div>
         <div className="header-actions">
           <button className="button button-secondary" type="button" onClick={() => onNavigate('sandbox')}>去试聊</button>
-          <button className={`button ${muted ? 'button-secondary' : 'button-warn'}`} type="button" onClick={() => void toggleMute()}>
-            {muted ? '恢复发言' : '全部闭嘴'}
-          </button>
         </div>
       </header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}

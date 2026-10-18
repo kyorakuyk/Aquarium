@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiRequest, type UsageView } from '../api.ts';
+import { InfoTip } from '../components/InfoTip.tsx';
 
 function number(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(value);
@@ -17,7 +18,7 @@ export function UsagePage() {
 
   return (
     <div className="page">
-      <header className="page-header"><h1>用量</h1><p className="page-description">按本机自然日统计模型调用与费用。</p></header>
+      <header className="page-header"><div className="page-title-row"><h1>用量</h1><InfoTip label="用量记录说明" text="当前数据由 Aquarium 本地 SQLite 用量表汇总。试聊产生的模型调用也会计入费用，但不会写入会话消息。面板暂不展示逐模型明细，因为现有用量记录没有关联消息或会话 ID。" /></div><p className="page-description">按本机自然日统计模型调用与费用。</p></header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
       {!usage && !error && <p className="muted">正在读取用量…</p>}
       {usage && <>
@@ -27,7 +28,6 @@ export function UsagePage() {
           <article className="panel-card stat-card"><div className="card-title">输入与缓存</div><strong className="stat-number mono">{number(usage.inputTokens)}<small> 输入 tokens</small></strong><div className="stat-foot">缓存 {number(usage.cachedTokens)} · 输出 {number(usage.outputTokens)}</div></article>
           <article className="panel-card stat-card"><div className="card-title">平均响应时间</div><strong className="stat-number mono">{Math.round(usage.averageLatencyMs)}<small> ms</small></strong><div className="stat-foot">涵盖今天所有已记录调用</div></article>
         </section>
-        <section className="panel-card usage-note"><h2>关于用量记录</h2><p>当前数据由 Aquarium 本地 SQLite 用量表汇总。试聊产生的模型调用也会计入费用；不会写入会话消息。</p><p className="muted">面板暂不展示逐模型明细，因为现有用量记录没有关联消息或会话 ID。</p></section>
       </>}
     </div>
   );
