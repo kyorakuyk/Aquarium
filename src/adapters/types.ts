@@ -14,6 +14,11 @@ export interface ContactFriend {
 
 export type AdapterStatus = 'connecting' | 'online' | 'offline' | 'waiting_login';
 
+export interface HistoryOptions {
+  count: number;
+  beforeMessageId?: string | number;
+}
+
 export interface ProtocolAdapter {
   readonly account: number;
   connect(): Promise<void>;
@@ -23,7 +28,7 @@ export interface ProtocolAdapter {
   send(session: SessionKey, segments: Segment[]): Promise<{ messageId: string }>;
   listGroups(): Promise<ContactGroup[]>;
   listFriends(): Promise<ContactFriend[]>;
-  history(session: SessionKey, count: number): Promise<IncomingMessage[]>;
+  history(session: SessionKey, request: number | HistoryOptions): Promise<IncomingMessage[]>;
   markRead(session: SessionKey): Promise<void>;
   setTyping(session: SessionKey): Promise<void>;
   recall(messageId: string): Promise<void>;

@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { apiRequest, patch, post, type ModelProviderView, type ModelReasoning, type ModelSlotEntryView } from '../api.ts';
-import { REASONING_OPTIONS, reasoningFieldOptions, type SlotDef } from '../models-view.ts';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
+import { apiRequest, patch, post, type ModelProviderView, type ModelSlotEntryView } from '../api.ts';
+import { reasoningFieldOptions, type SlotDef } from '../models-view.ts';
+import type { ModelParameterName, ProviderModelsState } from '../model-api.ts';
+import { SlotDialogRowCard, type SlotDialogRow } from './SlotDialogRowCard.tsx';
 
 function errorMessage(reason: unknown): string {
   return reason instanceof Error ? reason.message : '操作失败';
@@ -159,25 +161,23 @@ export function KeyDialog({ provider, onClose, onSaved }: {
   );
 }
 
-interface SlotRow {
-  key: number;
-  provider: string;
-  model: string;
-  temperature: string;
-  maxTokens: string;
-  reasoning: ModelReasoning;
-}
-
-export function SlotDialog({ definition, chain, providers, onClose, onSaved }: {
+export function SlotDialog({ definition, chain, providers, providerModels, pageBusy, onLoadModels, onOverrideChange, onClose, onSaved }: {
   definition: SlotDef;
   chain: ModelSlotEntryView[];
   providers: ModelProviderView[];
+  providerModels: Record<string, ProviderModelsState>;
+  pageBusy: boolean;
+  onLoadModels: (provider: ModelProviderView, refresh?: boolean) => Promise<unknown>;
+  onOverrideChange: (providerId: string, modelId: string, parameter: ModelParameterName, supported: boolean | undefined) => Promise<string | undefined>;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { ref, close } = useDialog(onClose);
   const nextKey = useRef(0);
-  const toRow = (entry: ModelSlotEntryView): SlotRow => ({
+  const draggedRowKey = useRef<number | undefined>(undefined);
+  const [activeDragKey, setActiveDragKey] = useState<number | undefined>(undefined);
+  const [dropTargetKey, setDropTargetKey] = useState<number | undefined>(undefined);
+  const toRow = (entry: ModelSlotEntryView): SlotDialogRow => ({
     key: nextKey.current++,
     provider: entry.provider,
     model: entry.model,
@@ -185,11 +185,12 @@ export function SlotDialog({ definition, chain, providers, onClose, onSaved }: {
     maxTokens: entry.maxTokens === undefined ? '' : String(entry.maxTokens),
     reasoning: entry.reasoning ?? 'off',
   });
-  const [rows, setRows] = useState<SlotRow[]>(() => chain.map(toRow));
+  const [rows, setRows] = useState<SlotDialogRow[]>(() => chain.map(toRow));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const dialogBusy = busy || pageBusy;
 
-  function change(key: number, patch: Partial<Omit<SlotRow, 'key'>>) {
+  function change(key: number, patch: Partial<Omit<SlotDialogRow, 'key'>>) {
     setRows((current) => current.map((row) => row.key === key ? { ...row, ...patch } : row));
   }
 
@@ -212,12 +213,54 @@ export function SlotDialog({ definition, chain, providers, onClose, onSaved }: {
     });
   }
 
+  function moveToPosition(sourceKey: number, targetKey: number): void {
+    if (sourceKey === targetKey) return;
+    setRows((current) => {
+      const sourceIndex = current.findIndex((row) => row.key === sourceKey);
+      const targetIndex = current.findIndex((row) => row.key === targetKey);
+      if (sourceIndex < 0 || targetIndex < 0) return current;
+      const next = [...current];
+      const [source] = next.splice(sourceIndex, 1);
+      if (!source) return current;
+      next.splice(targetIndex, 0, source);
+      return next;
+    });
+  }
+
+  function startDrag(key: number, event: DragEvent<HTMLButtonElement>): void {
+    if (dialogBusy) return;
+    draggedRowKey.current = key;
+    setActiveDragKey(key);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(key));
+  }
+
+  function dragOver(key: number, event: DragEvent<HTMLLIElement>): void {
+    if (draggedRowKey.current === undefined || draggedRowKey.current === key) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    if (dropTargetKey !== key) setDropTargetKey(key);
+  }
+
+  function dropOn(key: number, event: DragEvent<HTMLLIElement>): void {
+    event.preventDefault();
+    const sourceKey = draggedRowKey.current;
+    if (sourceKey !== undefined) moveToPosition(sourceKey, key);
+    endDrag();
+  }
+
+  function endDrag(): void {
+    draggedRowKey.current = undefined;
+    setActiveDragKey(undefined);
+    setDropTargetKey(undefined);
+  }
+
   async function save() {
-    if (busy) return;
     if (rows.length === 0) {
       setError('至少保留一项降级项。');
       return;
     }
+    if (dialogBusy) return;
     const chainBody: ModelSlotEntryView[] = [];
     for (const row of rows) {
       const temperature = row.temperature.trim() === '' ? undefined : Number(row.temperature);
@@ -226,8 +269,8 @@ export function SlotDialog({ definition, chain, providers, onClose, onSaved }: {
         setError('每一项都需要选择接入并填写模型名。');
         return;
       }
-      if (temperature !== undefined && (!Number.isFinite(temperature) || temperature < 0 || temperature > 2)) {
-        setError('温度需在 0 到 2 之间。');
+      if (temperature !== undefined && (!Number.isFinite(temperature) || temperature < 0 || temperature > 2 || Math.abs(temperature * 10 - Math.round(temperature * 10)) > 1e-8)) {
+        setError('温度需在 0 到 2 之间，步长为 0.1。');
         return;
       }
       if (maxTokens !== undefined && (!Number.isSafeInteger(maxTokens) || maxTokens <= 0)) {
@@ -258,31 +301,46 @@ export function SlotDialog({ definition, chain, providers, onClose, onSaved }: {
   }
 
   return (
-    <dialog className="model-dialog model-dialog-wide" ref={ref} aria-labelledby="slot-dialog-title" onClose={close}>
-      <div className="model-dialog-heading"><div><span className="eyebrow">用途</span><h3 id="slot-dialog-title">{definition.title}</h3></div><button className="text-button" type="button" onClick={close}>关闭</button></div>
-      <p className="model-help">{definition.description}；按顺序降级，前一项失败才尝试下一项。</p>
-      {error && <p className="notice notice-warn" role="alert">{error}</p>}
-      <div className="slot-editor">
-        {rows.map((row, index) => <div className="slot-editor-row" key={row.key}>
-          <span className="slot-index mono">{index + 1}</span>
-          <label><span className="field-label">接入</span><select value={row.provider} disabled={busy} onChange={(event) => change(row.key, { provider: event.currentTarget.value })}>
-            {providers.map((provider) => <option value={provider.id} key={provider.id}>{provider.label}</option>)}
-          </select></label>
-          <label><span className="field-label">模型名</span><input value={row.model} autoComplete="off" spellCheck={false} disabled={busy} onChange={(event) => change(row.key, { model: event.currentTarget.value })} /></label>
-          <label><span className="field-label">温度</span><input type="number" min={0} max={2} step={0.1} placeholder="默认" value={row.temperature} disabled={busy} onChange={(event) => change(row.key, { temperature: event.currentTarget.value })} /></label>
-          <label><span className="field-label">思考强度</span><select value={row.reasoning} disabled={busy} onChange={(event) => change(row.key, { reasoning: event.currentTarget.value as ModelReasoning })}>
-            {REASONING_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
-          </select></label>
-          <label><span className="field-label">最大长度</span><input type="number" min={1} placeholder="默认" value={row.maxTokens} disabled={busy} onChange={(event) => change(row.key, { maxTokens: event.currentTarget.value })} /></label>
-          <div className="slot-row-actions">
-            <button className="text-button" type="button" aria-label={`上移第 ${index + 1} 项`} disabled={busy || index === 0} onClick={() => move(index, -1)}>上移</button>
-            <button className="text-button" type="button" aria-label={`下移第 ${index + 1} 项`} disabled={busy || index === rows.length - 1} onClick={() => move(index, 1)}>下移</button>
-            <button className="text-button" type="button" aria-label={`删除第 ${index + 1} 项`} disabled={busy} onClick={() => setRows((current) => current.filter((item) => item.key !== row.key))}>删除</button>
-          </div>
-        </div>)}
+    <dialog className="model-dialog slot-dialog" ref={ref} aria-labelledby="slot-dialog-title" onClose={close}>
+      <header className="slot-dialog-header">
+        <div>
+          <h3 id="slot-dialog-title">{definition.title}</h3>
+          <p>{definition.description} · 按顺序尝试，前一项失败才用下一项</p>
+        </div>
+        <button className="slot-dialog-close" type="button" aria-label="关闭" title="关闭" onClick={close}>×</button>
+      </header>
+      <div className="slot-dialog-body">
+        {error && <p className="notice notice-warn" role="alert">{error}</p>}
+        <ol className="slot-editor">
+          {rows.map((row, index) => <SlotDialogRowCard
+            key={row.key}
+            definition={definition}
+            row={row}
+            index={index}
+            rowCount={rows.length}
+            providers={providers}
+            providerModels={providerModels}
+            disabled={dialogBusy}
+            dragging={activeDragKey === row.key}
+            dropTarget={dropTargetKey === row.key}
+            onChange={(patch) => change(row.key, patch)}
+            onMove={(direction) => move(index, direction)}
+            onDelete={() => setRows((current) => current.filter((item) => item.key !== row.key))}
+            onLoadModels={onLoadModels}
+            onOverrideChange={onOverrideChange}
+            onDragStart={(event) => startDrag(row.key, event)}
+            onDragOver={(event) => dragOver(row.key, event)}
+            onDrop={(event) => dropOn(row.key, event)}
+            onDragEnd={endDrag}
+          />)}
+        </ol>
+        <button className="slot-add" type="button" disabled={dialogBusy || providers.length === 0 || rows.length >= 8} onClick={addRow}>＋ 添加降级项</button>
+        <p className="slot-dialog-help">参数旁的 ? 表示接入没有声明是否支持，可能被忽略；点开参数即可标记。拖动左侧圆点调整顺序。</p>
       </div>
-      <button className="text-button slot-add" type="button" disabled={busy || providers.length === 0 || rows.length >= 8} onClick={addRow}>添加降级项</button>
-      <div className="model-dialog-footer"><span /><div><button className="button button-secondary" type="button" disabled={busy} onClick={close}>取消</button><button className="button button-primary" type="button" disabled={busy} onClick={() => void save()}>{busy ? '保存中…' : '保存'}</button></div></div>
+      <footer className="slot-dialog-footer">
+        <button className="button button-secondary" type="button" disabled={dialogBusy} onClick={close}>取消</button>
+        <button className="button button-primary" type="button" disabled={dialogBusy} onClick={() => void save()}>{dialogBusy ? '保存中…' : '保存'}</button>
+      </footer>
     </dialog>
   );
 }

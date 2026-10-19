@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiRequest, patch, post, type ModelProviderView, type ModelsView } from '../api.ts';
-import { chainSummary, MODEL_SLOT_DEFS, providerMeta, providerStatus, reasoningLabel } from '../models-view.ts';
+import { MODEL_SLOT_DEFS, providerMeta, providerStatus } from '../models-view.ts';
 import { KeyDialog, ProviderDialog, SlotDialog } from './ModelDialogs.tsx';
+import { InlineSlotRow } from './InlineSlotRow.tsx';
+import { getProviderModels, type ModelParameterName, type ProviderModelsState, type ProviderModelsView } from '../model-api.ts';
 
 interface TestState {
   busy?: boolean;
@@ -70,6 +72,12 @@ export function ModelsPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [tests, setTests] = useState<Record<string, TestState>>({});
+  const slotSaveInFlight = useRef(false);
+  const modelParamSaveInFlight = useRef(false);
+  const providerModelsCache = useRef(new Map<string, { loadedAt: number; baseUrl?: string; apiKeyEnv?: string; data: ProviderModelsView }>());
+  const providerModelsRequests = useRef(new Map<string, Promise<ProviderModelsView | undefined>>());
+  const providerModelsVersions = useRef(new Map<string, number>());
+  const [providerModels, setProviderModels] = useState<Record<string, ProviderModelsState>>({});
   const [providerDialog, setProviderDialog] = useState<{ mode: 'create' | 'edit'; kind: 'api' | 'cli'; provider?: ModelProviderView }>();
   const [keyTarget, setKeyTarget] = useState<ModelProviderView>();
   const [slotDialog, setSlotDialog] = useState<string>();
@@ -85,6 +93,71 @@ export function ModelsPage() {
     }
   }, []);
 
+  const loadProviderModels = useCallback((provider: ModelProviderView, refresh = false): Promise<ProviderModelsView | undefined> => {
+    if (provider.kind === 'cli') return Promise.resolve({ models: [], cli: true });
+    const id = provider.id;
+    const cached = providerModelsCache.current.get(id);
+    const reusable = cached && cached.baseUrl === provider.baseUrl && cached.apiKeyEnv === provider.apiKeyEnv ? cached : undefined;
+    if (!refresh && reusable && Date.now() - reusable.loadedAt < 10 * 60 * 1000) {
+      setProviderModels((current) => ({
+        ...current,
+        [id]: reusable.data.error
+          ? { status: 'error', error: reusable.data.error, data: reusable.data }
+          : { status: 'ready', data: reusable.data },
+      }));
+      return Promise.resolve(reusable.data);
+    }
+    const inFlight = providerModelsRequests.current.get(id);
+    if (!refresh && inFlight) return inFlight;
+
+    const version = (providerModelsVersions.current.get(id) ?? 0) + 1;
+    providerModelsVersions.current.set(id, version);
+    setProviderModels((current) => ({
+      ...current,
+      [id]: { status: 'loading', ...(reusable ? { data: reusable.data } : {}) },
+    }));
+
+    let request: Promise<ProviderModelsView | undefined> = Promise.resolve(undefined);
+    request = (async () => {
+      try {
+        const data = await getProviderModels(id, refresh);
+        if (providerModelsVersions.current.get(id) === version) {
+          if (data.error) {
+            setProviderModels((current) => ({ ...current, [id]: { status: 'error', error: data.error!, data } }));
+          } else {
+            providerModelsCache.current.set(id, { loadedAt: Date.now(), baseUrl: provider.baseUrl, apiKeyEnv: provider.apiKeyEnv, data });
+            setProviderModels((current) => ({ ...current, [id]: { status: 'ready', data } }));
+          }
+        }
+        return data;
+      } catch (reason) {
+        if (providerModelsVersions.current.get(id) === version) {
+          setProviderModels((current) => ({
+            ...current,
+            [id]: { status: 'error', error: errorMessage(reason), ...(reusable ? { data: reusable.data } : {}) },
+          }));
+        }
+        return reusable?.data;
+      } finally {
+        if (providerModelsRequests.current.get(id) === request) providerModelsRequests.current.delete(id);
+      }
+    })();
+    providerModelsRequests.current.set(id, request);
+    return request;
+  }, []);
+
+  function invalidateProviderModels(providerId: string): void {
+    providerModelsCache.current.delete(providerId);
+    providerModelsRequests.current.delete(providerId);
+    providerModelsVersions.current.set(providerId, (providerModelsVersions.current.get(providerId) ?? 0) + 1);
+    setProviderModels((current) => {
+      if (!current[providerId]) return current;
+      const next = { ...current };
+      delete next[providerId];
+      return next;
+    });
+  }
+
   useEffect(() => {
     void load();
     const timer = window.setInterval(() => { void load(); }, 15_000);
@@ -92,7 +165,7 @@ export function ModelsPage() {
   }, [load]);
 
   async function mutate(task: () => Promise<unknown>): Promise<boolean> {
-    if (busy) return false;
+    if (busy || slotSaveInFlight.current || modelParamSaveInFlight.current) return false;
     setBusy(true);
     setError('');
     try {
@@ -102,6 +175,51 @@ export function ModelsPage() {
       setError(errorMessage(reason));
       return false;
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveSlotChain(slot: string, chain: ModelsView['slots'][string]): Promise<string | undefined> {
+    if (busy || slotSaveInFlight.current || modelParamSaveInFlight.current) return '另一个设置正在保存。';
+    slotSaveInFlight.current = true;
+    setBusy(true);
+    try {
+      const saved = await patch<{ chain: ModelsView['slots'][string] }>(`/api/slots/${encodeURIComponent(slot)}`, { chain });
+      setView((current) => current ? {
+        ...current,
+        slots: { ...current.slots, [slot]: saved.chain },
+      } : current);
+      await load();
+      return undefined;
+    } catch (reason) {
+      return errorMessage(reason);
+    } finally {
+      slotSaveInFlight.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function saveModelParamOverride(providerId: string, modelId: string, parameter: ModelParameterName, supported: boolean | undefined): Promise<string | undefined> {
+    if (busy || slotSaveInFlight.current || modelParamSaveInFlight.current) return '另一个设置正在保存。';
+    const provider = view?.providers.find((candidate) => candidate.id === providerId);
+    const normalizedModelId = modelId.trim();
+    if (provider?.kind !== 'api' || !normalizedModelId) return '请先选择 API 接入并填写模型名。';
+    modelParamSaveInFlight.current = true;
+    setBusy(true);
+    try {
+      const modelParams = { [normalizedModelId]: { [parameter]: supported ?? null } };
+      await patch(`/api/providers/${encodeURIComponent(providerId)}`, { modelParams });
+      const readback = await apiRequest<ModelsView>('/api/models');
+      const savedProvider = readback.providers.find((candidate) => candidate.id === providerId);
+      if (savedProvider?.modelParams?.[normalizedModelId]?.[parameter] !== supported) {
+        return '保存后未读回所选模型的能力覆盖。';
+      }
+      setView(readback);
+      return undefined;
+    } catch (reason) {
+      return errorMessage(reason);
+    } finally {
+      modelParamSaveInFlight.current = false;
       setBusy(false);
     }
   }
@@ -152,22 +270,26 @@ export function ModelsPage() {
         </section>
 
         <section className="section-block">
-          <div className="section-heading"><div><h2>用途</h2><p className="model-help">回复建议用 API，CLI 适合后台任务。点击“使用的模型”调整降级顺序。</p></div></div>
+          <div className="section-heading"><div><h2>用途</h2></div></div>
           <div className="panel-card table-card">
             <div className="table-scroll">
               <table className="models-slot-table">
-                <thead><tr><th>用途</th><th>使用的模型（按顺序降级）</th><th>温度</th><th>思考强度</th><th>最大长度</th></tr></thead>
+                <thead><tr><th>用途</th><th>使用的模型（按顺序降级） <span className="models-help-mark" title="回复建议用 API，CLI 适合后台任务；点击模型名称调整降级顺序。" aria-label="用途表说明">ⓘ</span></th><th>温度</th><th>思考强度</th><th>最大长度</th><th>操作</th></tr></thead>
                 <tbody>
                   {MODEL_SLOT_DEFS.map((definition) => {
                     const chain = view.slots[definition.slot] ?? [];
-                    const first = chain[0];
-                    return <tr key={definition.slot}>
-                      <td><strong>{definition.title}</strong><span className="slot-description">{definition.description}</span></td>
-                      <td><button className="slot-chain-button" type="button" onClick={() => setSlotDialog(definition.slot)}>{chainSummary(chain, providers)}</button></td>
-                      <td className="mono">{first?.temperature ?? '默认'}</td>
-                      <td>{reasoningLabel(first?.reasoning)}</td>
-                      <td className="mono">{first?.maxTokens ?? '默认'}</td>
-                    </tr>;
+                    return <InlineSlotRow
+                      key={definition.slot}
+                      definition={definition}
+                      chain={chain}
+                      providers={providers}
+                      providerModels={providerModels}
+                      disabled={busy}
+                      onEdit={() => setSlotDialog(definition.slot)}
+                      onSave={(nextChain) => saveSlotChain(definition.slot, nextChain)}
+                      onLoadModels={loadProviderModels}
+                      onOverrideChange={saveModelParamOverride}
+                    />;
                   })}
                 </tbody>
               </table>
@@ -181,17 +303,31 @@ export function ModelsPage() {
         kind={providerDialog.kind}
         provider={providerDialog.provider}
         onClose={() => setProviderDialog(undefined)}
-        onSaved={() => { setProviderDialog(undefined); void load(); }}
+        onSaved={() => {
+          if (providerDialog.provider) invalidateProviderModels(providerDialog.provider.id);
+          setProviderDialog(undefined);
+          void load();
+        }}
       />}
       {keyTarget && <KeyDialog
         provider={keyTarget}
         onClose={() => setKeyTarget(undefined)}
-        onSaved={() => { setKeyTarget(undefined); void load(); }}
+        onSaved={() => {
+          const provider = keyTarget;
+          invalidateProviderModels(keyTarget.id);
+          setKeyTarget(undefined);
+          void load();
+          if (provider) void loadProviderModels(provider, true);
+        }}
       />}
       {slotDialog && view && <SlotDialog
         definition={MODEL_SLOT_DEFS.find((definition) => definition.slot === slotDialog) ?? MODEL_SLOT_DEFS[0]!}
         chain={view.slots[slotDialog] ?? []}
         providers={providers}
+        providerModels={providerModels}
+        pageBusy={busy}
+        onLoadModels={loadProviderModels}
+        onOverrideChange={saveModelParamOverride}
         onClose={() => setSlotDialog(undefined)}
         onSaved={() => { setSlotDialog(undefined); void load(); }}
       />}

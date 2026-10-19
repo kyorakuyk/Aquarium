@@ -45,6 +45,22 @@ test('saveMessage 去重并让 recentMessages 由旧到新返回', () => {
   });
 });
 
+test('messagesInRange returns only the inclusive time window in ascending order', () => {
+  withRepository((repository) => {
+    const session = '900000001:group:123456';
+    repository.saveMessage(messageRecord('before', 999));
+    repository.saveMessage(messageRecord('end', 2500));
+    repository.saveMessage(messageRecord('middle', 2000));
+    repository.saveMessage(messageRecord('start', 1500));
+    repository.saveMessage({ ...messageRecord('other-session', 1800), sessionId: '900000001:group:654321' });
+
+    const records = repository.messagesInRange(session, 1500, 2500);
+
+    assert.deepEqual(records.map((record) => record.messageId), ['start', 'middle', 'end']);
+    assert.throws(() => repository.messagesInRange(session, 2500, 1500), /时间范围/u);
+  });
+});
+
 test('costToday 只累计本地自然日内的用量', () => {
   withRepository((repository) => {
     const dayStart = new Date(2026, 9, 12).getTime();
@@ -100,13 +116,22 @@ test('recentDecisions 返回最新决策并还原 detail JSON', () => {
       reason: 'replied',
       detail: { model: 'fake' },
     });
-
     const decisions = repository.recentDecisions(1);
 
     assert.equal(decisions.length, 1);
     assert.equal(decisions[0]?.messageId, 'b');
     assert.equal(decisions[0]?.replied, true);
     assert.deepEqual(decisions[0]?.detail, { model: 'fake' });
+
+    repository.recordDecision({
+      time: 3,
+      sessionId: '900000001:private:42',
+      messageId: 'skip-after-reply',
+      replied: false,
+      reason: 'disabled',
+      detail: {},
+    });
+    assert.equal(repository.latestReplyDecision()?.messageId, 'b');
   });
 });
 
@@ -214,6 +239,8 @@ test('情绪状态与事件读写往返一致', () => {
       reason: '被说好话',
       bandBefore: 'calm',
       bandAfter: 'happy',
+      valenceAfter: 0.16,
+      arousalAfter: 0.66,
     });
     repository.recordMoodEvent({
       account: 900000001,
@@ -228,6 +255,8 @@ test('情绪状态与事件读写往返一致', () => {
       reason: '被叫',
       bandBefore: null,
       bandAfter: null,
+      valenceAfter: -0.28,
+      arousalAfter: 0.76,
     });
 
     const recent = repository.recentMoodEvents(900000001, 5);
@@ -236,7 +265,10 @@ test('情绪状态与事件读写往返一致', () => {
     assert.equal(recent[1]?.senderId, 42);
     assert.equal(recent[1]?.bandBefore, 'calm');
     assert.equal(recent[1]?.bandAfter, 'happy');
+    assert.equal(recent[1]?.valenceAfter, 0.16);
+    assert.equal(recent[1]?.arousalAfter, 0.66);
     assert.equal(recent[0]?.sessionId, '900000001:private:42');
+    assert.equal(repository.latestMoodEventAtOrBefore(900000001, 7_500)?.id, 1);
     assert.deepEqual(repository.recentMoodEvents(900000001, 0), []);
     assert.deepEqual(repository.recentMoodEvents(99999, 5), []);
 
@@ -353,5 +385,24 @@ test('好感度状态与事件读写往返一致', () => {
     };
     repository.recordAffinityEvent(event);
     assert.deepEqual(repository.recentAffinityEvents(account, userId, 5), [{ id: 1, ...event }]);
+  });
+});
+
+test('人设版本存储读写往返一致', () => {
+  withRepository((repository) => {
+    const markdown = '# 归档人设\n\n## 说话方式\n简洁。';
+    const traitsJson = JSON.stringify({ order: 0, morality: 0, talk: 1, mind: 0, humor: 0, openness: 0, imitation: 0 });
+    const id = repository.recordPersonaVersion('archive', markdown, traitsJson);
+
+    assert.deepEqual(repository.personaVersions('archive', 50), [{
+      id,
+      personaId: 'archive',
+      savedAt: new Date(2026, 9, 12, 12, 0, 0).getTime(),
+      markdown,
+      traitsJson,
+      note: null,
+    }]);
+    assert.equal(repository.personaVersion('archive', id)?.markdown, markdown);
+    assert.equal(repository.personaVersion('other', id), undefined);
   });
 });

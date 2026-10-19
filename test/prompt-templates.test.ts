@@ -40,6 +40,26 @@ test('startup template load hashes raw bytes and parses the exact vision and jud
   assert.ok(templates.judge.user.includes('{{context}}'));
   assert.equal(templates.traits.order.m2, '你很讲规矩，说话做事有条理，不爱乱开话题。');
   assert.equal(templates.traits.talk.p2, '你是个话痨，什么都想插一句。');
+  assert.deepEqual({ humor: templates.traits.humor, openness: templates.traits.openness, imitation: templates.traits.imitation }, {
+    humor: {
+      m2: '你很正经，几乎不开玩笑，说话一板一眼。',
+      m1: '你偏正经，偶尔才开个玩笑。',
+      p1: '你有点脱线，时不时冒出奇怪的点子。',
+      p2: '你很脱线，脑回路清奇，常常一本正经地胡说八道。',
+    },
+    openness: {
+      m2: '你很保守，只聊熟悉的话题，对新东西提不起兴趣。',
+      m1: '你偏保守，新话题要观察一阵才接。',
+      p1: '你挺好奇，对新东西愿意多问一句。',
+      p2: '你非常好奇，看到新东西就想刨根问底。',
+    },
+    imitation: {
+      m2: '你说话有自己的一套，很少跟着别人的说法走。',
+      m1: '你偏向保持自己的说话方式。',
+      p1: '你挺容易被群里的说法带跑，会跟着用大家的梗。',
+      p2: '你很爱学群里的说话方式，新梗听一次就会用。',
+    },
+  });
   assert.equal(templates.sleep.goodnight.length, 3);
   assert.ok(Object.isFrozen(templates.sleep.goodnight));
   assert.ok(templates.personaImport.system.includes('不得推断、补全或编造'));

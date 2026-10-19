@@ -52,6 +52,7 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const [previewError, setPreviewError] = useState('');
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [versionRefreshKey, setVersionRefreshKey] = useState(0);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -182,6 +183,22 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
     }
   }
 
+  function loadVersionIntoEditor(markdown: string) {
+    setSourceText(markdown);
+    setDirty(true);
+    setSaved(false);
+    setError('');
+    setActiveBlockId('');
+    try {
+      setForm(parseSections(markdown));
+      setSourceError('');
+      setViewMode('preview');
+    } catch {
+      setSourceError('该版本的 Markdown 或 YAML 暂不可解析；请在源文件中修正后再保存。');
+      setViewMode('source');
+    }
+  }
+
   function changeViewMode(next: 'preview' | 'source') {
     if (next === viewMode) return;
     if (next === 'source') {
@@ -223,6 +240,7 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
         method: 'PUT', body: JSON.stringify({ markdown }),
       });
       savedToServer = true;
+      setVersionRefreshKey((current) => current + 1);
       setSourceText(markdown);
       setDirty(false);
       setSaved(true);
@@ -393,6 +411,9 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
               onPreviewAccountChange={setPreviewAccountId}
               disabled={busy}
               onTryChat={() => onNavigate('sandbox')}
+              personaId={selected.id}
+              versionRefreshKey={versionRefreshKey}
+              onRestoreVersion={loadVersionIntoEditor}
             />
           </div>
         </>

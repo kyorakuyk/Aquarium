@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiRequest, type DecisionView, type MoodBand, type MoodEventView, type MoodView, type PanelStatus, type SessionView, type SleepView, type UsageView } from '../api.ts';
 import type { PageId } from '../components/Sidebar.tsx';
 import { decisionLabel, decisionTone } from '../labels.ts';
+import { MoodNowCard } from './MoodNowCard.tsx';
 
 const MOOD_BAND_LABELS: Record<MoodBand, string> = {
   low: '低落',
@@ -180,6 +181,8 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
           <p className="stat-foot">运行 {Math.floor(status.runtime.uptimeSeconds / 60)} 分钟</p>
         </article>
       </section>
+
+      <MoodNowCard />
 
       <div className="overview-state-grid section-block">
       <section className="panel-card mood-card">

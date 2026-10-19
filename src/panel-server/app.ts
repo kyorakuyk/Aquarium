@@ -30,6 +30,7 @@ import type { CliRuntime } from '../llm/cli.ts';
 import type { ContactSnapshot, PanelAccountRuntime } from './types.ts';
 import { budgetState } from '../llm/budget.ts';
 import type { SleepWakeState } from '../core/sleep.ts';
+import type { HistoryImportService } from '../core/impressions/history-import.ts';
 
 export interface PanelServerOptions {
   password: string;
@@ -45,8 +46,10 @@ export interface PanelServerOptions {
   callModel?: PipelineModelCall;
   replayMessage?: (message: IncomingMessage) => Promise<PipelineResult | undefined>;
   sleepWakeState?: SleepWakeState;
+  historyImports?: HistoryImportService;
   envPath?: string;
   env?: NodeJS.ProcessEnv;
+  fetch?: typeof fetch;
   testProvider?: (provider: string, model: string, config: AquariumConfig) => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
   cliRuntime?: CliRuntime;
   onError?: (error: unknown) => void;
@@ -219,6 +222,8 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     getConfig: options.getConfig,
     repository: options.repository,
     accounts: options.accounts,
+    sleepWakeState: options.sleepWakeState,
+    historyImports: options.historyImports,
     now,
   });
   registerSleepRoutes(app, {
@@ -242,6 +247,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     serializeConfigWrite,
     envPath: options.envPath ?? path.join(root, '.env'),
     env: options.env ?? process.env,
+    ...(options.fetch ? { fetch: options.fetch } : {}),
     now,
     testProvider: options.testProvider,
     cliRuntime: options.cliRuntime,

@@ -101,5 +101,8 @@ test('persona trait endpoint vocabulary stays fixed', () => {
     { key: 'morality', title: '善意', low: '善良', high: '邪恶' },
     { key: 'talk', title: '话量', low: '文静', high: '话痨' },
     { key: 'mind', title: '思维', low: '理性', high: '感性' },
+    { key: 'humor', title: '脱线', low: '正经', high: '脱线' },
+    { key: 'openness', title: '好奇', low: '保守', high: '好奇' },
+    { key: 'imitation', title: '模仿', low: '自我', high: '模仿', locked: true },
   ]);
 });

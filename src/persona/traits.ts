@@ -1,7 +1,7 @@
 import type { PersonaTraits } from './load.ts';
 import type { TraitPromptLevel, TraitsPromptTemplate } from '../core/prompt-templates.ts';
 
-const traitDimensions = ['order', 'morality', 'talk', 'mind'] as const;
+const traitDimensions = ['order', 'morality', 'talk', 'mind', 'humor', 'openness', 'imitation'] as const;
 
 export function effectiveTalkLevel(personaTalk: number, talkOffset: number): number {
   return Math.max(-2, Math.min(2, personaTalk + talkOffset));

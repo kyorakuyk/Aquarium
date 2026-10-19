@@ -54,6 +54,25 @@ export interface PersonaTraits {
   morality: number;
   talk: number;
   mind: number;
+  humor: number;
+  openness: number;
+  imitation: number;
+}
+
+export interface PersonaVersionSummary {
+  id: number;
+  savedAt: number;
+  traits: PersonaTraits;
+  traitsDelta: PersonaTraits;
+  summary: string;
+}
+
+export interface PersonaVersionDocument {
+  id: number;
+  savedAt: number;
+  markdown: string;
+  traits: PersonaTraits;
+  note: string | null;
 }
 
 export interface DefaultsView extends SessionSettings {
@@ -102,6 +121,8 @@ export interface MoodEventView {
   reason: string;
   bandBefore: MoodBand | null;
   bandAfter: MoodBand | null;
+  valenceAfter: number | null;
+  arousalAfter: number | null;
 }
 
 export interface MoodView {
@@ -151,6 +172,23 @@ export interface ImpressionsView {
   sessionId: string;
   groupTags: TagView[];
   members: Array<{ userId: number; name: string; affinity: AffinityView; tags: TagView[] }>;
+}
+
+export type HistoryImportPhase = 'fetching' | 'extracting' | 'done' | 'cancelled' | 'error';
+
+export interface HistoryImportJobView {
+  id: string;
+  sessionId: string;
+  phase: HistoryImportPhase;
+  fetched: number;
+  inserted: number;
+  windowsDone: number;
+  windowsTotal: number;
+  tagsInserted: number;
+  tagsObserved: number;
+  costCny: number;
+  error?: string;
+  cancelRequested?: boolean;
 }
 
 export type AffinityLevel = 'cold' | 'cool' | 'neutral' | 'warm' | 'close';
@@ -287,6 +325,7 @@ export interface ModelProviderView {
   baseUrl?: string;
   reasoningField?: string;
   apiKeyEnv?: string;
+  modelParams?: Record<string, { temperature?: boolean; maxTokens?: boolean; reasoning?: boolean }>;
   command?: string;
   args?: string[];
   prewarm?: boolean;
@@ -305,6 +344,7 @@ export interface ModelSlotEntryView {
 export interface ModelsView {
   providers: ModelProviderView[];
   slots: Record<string, ModelSlotEntryView[]>;
+  pricing: Record<string, { input: number; cachedInput: number; output: number }>;
 }
 
 export interface DecisionStep {

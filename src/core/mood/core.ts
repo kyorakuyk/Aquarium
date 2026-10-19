@@ -17,8 +17,9 @@ export const SLIDING_FRICTION_WINDOW_MS = 5 * 60 * 1000;
 export const MIN_BAND_DWELL_MS = 10 * 60 * 1000;
 
 export const BAND_ORDER: readonly MoodBand[] = ['low', 'annoyed', 'calm', 'happy', 'excited'];
+export const MOOD_BAND_BOUNDS = [-0.5, -0.15, 0.15, 0.5] as const;
 const MOOD_HYSTERESIS_PARAMS: HysteresisParams = {
-  bounds: [-0.5, -0.15, 0.15, 0.5],
+  bounds: MOOD_BAND_BOUNDS,
   staticMargin: STATIC_FRICTION,
   slidingMargin: SLIDING_FRICTION,
   slidingWindowMs: SLIDING_FRICTION_WINDOW_MS,

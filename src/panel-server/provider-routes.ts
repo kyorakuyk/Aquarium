@@ -1,8 +1,10 @@
-import type { Hono } from 'hono';
+import type { Context, Hono } from 'hono';
 import { z } from 'zod';
 import {
   AquariumConfigSchema,
   ProviderConfigSchema,
+  ProviderModelParamsSchema,
+  ProviderModelParamsPatchSchema,
   ReasoningFieldSchema,
   SlotEntryConfigSchema,
   type AquariumConfig,
@@ -12,6 +14,7 @@ import type { UsageAttempt } from '../llm/slots.ts';
 import { clearProviderClients } from '../llm/client.ts';
 import { buildCliInput, getCliRuntime, type CliRuntime } from '../llm/cli.ts';
 import { maskSecret, readEnvKey, writeEnvKey } from './env-file.ts';
+import { registerProviderModelRoutes } from './provider-model-routes.ts';
 
 const providerNameSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
 const apiProviderBodySchema = z.object({
@@ -20,6 +23,7 @@ const apiProviderBodySchema = z.object({
   baseUrl: z.string().min(1).max(2048),
   apiKeyEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
   reasoningField: ReasoningFieldSchema.default('reasoning_effort'),
+  modelParams: ProviderModelParamsSchema.optional(),
 }).strict();
 const cliProviderBodySchema = z.object({
   kind: z.literal('cli'),
@@ -35,6 +39,7 @@ const providerPatchSchema = z.object({
   baseUrl: z.string().min(1).max(2048).optional(),
   apiKeyEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/).optional(),
   reasoningField: ReasoningFieldSchema.optional(),
+  modelParams: ProviderModelParamsPatchSchema.optional(),
   command: z.string().min(1).max(2048).optional(),
   args: z.array(z.string().max(2048)).max(64).optional(),
   prewarm: z.boolean().optional(),
@@ -50,6 +55,7 @@ export interface ProviderRouteOptions {
   serializeConfigWrite: <T>(task: () => Promise<T>) => Promise<T>;
   envPath: string;
   env?: NodeJS.ProcessEnv;
+  fetch?: typeof fetch;
   now?: () => number;
   testProvider?: (provider: string, model: string, config: AquariumConfig) => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
   cliRuntime?: CliRuntime;
@@ -87,6 +93,13 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
   const now = options.now ?? Date.now;
   const env = options.env ?? process.env;
   const cliRuntime = options.cliRuntime ?? getCliRuntime();
+  registerProviderModelRoutes(app, {
+    getConfig: options.getConfig,
+    envPath: options.envPath,
+    env,
+    now,
+    ...(options.fetch ? { fetch: options.fetch } : {}),
+  });
 
   const keyStatus = (provider: AquariumConfig['providers'][string]) => {
     const name = safeApiKeyEnv(provider);
@@ -109,12 +122,18 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
         kind: provider.kind,
         label: provider.label ?? id,
         ...(provider.kind === 'api'
-          ? { baseUrl: displayBaseUrl(provider.baseUrl), reasoningField: provider.reasoningField, apiKeyEnv: provider.apiKeyEnv }
+          ? {
+            baseUrl: displayBaseUrl(provider.baseUrl),
+            reasoningField: provider.reasoningField,
+            apiKeyEnv: provider.apiKeyEnv,
+            modelParams: provider.modelParams ?? {},
+          }
           : { command: provider.command, args: provider.args, prewarm: provider.prewarm, timeoutSec: provider.timeoutSec }),
         keyStatus: keyStatus(provider),
         ...(provider.kind === 'cli' ? { runtime: cliRuntime.status(id) } : {}),
       })),
       slots: config.slots,
+      pricing: config.pricing,
     });
   });
 
@@ -172,6 +191,7 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
           baseUrl: current.baseUrl,
           apiKeyEnv: current.apiKeyEnv,
           reasoningField: current.reasoningField,
+          ...(current.modelParams ? { modelParams: current.modelParams } : {}),
         }
         : {
           kind: 'cli' as const,
@@ -181,14 +201,28 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
           timeoutSec: current.timeoutSec,
         };
       const allowed = current.kind === 'api'
-        ? ['baseUrl', 'apiKeyEnv', 'reasoningField']
+        ? ['baseUrl', 'apiKeyEnv', 'reasoningField', 'modelParams']
         : ['command', 'args', 'prewarm', 'timeoutSec'];
       if (Object.keys(fields).some((key) => !allowed.includes(key))) {
         return context.json({ error: 'Invalid provider patch' }, 400);
       }
+      const mergedModelParams = current.kind === 'api' ? { ...(current.modelParams ?? {}) } : {};
+      if (current.kind === 'api' && patch.modelParams !== undefined) {
+        for (const [modelId, overrides] of Object.entries(patch.modelParams)) {
+          const mergedOverride = { ...(mergedModelParams[modelId] ?? {}) };
+          for (const parameter of ['temperature', 'maxTokens', 'reasoning'] as const) {
+            const value = overrides[parameter];
+            if (value === null) delete mergedOverride[parameter];
+            else if (value !== undefined) mergedOverride[parameter] = value;
+          }
+          if (Object.keys(mergedOverride).length === 0) delete mergedModelParams[modelId];
+          else mergedModelParams[modelId] = mergedOverride;
+        }
+      }
       const merged = {
         ...base,
         ...fields,
+        ...(current.kind === 'api' && patch.modelParams !== undefined ? { modelParams: mergedModelParams } : {}),
         ...(label !== undefined ? { label: label === null ? undefined : label } : current.label !== undefined ? { label: current.label } : {}),
       };
       const provider = ProviderConfigSchema.safeParse(merged);
@@ -244,10 +278,10 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
     });
   });
 
-  app.put('/api/slots/:slot', async (context) => {
-    const slot = context.req.param('slot');
-    const slotName = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/).safeParse(slot);
+  const updateSlot = async (context: Context) => {
+    const slotName = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/).safeParse(context.req.param('slot'));
     if (!slotName.success) return context.json({ error: 'Unknown slot' }, 404);
+    const slot = slotName.data;
     let rawBody: unknown;
     try { rawBody = await context.req.json(); } catch { return context.json({ error: 'Invalid JSON' }, 400); }
     const chain = parseJsonBody(rawBody, z.object({ chain: z.array(SlotEntryConfigSchema).min(1).max(8) }).strict());
@@ -265,7 +299,9 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
       await options.saveConfig(next.data);
       return context.json({ chain: next.data.slots[slot] });
     });
-  });
+  };
+  app.put('/api/slots/:slot', updateSlot);
+  app.patch('/api/slots/:slot', updateSlot);
 
   app.post('/api/providers/:id/test', async (context) => {
     const id = context.req.param('id');

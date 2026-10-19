@@ -2,8 +2,8 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { PersonaTraits } from './api.ts';
 
 const frontmatterPattern = /^---[ \t]*\r?\n([\s\S]*?)^---[ \t]*(?:\r?\n|$)/m;
-const zeroTraits: PersonaTraits = { order: 0, morality: 0, talk: 0, mind: 0 };
-const traitFields: Array<keyof PersonaTraits> = ['order', 'morality', 'talk', 'mind'];
+const zeroTraits: PersonaTraits = { order: 0, morality: 0, talk: 0, mind: 0, humor: 0, openness: 0, imitation: 0 };
+const traitFields: Array<keyof PersonaTraits> = ['order', 'morality', 'talk', 'mind', 'humor', 'openness', 'imitation'];
 
 export function parsePersonaTraits(markdown: string): PersonaTraits | null {
   const match = frontmatterPattern.exec(markdown);

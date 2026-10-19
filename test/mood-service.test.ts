@@ -3,6 +3,7 @@ import test from 'node:test';
 import { createAffinityService } from '../src/core/affinity/service.ts';
 import { createMoodService } from '../src/core/mood/service.ts';
 import { createMessagePipeline } from '../src/core/pipeline.ts';
+import { sessionId } from '../src/core/events.ts';
 import {
   FakeAdapter,
   groupSession,
@@ -67,6 +68,7 @@ test('回复后异步评估并换档，下一次提示词带情绪块', async ()
     const config = makeConfig();
     const harness = createMoodHarness(repository, config, personaRoot, { appraiseAdvanceMs: 5_000 });
     const account = groupSession.account;
+    const fakeCredential = 'K9m4R2p8T1v6';
     repository.saveMoodState({
       account,
       valence: -0.1,
@@ -101,23 +103,56 @@ test('回复后异步评估并换档，下一次提示词带情绪块', async ()
     assert.equal(events[1]?.appliedDv, -0.15);
     assert.equal(events[1]?.time, harness.clock.value);
     assert.equal(events[2]?.reason, 'called');
+    assert.equal(events[0]?.valenceAfter, state?.valence);
+    assert.equal(events[0]?.arousalAfter, state?.arousal);
+    assert.equal(events[1]?.valenceAfter, state?.valence);
+    assert.equal(events[1]?.arousalAfter, state?.arousal);
+    assert.equal(events[2]?.valenceAfter, -0.1);
+    assert.equal(events[2]?.arousalAfter, 0.8);
     assert.ok(harness.appraiseRequests[0]?.includes('普通回复。'));
 
     harness.clock.value += 100_000;
-    const second = await harness.pipeline(makeIncoming({
+    config.debug.sessions[sessionId(groupSession)] = true;
+    repository.saveAffinityState({
+      account,
+      userId: 42,
+      value: 70,
+      level: 'warm',
+      levelSince: harness.clock.value - 3_600_000,
+      lastLevelChangeAt: harness.clock.value - 3_600_000,
+      lastInteractionAt: harness.clock.value,
+      updatedAt: harness.clock.value,
+    });
+    const secondMessage = makeIncoming({
       messageId: 'mood-2',
       time: harness.clock.value - 1_000,
-    }));
+    });
+    secondMessage.senderName = `小明 token=${fakeCredential}`;
+    const second = await harness.pipeline(secondMessage);
     assert.deepEqual(second, { replied: true, reason: 'replied' });
     await harness.moodService.idle();
 
     const secondPrompt = harness.replyPrompts[1] ?? '';
     assert.ok(secondPrompt.includes('你现在有点不爽'));
     assert.ok(secondPrompt.includes('很来劲'));
-    const detail = repository.recentDecisions(1)[0]?.detail as { promptBlocks?: Array<{ id: string }> };
+    assert.ok(secondPrompt.includes(`token=${fakeCredential}`));
+    const detail = repository.recentDecisions(1)[0]?.detail as {
+      promptBlocks?: Array<{ id: string }>;
+      injectedAffectBlocks?: { mood?: string; float?: string; affinity?: string };
+    };
     assert.deepEqual(detail.promptBlocks?.map((block) => block.id), [
-      'persona', 'rules', 'groupNote', 'mood', 'float',
+      'persona', 'rules', 'groupNote', 'mood', 'affinity', 'float',
     ]);
+    assert.ok(detail.injectedAffectBlocks?.mood?.includes('你现在有点不爽'));
+    assert.ok(detail.injectedAffectBlocks?.float?.includes('很来劲'));
+    assert.ok(detail.injectedAffectBlocks?.affinity?.includes('小明'));
+    assert.equal(JSON.stringify(detail.injectedAffectBlocks).includes(fakeCredential), false);
+    assert.ok(detail.injectedAffectBlocks?.affinity?.includes('[敏感内容已隐藏]'));
+    const trace = repository.pipelineTraceFor(sessionId(groupSession), 'mood-2');
+    const contextTrace = trace?.trace.find((entry) => {
+      return typeof entry === 'object' && entry !== null && 'step' in entry && entry.step === 'context';
+    }) as { detail?: { injectedAffectBlocks?: unknown } } | undefined;
+    assert.deepEqual(contextTrace?.detail?.injectedAffectBlocks, detail.injectedAffectBlocks);
   });
 });
 

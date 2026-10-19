@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { createPanelQueries } from './panel-queries.ts';
+import { createPersonaVersionRepository, type PersonaVersionRepository } from './persona-version-repo.ts';
 import {
   createAffectQueries,
   type AffinityEventRecord,
@@ -120,9 +121,10 @@ export interface StoredPipelineTrace extends PipelineTraceRecord {
   id: number;
 }
 
-export interface StoreRepository {
+export interface StoreRepository extends PersonaVersionRepository {
   saveMessage(message: MessageStorageRecord): boolean;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
+  messagesInRange(sessionId: string, fromTime: number, toTime: number): MessageStorageRecord[];
   lastMessageTime(sessionId: string): number | null;
   lastMessageBefore(sessionId: string, beforeTime: number): MessageStorageRecord | undefined;
   messageBySessionAndId(sessionId: string, messageId: string): MessageStorageRecord | undefined;
@@ -141,6 +143,7 @@ export interface StoreRepository {
   setCaption(key: string, caption: string, time?: number): void;
   recordDecision(decision: DecisionRecord): void;
   recentDecisions(count: number): StoredDecision[];
+  latestReplyDecision(): StoredDecision | undefined;
   decisionMessageText(sessionId: string, messageId: string): string | undefined;
   decisionById(id: number): StoredDecision | undefined;
   hasDebugTrace(sessionId: string, messageId: string): boolean;
@@ -156,6 +159,7 @@ export interface StoreRepository {
   recordMoodEvent(event: MoodEventRecord): void;
   recentMoodEvents(account: number, count: number): StoredMoodEvent[];
   moodEventsSince(account: number, since: number): StoredMoodEvent[];
+  latestMoodEventAtOrBefore(account: number, time: number): StoredMoodEvent | undefined;
   getAffinityState(account: number, userId: number): AffinityStateRecord | undefined;
   listAffinityStates(account: number): AffinityStateRecord[];
   saveAffinityState(state: AffinityStateRecord): void;
@@ -207,6 +211,12 @@ export function createRepository(
     WHERE session_id = ?
     ORDER BY time DESC, id DESC
     LIMIT ?
+  `);
+  const selectMessagesInRange = database.prepare(`
+    SELECT session_id, message_id, sender_id, sender_name, is_self, plain_text, segments_json, time
+    FROM messages
+    WHERE session_id = ? AND time >= ? AND time <= ?
+    ORDER BY time, id
   `);
   const selectLastMessageTime = database.prepare(
     'SELECT MAX(time) AS latest_time FROM messages WHERE session_id = ?',
@@ -301,6 +311,7 @@ export function createRepository(
   return {
     ...createPanelQueries(database, clock),
     ...createAffectQueries(database),
+    ...createPersonaVersionRepository(database, clock),
     saveMessage(message) {
       const result = insertMessage.run(
         message.sessionId,
@@ -320,6 +331,23 @@ export function createRepository(
       if (limit === 0) return [];
       const rows = selectRecentMessages.all(sessionId, limit) as Array<Record<string, unknown>>;
       return rows.reverse().map((row) => ({
+        sessionId: stringValue(row.session_id, 'session_id'),
+        messageId: stringValue(row.message_id, 'message_id'),
+        senderId: numberValue(row.sender_id, 'sender_id'),
+        senderName: stringValue(row.sender_name, 'sender_name'),
+        isSelf: numberValue(row.is_self, 'is_self') === 1,
+        plainText: stringValue(row.plain_text, 'plain_text'),
+        segments: JSON.parse(stringValue(row.segments_json, 'segments_json')) as unknown[],
+        time: numberValue(row.time, 'time'),
+      }));
+    },
+
+    messagesInRange(sessionId, fromTime, toTime) {
+      if (!Number.isFinite(fromTime) || !Number.isFinite(toTime) || toTime < fromTime) {
+        throw new RangeError('消息时间范围无效');
+      }
+      const rows = selectMessagesInRange.all(sessionId, fromTime, toTime) as Array<Record<string, unknown>>;
+      return rows.map((row) => ({
         sessionId: stringValue(row.session_id, 'session_id'),
         messageId: stringValue(row.message_id, 'message_id'),
         senderId: numberValue(row.sender_id, 'sender_id'),

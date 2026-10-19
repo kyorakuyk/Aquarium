@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { StoreRepository, UsageRange, UsageRangeSummary } from './repository.ts';
 
 export type PanelRepositoryQueries = Pick<StoreRepository,
-  'latestSelfMessageForAccount' | 'selfMessagesById' | 'replyCountToday' | 'replyCountTodayForAccount' | 'replyCountLastHourForAccount' | 'usageToday' | 'usageByRange' | 'decisionMessageText' | 'decisionById' | 'hasDebugTrace' | 'hasPipelineTrace'
+  'latestSelfMessageForAccount' | 'selfMessagesById' | 'replyCountToday' | 'replyCountTodayForAccount' | 'replyCountLastHourForAccount' | 'usageToday' | 'usageByRange' | 'decisionMessageText' | 'decisionById' | 'latestReplyDecision' | 'hasDebugTrace' | 'hasPipelineTrace'
 >;
 
 function numberValue(value: unknown, field: string): number {
@@ -131,6 +131,14 @@ export function createPanelQueries(
     FROM decisions
     WHERE id = ?
   `);
+  const selectLatestReplyDecision = database.prepare(`
+    SELECT id, time, session_id, message_id, replied, reason, detail_json
+    FROM decisions
+    WHERE replied = 1
+    ORDER BY time DESC, id DESC
+    LIMIT 1
+  `);
+
   const selectDecisionMessageText = database.prepare(`
     SELECT plain_text
     FROM messages
@@ -270,6 +278,20 @@ export function createPanelQueries(
     decisionById(id) {
       if (!Number.isSafeInteger(id) || id <= 0) return undefined;
       const row = selectDecisionById.get(id) as Record<string, unknown> | undefined;
+      if (!row) return undefined;
+      return {
+        id: numberValue(row.id, 'id'),
+        time: numberValue(row.time, 'time'),
+        sessionId: stringValue(row.session_id, 'session_id'),
+        messageId: stringValue(row.message_id, 'message_id'),
+        replied: numberValue(row.replied, 'replied') === 1,
+        reason: stringValue(row.reason, 'reason'),
+        detail: JSON.parse(stringValue(row.detail_json, 'detail_json')) as unknown,
+      };
+    },
+
+    latestReplyDecision() {
+      const row = selectLatestReplyDecision.get() as Record<string, unknown> | undefined;
       if (!row) return undefined;
       return {
         id: numberValue(row.id, 'id'),

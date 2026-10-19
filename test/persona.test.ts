@@ -19,13 +19,13 @@ test('loadPersona 优先读取 data/personas 并替换 {{name}}', () => {
 
     assert.deepEqual(loadPersona('default', '小鱼', { root }), {
       text: '用户人设：小鱼',
-      traits: { order: 0, morality: 0, talk: 0, mind: 0 },
+      traits: { order: 0, morality: 0, talk: 0, mind: 0, humor: 0, openness: 0, imitation: 0 },
     });
     const exactSource = '\r\n  原样保留  \r\n';
     fs.writeFileSync(path.join(root, 'data', 'personas', 'plain.md'), exactSource, 'utf8');
     const plain = loadPersona('plain', '小鱼', { root });
     assert.deepEqual(Buffer.from(plain.text), Buffer.from(exactSource));
-    assert.deepEqual(plain.traits, { order: 0, morality: 0, talk: 0, mind: 0 });
+    assert.deepEqual(plain.traits, { order: 0, morality: 0, talk: 0, mind: 0, humor: 0, openness: 0, imitation: 0 });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -62,7 +62,7 @@ test('loadPersona 解析并剥离性格文件头，缺省维度为零且保留�
     ].join('\n'), 'utf8');
 
     const loaded = loadPersona('default', '小鱼', { root });
-    assert.deepEqual(loaded.traits, { order: -2, morality: 1, talk: 2, mind: 0 });
+    assert.deepEqual(loaded.traits, { order: -2, morality: 1, talk: 2, mind: 0, humor: 0, openness: 0, imitation: 0 });
     assert.equal(loaded.text, '\n第一行  小鱼  \n');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

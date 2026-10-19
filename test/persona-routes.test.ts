@@ -24,10 +24,10 @@ test('persona API accepts traits, preserves Markdown body, and reads back the sa
     assert.equal(get.status, 200);
     const saved = await get.json() as {
       markdown: string;
-      traits: { order: number; morality: number; talk: number; mind: number };
+      traits: { order: number; morality: number; talk: number; mind: number; humor: number; openness: number; imitation: number };
     };
-    assert.equal(saved.markdown, `---\ntraits:\n  order: -2\n  morality: 1\n  talk: 0\n  mind: 2\n---\n${bodyText}`);
-    assert.deepEqual(saved.traits, { order: -2, morality: 1, talk: 0, mind: 2 });
+    assert.equal(saved.markdown, `---\ntraits:\n  order: -2\n  morality: 1\n  talk: 0\n  mind: 2\n  humor: 0\n  openness: 0\n  imitation: 0\n---\n${bodyText}`);
+    assert.deepEqual(saved.traits, { order: -2, morality: 1, talk: 0, mind: 2, humor: 0, openness: 0, imitation: 0 });
 
     const malformed = await app.request('/api/personas/custom-traits', {
       method: 'PUT',
@@ -67,7 +67,7 @@ test('persona API accepts traits, preserves Markdown body, and reads back the sa
     assert.equal(repaired.status, 200);
     const repairedReadBack = await app.request('/api/personas/broken-traits', { headers: authHeaders() });
     const repairedDocument = await repairedReadBack.json() as { markdown: string; traits: unknown };
-    assert.deepEqual(repairedDocument.traits, { order: 0, morality: 0, talk: 1, mind: 0 });
+    assert.deepEqual(repairedDocument.traits, { order: 0, morality: 0, talk: 1, mind: 0, humor: 0, openness: 0, imitation: 0 });
     assert.ok(repairedDocument.markdown.endsWith('可修复正文。'));
   });
 });
@@ -171,7 +171,7 @@ test('persona import uses the extract slot and returns a redacted unsaved draft'
       对主人: '',
       底线: [],
     },
-    traits: { order: 1, morality: 0, talk: -1, mind: 0 },
+    traits: { order: 1, morality: 0, talk: -1, mind: 0, humor: 1, openness: 0, imitation: 2 },
     other: [{ heading: '经历', text: '后来搬到海边。' }, { heading: '', text: '' }],
   };
 
@@ -183,7 +183,7 @@ test('persona import uses the extract slot and returns a redacted unsaved draft'
     });
     assert.equal(response.status, 200);
     const result = await response.json() as { draft: string; mappedCount: number; otherCount: number };
-    assert.equal(result.mappedCount, 5);
+    assert.equal(result.mappedCount, 7);
     assert.equal(result.otherCount, 1);
     assert.ok(!result.draft.includes(syntheticSecret), 'draft must not expose imported credential text');
     assert.ok(result.draft.includes('[敏感内容已隐藏]'));
@@ -219,7 +219,7 @@ test('persona import returns 422 with a reason for invalid JSON and schema value
       身份: '', 年龄: '', 背景: '', 说话方式: '', 口头禅: [], 常用表情: [],
       对熟人: '', 对陌生人: '', 对主人: '', 底线: [],
     },
-    traits: { order: 0, morality: 0, talk: 0, mind: 0 },
+    traits: { order: 0, morality: 0, talk: 0, mind: 0, humor: 0, openness: 0, imitation: 0 },
     other: [],
   };
   const invalidResponses = [
@@ -249,5 +249,91 @@ test('persona import returns 422 with a reason for invalid JSON and schema value
       model: 'fake-model',
       usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
     }),
+  });
+});
+
+test('persona versions seed on first read and retain only the newest 50 saves', async () => {
+  await withPanel(async ({ app }) => {
+    const initialResponse = await app.request('/api/personas/default/versions', { headers: authHeaders() });
+    assert.equal(initialResponse.status, 200);
+    const initialVersions = await initialResponse.json() as Array<{ id: number; summary: string; traits: Record<string, number> }>;
+    assert.equal(initialVersions.length, 1);
+    assert.equal(initialVersions[0]?.summary, '初始版本');
+    assert.deepEqual(initialVersions[0]?.traits, {
+      order: 0, morality: 0, talk: 0, mind: 0, humor: 0, openness: 0, imitation: 0,
+    });
+
+    const repeatRead = await app.request('/api/personas/default/versions', { headers: authHeaders() });
+    assert.equal((await repeatRead.json() as unknown[]).length, 1);
+    for (let index = 0; index < 50; index += 1) {
+      const saved = await app.request('/api/personas/default', {
+        method: 'PUT',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markdown: `# 版本 ${index}\n\n## 身份\n${index}` }),
+      });
+      assert.equal(saved.status, 200);
+    }
+
+    const latestResponse = await app.request('/api/personas/default/versions', { headers: authHeaders() });
+    const latest = await latestResponse.json() as Array<{ id: number; markdown?: string }>;
+    assert.equal(latest.length, 50);
+    assert.equal(latest.some((version) => version.id === initialVersions[0]?.id), false);
+    assert.equal(Object.hasOwn(latest[0] ?? {}, 'markdown'), false);
+  });
+});
+
+test('persona version list summarizes changes and restore loads without saving', async () => {
+  await withPanel(async ({ app }) => {
+    const original = '# 记录\n\n## 说话方式\n慢慢说。';
+    const originalSave = await app.request('/api/personas/default', {
+      method: 'PUT',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markdown: original }),
+    });
+    assert.equal(originalSave.status, 200);
+    const originalVersionsResponse = await app.request('/api/personas/default/versions', { headers: authHeaders() });
+    const originalVersions = await originalVersionsResponse.json() as Array<{ id: number }>;
+    const originalVersionId = originalVersions[0]?.id;
+    assert.equal(typeof originalVersionId, 'number');
+
+    const changed = [
+      '---',
+      'traits:',
+      '  order: -1',
+      '---',
+      '# 记录',
+      '',
+      '## 说话方式',
+      '用短句。',
+    ].join('\n');
+    const changedSave = await app.request('/api/personas/default', {
+      method: 'PUT',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markdown: changed }),
+    });
+    assert.equal(changedSave.status, 200);
+    const versionsResponse = await app.request('/api/personas/default/versions', { headers: authHeaders() });
+    const versions = await versionsResponse.json() as Array<{
+      id: number;
+      traitsDelta: { order: number };
+      summary: string;
+    }>;
+    assert.equal(versions.length, 2);
+    assert.equal(versions[0]?.traitsDelta.order, -1);
+    assert.match(versions[0]?.summary ?? '', /规矩 0→−1/u);
+    assert.match(versions[0]?.summary ?? '', /说话方式/u);
+
+    const details = await app.request(`/api/personas/default/versions/${originalVersionId}`, { headers: authHeaders() });
+    assert.equal((await details.json() as { markdown: string }).markdown, original);
+    const restored = await app.request(`/api/personas/default/versions/${originalVersionId}/restore`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    assert.equal(restored.status, 200);
+    assert.equal((await restored.json() as { markdown: string }).markdown, original);
+    const current = await app.request('/api/personas/default', { headers: authHeaders() });
+    assert.equal((await current.json() as { markdown: string }).markdown, changed);
+    const afterRestore = await app.request('/api/personas/default/versions', { headers: authHeaders() });
+    assert.equal((await afterRestore.json() as unknown[]).length, 2);
   });
 });

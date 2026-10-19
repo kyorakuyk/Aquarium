@@ -3,7 +3,7 @@ import { resolveSession } from '../../config/resolve.ts';
 import { budgetState } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
 import type { StoredTag } from '../../store/affect-repo.ts';
-import type { StoreRepository } from '../../store/repository.ts';
+import type { MessageStorageRecord, StoreRepository } from '../../store/repository.ts';
 import { sessionId, type SessionKey } from '../events.ts';
 import type { ExtractTagsPromptTemplate, ReplySystemTemplate } from '../prompt-templates.ts';
 import type { PipelineModelCall } from '../steps/types.ts';
@@ -39,6 +39,7 @@ export interface ExtractSummary {
   observed: number;
   superseded: number;
   dropped: number;
+  costCny: number;
 }
 
 export interface ImpressionsPromptBlocks {
@@ -58,6 +59,13 @@ export interface ImpressionsServiceOptions {
 
 export interface ImpressionsService {
   maybeExtract(input: { session: SessionKey; now: number; template: ExtractTagsPromptTemplate }): void;
+  tryAcquireSession(sessionId: string): (() => void) | undefined;
+  extractWindowUnderSessionLock(input: {
+    session: SessionKey;
+    records: MessageStorageRecord[];
+    now: number;
+    template: ExtractTagsPromptTemplate;
+  }): Promise<ExtractSummary>;
   promptBlocks(input: {
     session: SessionKey;
     sessionId: string;
@@ -97,6 +105,17 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     } catch {
       // 后台提取失败不能影响回复。
     }
+  }
+
+  function tryAcquireSession(sessionKey: string): (() => void) | undefined {
+    if (running.has(sessionKey)) return undefined;
+    running.add(sessionKey);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      running.delete(sessionKey);
+    };
   }
 
   function quoteOf(plainText: string): string {
@@ -310,16 +329,22 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     sessionKey: string,
     at: number,
     template: ExtractTagsPromptTemplate,
-  ): Promise<void> {
+    records: MessageStorageRecord[] = options.repository.recentMessages(sessionKey, EXTRACT_WINDOW_MESSAGES),
+    updateTagRun = true,
+  ): Promise<ExtractSummary> {
     const account = session.account;
     const counters = { inserted: 0, observed: 0, superseded: 0, dropped: 0 };
+    let costCny = 0;
+    const finish = (status: ExtractSummary['status']): ExtractSummary => {
+      const summary = { account, sessionId: sessionKey, status, ...counters, costCny };
+      report(summary);
+      return summary;
+    };
 
     if (budgetState(config, options.repository.costToday()) === 'exceeded') {
-      report({ account, sessionId: sessionKey, status: 'budget', ...counters });
-      return;
+      return finish('budget');
     }
 
-    const records = options.repository.recentMessages(sessionKey, EXTRACT_WINDOW_MESSAGES);
     const recordsById = new Map(records.map((record) => [
       record.messageId,
       {
@@ -344,34 +369,34 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       records,
       { group: groupTags, members: memberTags },
       template,
-      (slot, messages) => callModel(slot, messages, {
-        config,
-        account,
-        costToday: () => options.repository.costToday(),
-        recordUsage: (usage) => options.repository.recordUsage({ ...usage, account }),
-        now,
-      }),
+      async (slot, messages) => {
+        const response = await callModel(slot, messages, {
+          config,
+          account,
+          costToday: () => options.repository.costToday(),
+          recordUsage: (usage) => options.repository.recordUsage({ ...usage, account }),
+          now,
+        });
+        costCny += response.usage.costCny;
+        return response;
+      },
     ).catch((error: unknown) => {
       reportError(error);
       return { ok: false, reason: 'extract_error' } as const;
     });
 
     const newestTime = records.reduce((max, record) => Math.max(max, record.time), 0);
-    options.repository.saveTagRun({
-      account,
-      sessionId: sessionKey,
-      lastRunAt: at,
-      lastMessageTime: newestTime > 0 ? newestTime : null,
-    });
-
-    if (!result.ok) {
-      report({
+    if (updateTagRun) {
+      options.repository.saveTagRun({
         account,
         sessionId: sessionKey,
-        status: result.reason === 'extract_parse_error' ? 'parse_error' : 'error',
-        ...counters,
+        lastRunAt: at,
+        lastMessageTime: newestTime > 0 ? newestTime : null,
       });
-      return;
+    }
+
+    if (!result.ok) {
+      return finish(result.reason === 'extract_parse_error' ? 'parse_error' : 'error');
     }
 
     const parsed: ParsedExtractResponse = result.parsed;
@@ -385,10 +410,19 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       applySubject(member, current, account, sessionKey, member.userId, recordsById, at, counters);
     }
 
-    report({ account, sessionId: sessionKey, status: 'done', ...counters });
+    return finish('done');
   }
 
   return {
+    tryAcquireSession,
+
+    extractWindowUnderSessionLock(input) {
+      if (input.session.kind !== 'group') throw new RangeError('印象提取只支持群聊');
+      const key = sessionId(input.session);
+      if (!running.has(key)) throw new Error('extractWindowUnderSessionLock requires the group lock');
+      return runExtraction(options.getConfig(), input.session, key, input.now, input.template, input.records, false);
+    },
+
     maybeExtract(input) {
       if (input.session.kind !== 'group') return;
       const sessionKey = sessionId(input.session);
@@ -409,10 +443,12 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         || (n >= EXTRACT_SLOW_TRIGGER.messages && sinceRun >= EXTRACT_SLOW_TRIGGER.sinceMs);
       if (!due) return;
 
-      running.add(sessionKey);
+      const release = tryAcquireSession(sessionKey);
+      if (!release) return;
       const task = runExtraction(config, input.session, sessionKey, input.now, input.template)
+        .then(() => undefined)
         .catch(reportError)
-        .finally(() => running.delete(sessionKey));
+        .finally(release);
       pending.add(task);
       void task.finally(() => pending.delete(task));
     },

@@ -26,18 +26,26 @@ import {
   type PersonaSectionsForm,
 } from '../persona/sections.ts';
 import type { StoreRepository } from '../store/repository.ts';
+import { personaPath, validPersonaId } from './persona-paths.ts';
+import { recordPersonaVersionOnSave, registerPersonaVersionRoutes } from './persona-version-routes.ts';
 
 const personaTraitsSchema: z.ZodType<PersonaTraits> = z.object({
   order: z.number().int().min(-2).max(2).default(0),
   morality: z.number().int().min(-2).max(2).default(0),
   talk: z.number().int().min(-2).max(2).default(0),
   mind: z.number().int().min(-2).max(2).default(0),
+  humor: z.number().int().min(-2).max(2).default(0),
+  openness: z.number().int().min(-2).max(2).default(0),
+  imitation: z.number().int().min(-2).max(2).default(0),
 }).strict();
 const personaImportTraitsSchema = z.object({
   order: z.number().int().min(-2).max(2),
   morality: z.number().int().min(-2).max(2),
   talk: z.number().int().min(-2).max(2),
   mind: z.number().int().min(-2).max(2),
+  humor: z.number().int().min(-2).max(2),
+  openness: z.number().int().min(-2).max(2),
+  imitation: z.number().int().min(-2).max(2),
 }).strict();
 const personaBodySchema = z.object({
   markdown: z.string().max(100_000),
@@ -76,14 +84,6 @@ interface PersonaRouteOptions {
   getConfig: () => AquariumConfig;
   repository: StoreRepository;
   callModel?: PipelineModelCall;
-}
-
-function validPersonaId(value: string): boolean {
-  return /^[a-z0-9_-]+$/u.test(value);
-}
-
-function personaPath(root: string, folder: 'personas' | 'data/personas', id: string): string {
-  return path.join(root, folder, `${id}.md`);
 }
 
 function listPersonaIds(directory: string): string[] {
@@ -177,6 +177,8 @@ export function registerPersonaRoutes(app: Hono, root: string, options: PersonaR
     return context.json({ id, markdown, traits });
   });
 
+  registerPersonaVersionRoutes(app, root, options.repository);
+
   app.put('/api/personas/:id', async (context) => {
     const id = context.req.param('id');
     if (!validPersonaId(id)) return context.json({ error: 'Invalid persona ID' }, 400);
@@ -190,6 +192,7 @@ export function registerPersonaRoutes(app: Hono, root: string, options: PersonaR
       catch { return context.json({ error: 'Invalid persona YAML front matter' }, 400); }
     }
     writeTextAtomic(personaPath(root, 'data/personas', id), markdown);
+    recordPersonaVersionOnSave(options.repository, id, markdown);
     return context.json({ id, saved: true });
   });
 
