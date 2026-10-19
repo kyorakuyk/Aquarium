@@ -255,10 +255,8 @@ export function createPrivacyGateService(options: PrivacyGateServiceOptions): Pr
       const touchedPromptFacts = touched.filter((fact) => fact.level !== 'L0'
         && allowedForPurpose(fact, input.session, 'prompt'));
       const touchedIds = new Set(touched.map((fact) => fact.id));
-      const ownerL2 = input.senderId === config.owner
-        ? allFacts.filter((fact) => fact.level === 'L2' && !touchedIds.has(fact.id)
-          && fact.ownerId === config.owner && allowedForPurpose(fact, input.session, 'prompt')).slice(0, 3)
-        : [];
+      const ownerL2 = allFacts.filter((fact) => fact.level === 'L2' && !touchedIds.has(fact.id)
+        && fact.ownerId === input.senderId && allowedForPurpose(fact, input.session, 'prompt')).slice(0, 3);
       const knownFacts = [...touchedPromptFacts, ...ownerL2];
       const uniqueKnownFacts = [...new Map(knownFacts.map((fact) => [fact.id, fact])).values()];
       detail.injected = uniqueKnownFacts.map(safeFact);

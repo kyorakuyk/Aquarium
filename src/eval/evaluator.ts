@@ -80,6 +80,7 @@ function createUnusedTemplates(): PromptTemplateSet {
     extractTags: { source: '', version: '', system: '', user: '{{context}}{{existing}}' },
     extractPrivate: { source: '', version: '', system: '', user: '{{context}}{{existing}}' },
     privacyGate: { source: '', version: '', system: '', user: '{{context}}{{facts}}' },
+    privacyMention: { source: '', version: '', system: '', user: '{{message}}{{facts}}' },
     personaImport: { source: '', version: '', system: '', user: '{{text}}' },
   };
 }

@@ -49,6 +49,26 @@ export interface PrivacyRunRecord {
   lastMessageTime: number | null;
 }
 
+export interface PrivateFactMentionInput {
+  account: number;
+  ownerId: number;
+  id: number;
+  evidence: PrivateFactMentionEvidence;
+  dayStart: number;
+  nextDayStart: number;
+  updatedAt: number;
+  promoteMentions: number;
+}
+
+export interface PrivateFactMentionResult {
+  recorded: boolean;
+  fact?: PrivateFactRecord;
+}
+
+export interface PrivateFactMentionRepository {
+  recordPrivateFactMention(input: PrivateFactMentionInput): PrivateFactMentionResult;
+}
+
 export interface PrivacyRepository {
   listPrivateFactsForOwner(account: number, ownerId: number, status?: PrivateFactStatus): PrivateFactRecord[];
   listPrivateFactsForGroup(account: number, groupSessionId: string): PrivateFactRecord[];
@@ -146,7 +166,7 @@ function isMentionEvidence(value: unknown): value is PrivateFactMentionEvidence 
     && typeof value.time === 'number' && Number.isFinite(value.time);
 }
 
-function privateFactFromRow(row: Record<string, unknown>): PrivateFactRecord {
+export function privateFactFromRow(row: Record<string, unknown>): PrivateFactRecord {
   const level = stringValue(row.level, 'level');
   const levelSource = stringValue(row.level_source, 'level_source');
   const status = stringValue(row.status, 'status');

@@ -7,6 +7,13 @@ export const persistStep: PipelineStep = async (ctx) => traceStep(ctx, 'persist'
     || ctx.options.repository.saveMessage(messageRecord(ctx.message, ctx.currentSessionId));
   if (!inserted) return { next: false, reason: 'duplicate' };
   if (!ctx.processOptions.replay && ctx.message.session.kind === 'group') {
+    ctx.options.privateMentionService?.maybePromote({
+      session: ctx.message.session,
+      senderId: ctx.message.senderId,
+      messageId: ctx.message.messageId,
+      now: ctx.now(),
+      template: ctx.state.promptTemplates.privacyMention,
+    });
     ctx.options.impressionsService?.maybeExtract({
       session: ctx.message.session,
       now: ctx.now(),

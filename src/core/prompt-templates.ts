@@ -4,9 +4,11 @@ import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { parseReplySystemTemplate, type ReplySystemTemplate } from './prompt-templates/reply-system.ts';
 import { parsePrivacyGateTemplate, type PrivacyGatePromptTemplate } from './prompt-templates/privacy-gate.ts';
+import { parsePrivacyMentionTemplate, type PrivacyMentionPromptTemplate } from './prompt-templates/privacy-mention.ts';
 
 export type { ReplySystemTemplate } from './prompt-templates/reply-system.ts';
 export type { PrivacyGatePromptTemplate } from './prompt-templates/privacy-gate.ts';
+export type { PrivacyMentionPromptTemplate } from './prompt-templates/privacy-mention.ts';
 
 export interface PromptTemplate {
   source: string;
@@ -97,6 +99,7 @@ export interface PromptTemplateSet {
   extractTags: ExtractTagsPromptTemplate;
   extractPrivate: ExtractPrivatePromptTemplate;
   privacyGate: PrivacyGatePromptTemplate;
+  privacyMention: PrivacyMentionPromptTemplate;
   personaImport: PersonaImportPromptTemplate;
 }
 
@@ -332,6 +335,12 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
     parseTemplateFields(privacyGateSource, 'privacy-gate.md'),
     validatePlaceholders,
   );
+  const privacyMentionSource = readTemplate(root, 'privacy-mention.md');
+  const privacyMention = parsePrivacyMentionTemplate(
+    privacyMentionSource,
+    parseTemplateFields(privacyMentionSource, 'privacy-mention.md'),
+    validatePlaceholders,
+  );
   const personaImport = parsePersonaImportTemplate(readTemplate(root, 'persona-import.md'));
   return Object.freeze({
     replySystem: Object.freeze(replySystem),
@@ -345,6 +354,7 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
     extractTags: Object.freeze(extractTags),
     extractPrivate: Object.freeze(extractPrivate),
     privacyGate: Object.freeze(privacyGate),
+    privacyMention: Object.freeze(privacyMention),
     personaImport: Object.freeze(personaImport),
   });
 }

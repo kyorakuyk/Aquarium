@@ -16,6 +16,7 @@ import type { AffinityService } from '../affinity/service.ts';
 import type { ImpressionsService } from '../impressions/service.ts';
 import type { PrivateFactsService } from '../privacy/service.ts';
 import type { PrivacyGateDecision, PrivacyGateDetail, PrivacyGateService } from '../privacy/group-gate.ts';
+import type { PrivateMentionService } from '../privacy/mentions.ts';
 import type { PersonaTraits } from '../../persona/load.ts';
 import type { SleepWakeState } from '../sleep.ts';
 import type { StickerService } from '../stickers/service.ts';
@@ -72,6 +73,7 @@ export interface MessagePipelineOptions {
   affinityService?: AffinityService;
   impressionsService?: ImpressionsService;
   privateFactsService?: PrivateFactsService;
+  privateMentionService?: PrivateMentionService;
   privacyGateService?: PrivacyGateService;
   stickerService?: StickerService;
   sleepWakeState?: SleepWakeState;

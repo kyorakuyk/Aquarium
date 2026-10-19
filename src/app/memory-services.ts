@@ -3,6 +3,7 @@ import { createHistoryImportService } from '../core/impressions/history-import.t
 import { createImpressionsService } from '../core/impressions/service.ts';
 import { createPrivateFactsService } from '../core/privacy/service.ts';
 import { createPrivacyGateService } from '../core/privacy/group-gate.ts';
+import { createPrivacyMentionService } from '../core/privacy/mentions.ts';
 import { promptTemplateStore } from '../core/prompt-templates.ts';
 import type { StoreRepository } from '../store/repository.ts';
 
@@ -50,11 +51,21 @@ export function createMemoryServices(options: {
       options.logger.warn(`群聊隐私出口拦截：账号 ${account} 会话 ${sessionId} 条目 ${factId}`);
     },
   });
+  const privateMentionService = createPrivacyMentionService({
+    repository: options.repository,
+    getConfig: options.getConfig,
+    onError: ({ account, sessionId }) => {
+      options.logger.error(`群聊私聊事实提及判断失败：账号 ${account} 会话 ${sessionId}`);
+    },
+    onMention: ({ account, sessionId, factId, mentions, level }) => {
+      options.logger.info(`私聊事实提及：账号 ${account} 会话 ${sessionId} 条目 ${factId} 次数 ${mentions} 等级 ${level}`);
+    },
+  });
   const historyImports = createHistoryImportService({
     repository: options.repository,
     getConfig: options.getConfig,
     impressionsService,
     getTemplate: () => promptTemplateStore.get().extractTags,
   });
-  return { impressionsService, privateFactsService, privacyGateService, historyImports };
+  return { impressionsService, privateFactsService, privateMentionService, privacyGateService, historyImports };
 }

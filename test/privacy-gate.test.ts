@@ -138,7 +138,7 @@ test('L0 topic hit blocks proactive replies, starts cooldown, and called replies
 
 test('L1 and L2 touches plus up to three owner L2 facts form the knownFacts block', async () => {
   await withRepository(async (repository) => {
-    const config = AquariumConfigSchema.parse({ ...makeConfig(), owner: 42 });
+    const config = AquariumConfigSchema.parse({ ...makeConfig(), owner: 99 });
     const l1 = repository.insertPrivateFact(fact({
       ownerId: 42,
       text: '最近在准备考试',

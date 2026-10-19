@@ -96,7 +96,7 @@ const moodService = createMoodService({
     logger.error(`情绪后台任务失败：${describeError(error)}`);
   },
 });
-const { impressionsService, privateFactsService, privacyGateService, historyImports } = createMemoryServices({
+const { impressionsService, privateFactsService, privateMentionService, privacyGateService, historyImports } = createMemoryServices({
   repository,
   getConfig: () => configWatcher.getConfig(),
   logger,
@@ -148,6 +148,7 @@ async function shutdown(signal: string): Promise<void> {
   }
   await sessionQueue.idle();
   await privateFactsService.idle();
+  await privateMentionService.idle();
   await cliRuntime.stopAll();
   database.close();
   logger.info('Aquarium 已关闭。');
@@ -289,6 +290,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     affinityService,
     impressionsService,
     privateFactsService,
+    privateMentionService,
     privacyGateService,
     stickerService,
     sleepWakeState,

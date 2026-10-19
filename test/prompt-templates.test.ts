@@ -24,6 +24,7 @@ function copyPromptTemplates(): string {
   fs.copyFileSync(path.resolve('prompts/extract-tags.md'), path.join(root, 'extract-tags.md'));
   fs.copyFileSync(path.resolve('prompts/extract-private.md'), path.join(root, 'extract-private.md'));
   fs.copyFileSync(path.resolve('prompts/privacy-gate.md'), path.join(root, 'privacy-gate.md'));
+  fs.copyFileSync(path.resolve('prompts/privacy-mention.md'), path.join(root, 'privacy-mention.md'));
   fs.copyFileSync(path.resolve('prompts/persona-import.md'), path.join(root, 'persona-import.md'));
   return root;
 }
@@ -104,6 +105,16 @@ test('privacy-gate 模板按 context 和 facts 占位符加载', () => {
   assert.ok(template);
   assert.ok(template.system.includes('touches'));
   assert.ok(template.user.includes('{{context}}'));
+  assert.ok(template.user.includes('{{facts}}'));
+});
+
+test('privacy-mention 模板按 message 和 facts 占位符加载', () => {
+  const template = (promptTemplateStore.get() as unknown as {
+    privacyMention?: { system: string; user: string };
+  }).privacyMention;
+  assert.ok(template);
+  assert.ok(template.system.includes('mentions'));
+  assert.ok(template.user.includes('{{message}}'));
   assert.ok(template.user.includes('{{facts}}'));
 });
 
