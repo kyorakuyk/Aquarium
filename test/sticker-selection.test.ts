@@ -23,6 +23,7 @@ function sticker(id: number, descAi: string, tags: string[] = []): StickerRecord
     file: `${String(id).padStart(32, '0')}.png`,
     descQq: '',
     descAi,
+    manualDesc: '',
     tags,
     enabled: true,
     missing: false,

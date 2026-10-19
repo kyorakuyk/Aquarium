@@ -74,11 +74,26 @@ test('vision JSON 逐字转写截图文字并按 kind 渲染', async () => {
       kind: 'screenshot',
       desc: '聊天窗口',
       text: '你好，世界',
+      legible: true,
     }));
 
     assert.equal(
       messageTextWithImageCaptions(stored, repository, 'vision-v1'),
       '看图[截图：聊天窗口｜文字：“你好，世界”]',
+    );
+  });
+});
+
+test('vision 解析失败时原样保留响应文本作为描述以兼容旧输出', async () => {
+  await withRepository(async (repository) => {
+    const { incoming, stored } = imageRecords('https://example.invalid/legacy.png');
+    const rawResponse = '  原始文本\n第二行  ';
+
+    await caption(incoming, repository, 'vision-v1', () => rawResponse);
+
+    assert.equal(
+      messageTextWithImageCaptions(stored, repository, 'vision-v1'),
+      `看图[图片：${rawResponse}]`,
     );
   });
 });
@@ -92,6 +107,7 @@ test('QQ sub_type=1 强制渲染为表情包，空文字省略后半部分', asy
       kind: 'photo',
       desc: '笑脸表情',
       text: '',
+      legible: true,
     }));
 
     assert.equal(messageTextWithImageCaptions(stored, repository, 'vision-v1'), '看图[表情包：笑脸表情]');
@@ -106,6 +122,7 @@ test('vision 缓存按模板版本隔离', async () => {
       kind: 'photo',
       desc: `描述版本${++calls}`,
       text: '',
+      legible: true,
     });
 
     await caption(incoming, repository, 'vision-v1', response);

@@ -87,6 +87,18 @@ test('收到的 image 保留 sub_type=1 QQ 表情元数据', () => {
   }]);
 });
 
+test('商城表情保留 emoji_id 与 summary', () => {
+  const result = convertIncomingMessage(groupEvent([
+    { type: 'mface', data: { emoji_id: 'market-emoji', summary: '[动画表情]' } },
+  ]), account);
+
+  assert.deepEqual(result.segments, [{
+    type: 'sticker',
+    emojiId: 'market-emoji',
+    summary: '[动画表情]',
+  }]);
+});
+
 test('私聊生成 private SessionKey，群名片优先于昵称', () => {
   const group = convertIncomingMessage(groupEvent([], {
     sender: { user_id: 42, nickname: '昵称', card: '群名片' },

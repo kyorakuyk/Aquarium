@@ -166,7 +166,9 @@ export function createManagementCommands(options: {
       }
       const sent = await sendDirect(
         message,
-        result.ok ? '收好了' : `没收藏上：${result.reason || '收藏操作失败'}`,
+        result.ok ? '收好了' : result.reason === 'already_collected'
+          ? '这个已经收藏过啦'
+          : `没收藏上：${result.reason || '收藏操作失败'}`,
       );
       recordDecision(message, result.ok && sent ? 'command_sticker_collect' : 'command_sticker_collect_error', {
         command: 'sticker_collect',

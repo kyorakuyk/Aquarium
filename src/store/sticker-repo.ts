@@ -8,6 +8,7 @@ export interface StickerRecord {
   file: string | null;
   descQq: string;
   descAi: string;
+  manualDesc: string;
   tags: string[];
   enabled: boolean;
   missing: boolean;
@@ -34,6 +35,7 @@ export interface StickerUpdate {
 export interface StickerRepository {
   listStickers(account?: number): StickerRecord[];
   stickerById(id: number): StickerRecord | undefined;
+  stickerByMd5(account: number, md5: string): StickerRecord | undefined;
   upsertSticker(detail: StickerDetailRecord, now: number): { sticker: StickerRecord; inserted: boolean };
   markMissingStickers(account: number, seenMd5s: string[], now: number): number;
   setStickerFile(id: number, file: string | null, now: number): void;
@@ -93,6 +95,7 @@ function stickerFromRow(row: Record<string, unknown>): StickerRecord {
     file: row.file === null ? null : stringValue(row.file, 'file'),
     descQq: stringValue(row.desc_qq, 'desc_qq'),
     descAi: stringValue(row.desc_ai, 'desc_ai'),
+    manualDesc: stringValue(row.manual_desc, 'manual_desc'),
     tags: parsedTags as string[],
     enabled: numberValue(row.enabled, 'enabled') === 1,
     missing: numberValue(row.missing, 'missing') === 1,
@@ -105,7 +108,7 @@ function stickerFromRow(row: Record<string, unknown>): StickerRecord {
 }
 
 const SELECT_COLUMNS = `
-  id, account, emoji_id, md5, file, desc_qq, desc_ai, tags_json,
+  id, account, emoji_id, md5, file, desc_qq, desc_ai, manual_desc, tags_json,
   enabled, missing, use_count, last_used_at, description_attempts, created_at, updated_at
 `;
 
@@ -137,7 +140,7 @@ export function createStickerQueries(database: DatabaseSync): StickerRepository 
       description_attempts = MIN(3, description_attempts + 1), updated_at = ? WHERE id = ?
   `);
   const updateStickerFields = database.prepare(`
-    UPDATE stickers SET enabled = ?, tags_json = ?, desc_ai = ?, desc_qq = ?, updated_at = ? WHERE id = ?
+    UPDATE stickers SET enabled = ?, tags_json = ?, desc_ai = ?, desc_qq = ?, manual_desc = ?, updated_at = ? WHERE id = ?
   `);
   const updateStickerUse = database.prepare(`
     UPDATE stickers SET use_count = use_count + 1, last_used_at = ?, updated_at = ? WHERE id = ?
@@ -155,6 +158,12 @@ export function createStickerQueries(database: DatabaseSync): StickerRepository 
     stickerById(id) {
       positiveId(id, 'sticker id');
       const row = selectById.get(id) as Record<string, unknown> | undefined;
+      return row ? stickerFromRow(row) : undefined;
+    },
+
+    stickerByMd5(account, md5) {
+      positiveId(account, 'account');
+      const row = selectByAccountMd5.get(account, normalizeMd5(md5)) as Record<string, unknown> | undefined;
       return row ? stickerFromRow(row) : undefined;
     },
 
@@ -225,8 +234,9 @@ export function createStickerQueries(database: DatabaseSync): StickerRepository 
       const tags = update.tags ?? current.tags;
       const descAi = update.descAi ?? current.descAi;
       const descQq = update.descAi ?? current.descQq;
+      const manualDesc = update.descAi === undefined ? current.manualDesc : update.descAi;
       validateDescription(descAi, tags);
-      updateStickerFields.run(enabled ? 1 : 0, JSON.stringify(tags), descAi, descQq, now, id);
+      updateStickerFields.run(enabled ? 1 : 0, JSON.stringify(tags), descAi, descQq, manualDesc, now, id);
       const saved = selectById.get(id) as Record<string, unknown>;
       return stickerFromRow(saved);
     },

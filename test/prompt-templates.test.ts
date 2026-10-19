@@ -35,11 +35,13 @@ test('startup template load hashes raw bytes and parses the exact vision and jud
   assert.equal(templates.replySystem.version, createHash('sha256').update(replyBytes).digest('hex').slice(0, 8));
   assert.equal(templates.judge.version, createHash('sha256').update(judgeBytes).digest('hex').slice(0, 8));
   assert.equal(templates.vision.version, createHash('sha256').update(visionBytes).digest('hex').slice(0, 8));
-  assert.ok(templates.vision.system.includes('{"kind": "sticker|photo|screenshot|other", "desc": "...", "text": "..."}'));
-  assert.ok(templates.vision.system.includes('不超过30字'));
+  assert.ok(templates.vision.system.includes('{"kind": "sticker|photo|screenshot|other", "desc": "...", "text": "...", "legible": true}'));
+  assert.ok(templates.vision.system.includes('不超过60字'));
   assert.ok(templates.vision.system.includes('最多200字'));
   assert.ok(templates.vision.system.includes('必须逐字转写'));
   assert.ok(templates.vision.system.includes('不要翻译或概括'));
+  assert.ok(templates.vision.system.includes('看不清的字不要猜'));
+  assert.ok(templates.vision.system.includes('legible'));
   assert.ok(templates.vision.user.includes('只输出 JSON'));
   assert.ok(templates.judge.system.includes('严格 JSON'));
   assert.ok(templates.judge.user.includes('{{context}}'));

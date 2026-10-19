@@ -62,9 +62,10 @@ function convertOneBotSegment(raw: unknown): Segment {
     }
     case 'mface': {
       const emojiId = stringValue(data.emoji_id) ?? stringValue(data.emojiId);
+      const summary = stringValue(data.summary);
       return emojiId === undefined
         ? { type: 'unknown', raw }
-        : { type: 'sticker', emojiId };
+        : { type: 'sticker', emojiId, ...(summary === undefined ? {} : { summary }) };
     }
     default:
       return { type: 'unknown', raw };

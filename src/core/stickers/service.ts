@@ -10,6 +10,7 @@ import {
 import path from 'node:path';
 import { budgetState } from '../../llm/budget.ts';
 import { downloadImageAsDataUrl } from '../images.ts';
+import { computeImageMd5 } from '../images/fingerprint.ts';
 import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../events.ts';
 import type { AquariumConfig } from '../../config/schema.ts';
 import type { MoodBand } from '../../store/affect-repo.ts';
@@ -20,6 +21,28 @@ import { selectStickerCandidates, type StickerOffer } from './selection.ts';
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const STICKER_SYNC_COUNT = 300;
 const MAX_DESCRIPTION_ATTEMPTS = 3;
+
+class DuplicateStickerError extends Error {}
+
+function duplicateErrorFields(value: unknown, depth = 0): string[] {
+  if (typeof value === 'string') return [value];
+  if (value instanceof Error) return [value.name, value.message];
+  if (typeof value !== 'object' || value === null || Array.isArray(value) || depth >= 2) return [];
+  const record = value as Record<string, unknown>;
+  const fields: string[] = [];
+  for (const key of ['code', 'message', 'wording', 'error', 'detail', 'data', 'response']) {
+    const field = record[key];
+    if (typeof field === 'string') fields.push(field);
+    else fields.push(...duplicateErrorFields(field, depth + 1));
+  }
+  return fields;
+}
+
+function isDuplicateFaceError(error: unknown): boolean {
+  return duplicateErrorFields(error).some((value) => (
+    /duplicate|already\s+(?:added|exists?|collected)|重复|已存在|已经收藏|收藏过/iu.test(value)
+  ));
+}
 
 export type StickerRemoteDetail = CustomFaceDetail;
 export type StickerAdapter = CustomFaceActions;
@@ -297,8 +320,9 @@ export function createStickerService(options: StickerServiceOptions): StickerSer
   async function addAndSync(file: string, stage: 'collect' | 'upload'): Promise<void> {
     try {
       await options.adapter.addCustomFace(file);
-    } catch {
+    } catch (error) {
       options.onError?.(stage);
+      if (stage === 'collect' && isDuplicateFaceError(error)) throw new DuplicateStickerError();
       throw new Error('QQ 收藏接口失败');
     }
     try {
@@ -333,10 +357,15 @@ export function createStickerService(options: StickerServiceOptions): StickerSer
       }
     }
     if (!downloaded) return { ok: false, reason: '引用图片已过期或无法读取' };
+    const md5 = computeImageMd5(downloaded.bytes);
+    if (options.repository.stickerByMd5(options.account, md5)) {
+      return { ok: false, reason: 'already_collected' };
+    }
     try {
       await addAndSync(`base64://${downloaded.bytes.toString('base64')}`, 'collect');
       return { ok: true };
-    } catch {
+    } catch (error) {
+      if (error instanceof DuplicateStickerError) return { ok: false, reason: 'already_collected' };
       return { ok: false, reason: 'QQ 收藏接口失败' };
     }
   }

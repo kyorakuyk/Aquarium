@@ -164,6 +164,7 @@ test('主人引用图片用精确收藏短语时进入管理层，非主人消�
     const collected: string[] = [];
     const commands = createCommands(repository, config, adapter, () => {}, async (message) => {
       collected.push(message.messageId);
+      if (message.messageId === 'duplicate-collect') return { ok: false, reason: 'already_collected' };
       return { ok: true };
     });
     const reply = (messageId: string, senderId: number) => makeMessage({
@@ -174,6 +175,7 @@ test('主人引用图片用精确收藏短语时进入管理层，非主人消�
     });
     const nonOwner = reply('non-owner-collect', ownerId + 1);
     const owner = reply('owner-collect', ownerId);
+    const duplicate = reply('duplicate-collect', ownerId);
 
     assert.equal(isManagementCommand(nonOwner, ownerId), true);
     assert.equal(await commands.handle(nonOwner), true);
@@ -183,6 +185,9 @@ test('主人引用图片用精确收藏短语时进入管理层，非主人消�
     assert.equal(await commands.handle(owner), true);
     assert.deepEqual(collected, ['owner-collect']);
     assert.deepEqual(adapter.sent[0]?.segments, [{ type: 'text', text: '收好了' }]);
+    assert.equal(await commands.handle(duplicate), true);
+    assert.deepEqual(collected, ['owner-collect', 'duplicate-collect']);
+    assert.deepEqual(adapter.sent[1]?.segments, [{ type: 'text', text: '这个已经收藏过啦' }]);
     assert.equal(isManagementCommand(makeMessage({
       messageId: 'not-exact-collect',
       plainText: '收藏一下',

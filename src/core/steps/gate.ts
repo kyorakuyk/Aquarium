@@ -123,7 +123,12 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
     time: record.time,
     senderName: record.senderName,
     isSelf: record.isSelf,
-    plainText: messageTextWithImageCaptions(record, ctx.options.repository, ctx.state.promptTemplates.vision.version),
+    plainText: messageTextWithImageCaptions(
+      record,
+      ctx.options.repository,
+      ctx.state.promptTemplates.vision.version,
+      config.slots.vision?.[0]?.model ?? 'unknown',
+    ),
   }));
   const judge = await runJudge(
     judgeContext,

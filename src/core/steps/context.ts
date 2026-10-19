@@ -41,10 +41,12 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     message: ctx.message,
     repository: ctx.options.repository,
     visionTemplate: ctx.state.promptTemplates.vision,
+    visionModel: config.slots.vision?.[0]?.model ?? 'unknown',
     callVision: (messages) => ctx.modelCall('vision', messages, callOptions),
     ...(ctx.options.downloadImage === undefined ? {} : { downloadImage: ctx.options.downloadImage }),
     ...(ctx.options.onError === undefined ? {} : { onError: ctx.options.onError }),
     now: ctx.now,
+    persistMd5: !ctx.processOptions.replay,
   });
 
   const contextCount = ctx.state.proactiveMode ? 8 : settings.contextMessages;
@@ -57,6 +59,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
         record,
         ctx.options.repository,
         ctx.state.promptTemplates.vision.version,
+        config.slots.vision?.[0]?.model ?? 'unknown',
       ),
     }));
   const tagBlocks = ctx.options.impressionsService?.promptBlocks({

@@ -7,9 +7,9 @@ import test from 'node:test';
 import yaml from 'yaml';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
 import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../src/core/events.ts';
-import { imageCaptionCacheKey } from '../src/core/images.ts';
 import { createMessagePipeline } from '../src/core/pipeline.ts';
 import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { computeImageMd5 } from '../src/core/images/fingerprint.ts';
 import type { ProtocolAdapter } from '../src/adapters/types.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
@@ -20,6 +20,7 @@ const exampleConfig = AquariumConfigSchema.parse(yaml.parse(
 const session: SessionKey = { account: 900000001, kind: 'group', peer: 123456 };
 const baseTime = new Date(2026, 9, 12, 9, 6).getTime();
 const visionVersion = promptTemplateStore.get().vision.version;
+const visionModel = makeConfig().slots.vision?.[0]?.model ?? 'unknown';
 
 type CapturedMessage = { role: string; content: unknown };
 type CapturedRequest = { slot: string; messages: CapturedMessage[] };
@@ -128,10 +129,10 @@ function createHarness(
   return { adapter, requests, pipeline };
 }
 
-test('触发消息中的图片调用 vision、按 URL 哈希缓存并替换上下文', async () => {
+test('触发消息中的图片调用 vision、按内容 MD5 缓存并替换上下文', async () => {
   await withRepository(async (repository, personaRoot) => {
     const url = 'https://example.invalid/cat.png';
-    const longCaption = '窗边有一只白猫，阳光正照在它身上。'.repeat(2);
+    const longCaption = '窗边有一只白猫，阳光正照在它身上。'.repeat(4);
     const incoming = makeIncoming({
       messageId: 'vision-1',
       plainText: '小鱼，看这个：可爱吗？',
@@ -153,13 +154,13 @@ test('触发消息中的图片调用 vision、按 URL 哈希缓存并替换上�
 
     const result = await harness.pipeline(incoming);
 
-    const key = imageCaptionCacheKey({ type: 'image', url }, visionVersion);
-    const expectedCaption = Array.from(longCaption.trim()).slice(0, 30).join('');
+    const md5 = computeImageMd5(Buffer.from('AQID', 'base64'));
+    const expectedCaption = Array.from(longCaption.trim()).slice(0, 60).join('');
     assert.deepEqual(result, { replied: true, reason: 'replied' });
     assert.deepEqual(harness.requests.map(({ slot }) => slot), ['vision', 'reply']);
     assert.deepEqual(downloaded, [url]);
-    assert.equal(repository.getCaption(key), `[图片：${expectedCaption}]`);
-    assert.equal(Array.from(expectedCaption).length, 30);
+    assert.equal(repository.getImageCaption(md5)?.caption, `[图片：${expectedCaption}]`);
+    assert.equal(Array.from(expectedCaption).length, 60);
 
     const visionContent = harness.requests[0]?.messages[1]?.content;
     assert.ok(Array.isArray(visionContent));
@@ -180,12 +181,23 @@ test('触发消息中的图片调用 vision、按 URL 哈希缓存并替换上�
 
 test('缓存命中的当前图片不调用 vision 或下载', async () => {
   await withRepository(async (repository, personaRoot) => {
+    const md5 = 'd'.repeat(32);
     const image = {
       type: 'image' as const,
       url: 'https://example.invalid/cached.png',
-      file: 'cached-file-1',
+      file: `${md5}.png`,
     };
-    repository.setCaption(imageCaptionCacheKey(image, visionVersion), '[图片：一只趴着的小猫]');
+    repository.setImageCaption({
+      md5,
+      caption: '[图片：一只趴着的小猫]',
+      kind: 'photo',
+      desc: '一只趴着的小猫',
+      text: '',
+      legible: true,
+      visionModel,
+      visionTemplateVersion: visionVersion,
+      time: baseTime,
+    });
     let downloads = 0;
     const incoming = makeIncoming({
       messageId: 'vision-cached-1',
@@ -224,7 +236,11 @@ test('一条触发消息中的每张未缓存图片都会单独描述', async ()
         { type: 'text', text: '呢？' },
       ],
     });
-    const harness = createHarness(repository, personaRoot);
+    const harness = createHarness(repository, personaRoot, {
+      downloadImage: async (url) => url.endsWith('/first.png')
+        ? 'data:image/png;base64,AQID'
+        : 'data:image/png;base64,BAUG',
+    });
 
     const result = await harness.pipeline(incoming);
 
@@ -245,12 +261,10 @@ test('一条触发消息中的每张未缓存图片都会单独描述', async ()
       detail.visionTemplateVersion,
       detail.templateVersion,
     ]);
-    assert.equal(repository.getCaption(imageCaptionCacheKey({
-      type: 'image', url: 'https://example.invalid/first.png', file: 'first-image',
-    }, visionVersion)), '[图片：图片里有一只猫。]');
-    assert.equal(repository.getCaption(imageCaptionCacheKey({
-      type: 'image', url: 'https://example.invalid/second.png', file: 'second-image',
-    }, visionVersion)), '[图片：图片里有一只猫。]');
+    const firstMd5 = computeImageMd5(Buffer.from('AQID', 'base64'));
+    const secondMd5 = computeImageMd5(Buffer.from('BAUG', 'base64'));
+    assert.equal(repository.getImageCaption(firstMd5)?.caption, '[图片：图片里有一只猫。]');
+    assert.equal(repository.getImageCaption(secondMd5)?.caption, '[图片：图片里有一只猫。]');
     assert.ok(String(harness.requests[2]?.messages[1]?.content).includes(
       '小鱼，[图片：图片里有一只猫。]还有[图片：图片里有一只猫。]呢？',
     ));
@@ -351,18 +365,29 @@ test('不为未触发消息识图', async () => {
 
     assert.deepEqual(result, { replied: false, reason: 'mode_mention_only' });
     assert.equal(harness.requests.length, 0);
-    assert.equal(repository.getCaption(imageCaptionCacheKey({ type: 'image', url }, visionVersion)), undefined);
+    assert.equal(repository.getImageCaption(computeImageMd5(Buffer.from('AQID', 'base64'))), undefined);
   });
 });
 
 test('历史图片只使用缓存描述，未缓存图片显示通用占位', async () => {
   await withRepository(async (repository, personaRoot) => {
+    const cachedMd5 = 'f'.repeat(32);
     const cachedImage = {
       type: 'image' as const,
       url: 'https://example.invalid/history-cached.png',
-      file: 'history-cached-file',
+      file: `${cachedMd5}.png`,
     };
-    repository.setCaption(imageCaptionCacheKey(cachedImage, visionVersion), '[图片：缓存中的红色风筝]');
+    repository.setImageCaption({
+      md5: cachedMd5,
+      caption: '[图片：缓存中的红色风筝]',
+      kind: 'photo',
+      desc: '缓存中的红色风筝',
+      text: '',
+      legible: true,
+      visionModel,
+      visionTemplateVersion: visionVersion,
+      time: baseTime,
+    });
     repository.saveMessage({
       sessionId: sessionId(session),
       messageId: 'history-image-cached',

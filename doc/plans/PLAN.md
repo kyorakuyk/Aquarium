@@ -514,6 +514,7 @@
 | 2026-10-19 | 外链归因 | 卡片文案非本人证据；check 519/519 |
 | 2026-10-19 | V18c补 | 标记支持全角符号；check 519/519 |
 | 2026-10-19 | V18e | 看图 JSON/OCR、缓存版本；check 523/523 |
+| 2026-10-20 | V18f | MD5/GIF/重复收藏；check 541/541 |
 
 ---
 
@@ -1510,7 +1511,7 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
   - 图片缓存 key 包含 vision 模板版本；OneBot image `sub_type=1` 强制分类为 `sticker`。
   - 测试：JSON 解析与渲染、空文字、缓存随模板版本失效、QQ 表情子类型。
 
-- [ ] **V18f 图片认知缓存池与 GIF 关键帧**（2026-10-20，在 dev/stickers 上，一个提交）
+- [x] **V18f 图片认知缓存池与 GIF 关键帧**（2026-10-20，在 dev/stickers 上，一个提交）
   1. **按顺序查找图片含义**，命中即停：
      ① 商城表情：segment 带 `emoji_id`，直接用 `summary` 作为含义，不调用模型；
      ② 图片 md5 命中 stickers 表：依次取 手动编辑过的描述 → `desc_ai` → `desc_qq`；

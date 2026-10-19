@@ -7,6 +7,7 @@ import yaml from 'yaml';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
 import { sessionId, type IncomingMessage, type SessionKey } from '../src/core/events.ts';
 import { createStickerService, type StickerAdapter } from '../src/core/stickers/service.ts';
+import { computeImageMd5 } from '../src/core/images/fingerprint.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
 
@@ -216,6 +217,89 @@ test('收藏回复在图片 URL 过期时用 get_image 刷新并写入 QQ 收藏
     assert.ok(additions[0]?.startsWith('base64://'));
     assert.equal(events[0], 'sync');
     assert.equal(repository.listStickers(account)[0]?.file, `${md5}.png`);
+  });
+});
+
+test('回复收藏命中本地 md5 时返回重复收藏且不调用 QQ 接口', async () => {
+  await withStickerService(async ({ dataDirectory, repository }) => {
+    const md5 = computeImageMd5(imageBytes);
+    repository.upsertSticker({ account, emojiId: 'existing', md5, descQq: '已收藏' }, 1);
+    repository.saveMessage({
+      sessionId: sessionId(session),
+      messageId: 'duplicate-source',
+      senderId: 42,
+      senderName: '群友',
+      isSelf: false,
+      plainText: '',
+      segments: [{ type: 'image', url: 'https://gchat.qpic.cn/existing.png', file: 'source' }],
+      time: 10,
+    });
+    let syncCalls = 0;
+    const { adapter, additions } = customFaceAdapter(async () => {
+      syncCalls += 1;
+      return [];
+    });
+    const config = AquariumConfigSchema.parse({
+      ...exampleConfig,
+      budget: { ...exampleConfig.budget, dailyCny: 0 },
+    });
+    const service = createStickerService({
+      account,
+      adapter,
+      repository,
+      dataDirectory,
+      getConfig: () => config,
+      downloadImage: async () => imageDataUrl,
+      describeImage: async () => '',
+      now: () => 1_000,
+    });
+
+    const result = await service.collect(incoming('duplicate-request', [
+      { type: 'reply', messageId: 'duplicate-source' },
+      { type: 'text', text: '收藏' },
+    ], '收藏'));
+
+    assert.deepEqual(result, { ok: false, reason: 'already_collected' });
+    assert.deepEqual(additions, []);
+    assert.equal(syncCalls, 0);
+  });
+});
+
+test('回复收藏遇到 QQ 重复错误时返回固定重复收藏结果', async () => {
+  await withStickerService(async ({ dataDirectory, repository }) => {
+    repository.saveMessage({
+      sessionId: sessionId(session),
+      messageId: 'remote-duplicate-source',
+      senderId: 42,
+      senderName: '群友',
+      isSelf: false,
+      plainText: '',
+      segments: [{ type: 'image', url: 'https://gchat.qpic.cn/remote.png', file: 'source' }],
+      time: 10,
+    });
+    const { adapter } = customFaceAdapter(async () => []);
+    adapter.addCustomFace = async () => { throw new Error('duplicate custom face already exists'); };
+    const config = AquariumConfigSchema.parse({
+      ...exampleConfig,
+      budget: { ...exampleConfig.budget, dailyCny: 0 },
+    });
+    const service = createStickerService({
+      account,
+      adapter,
+      repository,
+      dataDirectory,
+      getConfig: () => config,
+      downloadImage: async () => imageDataUrl,
+      describeImage: async () => '',
+      now: () => 1_000,
+    });
+
+    const result = await service.collect(incoming('remote-duplicate-request', [
+      { type: 'reply', messageId: 'remote-duplicate-source' },
+      { type: 'text', text: '收藏' },
+    ], '收藏'));
+
+    assert.deepEqual(result, { ok: false, reason: 'already_collected' });
   });
 });
 
