@@ -3,6 +3,7 @@ import type { ModelProviderView, ModelReasoning, ModelSlotEntryView } from '../a
 import { modelParameterInfo, type ModelParameterName, type ProviderModelsState } from '../model-api.ts';
 import { chainSummary, REASONING_OPTIONS, type SlotDef } from '../models-view.ts';
 import { InlineModelParamCell } from './InlineModelParamCell.tsx';
+import { MaxTokensParameterControls, ReasoningParameterControls, TemperatureParameterControls } from './SlotParameterControls.tsx';
 
 type EditableField = 'temperature' | 'reasoning' | 'maxTokens';
 type SlotDraft = { temperature: string; reasoning: ModelReasoning; maxTokens: string };
@@ -35,6 +36,8 @@ export function InlineSlotRow({ definition, chain, providers, providerModels, di
   const providerModelStatus = providerModelState?.status;
   const serverDraft = draftFrom(first);
   const [draft, setDraft] = useState<SlotDraft>(serverDraft);
+  const [temperatureFallback, setTemperatureFallback] = useState(serverDraft.temperature || '0.9');
+  const [maxTokensFallback, setMaxTokensFallback] = useState(serverDraft.maxTokens || '800');
   const [dirty, setDirty] = useState<Record<EditableField, boolean>>({
     temperature: false,
     reasoning: false,
@@ -52,6 +55,12 @@ export function InlineSlotRow({ definition, chain, providers, providerModels, di
   }, [serverDraft.reasoning]);
   useEffect(() => {
     if (!dirtyRef.current.maxTokens) setDraft((current) => ({ ...current, maxTokens: serverDraft.maxTokens }));
+  }, [serverDraft.maxTokens]);
+  useEffect(() => {
+    if (serverDraft.temperature) setTemperatureFallback(serverDraft.temperature);
+  }, [serverDraft.temperature]);
+  useEffect(() => {
+    if (serverDraft.maxTokens) setMaxTokensFallback(serverDraft.maxTokens);
   }, [serverDraft.maxTokens]);
   useEffect(() => {
     if (provider?.kind === 'api' && first?.model && providerModelStatus === undefined) void onLoadModels(provider);
@@ -144,28 +153,37 @@ export function InlineSlotRow({ definition, chain, providers, providerModels, di
         onCommit={(value) => saveField('temperature', value)}
         onOverrideChange={(supported) => confirmOverride('temperature', supported)}
       >
-        {(value, onChange, controlDisabled) => <input type="number" min={0} max={2} step={0.1} placeholder="默认" value={value} disabled={controlDisabled} onChange={(event) => {
-          const next = event.currentTarget.value;
-          onChange(next);
-          setDraft((current) => ({ ...current, temperature: next }));
-          markDirty('temperature', next !== serverDraft.temperature);
-        }} />}
+        {(value, onChange, controlDisabled) => <TemperatureParameterControls
+          value={value}
+          fallback={temperatureFallback}
+          disabled={controlDisabled}
+          onChange={(next) => {
+            if (next.trim()) setTemperatureFallback(next);
+            onChange(next);
+            setDraft((current) => ({ ...current, temperature: next }));
+            markDirty('temperature', next !== serverDraft.temperature);
+          }}
+        />}
       </InlineModelParamCell></td>
       <td><InlineModelParamCell
         label="思考强度"
         value={draft.reasoning}
+        displayValue={REASONING_OPTIONS.find((option) => option.value === draft.reasoning)?.label ?? draft.reasoning}
         {...reasoningInfo}
         disabled={parameterDisabled}
         allowOverride={provider?.kind === 'api' && Boolean(first?.model.trim())}
         onCommit={(value) => saveField('reasoning', value)}
         onOverrideChange={(supported) => confirmOverride('reasoning', supported)}
       >
-        {(value, onChange, controlDisabled) => <select value={value} disabled={controlDisabled} onChange={(event) => {
-          const next = event.currentTarget.value;
-          onChange(next);
-          setDraft((current) => ({ ...current, reasoning: next as ModelReasoning }));
-          markDirty('reasoning', next !== serverDraft.reasoning);
-        }}>{REASONING_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select>}
+        {(value, onChange, controlDisabled) => <ReasoningParameterControls
+          value={value as ModelReasoning}
+          disabled={controlDisabled}
+          onChange={(next) => {
+            onChange(next);
+            setDraft((current) => ({ ...current, reasoning: next }));
+            markDirty('reasoning', next !== serverDraft.reasoning);
+          }}
+        />}
       </InlineModelParamCell></td>
       <td><InlineModelParamCell
         label="最大长度"
@@ -176,12 +194,17 @@ export function InlineSlotRow({ definition, chain, providers, providerModels, di
         onCommit={(value) => saveField('maxTokens', value)}
         onOverrideChange={(supported) => confirmOverride('maxTokens', supported)}
       >
-        {(value, onChange, controlDisabled) => <input type="number" min={1} step={1} placeholder="默认" value={value} disabled={controlDisabled} onChange={(event) => {
-          const next = event.currentTarget.value;
-          onChange(next);
-          setDraft((current) => ({ ...current, maxTokens: next }));
-          markDirty('maxTokens', next !== serverDraft.maxTokens);
-        }} />}
+        {(value, onChange, controlDisabled) => <MaxTokensParameterControls
+          value={value}
+          fallback={maxTokensFallback}
+          disabled={controlDisabled}
+          onChange={(next) => {
+            if (next.trim()) setMaxTokensFallback(next);
+            onChange(next);
+            setDraft((current) => ({ ...current, maxTokens: next }));
+            markDirty('maxTokens', next !== serverDraft.maxTokens);
+          }}
+        />}
       </InlineModelParamCell></td>
       <td><button className="button button-secondary slot-inline-edit" type="button" disabled={disabled} onClick={onEdit}>编辑</button></td>
     </tr>

@@ -11,6 +11,8 @@ interface Position {
 export function InlineModelParamCell({
   label,
   value,
+  displayValue,
+  variant = 'cell',
   capability,
   source,
   override,
@@ -22,6 +24,8 @@ export function InlineModelParamCell({
 }: {
   label: string;
   value: string;
+  displayValue?: string;
+  variant?: 'cell' | 'pill';
   capability: ModelCapability;
   source: ModelCapabilitySource;
   override?: boolean;
@@ -42,7 +46,8 @@ export function InlineModelParamCell({
   const [valueError, setValueError] = useState('');
   const effectiveDisabled = disabled || saving;
   const markedOverride = override === true ? 'supported' : override === false ? 'unsupported' : '';
-  const displayValue = capability === 'unsupported' ? '—' : (value || '默认');
+  const visibleValue = capability === 'unsupported' ? '—' : (displayValue ?? (value || '默认'));
+  const portalTarget = open ? triggerRef.current?.closest('dialog[open]') ?? document.body : document.body;
 
   function updatePosition(): void {
     const bounds = triggerRef.current?.getBoundingClientRect();
@@ -125,18 +130,19 @@ export function InlineModelParamCell({
     <>
       <button
         ref={triggerRef}
-        className={`inline-param-trigger ${capability === 'unsupported' ? 'is-unsupported' : ''}`}
+        className={`inline-param-trigger${variant === 'pill' ? ' slot-param-trigger' : ''}${capability === 'unsupported' ? ' is-unsupported' : ''}`}
         type="button"
         disabled={disabled}
         title={capability === 'unknown' ? '未声明，可能被忽略' : capability === 'unsupported' ? '该模型不支持' : undefined}
-        aria-label={`${label}：${displayValue}；${capability === 'unknown' ? '未声明，可能被忽略' : capability === 'unsupported' ? '不支持' : '支持'}`}
+        aria-label={`${label}：${visibleValue}；${capability === 'unknown' ? '未声明，可能被忽略' : capability === 'unsupported' ? '不支持' : '支持'}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={openPopover}
       >
-        {capability === 'unsupported'
-          ? <s>{displayValue}</s>
-          : <>{displayValue}{capability === 'unknown' && <span className="param-unknown-marker" title="未声明，可能被忽略" aria-hidden="true">?</span>}</>}
+        {variant === 'pill' && <span className="slot-param-pill-label">{label}</span>}
+        <span className="slot-param-pill-value">{capability === 'unsupported' ? <s>{visibleValue}</s> : visibleValue}</span>
+        {capability === 'unknown' && <span className="param-unknown-marker" title="未声明，可能被忽略" aria-hidden="true">?</span>}
+        {variant === 'pill' && <svg className="slot-param-pill-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>}
       </button>
       {open && createPortal(
         <div
@@ -146,10 +152,10 @@ export function InlineModelParamCell({
           aria-label={`${label}参数编辑`}
           style={{ left: `${position.left}px`, top: `${position.top}px` }}
         >
-          <label className="model-param-popover-input">
-            <span>{label}</span>
-            {children(draft, setDraft, effectiveDisabled)}
-          </label>
+          <div className="model-param-popover-input">
+            <span className="model-param-popover-label">{label}</span>
+            {children(draft, setDraft, effectiveDisabled || capability === 'unsupported')}
+          </div>
           <div className="model-param-popover-capability">
             <ModelCapabilityStatus capability={capability} source={source} />
             <label className="model-param-override-select">
@@ -179,7 +185,7 @@ export function InlineModelParamCell({
             </button>
           </div>
         </div>,
-        document.body,
+        portalTarget,
       )}
     </>
   );
