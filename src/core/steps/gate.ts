@@ -70,6 +70,14 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
   }
 
   if (ctx.processOptions.batched) {
+    const privacyAvoid = ctx.options.privacyGateService?.activeAvoid({
+      session: ctx.message.session,
+      now: ctx.now(),
+    });
+    if (privacyAvoid) {
+      ctx.state.privacyDecisionDetail = privacyAvoid.detail;
+      return { next: false, reason: 'privacy_avoid', detail: { privacy: privacyAvoid.detail } };
+    }
     return { next: false, reason: 'batched', detail: { trigger: 'proactive' } };
   }
 
