@@ -125,17 +125,26 @@ test('只发表情比例低于阈值才允许发出无正文回复', () => {
   ], now, 0.2), true);
 });
 
-test('表情标记全部剥离，只保留第一个合法编号', () => {
+test('表情标记支持全角标点，全部剥离并只保留第一个合法编号', () => {
   const offer = {
     candidates: [
       { id: 1, emojiId: 'emoji-1', file: 'a.png', descAi: '开心', tags: [] },
       { id: 2, emojiId: 'emoji-2', file: 'b.png', descAi: '难过', tags: [] },
+      { id: 3, emojiId: 'emoji-3', file: 'c.png', descAi: '惊讶', tags: [] },
     ],
-    promptList: '1 开心 / 2 难过',
+    promptList: '1 开心 / 2 难过 / 3 惊讶',
   };
-  const parsed = parseStickerReply('好呀 [表情:2] 你看 [表情:9] [表情:x] [表情:]', offer);
-  assert.equal(parsed.text, '好呀  你看');
-  assert.equal(parsed.sticker?.id, 2);
+  const parsed = parseStickerReply(
+    'A [表情：3] B 【表情:2】 C 【表情：1】 D [表情:9] E 【表情：x】 F [表情：] G',
+    offer,
+  );
+  assert.equal(parsed.text, 'A  B  C  D  E  F  G');
+  assert.equal(parsed.sticker?.id, 3);
+  for (const marker of ['[表情：3]', '【表情:3】', '【表情：3】']) {
+    const variant = parseStickerReply(marker, offer);
+    assert.equal(variant.text, '');
+    assert.equal(variant.sticker?.id, 3, marker);
+  }
 
   const textOnly = parseStickerReply('嗯呢 [表情:1]', null);
   assert.equal(textOnly.text, '嗯呢');

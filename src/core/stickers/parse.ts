@@ -1,7 +1,7 @@
 import type { StickerOffer } from './selection.ts';
 
-const MARKER_PATTERN = /\[表情:[^\]\n]*\]/gu;
-const VALID_MARKER = /^\[表情:(\d{1,3})\]$/u;
+const MARKER_PATTERN = /(?:\[表情[:：][^\]\n]*\]|【表情[:：][^】\n]*】)/gu;
+const VALID_MARKER = /^(?:\[表情[:：](\d{1,3})\]|【表情[:：](\d{1,3})】)$/u;
 
 export interface StickerReply {
   text: string;
@@ -15,7 +15,8 @@ export function parseStickerReply(text: string, offer: StickerOffer | null | und
   let sticker: StickerOffer['candidates'][number] | undefined;
   for (const match of text.matchAll(MARKER_PATTERN)) {
     if (sticker !== undefined) continue;
-    const index = VALID_MARKER.exec(match[0])?.[1];
+    const validMarker = VALID_MARKER.exec(match[0]);
+    const index = validMarker?.[1] ?? validMarker?.[2];
     if (index === undefined) continue;
     sticker = offer.candidates[Number(index) - 1];
   }
