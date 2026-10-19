@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import type { Hono } from 'hono';
+import { AquariumConfigSchema, type AquariumConfig } from '../config/schema.ts';
 import type { PanelAccountRuntime } from './types.ts';
 import type { StickerService } from '../core/stickers/service.ts';
 import type { StoreRepository } from '../store/repository.ts';
@@ -19,6 +20,14 @@ const patchSchema = z.object({
   })).max(5).optional(),
   descAi: z.string().refine((value) => Array.from(value).length <= 20).optional(),
 }).strict().refine((value) => Object.keys(value).length > 0);
+
+const settingsPatchSchema = z.object({
+  enabled: z.boolean().optional(),
+  maxRatio: z.number().min(0).max(1).optional(),
+  onlyStickerRatio: z.number().min(0).max(1).optional(),
+  cooldownSec: z.number().int().min(0).max(86_400).optional(),
+  candidates: z.number().int().min(1).max(50).optional(),
+}).strict();
 
 function parseAccount(value: string | undefined): number | undefined | null {
   if (value === undefined) return undefined;
@@ -45,7 +54,35 @@ export function registerStickerRoutes(app: Hono, options: {
   accounts: () => PanelAccountRuntime[];
   services: () => StickerService[];
   now: () => number;
+  getConfig?: () => AquariumConfig;
+  saveConfig?: (config: AquariumConfig) => void | Promise<void>;
+  serializeConfigWrite?: <T>(task: () => Promise<T>) => Promise<T>;
 }): void {
+  app.get('/api/stickers/settings', (context) => {
+    if (!options.getConfig) return context.json({ error: 'Sticker settings are unavailable' }, 501);
+    return context.json(options.getConfig().stickers);
+  });
+
+  app.patch('/api/stickers/settings', async (context) => {
+    if (!options.getConfig || !options.saveConfig) {
+      return context.json({ error: 'Sticker settings are unavailable' }, 501);
+    }
+    let raw: unknown;
+    try { raw = await context.req.json(); } catch { return context.json({ error: 'Invalid JSON' }, 400); }
+    const parsed = settingsPatchSchema.safeParse(raw);
+    if (!parsed.success) return context.json({ error: 'Invalid sticker settings' }, 400);
+    const task = async () => {
+      const config = options.getConfig!();
+      const next = AquariumConfigSchema.parse({
+        ...config,
+        stickers: { ...config.stickers, ...parsed.data },
+      });
+      await options.saveConfig!(next);
+      return context.json(next.stickers);
+    };
+    return options.serializeConfigWrite ? options.serializeConfigWrite(task) : task();
+  });
+
   app.get('/api/stickers', (context) => {
     const account = parseAccount(context.req.query('account'));
     if (account === null) return context.json({ error: 'Invalid account' }, 400);

@@ -21,6 +21,42 @@ function fakeStickerService(
   };
 }
 
+test('表情设置 API 支持读取、局部保存和范围校验', async () => {
+  await withPanel(async ({ app, getConfig, getSavedConfig }) => {
+    const current = await app.request('/api/stickers/settings', { headers: authHeaders() });
+    assert.equal(current.status, 200);
+    assert.deepEqual(await current.json(), exampleConfig.stickers);
+
+    const saved = await app.request('/api/stickers/settings', {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: true, maxRatio: 0.4 }),
+    });
+    assert.equal(saved.status, 200);
+    assert.deepEqual(await saved.json(), {
+      ...exampleConfig.stickers,
+      enabled: true,
+      maxRatio: 0.4,
+    });
+    assert.deepEqual(getConfig().stickers, {
+      ...exampleConfig.stickers,
+      enabled: true,
+      maxRatio: 0.4,
+    });
+    assert.deepEqual(getSavedConfig()?.stickers, getConfig().stickers);
+    const savedStickers = getSavedConfig()?.stickers;
+
+    const invalid = await app.request('/api/stickers/settings', {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ maxRatio: 1.1 }),
+    });
+    assert.equal(invalid.status, 400);
+    assert.deepEqual(getConfig().stickers, savedStickers);
+    assert.deepEqual(getSavedConfig()?.stickers, savedStickers);
+  });
+});
+
 test('表情上传 API 接受大于通用请求上限的有效载荷并转交账号服务', async () => {
   const uploaded: Array<{ dataBase64: string; filename: string }> = [];
   const service = fakeStickerService(async (dataBase64, filename) => {

@@ -223,6 +223,9 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     accounts: options.accounts,
     services: options.stickerServices ?? (() => []),
     now,
+    getConfig: options.getConfig,
+    saveConfig: options.saveConfig,
+    serializeConfigWrite,
   });
   registerPersonaRoutes(app, root, {
     getConfig: options.getConfig,
