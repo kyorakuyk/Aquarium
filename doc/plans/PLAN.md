@@ -507,6 +507,7 @@
 | 2026-10-19 | V17 | 用途表浮层/能力重置；未启用群导入；自动提取仍跳过；487/487，panel 132 |
 | 2026-10-19 | V17b | 卡片化、拖拽排序、胶囊编辑；check 487/487；panel 134 modules |
 | 2026-10-19 | V18a | 超时/去重/日志/配置；最大输出文案；check 492/492，panel 134 |
+| 2026-10-19 | V18b | 表情同步、收藏与 API；check 503/503 |
 
 ---
 
@@ -1447,10 +1448,11 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
   5. **“最大长度”改名**：界面上所有的“长度 / 最大长度”统一改成“最大输出”，值后面加单位 `token`，比如 `800 token`。参数浮层里加一行说明：`单位 token，中文约 0.6 token/字；设太小会截断回复。开启思考时，部分模型会把思考内容也计入这个上限。` 只改前端文案。
   - 测试点：超时分档；去重窗口（含 0）；配置损坏不覆写；日志上限。第 5 条只要求 `panel:build` 成功。
 
-- [ ] **V18b 表情库与收藏**
+- [x] **V18b 表情库与收藏**
   - **来源只有 QQ 收藏表情**：小号在 QQ 里收藏的表情就是表情库，这是唯一的来源。控制台上传和“回复收藏”也都会先调用 `add_custom_face` 存进 QQ 收藏，再同步回来。
-  - **数据表**（迁移 v8）：`stickers(id, account, emoji_id, md5, file TEXT NULL, desc_qq, desc_ai, tags_json, enabled, missing, use_count, last_used_at, created_at, updated_at, UNIQUE(account, md5))`。
+  - **数据表**（迁移 v8）：`stickers(id, account, emoji_id, md5, file TEXT NULL, desc_qq, desc_ai, tags_json, enabled, missing, use_count, last_used_at, created_at, updated_at, description_attempts INTEGER NOT NULL DEFAULT 0, UNIQUE(account, md5))`。
     - `file` 存的是**相对 `data/stickers/` 的文件名**，例如 `<md5>.gif`，**不存绝对路径**；读取时再拼上数据目录。
+    - `description_attempts` 持久化描述重试次数，最多 3 次。
   - **同步**：账号上线时同步一次，之后每 10 分钟一次，控制台也可以手动触发。
     - 调用 `fetch_custom_face_detail { count: 300 }`，遇到新的 md5 就新建一行，并立即把图片下载到 `data/stickers/`。下载复用现有图片下载的域名白名单和大小限制，扩展名按文件头判断。
     - QQ 收藏里已经没有的记录，标记 `missing=1`，不删除。
@@ -1464,6 +1466,7 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
     - `PATCH /api/stickers/:id`：可改 `{ enabled?, tags?, descAi? }`。改了描述时，同时调用 `modify_custom_face` 把描述写回 QQ；
     - `POST /api/stickers/sync`：手动同步；
     - `POST /api/stickers/upload`：请求体 `{ dataBase64, filename }`，大小不超过 5MB，调用 `add_custom_face`（以 `base64://` 传入）后再同步。
+    - 多账号上传通过 `?account=` 指定目标；未指定时返回 409。
   - 测试点（用假适配器）：同步时新增、标记缺失、按 md5 去重；只存相对路径；描述的解析与重试上限；“回复收藏”只认主人、只认这两个词；上传；图片接口拒绝越界路径。
 
 - [ ] **V18c 发送表情**

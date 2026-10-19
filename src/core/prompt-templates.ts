@@ -21,6 +21,11 @@ export interface VisionPromptTemplate extends PromptTemplate {
   user: string;
 }
 
+export interface StickerDescribePromptTemplate extends PromptTemplate {
+  system: string;
+  user: string;
+}
+
 export interface JudgePromptTemplate extends PromptTemplate {
   system: string;
   user: string;
@@ -82,6 +87,7 @@ export interface PromptTemplateSet {
   replySystem: ReplySystemTemplate;
   judge: JudgePromptTemplate;
   vision: VisionPromptTemplate;
+  stickerDescribe: StickerDescribePromptTemplate;
   appraise: AppraisePromptTemplate;
   affect: AffectPromptTemplate;
   traits: TraitsPromptTemplate;
@@ -156,6 +162,18 @@ function parseVisionTemplate(template: PromptTemplate): VisionPromptTemplate {
     throw new Error('vision.md 必须包含非空 system 和 user 文本');
   }
   return { ...template, system: fields.system, user: fields.user };
+}
+
+function parseStickerDescribeTemplate(template: PromptTemplate): StickerDescribePromptTemplate {
+  const fields = parseTemplateFields(template, 'sticker-describe.md');
+  if (typeof fields.system !== 'string' || fields.system.length === 0
+    || typeof fields.user !== 'string' || fields.user.length === 0) {
+    throw new Error('sticker-describe.md 必须包含非空 system 和 user 文本');
+  }
+  const stickerDescribe = { ...template, system: fields.system, user: fields.user };
+  validatePlaceholders('sticker-describe.md', stickerDescribe.system, [], []);
+  validatePlaceholders('sticker-describe.md', stickerDescribe.user, [], []);
+  return stickerDescribe;
 }
 
 function parseJudgeTemplate(template: PromptTemplate): JudgePromptTemplate {
@@ -305,6 +323,7 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
   const replySystem = parseReplySystemTemplate(readTemplate(root, 'reply-system.md'));
   const judge = parseJudgeTemplate(readTemplate(root, 'judge.md'));
   const vision = parseVisionTemplate(readTemplate(root, 'vision.md'));
+  const stickerDescribe = parseStickerDescribeTemplate(readTemplate(root, 'sticker-describe.md'));
   const appraise = parseAppraiseTemplate(readTemplate(root, 'appraise.md'));
   const affect = parseAffectTemplate(readTemplate(root, 'affect.md'));
   const traits = parseTraitsTemplate(readTemplate(root, 'traits.md'));
@@ -315,6 +334,7 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
     replySystem: Object.freeze(replySystem),
     judge: Object.freeze(judge),
     vision: Object.freeze(vision),
+    stickerDescribe: Object.freeze(stickerDescribe),
     appraise: Object.freeze(appraise),
     affect: Object.freeze(affect),
     traits: Object.freeze(traits),

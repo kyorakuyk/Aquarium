@@ -16,6 +16,7 @@ function copyPromptTemplates(): string {
   fs.copyFileSync(path.resolve('prompts/reply-system.md'), path.join(root, 'reply-system.md'));
   fs.copyFileSync(path.resolve('prompts/judge.md'), path.join(root, 'judge.md'));
   fs.copyFileSync(path.resolve('prompts/vision.md'), path.join(root, 'vision.md'));
+  fs.copyFileSync(path.resolve('prompts/sticker-describe.md'), path.join(root, 'sticker-describe.md'));
   fs.copyFileSync(path.resolve('prompts/appraise.md'), path.join(root, 'appraise.md'));
   fs.copyFileSync(path.resolve('prompts/affect.md'), path.join(root, 'affect.md'));
   fs.copyFileSync(path.resolve('prompts/traits.md'), path.join(root, 'traits.md'));
@@ -64,6 +65,12 @@ test('startup template load hashes raw bytes and parses the exact vision and jud
   assert.ok(Object.isFrozen(templates.sleep.goodnight));
   assert.ok(templates.personaImport.system.includes('不得推断、补全或编造'));
   assert.ok(templates.personaImport.user.includes('{{text}}'));
+  const stickerBytes = fs.readFileSync(path.resolve('prompts/sticker-describe.md'));
+  const stickerDescribe = (templates as unknown as { stickerDescribe?: { version: string; system: string; user: string } }).stickerDescribe;
+  assert.ok(stickerDescribe);
+  assert.equal(stickerDescribe.version, createHash('sha256').update(stickerBytes).digest('hex').slice(0, 8));
+  assert.ok(stickerDescribe.system.includes('JSON'));
+  assert.ok(stickerDescribe.user.length > 0);
 });
 
 test('persona-import 模板必须声明 text 占位符', () => {

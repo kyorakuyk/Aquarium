@@ -126,6 +126,40 @@ test('发送、历史顺序与标记已读保持在当前会话范围内', async
   assert.deepEqual(fake.state.markedGroup, [[20, 123456]]);
 });
 
+test('自定义表情动作映射详情、添加、修改备注与 get_image', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  fake.state.rawResults.set('fetch_custom_face_detail', [{
+    emoji_id: 'emoji-1',
+    resId: 'res-1',
+    url: 'https://gchat.qpic.cn/sticker.png',
+    md5: '0123456789abcdef0123456789abcdef',
+    desc: 'QQ 备注',
+  }]);
+  fake.state.rawResults.set('add_custom_face', { emoji_id: 'emoji-2' });
+  fake.state.imageInfo = { url: 'https://gchat.qpic.cn/refreshed.png' };
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => fake.client);
+  t.after(() => adapter.close());
+  await adapter.connect();
+
+  assert.deepEqual(await adapter.customFaces.fetchDetails(300), [{
+    emojiId: 'emoji-1',
+    resId: 'res-1',
+    url: 'https://gchat.qpic.cn/sticker.png',
+    md5: '0123456789abcdef0123456789abcdef',
+    desc: 'QQ 备注',
+  }]);
+  assert.deepEqual(await adapter.customFaces.addCustomFace('base64://AAAA'), { emojiId: 'emoji-2' });
+  await adapter.customFaces.modifyCustomFace('emoji-2', '新的备注');
+  assert.equal(await adapter.customFaces.getImageUrl('file-1'), 'https://gchat.qpic.cn/refreshed.png');
+  assert.deepEqual(fake.state.rawCalls, [
+    ['fetch_custom_face_detail', { count: 300 }],
+    ['add_custom_face', { file: 'base64://AAAA' }],
+    ['modify_custom_face', { emoji_id: 'emoji-2', desc: '新的备注' }],
+  ]);
+  assert.deepEqual(fake.state.imageCalls, [{ file: 'file-1' }]);
+});
+
 test('相同会话的纯文本在窗口内只发送一次，并在窗口过期后恢复发送', async (t) => {
   const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
   const fake = createFakeClient();

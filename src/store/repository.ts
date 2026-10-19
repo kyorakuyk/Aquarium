@@ -14,6 +14,7 @@ import {
   type TagRunRecord,
   type TagUpdate,
 } from './affect-repo.ts';
+import { createStickerQueries, type StickerRepository } from './sticker-repo.ts';
 
 export interface MessageStorageRecord {
   sessionId: string;
@@ -121,7 +122,7 @@ export interface StoredPipelineTrace extends PipelineTraceRecord {
   id: number;
 }
 
-export interface StoreRepository extends PersonaVersionRepository {
+export interface StoreRepository extends PersonaVersionRepository, StickerRepository {
   saveMessage(message: MessageStorageRecord): boolean;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
   messagesInRange(sessionId: string, fromTime: number, toTime: number): MessageStorageRecord[];
@@ -312,6 +313,7 @@ export function createRepository(
     ...createPanelQueries(database, clock),
     ...createAffectQueries(database),
     ...createPersonaVersionRepository(database, clock),
+    ...createStickerQueries(database),
     saveMessage(message) {
       const result = insertMessage.run(
         message.sessionId,

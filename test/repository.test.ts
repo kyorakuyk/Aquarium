@@ -98,6 +98,37 @@ test('setCaption 覆盖已有描述，缺失 key 返回 undefined', () => {
   });
 });
 
+test('表情按账号和 md5 去重，保存相对文件名与描述状态', () => {
+  withRepository((repository) => {
+    const md5 = '0123456789abcdef0123456789abcdef';
+    const detail = {
+      account: 900000001,
+      emojiId: 'emoji-one',
+      md5,
+      descQq: 'QQ 备注',
+    };
+    const inserted = repository.upsertSticker(detail, 100);
+    assert.equal(inserted.inserted, true);
+    repository.setStickerFile(inserted.sticker.id, `${md5}.gif`, 101);
+    repository.saveStickerDescription(inserted.sticker.id, '开心啦', ['开心'], 102);
+
+    const duplicate = repository.upsertSticker({ ...detail, emojiId: 'emoji-two' }, 103);
+    assert.equal(duplicate.inserted, false);
+    assert.equal(duplicate.sticker.id, inserted.sticker.id);
+    assert.equal(duplicate.sticker.emojiId, 'emoji-two');
+    assert.equal(duplicate.sticker.file, `${md5}.gif`);
+    assert.equal(duplicate.sticker.descAi, '开心啦');
+    assert.deepEqual(duplicate.sticker.tags, ['开心']);
+    assert.equal(duplicate.sticker.descriptionAttempts, 1);
+
+    repository.markMissingStickers(detail.account, [], 104);
+    assert.equal(repository.stickerById(inserted.sticker.id)?.missing, true);
+    const restored = repository.upsertSticker(detail, 105);
+    assert.equal(restored.sticker.missing, false);
+    assert.equal(repository.listStickers(detail.account).length, 1);
+  });
+});
+
 test('recentDecisions 返回最新决策并还原 detail JSON', () => {
   withRepository((repository) => {
     repository.recordDecision({

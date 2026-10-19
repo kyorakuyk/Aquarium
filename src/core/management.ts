@@ -37,8 +37,24 @@ function parseOwnerCommand(message: IncomingMessage, ownerId: number): Managemen
   return parseCommand(message.plainText);
 }
 
+function isStickerCollectionRequest(message: IncomingMessage): boolean {
+  const text = message.plainText.replace(/\s/gu, '');
+  return (text === '收藏' || text === '收藏这个')
+    && message.segments.some((segment) => segment.type === 'reply');
+}
+
+function repliedMessageHasImage(message: IncomingMessage, repository: StoreRepository): boolean {
+  const reply = message.segments.find((segment) => segment.type === 'reply');
+  if (!reply || reply.type !== 'reply') return false;
+  const stored = repository.messageBySessionAndId(sessionId(message.session), reply.messageId);
+  return stored?.segments.some((segment) => (
+    typeof segment === 'object' && segment !== null && !Array.isArray(segment)
+    && (segment as Record<string, unknown>).type === 'image'
+  )) ?? false;
+}
+
 export function isManagementCommand(message: IncomingMessage, ownerId: number): boolean {
-  return parseOwnerCommand(message, ownerId) !== undefined;
+  return isStickerCollectionRequest(message) || parseOwnerCommand(message, ownerId) !== undefined;
 }
 
 function budgetLabel(state: ReturnType<typeof budgetState>): string {
@@ -65,6 +81,7 @@ export function createManagementCommands(options: {
   getNickname?: () => string;
   now?: () => number;
   onError?: (error: unknown, message: IncomingMessage) => void;
+  collectSticker?: (message: IncomingMessage) => Promise<{ ok: boolean; reason?: string }>;
 }): ManagementCommands {
   const now = options.now ?? Date.now;
   const mutedUntil = new Map<string, number>();
@@ -121,6 +138,42 @@ export function createManagementCommands(options: {
 
   async function handle(message: IncomingMessage): Promise<boolean> {
     const config = options.getConfig();
+    if (isStickerCollectionRequest(message)) {
+      if (config.owner === 0 || message.senderId !== config.owner) return true;
+      if (!options.collectSticker || !repliedMessageHasImage(message, options.repository)) return false;
+
+      const inserted = options.repository.saveMessage({
+        sessionId: sessionId(message.session),
+        messageId: message.messageId,
+        senderId: message.senderId,
+        senderName: message.senderName,
+        isSelf: false,
+        plainText: message.plainText,
+        segments: message.segments,
+        time: message.time,
+      });
+      if (!inserted) {
+        recordDecision(message, 'duplicate', { command: 'sticker_collect' });
+        return true;
+      }
+
+      let result: { ok: boolean; reason?: string };
+      try {
+        result = await options.collectSticker(message);
+      } catch (error) {
+        options.onError?.(error, message);
+        result = { ok: false, reason: '收藏操作失败' };
+      }
+      const sent = await sendDirect(
+        message,
+        result.ok ? '收好了' : `没收藏上：${result.reason || '收藏操作失败'}`,
+      );
+      recordDecision(message, result.ok && sent ? 'command_sticker_collect' : 'command_sticker_collect_error', {
+        command: 'sticker_collect',
+      }, sent);
+      return true;
+    }
+
     const command = parseOwnerCommand(message, config.owner);
     if (!command) return false;
 

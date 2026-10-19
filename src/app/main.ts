@@ -28,6 +28,7 @@ import type { Host } from '../host/types.ts';
 import { bindHostTrayAfterLoad, createWindowsTray } from '../host/tray.ts';
 import { createWindowsHost } from '../host/windows/host.ts';
 import { createAccountActivityRouter } from './activity-routing.ts';
+import { createAccountStickerService, startStickerSyncTimer } from './stickers.ts';
 import { startAdapterForHost } from './adapter-start.ts';
 import {
   createHostLifecycleQueue,
@@ -59,6 +60,7 @@ pruneTraces();
 const debugPruneTimer = setInterval(pruneTraces, 6 * 60 * 60 * 1000);
 debugPruneTimer.unref();
 const adapters: OneBotAdapter[] = [];
+const stickerServices: ReturnType<typeof createAccountStickerService>[] = [];
 const injectedUins = new Set<number>();
 const panelAccounts: PanelAccountRuntime[] = [];
 const managementControllers: ManagementCommands[] = [];
@@ -260,6 +262,16 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
 
   adapters.push(adapter);
   let currentStatus: AdapterStatus = managedHost ? 'waiting_login' : 'connecting';
+  const stickerService = createAccountStickerService({
+    adapter,
+    root: process.cwd(),
+    repository,
+    getConfig: () => configWatcher.getConfig(),
+    getPromptTemplate: () => promptTemplateStore.get().stickerDescribe,
+    onError: () => logger.error('表情库同步或处理失败；后续同步将重试未完成项目。'),
+  });
+  stickerServices.push(stickerService);
+  subscriptions.push(startStickerSyncTimer(stickerService, () => currentStatus === 'online', () => {}));
   adapterStatuses.set(accountConfig.uin, currentStatus);
   panelAccounts.push({
     adapter,
@@ -275,6 +287,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     onError: (error, message) => {
       logger.error(`管理指令消息 ${message.messageId} 执行失败：${describeError(error)}`);
     },
+    collectSticker: (message) => stickerService.collect(message),
   });
   managementControllers.push(management);
   const pipeline = createMessagePipeline({
@@ -312,6 +325,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
       void catchUpHistory().catch((error: unknown) => {
         logger.error(`账号 ${adapter.account} 的离线补课启动失败：${describeError(error)}`);
       });
+      void stickerService.sync().catch(() => {});
     }
   }));
   const activityRouter = createAccountActivityRouter({
@@ -357,6 +371,7 @@ await startPanelWhileAccountStartupRuns(accountStartup, () => {
           },
           repository,
           accounts: () => panelAccounts,
+          stickerServices: () => stickerServices,
           historyImports,
           sleepWakeState,
           cliRuntime,
