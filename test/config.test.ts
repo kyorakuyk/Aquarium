@@ -52,6 +52,23 @@ test('stickers 默认关闭并校验比例、冷却与候选数', () => {
   }));
 });
 
+test('privacy 兼容旧配置、填充字段默认值并校验类型', () => {
+  const legacyConfig = structuredClone(exampleConfig) as Record<string, unknown>;
+  delete legacyConfig.privacy;
+  const legacy = AquariumConfigSchema.parse(legacyConfig);
+  const partial = AquariumConfigSchema.parse({
+    ...legacyConfig,
+    privacy: { enabled: false, promoteMentions: 4 },
+  });
+
+  assert.deepEqual(legacy.privacy, { enabled: true, promoteMentions: 3, avoidMinutes: 10 });
+  assert.deepEqual(partial.privacy, { enabled: false, promoteMentions: 4, avoidMinutes: 10 });
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...legacyConfig,
+    privacy: { enabled: true, promoteMentions: '3', avoidMinutes: 10 },
+  }).success, false);
+});
+
 test('V4 defaults keep legacy provider and slot configuration compatible', () => {
   const legacyConfig = structuredClone(exampleConfig) as Record<string, any>;
   for (const provider of Object.values(legacyConfig.providers) as Array<Record<string, unknown>>) {

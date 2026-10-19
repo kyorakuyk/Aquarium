@@ -134,6 +134,16 @@ const stickersSchema = z.object({
   candidates: 8,
 });
 
+const privacySchema = z.object({
+  enabled: z.boolean().default(true),
+  promoteMentions: z.number().int().min(2).default(3),
+  avoidMinutes: z.number().int().positive().default(10),
+}).strict().default({
+  enabled: true,
+  promoteMentions: 3,
+  avoidMinutes: 10,
+});
+
 const moodSchema = z.object({
   enabled: z.boolean().default(true),
   baseline: z.object({
@@ -189,6 +199,7 @@ export const AquariumConfigSchema = z.object({
   host: hostSchema,
   send: sendSchema,
   stickers: stickersSchema,
+  privacy: privacySchema,
   panel: z.object({
     host: z.string().min(1),
     port: z.number().int().min(1).max(65535),

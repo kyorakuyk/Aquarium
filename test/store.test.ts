@@ -11,7 +11,7 @@ function createDatabaseFixture() {
   return { root, databasePath: path.join(root, 'aquarium.db') };
 }
 
-test('openDatabase 开启 WAL 并创建版本 10 数据表', () => {
+test('openDatabase 开启 WAL 并创建版本 11 数据表', () => {
   const { root, databasePath } = createDatabaseFixture();
   let database: DatabaseSync | undefined;
   try {
@@ -20,7 +20,7 @@ test('openDatabase 开启 WAL 并创建版本 10 数据表', () => {
       INSERT INTO messages (session_id, message_id, sender_id, sender_name, is_self, plain_text, segments_json, time)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run('900000001:group:123456', 'migration-preserve', 42, '群友', 0, '保留', '[]', 123);
-    database.exec('DROP TABLE stickers; UPDATE schema_version SET version = 7 WHERE id = 1;');
+    database.exec('DROP TABLE stickers; DROP TABLE private_facts; DROP TABLE privacy_runs; UPDATE schema_version SET version = 7 WHERE id = 1;');
     database.close();
     database = openDatabase(databasePath);
     const journal = database.prepare('PRAGMA journal_mode').get() as { journal_mode: string };
@@ -43,6 +43,8 @@ test('openDatabase 开启 WAL 并创建版本 10 数据表', () => {
       'mood_state',
       'persona_versions',
       'pipeline_traces',
+      'privacy_runs',
+      'private_facts',
       'schema_version',
       'stickers',
       'tag_runs',
@@ -53,14 +55,14 @@ test('openDatabase 开启 WAL 并创建版本 10 数据表', () => {
       'id', 'time', 'session_id', 'message_id', 'slot', 'provider', 'model',
       'prompt_json', 'response_text', 'prompt_hash', 'detail_json',
     ]);
-    assert.equal(version.version, 10);
+    assert.equal(version.version, 11);
   } finally {
     if (database?.isOpen) database.close();
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
-test('openDatabase 创建版本 10 的情绪、好感度、标签、人设版本与表情库表', () => {
+test('openDatabase 创建版本 11 的情绪、好感度、标签、人设版本与表情库表', () => {
   const { root, databasePath } = createDatabaseFixture();
   let database: DatabaseSync | undefined;
   try {
@@ -71,7 +73,7 @@ test('openDatabase 创建版本 10 的情绪、好感度、标签、人设版本
     const stickerColumns = database.prepare("PRAGMA table_info('stickers')").all() as Array<{ name: string }>;
     const stickerIndexes = database.prepare("PRAGMA index_list('stickers')").all() as Array<{ unique: number }>;
 
-    assert.equal(version.version, 10);
+    assert.equal(version.version, 11);
     assert.deepEqual(columns.map((column) => column.name), [
       'id', 'time', 'session_id', 'message_id', 'trace_json',
     ]);
@@ -159,7 +161,7 @@ test('版本 8 数据库为表情频控增加决策时间索引并保留历史',
     const indexes = upgraded.prepare("PRAGMA index_list('decisions')").all() as Array<{ name: string }>;
     const retained = upgraded.prepare('SELECT detail_json FROM decisions WHERE id = 1').get() as { detail_json: string };
 
-    assert.equal(version.version, 10);
+    assert.equal(version.version, 11);
     assert.ok(indexes.some((index) => index.name === 'idx_decisions_session_time'));
     assert.equal(retained.detail_json, '{"kept":true}');
   } finally {
@@ -182,7 +184,7 @@ test('重复打开数据库不会重复应用迁移', () => {
     const version = second.prepare('SELECT version FROM schema_version WHERE id = 1').get() as { version: number };
     const messageIndexes = second.prepare("PRAGMA index_list('messages')").all() as Array<{ name: string }>;
 
-    assert.equal(version.version, 10);
+    assert.equal(version.version, 11);
     assert.ok(messageIndexes.some((index) => index.name === 'idx_messages_session_time'));
     const debugIndexes = second.prepare("PRAGMA index_list('debug_traces')").all() as Array<{ name: string }>;
     assert.ok(debugIndexes.some((index) => index.name === 'idx_debug_traces_session_time'));
@@ -223,7 +225,7 @@ test('版本 2 数据库迁移 pipeline_traces 时保留既有调试记录', () 
     const version = upgraded.prepare('SELECT version FROM schema_version WHERE id = 1').get() as { version: number };
     const retained = upgraded.prepare('SELECT response_text FROM debug_traces WHERE id = 1').get() as { response_text: string };
 
-    assert.equal(version.version, 10);
+    assert.equal(version.version, 11);
     assert.equal(retained.response_text, 'kept');
     assert.equal(upgraded.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pipeline_traces'").get() !== undefined, true);
   } finally {
@@ -254,7 +256,7 @@ test('版本 1 数据库会升级到包含调试追踪与情绪表的当前版�
     const table = upgraded.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'debug_traces'")
       .get() as { name: string } | undefined;
 
-    assert.equal(version.version, 10);
+    assert.equal(version.version, 11);
     assert.equal(table?.name, 'debug_traces');
     assert.equal(upgraded.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pipeline_traces'").get() !== undefined, true);
   } finally {
@@ -264,7 +266,7 @@ test('版本 1 数据库会升级到包含调试追踪与情绪表的当前版�
   }
 });
 
-test('版本 3 数据库迁移到版本 10 时新增情绪、好感度、人设版本与标签表', () => {
+test('版本 3 数据库迁移到版本 11 时新增情绪、好感度、人设版本与标签表', () => {
   const { root, databasePath } = createDatabaseFixture();
   let legacy: DatabaseSync | undefined;
   let upgraded: DatabaseSync | undefined;
@@ -292,7 +294,7 @@ test('版本 3 数据库迁移到版本 10 时新增情绪、好感度、人设�
       .all() as Array<{ name: string }>;
     const retained = upgraded.prepare('SELECT trace_json FROM pipeline_traces WHERE id = 1').get() as { trace_json: string };
 
-    assert.equal(version.version, 10);
+    assert.equal(version.version, 11);
     assert.deepEqual(tables.map((table) => table.name), [
       'affinity_events', 'affinity_state', 'mood_events', 'mood_state', 'tag_runs', 'tags',
     ]);
@@ -304,7 +306,7 @@ test('版本 3 数据库迁移到版本 10 时新增情绪、好感度、人设�
   }
 });
 
-test('版本 4 数据库迁移到版本 10 并保留既有数据', () => {
+test('版本 4 数据库迁移到版本 11 并保留既有数据', () => {
   const { root, databasePath } = createDatabaseFixture();
   let legacy: DatabaseSync | undefined;
   let upgraded: DatabaseSync | undefined;
@@ -341,7 +343,7 @@ test('版本 4 数据库迁移到版本 10 并保留既有数据', () => {
     const affinityTables = upgraded.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('affinity_state', 'affinity_events') ORDER BY name")
       .all() as Array<{ name: string }>;
 
-    assert.equal(version.version, 10);
+    assert.equal(version.version, 11);
     assert.deepEqual(affinityTables.map((table) => table.name), ['affinity_events', 'affinity_state']);
     assert.equal(retained.value, 'preserved');
     assert.equal(retainedMood.id, 1);
@@ -402,10 +404,61 @@ test('版本 5 用量迁移保留旧行并将账号标记为未知', () => {
     const version = upgraded.prepare('SELECT version FROM schema_version WHERE id = 1').get() as { version: number };
     assert.equal(oldRow.id, 1);
     assert.equal(oldRow.account, null);
-    assert.equal(version.version, 10);
+    assert.equal(version.version, 11);
   } finally {
     if (legacy?.isOpen) legacy.close();
     if (upgraded?.isOpen) upgraded.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('版本 10 迁移新增私聊事实与运行游标并保留原消息', () => {
+  const { root, databasePath } = createDatabaseFixture();
+  let database: DatabaseSync | undefined;
+  try {
+    database = openDatabase(databasePath);
+    database.prepare(`
+      INSERT INTO messages (session_id, message_id, sender_id, sender_name, is_self, plain_text, segments_json, time)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run('900000001:private:42', 'privacy-migration', 42, '小明', 0, '最近在备考', '[]', 123);
+    database.exec(`
+      DROP TABLE IF EXISTS private_facts;
+      DROP TABLE IF EXISTS privacy_runs;
+      UPDATE schema_version SET version = 10 WHERE id = 1;
+    `);
+    database.close();
+
+    database = openDatabase(databasePath);
+    const version = database.prepare('SELECT version FROM schema_version WHERE id = 1').get() as { version: number };
+    const factColumns = database.prepare("PRAGMA table_info('private_facts')").all() as Array<{ name: string }>;
+    const runColumns = database.prepare("PRAGMA table_info('privacy_runs')").all() as Array<{ name: string }>;
+    const retained = database.prepare('SELECT plain_text FROM messages WHERE message_id = ?')
+      .get('privacy-migration') as { plain_text: string };
+
+    assert.equal(version.version, 11);
+    assert.deepEqual(factColumns.map(({ name }) => name), [
+      'id', 'account', 'owner_id', 'session_id', 'text', 'keywords_json', 'level', 'level_source',
+      'mentions', 'mention_evidence_json', 'evidence_json', 'status', 'created_at', 'updated_at',
+    ]);
+    assert.deepEqual(runColumns.map(({ name }) => name), [
+      'account', 'session_id', 'last_run_at', 'last_message_time',
+    ]);
+    assert.equal(retained.plain_text, '最近在备考');
+    database.prepare(`
+      INSERT INTO private_facts
+        (account, owner_id, session_id, text, keywords_json, level, level_source, mentions,
+         mention_evidence_json, evidence_json, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(900000001, 42, '900000001:private:42', '最近在备考，压力较大', '["备考","压力"]',
+      'L0', 'auto', 0, '[]', '[]', 'active', 1, 1);
+    assert.throws(() => database?.prepare(`
+      INSERT INTO private_facts
+        (account, owner_id, session_id, text, keywords_json, level, level_source, mentions,
+         mention_evidence_json, evidence_json, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(900000001, 42, '900000001:private:42', '非法等级', '[]', 'L3', 'auto', 0, '[]', '[]', 'active', 1, 1));
+  } finally {
+    if (database?.isOpen) database.close();
     fs.rmSync(root, { recursive: true, force: true });
   }
 });

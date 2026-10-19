@@ -517,3 +517,50 @@ test('已确认标签注入群与群友块，私聊不注入，丢弃数进追�
     assert.equal(privateDetail.droppedTags, undefined);
   });
 });
+
+test('标签注入在来源会话与目标会话不一致时经策略拒绝', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const harness = createImpressionsHarness(repository, makeConfig(), personaRoot);
+    const sourceSessionId = `${account}:group:999999`;
+    const at = harness.clock.value;
+    for (const userId of [null, 42]) {
+      const text = userId === null ? '其他群氛围' : '其他群成员标签';
+      repository.insertTag({
+        account,
+        sessionId: sourceSessionId,
+        userId,
+        text,
+        norm: text,
+        status: 'confirmed',
+        source: 'auto',
+        samples: 2,
+        evidence: [],
+        firstSeen: at,
+        lastSeen: at,
+        supersededBy: null,
+        updatedAt: at,
+      });
+    }
+
+    const blocks = harness.impressionsService.promptBlocks({
+      session: groupSession,
+      sessionId: sourceSessionId,
+      senderId: 42,
+      senderName: '小明',
+      now: at,
+      template: {
+        source: '',
+        version: 'test',
+        system: '',
+        groupNote: '',
+        request: '',
+        groupTags: 'group {{tags}}',
+        memberTags: 'member {{name}} {{tags}}',
+        stickers: '',
+      },
+    });
+
+    assert.equal(blocks.groupTags, undefined);
+    assert.equal(blocks.memberTags, undefined);
+  });
+});
