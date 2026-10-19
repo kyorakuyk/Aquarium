@@ -142,6 +142,34 @@ test('假模型下完成一次提取：观察转正、新标签、成员标签�
   });
 });
 
+test('外链分享卡片宣传文案不作为群友观点或标签证据', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const key = sessionId(groupSession);
+    const harness = createImpressionsHarness(repository, makeConfig({ nicknames: [] }), personaRoot, {
+      extractText: JSON.stringify({
+        group: { observe: [], new: [{ text: '爱聊游戏', messageId: 'share-card' }], contradict: [] },
+        members: [],
+      }),
+    });
+
+    await pump(harness, groupSession, 9);
+    harness.clock.value += 1_000;
+    await harness.pipeline(makeIncoming({
+      messageId: 'share-card',
+      time: harness.clock.value - 1_000,
+      plainText: '这张地图超级好玩，快点击链接和我一起开黑→平台标题：@url:https://example.invalid/card',
+    }));
+    await harness.impressionsService.idle();
+
+    const prompt = harness.extractRequests[0] ?? '';
+    assert.ok(prompt.includes('分享了外链卡片'));
+    assert.equal(prompt.includes('超级好玩'), false);
+    assert.equal(prompt.includes('example.invalid'), false);
+    assert.equal(repository.listTagsForSubject(account, key, null).length, 0);
+    assert.equal(harness.summaries[0]?.dropped, 1);
+  });
+});
+
 test('触发条件：60 条且 30 分钟，或 10 条且 6 小时', async () => {
   await withRepository(async (repository, personaRoot) => {
     const groupA: SessionKey = { account, kind: 'group', peer: 111111 };

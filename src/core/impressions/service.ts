@@ -11,6 +11,7 @@ import {
   asContradictItem,
   asNewItem,
   asObserveItem,
+  isExternalLinkShareText,
   runExtract,
   type ExtractSubjectItems,
   type ParsedExtractResponse,
@@ -128,7 +129,13 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     account: number,
     sessionKey: string,
     userId: number | null,
-    recordsById: Map<string, { time: number; plainText: string; senderId: number; isSelf: boolean }>,
+    recordsById: Map<string, {
+      time: number;
+      plainText: string;
+      senderId: number;
+      isSelf: boolean;
+      externalLinkShare: boolean;
+    }>,
     at: number,
     counters: { inserted: number; observed: number; superseded: number; dropped: number },
   ): void {
@@ -137,7 +144,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
 
     const evidenceFor = (messageId: string, evidenceUserId: number | null) => {
       const record = recordsById.get(messageId);
-      if (!record || record.isSelf) return undefined;
+      if (!record || record.isSelf || record.externalLinkShare) return undefined;
       if (evidenceUserId !== null && record.senderId !== evidenceUserId) return undefined;
       return {
         messageId,
@@ -352,6 +359,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         plainText: record.plainText,
         senderId: record.senderId,
         isSelf: record.isSelf,
+        externalLinkShare: isExternalLinkShareText(record.plainText),
       },
     ]));
     const senderIds = new Set<number>();
