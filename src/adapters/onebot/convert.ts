@@ -40,7 +40,13 @@ function convertOneBotSegment(raw: unknown): Segment {
       const file = stringValue(data.file);
       const url = stringValue(data.url) ?? file;
       if (!url) return { type: 'unknown', raw };
-      return file ? { type: 'image', url, file } : { type: 'image', url };
+      const subType = accountNumber(data.sub_type);
+      return {
+        type: 'image',
+        url,
+        ...(file === undefined ? {} : { file }),
+        ...(subType === undefined ? {} : { subType }),
+      };
     }
     case 'reply': {
       const messageId = stringValue(data.id);

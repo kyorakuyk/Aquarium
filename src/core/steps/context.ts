@@ -53,7 +53,11 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     : ctx.options.repository.recentMessages(ctx.currentSessionId, contextCount))
     .map((record) => ({
       ...record,
-      plainText: messageTextWithImageCaptions(record, ctx.options.repository),
+      plainText: messageTextWithImageCaptions(
+        record,
+        ctx.options.repository,
+        ctx.state.promptTemplates.vision.version,
+      ),
     }));
   const tagBlocks = ctx.options.impressionsService?.promptBlocks({
     session: ctx.message.session,

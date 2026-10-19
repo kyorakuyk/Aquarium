@@ -14,7 +14,7 @@ export function sessionId(key: SessionKey): string {
 export type Segment =
   | { type: 'text'; text: string }
   | { type: 'at'; target: number | 'all' }
-  | { type: 'image'; url: string; file?: string }
+  | { type: 'image'; url: string; file?: string; subType?: number }
   | { type: 'reply'; messageId: string }
   | { type: 'face'; id: string }
   | { type: 'sticker'; emojiId: string }

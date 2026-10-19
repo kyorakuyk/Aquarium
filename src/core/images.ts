@@ -6,6 +6,7 @@ import type { SlotResult } from '../llm/slots.ts';
 import type { VisionPromptTemplate } from './prompt-templates.ts';
 
 const MAX_CAPTION_LENGTH = 30;
+const MAX_IMAGE_TEXT_LENGTH = 200;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const IMAGE_DOWNLOAD_TIMEOUT_MS = 10_000;
 const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
@@ -15,6 +16,13 @@ type ImageSegment = Extract<Segment, { type: 'image' }>;
 type VisionCall = (messages: OpenAI.ChatCompletionMessageParam[]) => Promise<SlotResult>;
 type ImageFetcher = (url: string, init: RequestInit) => Promise<Response>;
 export type ImageDownloader = (url: string) => Promise<string>;
+type VisionKind = 'sticker' | 'photo' | 'screenshot' | 'other';
+
+interface VisionDescription {
+  kind: VisionKind;
+  desc: string;
+  text: string;
+}
 
 class ImageHostNotAllowedError extends Error {
   readonly code = 'IMAGE_HOST_NOT_ALLOWED';
@@ -39,18 +47,48 @@ function isImageSegment(value: unknown): value is ImageSegment {
   return isRecord(value)
     && value.type === 'image'
     && typeof value.url === 'string'
-    && (value.file === undefined || typeof value.file === 'string');
+    && (value.file === undefined || typeof value.file === 'string')
+    && (value.subType === undefined || typeof value.subType === 'number');
 }
 
-function imageCacheKey(image: ImageSegment): string {
-  if (image.file) return image.file;
-  return createHash('sha1').update(image.url).digest('hex');
+export function imageCaptionCacheKey(image: ImageSegment, visionTemplateVersion: string): string {
+  const source = image.file || createHash('sha1').update(image.url).digest('hex');
+  return `vision:${visionTemplateVersion}:subtype-${image.subType ?? 0}:${source}`;
 }
 
 function normalizeCaption(value: string): string {
   return Array.from(value.replace(/\s+/gu, ' ').trim())
     .slice(0, MAX_CAPTION_LENGTH)
     .join('');
+}
+
+function parseVisionDescription(value: string): VisionDescription {
+  const fallback = (): VisionDescription => ({ kind: 'other', desc: normalizeCaption(value), text: '' });
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!isRecord(parsed)
+      || !['sticker', 'photo', 'screenshot', 'other'].includes(String(parsed.kind))
+      || typeof parsed.desc !== 'string'
+      || typeof parsed.text !== 'string') return fallback();
+    const desc = normalizeCaption(parsed.desc);
+    if (!desc) return fallback();
+    return {
+      kind: parsed.kind as VisionKind,
+      desc,
+      text: Array.from(parsed.text).slice(0, MAX_IMAGE_TEXT_LENGTH).join(''),
+    };
+  } catch {
+    return fallback();
+  }
+}
+
+function renderVisionDescription(description: VisionDescription, forceSticker: boolean): string {
+  const kind = forceSticker ? 'sticker' : description.kind;
+  const label = kind === 'sticker' ? '表情包' : kind === 'screenshot' ? '截图' : '图片';
+  const prefix = `[${label}：${description.desc}`;
+  if (!description.text.trim()) return `${prefix}]`;
+  const textLabel = kind === 'screenshot' ? '｜文字：' : '｜图上写着';
+  return `${prefix}${textLabel}“${description.text}”]`;
 }
 
 function isSupportedImageUrl(value: string): boolean {
@@ -179,7 +217,7 @@ export async function captionIncomingImages(options: {
 
   for (const segment of options.message.segments) {
     if (segment.type !== 'image') continue;
-    const key = imageCacheKey(segment);
+    const key = imageCaptionCacheKey(segment, options.visionTemplate.version);
     if (options.repository.getCaption(key) !== undefined || attempted.has(key)) continue;
     attempted.add(key);
 
@@ -189,8 +227,9 @@ export async function captionIncomingImages(options: {
       }
       const imageData = await (options.downloadImage ?? downloadImageAsDataUrl)(segment.url);
       const result = await options.callVision(visionMessages(imageData, options.visionTemplate));
-      const caption = normalizeCaption(result.text);
-      if (!caption) throw new Error('vision 槽位返回了空描述');
+      const description = parseVisionDescription(result.text);
+      if (!description.desc) throw new Error('vision 槽位返回了空描述');
+      const caption = renderVisionDescription(description, segment.subType === 1);
       options.repository.setCaption(key, caption, now());
     } catch (error) {
       options.onError?.(error, options.message);
@@ -198,19 +237,24 @@ export async function captionIncomingImages(options: {
   }
 }
 
-function imagePlaceholder(image: ImageSegment, repository: StoreRepository): string {
-  const caption = normalizeCaption(repository.getCaption(imageCacheKey(image)) ?? '');
-  return caption ? `[图片：${caption}]` : '[图片]';
+function imagePlaceholder(
+  image: ImageSegment,
+  repository: StoreRepository,
+  visionTemplateVersion: string,
+): string {
+  return repository.getCaption(imageCaptionCacheKey(image, visionTemplateVersion))
+    ?? (image.subType === 1 ? '[表情包]' : '[图片]');
 }
 
 export function messageTextWithImageCaptions(
   message: MessageStorageRecord,
   repository: StoreRepository,
+  visionTemplateVersion: string,
 ): string {
   if (!message.segments.some(isImageSegment)) return message.plainText;
   return message.segments.map((segment) => {
     if (isTextSegment(segment)) return segment.text;
-    if (isImageSegment(segment)) return imagePlaceholder(segment, repository);
+    if (isImageSegment(segment)) return imagePlaceholder(segment, repository, visionTemplateVersion);
     return '';
   }).join('');
 }
