@@ -64,7 +64,7 @@ test('provider model endpoint applies overrides and caches until forced refresh'
 
   await withPanel(async ({ app }) => {
     const headers = { ...authHeaders(), 'Content-Type': 'application/json' };
-    const writeOverride = async (modelParams: Record<string, { temperature?: boolean; maxTokens?: boolean }>) => app.request('/api/providers/deepseek', {
+    const writeOverride = async (modelParams: Record<string, { temperature?: boolean | null; maxTokens?: boolean | null }>) => app.request('/api/providers/deepseek', {
       method: 'PATCH',
       headers,
       body: JSON.stringify({ modelParams }),
@@ -90,6 +90,18 @@ test('provider model endpoint applies overrides and caches until forced refresh'
       temperature: true, maxTokens: false,
     });
     assert.equal(requests, 1);
+
+    const reset = await writeOverride({ 'override-model': { temperature: null } });
+    assert.equal(reset.status, 200);
+    const resetConfigResponse = await app.request('/api/models', { headers: authHeaders() });
+    const resetConfig = await resetConfigResponse.json() as { providers: Array<{ id: string; modelParams?: Record<string, { temperature?: boolean; maxTokens?: boolean }> }> };
+    assert.deepEqual(resetConfig.providers.find((provider) => provider.id === 'deepseek')?.modelParams?.['override-model'], {
+      maxTokens: false,
+    });
+    const afterReset = await readModels(await app.request('/api/providers/deepseek/models', { headers: authHeaders() }));
+    assert.deepEqual(afterReset.models[0]?.params, {
+      temperature: 'unknown', maxTokens: 'unsupported', reasoning: 'unknown',
+    });
 
     await app.request('/api/providers/deepseek/models?refresh=1', { headers: authHeaders() });
     assert.equal(requests, 2);

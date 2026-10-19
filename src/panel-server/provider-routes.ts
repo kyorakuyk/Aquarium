@@ -4,6 +4,7 @@ import {
   AquariumConfigSchema,
   ProviderConfigSchema,
   ProviderModelParamsSchema,
+  ProviderModelParamsPatchSchema,
   ReasoningFieldSchema,
   SlotEntryConfigSchema,
   type AquariumConfig,
@@ -38,7 +39,7 @@ const providerPatchSchema = z.object({
   baseUrl: z.string().min(1).max(2048).optional(),
   apiKeyEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/).optional(),
   reasoningField: ReasoningFieldSchema.optional(),
-  modelParams: ProviderModelParamsSchema.optional(),
+  modelParams: ProviderModelParamsPatchSchema.optional(),
   command: z.string().min(1).max(2048).optional(),
   args: z.array(z.string().max(2048)).max(64).optional(),
   prewarm: z.boolean().optional(),
@@ -208,7 +209,14 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
       const mergedModelParams = current.kind === 'api' ? { ...(current.modelParams ?? {}) } : {};
       if (current.kind === 'api' && patch.modelParams !== undefined) {
         for (const [modelId, overrides] of Object.entries(patch.modelParams)) {
-          mergedModelParams[modelId] = { ...(mergedModelParams[modelId] ?? {}), ...overrides };
+          const mergedOverride = { ...(mergedModelParams[modelId] ?? {}) };
+          for (const parameter of ['temperature', 'maxTokens', 'reasoning'] as const) {
+            const value = overrides[parameter];
+            if (value === null) delete mergedOverride[parameter];
+            else if (value !== undefined) mergedOverride[parameter] = value;
+          }
+          if (Object.keys(mergedOverride).length === 0) delete mergedModelParams[modelId];
+          else mergedModelParams[modelId] = mergedOverride;
         }
       }
       const merged = {

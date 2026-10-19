@@ -199,7 +199,7 @@ export function ModelsPage() {
     }
   }
 
-  async function saveModelParamOverride(providerId: string, modelId: string, parameter: ModelParameterName, supported: boolean): Promise<string | undefined> {
+  async function saveModelParamOverride(providerId: string, modelId: string, parameter: ModelParameterName, supported: boolean | undefined): Promise<string | undefined> {
     if (busy || slotSaveInFlight.current || modelParamSaveInFlight.current) return '另一个设置正在保存。';
     const provider = view?.providers.find((candidate) => candidate.id === providerId);
     const normalizedModelId = modelId.trim();
@@ -207,7 +207,7 @@ export function ModelsPage() {
     modelParamSaveInFlight.current = true;
     setBusy(true);
     try {
-      const modelParams = { [normalizedModelId]: { [parameter]: supported } };
+      const modelParams = { [normalizedModelId]: { [parameter]: supported ?? null } };
       await patch(`/api/providers/${encodeURIComponent(providerId)}`, { modelParams });
       const readback = await apiRequest<ModelsView>('/api/models');
       const savedProvider = readback.providers.find((candidate) => candidate.id === providerId);
@@ -270,11 +270,11 @@ export function ModelsPage() {
         </section>
 
         <section className="section-block">
-          <div className="section-heading"><div><h2>用途</h2><p className="model-help">回复建议用 API，CLI 适合后台任务。点击“使用的模型”调整降级顺序。</p></div></div>
+          <div className="section-heading"><div><h2>用途</h2></div></div>
           <div className="panel-card table-card">
             <div className="table-scroll">
               <table className="models-slot-table">
-                <thead><tr><th>用途</th><th>使用的模型（按顺序降级）</th><th>温度</th><th>思考强度</th><th>最大长度</th><th>操作</th></tr></thead>
+                <thead><tr><th>用途</th><th>使用的模型（按顺序降级） <span className="models-help-mark" title="回复建议用 API，CLI 适合后台任务；点击模型名称调整降级顺序。" aria-label="用途表说明">ⓘ</span></th><th>温度</th><th>思考强度</th><th>最大长度</th><th>操作</th></tr></thead>
                 <tbody>
                   {MODEL_SLOT_DEFS.map((definition) => {
                     const chain = view.slots[definition.slot] ?? [];

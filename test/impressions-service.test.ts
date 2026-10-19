@@ -178,6 +178,22 @@ test('触发条件：60 条且 30 分钟，或 10 条且 6 小时', async () => 
   });
 });
 
+test('常规自动提取仍跳过未启用群', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const config = makeConfig({
+      nicknames: [],
+      sessions: { [sessionId(groupSession)]: { enabled: false } },
+    });
+    const harness = createImpressionsHarness(repository, config, personaRoot);
+
+    await pump(harness, groupSession, 10);
+    await harness.impressionsService.idle();
+
+    assert.equal(harness.extractRequests.length, 0);
+    assert.equal(repository.getTagRun(account, sessionId(groupSession)), undefined);
+  });
+});
+
 test('非法条目被单独丢弃，其余条目照常生效', async () => {
   await withRepository(async (repository, personaRoot) => {
     const key = sessionId(groupSession);

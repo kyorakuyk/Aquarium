@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import type { ProtocolAdapter } from '../../adapters/types.ts';
-import { resolveSession } from '../../config/resolve.ts';
 import type { AquariumConfig } from '../../config/schema.ts';
 import { sessionId, type IncomingMessage, type SessionKey } from '../events.ts';
 import type { ExtractTagsPromptTemplate } from '../prompt-templates.ts';
@@ -197,7 +196,6 @@ export function createHistoryImportService(options: HistoryImportServiceOptions)
     start(input) {
       if (input.session.kind !== 'group' || !TARGETS.has(input.target)) return undefined;
       const key = sessionId(input.session);
-      if (!resolveSession(options.getConfig(), input.session).enabled) return undefined;
       if (input.adapter.account !== input.session.account || runningSessions.has(key)) return undefined;
       const release = options.impressionsService.tryAcquireSession(key);
       if (!release) return undefined;

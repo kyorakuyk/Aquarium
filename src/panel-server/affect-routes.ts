@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AquariumConfig } from '../config/schema.ts';
 import { parseSessionId } from '../core/sessions.ts';
-import { resolveSession } from '../config/resolve.ts';
 import { bandOf, decayValue, nextBand } from '../core/mood/core.ts';
 import { buildMoodSeriesPoints, distanceToNextBand } from '../core/mood/series.ts';
 import { sleepEnergy, sleepPlan, type SleepWakeState } from '../core/sleep.ts';
@@ -316,7 +315,6 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     const runtime = options.accounts().find((candidate) => candidate.adapter.account === key.account);
     if (!runtime) return context.json({ error: 'Unknown account' }, 404);
     if (runtime.getStatus() !== 'online') return context.json({ error: '小号不在线' }, 503);
-    if (!resolveSession(options.getConfig(), key).enabled) return context.json({ error: '该群未启用' }, 409);
     if (historyImports.isRunning(id)) return context.json({ error: '该群已有导入任务' }, 409);
 
     const job = historyImports.start({ session: key, target: body.target, adapter: runtime.adapter });

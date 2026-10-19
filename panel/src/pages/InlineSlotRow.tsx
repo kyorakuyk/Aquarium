@@ -2,12 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import type { ModelProviderView, ModelReasoning, ModelSlotEntryView } from '../api.ts';
 import { modelParameterInfo, type ModelParameterName, type ProviderModelsState } from '../model-api.ts';
 import { chainSummary, REASONING_OPTIONS, type SlotDef } from '../models-view.ts';
-import { ModelParamField } from './ModelParamField.tsx';
+import { InlineModelParamCell } from './InlineModelParamCell.tsx';
 
 type EditableField = 'temperature' | 'reasoning' | 'maxTokens';
 type SlotDraft = { temperature: string; reasoning: ModelReasoning; maxTokens: string };
-type Feedback = { field: EditableField; message: string; success: boolean };
-
 function formatOptionalNumber(value: number | undefined): string {
   return value === undefined ? '' : String(value);
 }
@@ -29,7 +27,7 @@ export function InlineSlotRow({ definition, chain, providers, providerModels, di
   onEdit: () => void;
   onSave: (nextChain: ModelSlotEntryView[]) => Promise<string | undefined>;
   onLoadModels: (provider: ModelProviderView, refresh?: boolean) => Promise<unknown>;
-  onOverrideChange: (providerId: string, modelId: string, parameter: ModelParameterName, supported: boolean) => Promise<string | undefined>;
+  onOverrideChange: (providerId: string, modelId: string, parameter: ModelParameterName, supported: boolean | undefined) => Promise<string | undefined>;
 }) {
   const first = chain[0];
   const provider = first ? providers.find((candidate) => candidate.id === first.provider) : undefined;
@@ -45,8 +43,6 @@ export function InlineSlotRow({ definition, chain, providers, providerModels, di
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
   const [savingField, setSavingField] = useState<EditableField>();
-  const [feedback, setFeedback] = useState<Feedback>();
-  const feedbackTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (!dirtyRef.current.temperature) setDraft((current) => ({ ...current, temperature: serverDraft.temperature }));
@@ -60,9 +56,6 @@ export function InlineSlotRow({ definition, chain, providers, providerModels, di
   useEffect(() => {
     if (provider?.kind === 'api' && first?.model && providerModelStatus === undefined) void onLoadModels(provider);
   }, [first?.model, onLoadModels, provider?.id, provider?.kind, providerModelStatus]);
-  useEffect(() => () => {
-    if (feedbackTimer.current !== undefined) window.clearTimeout(feedbackTimer.current);
-  }, []);
 
   function markDirty(field: EditableField, value: boolean): void {
     const next = { ...dirtyRef.current, [field]: value };
@@ -70,46 +63,27 @@ export function InlineSlotRow({ definition, chain, providers, providerModels, di
     setDirty(next);
   }
 
-  function showFeedback(next: Feedback): void {
-    if (feedbackTimer.current !== undefined) window.clearTimeout(feedbackTimer.current);
-    setFeedback(next);
-    if (next.success) {
-      feedbackTimer.current = window.setTimeout(() => setFeedback(undefined), 900);
-    }
-  }
-
-  function restoreField(field: EditableField): void {
-    setDraft((current) => ({ ...current, [field]: serverDraft[field] }));
-    markDirty(field, false);
-  }
-
-  async function saveField(field: EditableField, rawValue: string | ModelReasoning): Promise<void> {
-    if (!first || disabled || savingField || !dirtyRef.current[field]) return;
+  async function saveField(field: EditableField, rawValue: string): Promise<string | undefined> {
+    if (!first || disabled || savingField || !dirtyRef.current[field]) return undefined;
     let value: number | string | undefined;
     if (field === 'temperature') {
-      const text = String(rawValue).trim();
+      const text = rawValue.trim();
       if (text !== '') {
         const parsed = Number(text);
         if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2) {
-          restoreField(field);
-          showFeedback({ field, message: '温度需在 0 到 2 之间。', success: false });
-          return;
+          return '温度需在 0 到 2 之间。';
         }
         if (Math.abs(parsed * 10 - Math.round(parsed * 10)) > 1e-8) {
-          restoreField(field);
-          showFeedback({ field, message: '温度步长为 0.1。', success: false });
-          return;
+          return '温度步长为 0.1。';
         }
         value = parsed;
       }
     } else if (field === 'maxTokens') {
-      const text = String(rawValue).trim();
+      const text = rawValue.trim();
       if (text !== '') {
         const parsed = Number(text);
         if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-          restoreField(field);
-          showFeedback({ field, message: '最大长度需为正整数。', success: false });
-          return;
+          return '最大长度需为正整数。';
         }
         value = parsed;
       }
@@ -123,15 +97,9 @@ export function InlineSlotRow({ definition, chain, providers, providerModels, di
         ? { ...first, maxTokens: value as number | undefined }
         : { ...first, reasoning: value as ModelReasoning };
     setSavingField(field);
-    if (feedbackTimer.current !== undefined) window.clearTimeout(feedbackTimer.current);
-    setFeedback(undefined);
     try {
       const error = await onSave(chain.map((entry, index) => index === 0 ? nextFirst : entry));
-      if (error) {
-        restoreField(field);
-        showFeedback({ field, message: error, success: false });
-        return;
-      }
+      if (error) return error;
       setDraft((current) => ({
         ...current,
         [field]: field === 'temperature' || field === 'maxTokens'
@@ -139,26 +107,21 @@ export function InlineSlotRow({ definition, chain, providers, providerModels, di
           : value as ModelReasoning,
       }));
       markDirty(field, false);
-      showFeedback({ field, message: '✓', success: true });
+      return undefined;
     } finally {
       setSavingField(undefined);
     }
   }
 
   const editingDisabled = disabled || savingField !== undefined;
-  const fallbackNote = chain.length > 1 ? <small className="slot-fallback-note">第 1 项；其余项在编辑中设置</small> : null;
-  const temperatureFeedback = feedback?.field === 'temperature' ? feedback : undefined;
-  const reasoningFeedback = feedback?.field === 'reasoning' ? feedback : undefined;
-  const maxTokensFeedback = feedback?.field === 'maxTokens' ? feedback : undefined;
   const modelList = first ? providerModels[first.provider]?.data : undefined;
   const temperatureInfo = modelParameterInfo(provider, first?.model ?? '', 'temperature', modelList);
   const reasoningInfo = modelParameterInfo(provider, first?.model ?? '', 'reasoning', modelList);
   const maxTokensInfo = modelParameterInfo(provider, first?.model ?? '', 'maxTokens', modelList);
   const capabilityLoading = provider?.kind === 'api' && providerModelStatus !== 'ready' && providerModelStatus !== 'error';
-  const parameterDisabled = editingDisabled || capabilityLoading;
-  const capabilityError = providerModelState?.status === 'error' ? providerModelState.error : undefined;
+  const parameterDisabled = editingDisabled || capabilityLoading || !first;
 
-  function confirmOverride(parameter: ModelParameterName, supported: boolean): Promise<string | undefined> {
+  function confirmOverride(parameter: ModelParameterName, supported: boolean | undefined): Promise<string | undefined> {
     if (!provider || !first) return Promise.resolve('请先配置模型。');
     return onOverrideChange(provider.id, first.model, parameter, supported);
   }
@@ -171,77 +134,55 @@ export function InlineSlotRow({ definition, chain, providers, providerModels, di
           <span>{chainSummary(chain, providers)}</span>
           <span className="slot-chain-edit"><span aria-hidden="true">✎</span>更换</span>
         </button>
-        {capabilityError && <small className="model-picker-error">能力列表读取失败：{capabilityError}；点“编辑”可重试。</small>}
       </td>
-      <td>
-        <ModelParamField label="温度" className="slot-inline-cell" {...temperatureInfo} disabled={parameterDisabled} allowOverride={provider?.kind === 'api' && Boolean(first?.model.trim())} onOverrideChange={(supported) => confirmOverride('temperature', supported)}>
-          {(controlDisabled, title) => <input
-            className="slot-inline-number mono"
-            type="number"
-            min={0}
-            max={2}
-            step={0.1}
-            placeholder="默认"
-            aria-label={`${definition.title}温度`}
-            title={title}
-            value={draft.temperature}
-            disabled={controlDisabled}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              setDraft((current) => ({ ...current, temperature: value }));
-              markDirty('temperature', value !== serverDraft.temperature);
-            }}
-            onBlur={() => { void saveField('temperature', draft.temperature); }}
-            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }}
-          />}
-        </ModelParamField>
-        {temperatureFeedback && <small className={temperatureFeedback.success ? 'slot-inline-success' : 'slot-inline-error'}>{temperatureFeedback.message}</small>}
-        {fallbackNote}
-      </td>
-      <td>
-        <ModelParamField label="思考强度" className="slot-inline-cell" {...reasoningInfo} disabled={parameterDisabled} allowOverride={provider?.kind === 'api' && Boolean(first?.model.trim())} onOverrideChange={(supported) => confirmOverride('reasoning', supported)}>
-          {(controlDisabled, title) => <select
-            aria-label={`${definition.title}思考强度`}
-            title={title}
-            value={draft.reasoning}
-            disabled={controlDisabled}
-            onChange={(event) => {
-              const value = event.currentTarget.value as ModelReasoning;
-              setDraft((current) => ({ ...current, reasoning: value }));
-              markDirty('reasoning', value !== serverDraft.reasoning);
-              void saveField('reasoning', value);
-            }}
-          >
-            {REASONING_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
-          </select>}
-        </ModelParamField>
-        {reasoningFeedback && <small className={reasoningFeedback.success ? 'slot-inline-success' : 'slot-inline-error'}>{reasoningFeedback.message}</small>}
-        {fallbackNote}
-      </td>
-      <td>
-        <ModelParamField label="最大长度" className="slot-inline-cell" {...maxTokensInfo} disabled={parameterDisabled} allowOverride={provider?.kind === 'api' && Boolean(first?.model.trim())} onOverrideChange={(supported) => confirmOverride('maxTokens', supported)}>
-          {(controlDisabled, title) => <input
-            className="slot-inline-number mono"
-            type="number"
-            min={1}
-            step={1}
-            placeholder="默认"
-            aria-label={`${definition.title}最大长度`}
-            title={title}
-            value={draft.maxTokens}
-            disabled={controlDisabled}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              setDraft((current) => ({ ...current, maxTokens: value }));
-              markDirty('maxTokens', value !== serverDraft.maxTokens);
-            }}
-            onBlur={() => { void saveField('maxTokens', draft.maxTokens); }}
-            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }}
-          />}
-        </ModelParamField>
-        {maxTokensFeedback && <small className={maxTokensFeedback.success ? 'slot-inline-success' : 'slot-inline-error'}>{maxTokensFeedback.message}</small>}
-        {fallbackNote}
-      </td>
+      <td><InlineModelParamCell
+        label="温度"
+        value={draft.temperature}
+        {...temperatureInfo}
+        disabled={parameterDisabled}
+        allowOverride={provider?.kind === 'api' && Boolean(first?.model.trim())}
+        onCommit={(value) => saveField('temperature', value)}
+        onOverrideChange={(supported) => confirmOverride('temperature', supported)}
+      >
+        {(value, onChange, controlDisabled) => <input type="number" min={0} max={2} step={0.1} placeholder="默认" value={value} disabled={controlDisabled} onChange={(event) => {
+          const next = event.currentTarget.value;
+          onChange(next);
+          setDraft((current) => ({ ...current, temperature: next }));
+          markDirty('temperature', next !== serverDraft.temperature);
+        }} />}
+      </InlineModelParamCell></td>
+      <td><InlineModelParamCell
+        label="思考强度"
+        value={draft.reasoning}
+        {...reasoningInfo}
+        disabled={parameterDisabled}
+        allowOverride={provider?.kind === 'api' && Boolean(first?.model.trim())}
+        onCommit={(value) => saveField('reasoning', value)}
+        onOverrideChange={(supported) => confirmOverride('reasoning', supported)}
+      >
+        {(value, onChange, controlDisabled) => <select value={value} disabled={controlDisabled} onChange={(event) => {
+          const next = event.currentTarget.value;
+          onChange(next);
+          setDraft((current) => ({ ...current, reasoning: next as ModelReasoning }));
+          markDirty('reasoning', next !== serverDraft.reasoning);
+        }}>{REASONING_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select>}
+      </InlineModelParamCell></td>
+      <td><InlineModelParamCell
+        label="最大长度"
+        value={draft.maxTokens}
+        {...maxTokensInfo}
+        disabled={parameterDisabled}
+        allowOverride={provider?.kind === 'api' && Boolean(first?.model.trim())}
+        onCommit={(value) => saveField('maxTokens', value)}
+        onOverrideChange={(supported) => confirmOverride('maxTokens', supported)}
+      >
+        {(value, onChange, controlDisabled) => <input type="number" min={1} step={1} placeholder="默认" value={value} disabled={controlDisabled} onChange={(event) => {
+          const next = event.currentTarget.value;
+          onChange(next);
+          setDraft((current) => ({ ...current, maxTokens: next }));
+          markDirty('maxTokens', next !== serverDraft.maxTokens);
+        }} />}
+      </InlineModelParamCell></td>
       <td><button className="button button-secondary slot-inline-edit" type="button" disabled={disabled} onClick={onEdit}>编辑</button></td>
     </tr>
   );

@@ -220,6 +220,7 @@ export function ImpressionsPage() {
 
   const historyImportActive = historyStarting || Boolean(historyJobId && !isHistoryImportTerminal(historyJob));
   const estimatedCost = estimatedHistoryImportCost(historyTarget, models);
+  const historyGroup = groups.find((group) => group.sessionId === (historyJob?.sessionId ?? selectedId));
 
   function openHistoryDialog(): void {
     if (historyImportActive) {
@@ -344,6 +345,7 @@ export function ImpressionsPage() {
           </div>
           <button className="button button-secondary" type="button" onClick={() => setHistoryDialogOpen(false)}>关闭</button>
         </div>
+        {historyGroup && !historyGroup.enabled && <p className="notice history-import-disabled-notice">这个群还没启用：会整理印象，但它不会在群里说话。</p>}
         {!historyJobId && !historyStarting && <div className="history-import-form">
           <label>
             <span>拉取条数</span>

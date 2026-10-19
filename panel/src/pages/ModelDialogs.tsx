@@ -178,7 +178,7 @@ export function SlotDialog({ definition, chain, providers, providerModels, pageB
   providerModels: Record<string, ProviderModelsState>;
   pageBusy: boolean;
   onLoadModels: (provider: ModelProviderView, refresh?: boolean) => Promise<unknown>;
-  onOverrideChange: (providerId: string, modelId: string, parameter: ModelParameterName, supported: boolean) => Promise<string | undefined>;
+  onOverrideChange: (providerId: string, modelId: string, parameter: ModelParameterName, supported: boolean | undefined) => Promise<string | undefined>;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -280,7 +280,7 @@ export function SlotDialog({ definition, chain, providers, providerModels, pageB
           const temperatureInfo = modelParameterInfo(provider, row.model, 'temperature', modelList);
           const reasoningInfo = modelParameterInfo(provider, row.model, 'reasoning', modelList);
           const maxTokensInfo = modelParameterInfo(provider, row.model, 'maxTokens', modelList);
-          const confirmOverride = (parameter: ModelParameterName, supported: boolean) => provider
+          const confirmOverride = (parameter: ModelParameterName, supported: boolean | undefined) => provider
             ? onOverrideChange(provider.id, row.model, parameter, supported)
             : Promise.resolve('请先选择模型接入。');
           return <div className="slot-editor-row" key={row.key}>

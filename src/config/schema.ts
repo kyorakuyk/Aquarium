@@ -59,6 +59,11 @@ export const ModelParamOverrideSchema = z.object({
   reasoning: z.boolean().optional(),
 }).strict();
 export const ProviderModelParamsSchema = z.record(z.string(), ModelParamOverrideSchema);
+export const ProviderModelParamsPatchSchema = z.record(z.string(), z.object({
+  temperature: z.boolean().nullable().optional(),
+  maxTokens: z.boolean().nullable().optional(),
+  reasoning: z.boolean().nullable().optional(),
+}).strict());
 
 export const ProviderConfigSchema = z.union([
   z.object({
