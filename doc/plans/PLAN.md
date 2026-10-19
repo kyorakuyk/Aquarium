@@ -1494,3 +1494,119 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
 
 > **⛔ 停止点 V18**：V18d 完成后停下。
 > **【用户】验收**：用手机在小号收藏 3 张以上表情 → 控制台“同步 QQ 收藏”后能看到图片和描述 → 在群里回复一张图说“收藏”，它回“收好了”，表情包页多了这张 → 打开 `stickers.enabled` 聊一会，偶尔会跟一个表情，并且发出来的是 QQ 原生表情的样式。
+
+---
+
+## 13. M3-A：私聊记忆与私密信息分级（2026-10-19 编写）
+
+> 前置：§12.7 V18 合并进 main 后，从 `main` 新建 `dev/privacy`。按 §0.1 执行；无人值守时按 §7（§7.1 范围 = 本节 P1–P7）。
+> 设计依据：DESIGN §6.3（L0/L1/L2），`RESEARCH-refs.md` §1。
+> **核心原则**：宁可不说，也不说错；生成回复的模型**永远看不到**别的会话的 L0 信息；所有跨会话的使用都经过同一个策略函数。
+> **本节不做**：联网搜索（M3-B）、多眷属之间共享信息（永远不做）、群聊信息的分级（群里说过的话视为在该群内公开）。
+
+### 13.1 数据（P1）
+- 迁移新版本，新增表 `private_facts`：
+
+| 字段 | 说明 |
+|---|---|
+| `id` | 主键 |
+| `account` | 角色键 |
+| `owner_id` | 信息的主人，即私聊对象的 QQ 号 |
+| `session_id` | 来源私聊会话 |
+| `text` | 不超过 40 字，第三人称陈述，如“最近在准备考研，压力大” |
+| `keywords_json` | 2–5 个话题关键词，用于预筛 |
+| `level` | `L0` / `L1` / `L2` |
+| `level_source` | `auto` / `manual` |
+| `mentions` | 主人在群里提及的次数 |
+| `mention_evidence_json` | 最近 5 条：`{sessionId, messageId, time}` |
+| `evidence_json` | 来源私聊消息，最多 5 条：`{messageId, time, quote}`，quote 不超过 40 字 |
+| `status` | `active` / `deleted` |
+| `created_at`、`updated_at` | 时间 |
+
+- 新表 `privacy_runs (account, session_id, last_run_at, last_message_time)`，作用与 `tag_runs` 相同。
+- 配置新增顶层可选项 `privacy: { enabled: true, promoteMentions: 3, avoidMinutes: 10 }`。
+
+### 13.2 策略函数（P1，`src/core/privacy/policy.ts`，纯函数）
+`decide({ info, target, purpose })`，返回 `'allow' | 'gate_only' | 'deny'`。
+- `info`：`{ origin: 'private' | 'group', sessionId, ownerId, level? }`；
+- `target`：`{ kind: 'private' | 'group', sessionId, peerId? }`；
+- `purpose`：`'prompt' | 'gate' | 'third_party'`，其中 `third_party` 指任何发往外部服务的请求，比如以后的搜索。
+
+规则**按顺序**匹配，命中即返回：
+1. `info.sessionId === target.sessionId`：`purpose = 'third_party'` 时返回 `deny`，其余返回 `allow`。
+2. `origin = 'private'`、`target.kind = 'group'`：
+   - `purpose = 'gate'` → `gate_only`；
+   - `purpose = 'prompt'`：L0 → `deny`；L1 → `allow`，但调用方必须满足“只在话题已经被聊到时注入”；L2 → `allow`；
+   - `purpose = 'third_party'` → `deny`。
+3. `origin = 'private'`、`target.kind = 'private'`，但不是同一会话（即 A 的私聊信息用到和 B 的私聊里）→ `deny`。
+4. `origin = 'group'`、`target.kind = 'private'`：
+   - `info.ownerId === target.peerId`（这条群里得来的标签就是关于这位私聊对象本人的）且 `purpose = 'prompt'` → `allow`；
+   - 其余 → `deny`。
+5. 其他情况一律 `deny`。
+
+- 全项目凡是“把一个会话的信息用到另一个会话”的地方，都**必须**调用这个函数，不得自己判断。现有的群标签和群友标签注入，也改为先调用它；结果应与现在完全一致（同一个群内允许），现有测试不改就能通过。
+- 测试：对每条规则、每种 `purpose` 做穷举表测试；`info` 或 `target` 缺字段时，返回 `deny`。
+
+### 13.3 私聊记忆的提取（P2）
+- **触发**：每次持久化一条私聊里**对方**发来的消息后检查。满足以下任一条件就异步提取一次，同一会话同一时间只允许一个提取：
+  - 新消息数 ≥ 20 且距上次提取 ≥ 30 分钟；
+  - 新消息数 ≥ 5 且距上次提取 ≥ 6 小时。
+- 用 `extract` 槽位和新模板 `prompts/extract-private.md`。输入：该私聊最近 60 条消息，加上这个人现有的 `active` 条目（附 id）。
+- 输出 JSON：`{ "new": [{ "text", "keywords": [], "messageId" }], "update": [{ "id", "text", "keywords", "messageId" }], "obsolete": [{ "id" }] }`。
+- 模板要求：
+  - 只记**对方本人**的近况、计划、烦恼、喜好和经历，不记别人的事，也不记 bot 自己说的话；
+  - **不记**：身份证号、银行卡号、密码、住址门牌、病名诊断、性相关的内容，以及具体的收入数字；
+  - 同一件事优先用 `update` 更新，不要换个说法再新增一条。
+- 校验：`text` 长 4–40 字；`keywords` 2–5 个，每个 2–8 字；`messageId` 必须在本次窗口内，并且是对方发的消息；`update` 和 `obsolete` 的 id 必须属于这个人。不合格的条目单独丢弃。`obsolete` 把状态改为 `deleted`。新条目一律为 `L0`、`auto`。
+- 预算 `exceeded` 时跳过。解析失败时 `privacy_runs` 照常更新。
+
+### 13.4 私聊里怎么用（P3）
+- 在私聊中回复时，新增提示词块 `privateFacts`，位于 `memberTags` 的位置（私聊没有 memberTags），内容取该私聊对象的 `active` 条目，**不分等级**（同一会话内一律允许）。
+- 排序：`updated_at` 倒序；最多 6 条，总长不超过 200 字。
+- 模板键 `prompts/reply-system.md` 的 `privateFacts`：`你和{{name}}私聊时了解到：{{facts}}（自然地记得就好，不要逐条复述）`。
+- 群里得来的这个人自己的标签，按策略规则 4，在私聊中也注入到同一个块里，放在私聊条目之后，用分号隔开。
+
+### 13.5 群里的守门（P4）
+- **预筛**：群里每次要生成回复之前（被叫和主动两种情况都算），取该群最近 8 条消息的文本，与“本群出现过的群友”的 `active` 条目的 keywords 做匹配。“出现过”指 messages 表里在该群发过言。某条的 keywords 中有任意 1 个出现在这 8 条里，就算命中。没有命中就直接放行，不花钱。
+- **判断**：有命中时，用 `judge` 槽位和新模板 `prompts/privacy-gate.md` 调用一次。输入是这 8 条消息，以及**命中条目的 id 和 text**（这是 `gate` 用途，策略返回 `gate_only`，允许）。输出 JSON `{"touches": [id, …]}`，即正在被聊到的条目 id。
+  - 解析失败或调用失败，一律当作命中所有预筛条目处理（宁可不说）。
+- **按等级处理被聊到的条目**：
+  - 有 L0：
+    - **未被叫**：不回复，`reason='privacy_avoid'`，并让该会话进入 `avoidMinutes` 分钟的回避期，期间所有主动发言都跳过，同样记这个原因；
+    - **被叫**：照常回复，但提示词追加一句固定的规则：`群里正在聊的话题可能涉及别人的私事。你对此一无所知，不追问、不展开、不猜测。`。**不注入任何条目内容**。
+  - 只有 L1 或 L2：把这些条目放进新提示词块 `knownFacts`，位置在 `memberTags` 之后：`你私下知道：{{facts}}（对方已经在群里提过；别人问起才接，不要主动透露细节）`。
+  - **未被聊到的 L2 条目**：只在主人本人就是触发消息的发送者时，才放进 `knownFacts`，作用和群友标签一样，最多 3 条。
+- **出口检查**（双保险）：群里发送前，把要发出的文本与本群群友的 L0 条目逐条比对，某条有 ≥ 2 个 keywords 出现在文本里，就整条丢弃，`reason='privacy_egress'`，并写一条警告日志（只记条目 id）。
+- **追踪与日志**：决策 detail 和调试追踪里只记录条目 **id** 和等级，**不记录 text**。
+- 测试点：没命中时不调用 judge；命中但 judge 判定未聊到时放行；L0 未被叫时回避并进入回避期，被叫时追加规则且提示词里没有条目内容（断言 prompt 不包含 text）；L1/L2 注入；judge 失败时按命中处理；出口检查。
+
+### 13.6 升级：主人自己在群里提起（P5）
+- 每条群消息持久化后：如果发送者是某些 `active` 条目的主人，就用这条消息做关键词预筛（至少命中 1 个 keyword）。命中后，用 `judge` 槽位和新模板 `prompts/privacy-mention.md` 判断：“这条消息里，他是不是在讲这件事？”输出 `{"mentions": [id, …]}`。
+- 每被确认一次，`mentions + 1`，并记录证据。同一条目、同一自然日最多计 1 次。**只有主人本人的消息才计数**，别人提起一律不变。
+- 等级由 `mentions` 自动推出：0 为 L0，1 到 `promoteMentions − 1` 为 L1，达到 `promoteMentions` 为 L2。`level_source = 'manual'` 的条目不自动改。
+- 判断偏保守：解析失败时视为没有提及。
+
+### 13.7 控制台（P6）
+- 印象页新增分段“私聊”（与“群聊 / 所有人”并列）。
+  - 左侧是好友列表；右侧是选中好友的条目列表，每条显示：text、等级徽标（L0 灰色锁形图标“仅私聊”、L1“提过一次”、L2“可聊”）、提及次数、来源证据（可展开）。
+  - 操作：手动设置等级（之后标为 manual，可以“恢复自动”）、改字、删除。
+  - 页面顶部固定一行说明：“这些内容只有你能看到；眷属在群里不会主动提起 L0。”
+- API：`GET /api/privacy/:userId`、`PATCH /api/privacy/facts/:id`（`{ text?, level?, auto? }`）、`DELETE /api/privacy/facts/:id`（软删除）。鉴权与现有接口相同。
+- `panel:build` 成功。
+
+### 13.8 任务
+- [ ] **P1** 数据表、配置、策略函数（§13.1、§13.2），以及现有标签注入改为经过策略函数
+- [ ] **P2** 私聊提取（§13.3）
+- [ ] **P3** 私聊注入（§13.4）
+- [ ] **P4** 群里守门与出口检查（§13.5）
+- [ ] **P5** 提及升级（§13.6）
+- [ ] **P6** 控制台（§13.7）
+- [ ] **P7** 文档：HANDOFF 补充隐私数据流（≤15 行），并在 DESIGN §6.3 末尾加一行“已在 PLAN §13 实现”
+- [ ] **🔍 R7 阶段审查**：重点检查有没有任何路径把 L0 的 text 送进群聊生成的提示词、调试追踪或日志（逐个调用点核对）。
+
+> **⛔ 停止点 P**：R7 完成后停下。
+> **【用户】验收**：
+> 1. 和小号私聊几句近况（比如“最近在准备考研，压力好大”），聊满后等提取；印象 → 私聊里出现这一条，等级为 L0。
+> 2. 换个话题再私聊，它会自然记得这件事。
+> 3. 在群里让别人提“考研”：它不接话；@ 它，它会装作不知道。
+> 4. 你自己在群里说一句“我最近在备考”：这条变成 L1；之后别人聊到，它能接话但不主动透露。
