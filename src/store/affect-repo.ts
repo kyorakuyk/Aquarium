@@ -116,7 +116,7 @@ export interface TagRunRecord {
 export type AffectRepositoryQueries = Pick<StoreRepository,
   'getMoodState' | 'saveMoodState' | 'recordMoodEvent' | 'recentMoodEvents' | 'moodEventsSince' | 'latestMoodEventAtOrBefore'
   | 'getAffinityState' | 'listAffinityStates' | 'saveAffinityState' | 'recordAffinityEvent' | 'recentAffinityEvents' | 'affinityEventsSince' | 'latestSenderNameForAccount'
-  | 'insertTag' | 'tagById' | 'listTagsForSubject' | 'listTagsForSession' | 'senderNameFor'
+  | 'insertTag' | 'tagById' | 'listTagsForSubject' | 'listTagsForSession' | 'listGroupTagsForUser' | 'senderNameFor'
   | 'updateTag' | 'getTagRun' | 'saveTagRun'
   | 'countMessagesAfter'
 >;
@@ -346,6 +346,12 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
     WHERE account = ? AND session_id = ?
     ORDER BY last_seen DESC, id DESC
   `);
+  const selectGroupTagsForUser = database.prepare(`
+    SELECT id, account, session_id, user_id, text, norm, status, source, samples, evidence_json, first_seen, last_seen, superseded_by, updated_at
+    FROM tags
+    WHERE account = ? AND user_id = ? AND session_id LIKE ?
+    ORDER BY last_seen DESC, id DESC
+  `);
   const selectSenderName = database.prepare(`
     SELECT sender_name
     FROM messages
@@ -519,6 +525,11 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
 
     listTagsForSession(account, sessionId) {
       const rows = selectTagsForSession.all(account, sessionId) as Array<Record<string, unknown>>;
+      return rows.map(tagRecord);
+    },
+
+    listGroupTagsForUser(account, userId) {
+      const rows = selectGroupTagsForUser.all(account, userId, `${account}:group:%`) as Array<Record<string, unknown>>;
       return rows.map(tagRecord);
     },
 

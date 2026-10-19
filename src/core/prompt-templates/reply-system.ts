@@ -1,0 +1,52 @@
+import type { PromptTemplate } from '../prompt-templates.ts';
+
+export interface ReplySystemTemplate extends PromptTemplate {
+  system: string;
+  groupNote: string;
+  request: string;
+  groupTags: string;
+  memberTags: string;
+  privateFacts: string;
+  stickers: string;
+}
+
+export type PlaceholderValidator = (
+  fileName: string,
+  source: string,
+  allowed: string[],
+  required: string[],
+) => void;
+
+export function parseReplySystemTemplate(
+  template: PromptTemplate,
+  fields: Record<string, unknown>,
+  validatePlaceholders: PlaceholderValidator,
+): ReplySystemTemplate {
+  if (typeof fields.system !== 'string' || fields.system.length === 0
+    || typeof fields.groupNote !== 'string' || fields.groupNote.length === 0
+    || typeof fields.request !== 'string' || fields.request.length === 0
+    || typeof fields.groupTags !== 'string' || fields.groupTags.length === 0
+    || typeof fields.memberTags !== 'string' || fields.memberTags.length === 0
+    || typeof fields.privateFacts !== 'string' || fields.privateFacts.length === 0
+    || typeof fields.stickers !== 'string' || fields.stickers.length === 0) {
+    throw new Error('reply-system.md 必须包含非空 system、groupNote、request、groupTags、memberTags、privateFacts 和 stickers 文本');
+  }
+  const replySystem = {
+    ...template,
+    system: fields.system,
+    groupNote: fields.groupNote,
+    request: fields.request,
+    groupTags: fields.groupTags,
+    memberTags: fields.memberTags,
+    privateFacts: fields.privateFacts,
+    stickers: fields.stickers,
+  };
+  validatePlaceholders('reply-system.md', replySystem.system, ['ownerRule', 'modeHint'], ['ownerRule', 'modeHint']);
+  validatePlaceholders('reply-system.md', replySystem.groupNote, ['groupNote'], ['groupNote']);
+  validatePlaceholders('reply-system.md', replySystem.request, [], []);
+  validatePlaceholders('reply-system.md', replySystem.groupTags, ['tags'], ['tags']);
+  validatePlaceholders('reply-system.md', replySystem.memberTags, ['name', 'tags'], ['name', 'tags']);
+  validatePlaceholders('reply-system.md', replySystem.privateFacts, ['name', 'facts'], ['name', 'facts']);
+  validatePlaceholders('reply-system.md', replySystem.stickers, ['list'], ['list']);
+  return replySystem;
+}

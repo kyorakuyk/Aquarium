@@ -71,6 +71,12 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     template: ctx.state.promptTemplates.replySystem,
   }) ?? { droppedTags: 0 };
   if (tagBlocks.droppedTags > 0) ctx.state.droppedTags = tagBlocks.droppedTags;
+  const privateFactsBlock = ctx.options.privateFactsService?.promptBlock({
+    session: ctx.message.session,
+    name: ctx.message.senderName,
+    now: ctx.now(),
+    template: ctx.state.promptTemplates.replySystem,
+  });
   const moodBlocks = ctx.options.moodService?.promptBlocks({
     account: ctx.message.session.account,
     now: ctx.now(),
@@ -119,6 +125,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
       traits: traitsBlock,
       ...moodBlocks,
       ...(tagBlocks.groupTags === undefined ? {} : { groupTags: tagBlocks.groupTags }),
+      ...(privateFactsBlock === undefined ? {} : { privateFacts: privateFactsBlock }),
       ...(tagBlocks.memberTags === undefined ? {} : { memberTags: tagBlocks.memberTags }),
       ...(affinityBlock === undefined ? {} : { affinity: affinityBlock }),
       ...(stickersBlock ? { stickers: stickersBlock } : {}),

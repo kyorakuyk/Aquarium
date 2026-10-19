@@ -3,8 +3,9 @@ import { budgetState } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
 import type { StoreRepository } from '../../store/repository.ts';
 import type { NewPrivateFactRecord, PrivateFactEvidence, PrivateFactRecord } from '../../store/privacy-repo.ts';
-import type { ExtractPrivatePromptTemplate } from '../prompt-templates.ts';
+import type { ExtractPrivatePromptTemplate, ReplySystemTemplate } from '../prompt-templates.ts';
 import { buildPrivateExtractionMessages, parsePrivateFactResponse } from './extract.ts';
+import { buildPrivateFactsBlock } from './prompt.ts';
 import { decide } from './policy.ts';
 import type { PipelineModelCall } from '../steps/types.ts';
 import { sessionId, type SessionKey } from '../events.ts';
@@ -25,6 +26,12 @@ export interface PrivateFactsSummary {
 }
 
 export interface PrivateFactsService {
+  promptBlock(input: {
+    session: SessionKey;
+    name: string;
+    now: number;
+    template: ReplySystemTemplate;
+  }): string | undefined;
   maybeExtract(input: {
     session: SessionKey;
     messageId: string;
@@ -323,6 +330,22 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
   }
 
   return {
+    promptBlock(input) {
+      if (input.session.kind !== 'private') return undefined;
+      const sessionIdValue = sessionId(input.session);
+      try {
+        if (!options.getConfig().privacy.enabled) return undefined;
+        return buildPrivateFactsBlock({
+          ...input,
+          facts: options.repository.listPrivateFactsForOwner(input.session.account, input.session.peer),
+          groupTags: options.repository.listGroupTagsForUser(input.session.account, input.session.peer),
+        });
+      } catch {
+        reportError(input.session.account, sessionIdValue);
+        return undefined;
+      }
+    },
+
     maybeExtract(input) {
       if (input.session.kind !== 'private' || input.session.peer !== input.senderId
         || !Number.isSafeInteger(input.senderId) || input.senderId <= 0

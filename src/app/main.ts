@@ -14,9 +14,6 @@ import { sessionId } from '../core/events.ts';
 import { createSessionQueue } from '../core/session-queue.ts';
 import { createAffinityService } from '../core/affinity/service.ts';
 import { createMoodService } from '../core/mood/service.ts';
-import { createImpressionsService } from '../core/impressions/service.ts';
-import { createPrivateFactsService } from '../core/privacy/service.ts';
-import { createHistoryImportService } from '../core/impressions/history-import.ts';
 import { createSleepWakeState } from '../core/sleep.ts';
 import { createSleepGoodnightScheduler } from '../core/sleep/goodnight.ts';
 import { getCliRuntime } from '../llm/cli.ts';
@@ -29,6 +26,7 @@ import type { Host } from '../host/types.ts';
 import { bindHostTrayAfterLoad, createWindowsTray } from '../host/tray.ts';
 import { createWindowsHost } from '../host/windows/host.ts';
 import { createAccountActivityRouter } from './activity-routing.ts';
+import { createMemoryServices } from './memory-services.ts';
 import { createAccountStickerService, startStickerSyncTimer } from './stickers.ts';
 import { startAdapterForHost } from './adapter-start.ts';
 import {
@@ -98,35 +96,11 @@ const moodService = createMoodService({
     logger.error(`情绪后台任务失败：${describeError(error)}`);
   },
 });
-const impressionsService = createImpressionsService({
+const { impressionsService, privateFactsService, historyImports } = createMemoryServices({
   repository,
   getConfig: () => configWatcher.getConfig(),
-  onError: (error) => {
-    logger.error(`印象提取失败：${describeError(error)}`);
-  },
-  onExtract: (summary) => {
-    logger.info(
-      `印象提取 ${summary.sessionId}：${summary.status}，新增 ${summary.inserted}、观察 ${summary.observed}、推翻 ${summary.superseded}、丢弃 ${summary.dropped}。`,
-    );
-  },
-});
-const privateFactsService = createPrivateFactsService({
-  repository,
-  getConfig: () => configWatcher.getConfig(),
-  onError: ({ account, sessionId: currentSessionId }) => {
-    logger.error(`私聊记忆提取失败：账号 ${account} 会话 ${currentSessionId}`);
-  },
-  onExtract: (summary) => {
-    logger.info(
-      `私聊记忆提取 ${summary.sessionId}：${summary.status}，新增 ${summary.inserted}、更新 ${summary.updated}、过时 ${summary.deleted}、丢弃 ${summary.dropped}。`,
-    );
-  },
-});
-const historyImports = createHistoryImportService({
-  repository,
-  getConfig: () => configWatcher.getConfig(),
-  impressionsService,
-  getTemplate: () => promptTemplateStore.get().extractTags,
+  logger,
+  describeError,
 });
 let panelServer: ReturnType<typeof startPanelServer> | undefined;
 let managedHost: Host | undefined;

@@ -11,6 +11,7 @@ test('persist schedules private extraction only after an incoming peer message i
   await withRepository(async (repository, personaRoot) => {
     const calls: Array<{ messageId: string; templateVersion: string }> = [];
     const privateFactsService = {
+      promptBlock() { return undefined; },
       maybeExtract(input: { messageId: string; template: { version: string } }) {
         assert.ok(repository.messageBySessionAndId(sessionId(privateSession), input.messageId));
         calls.push({ messageId: input.messageId, templateVersion: input.template.version });

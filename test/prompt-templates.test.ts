@@ -90,6 +90,11 @@ test('extract-private 模板按原始文件哈希加载并保留私聊提取指�
   assert.ok(template.user.includes('{{existing}}'));
 });
 
+test('reply-system 模板提供带 name 和 facts 占位符的 privateFacts 块', () => {
+  const template = promptTemplateStore.get().replySystem as unknown as { privateFacts?: string };
+  assert.equal(template.privateFacts, '你和{{name}}私聊时了解到：{{facts}}（自然地记得就好，不要逐条复述）');
+});
+
 test('persona-import 模板必须声明 text 占位符', () => {
   const root = copyPromptTemplates();
   try {

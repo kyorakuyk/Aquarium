@@ -191,6 +191,7 @@ export interface StoreRepository extends PersonaVersionRepository, PrivacyReposi
   tagById(id: number): StoredTag | undefined;
   listTagsForSubject(account: number, sessionId: string, userId: number | null): StoredTag[];
   listTagsForSession(account: number, sessionId: string): StoredTag[];
+  listGroupTagsForUser(account: number, userId: number): StoredTag[];
   senderNameFor(sessionId: string, senderId: number): string | undefined;
   updateTag(id: number, update: TagUpdate): void;
   getTagRun(account: number, sessionId: string): TagRunRecord | undefined;
