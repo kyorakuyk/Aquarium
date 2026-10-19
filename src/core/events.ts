@@ -17,6 +17,7 @@ export type Segment =
   | { type: 'image'; url: string; file?: string }
   | { type: 'reply'; messageId: string }
   | { type: 'face'; id: string }
+  | { type: 'sticker'; emojiId: string }
   | { type: 'unknown'; raw: unknown };
 
 export interface IncomingMessage {

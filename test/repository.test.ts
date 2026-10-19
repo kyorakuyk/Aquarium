@@ -61,7 +61,25 @@ test('messagesInRange returns only the inclusive time window in ascending order'
   });
 });
 
-test('costToday 只累计本地自然日内的用量', () => {
+test('decisionsInRange 返回指定会话内的闭区间决策', () => {
+  withRepository((repository) => {
+    const session = '900000001:group:123456';
+    repository.recordDecision({ time: 1000, sessionId: session, messageId: 'before', replied: true, reason: 'replied', detail: {} });
+    repository.recordDecision({ time: 1500, sessionId: session, messageId: 'start', replied: true, reason: 'replied', detail: { stickerSent: 3 } });
+    repository.recordDecision({ time: 2500, sessionId: session, messageId: 'end', replied: false, reason: 'empty_reply', detail: {} });
+    repository.recordDecision({ time: 1800, sessionId: 'other-session', messageId: 'other', replied: true, reason: 'replied', detail: {} });
+
+    const records = repository.decisionsInRange(session, 1500, 2500);
+
+    assert.deepEqual(records.map((record) => record.messageId), ['start', 'end']);
+    assert.equal(records[0]?.detail && typeof records[0].detail === 'object'
+      ? (records[0].detail as Record<string, unknown>).stickerSent
+      : undefined, 3);
+    assert.throws(() => repository.decisionsInRange(session, 2500, 1500), /时间范围/u);
+  });
+});
+
+ test('costToday 只累计本地自然日内的用量', () => {
   withRepository((repository) => {
     const dayStart = new Date(2026, 9, 12).getTime();
     const nextDay = new Date(2026, 9, 13).getTime();
@@ -120,6 +138,9 @@ test('表情按账号和 md5 去重，保存相对文件名与描述状态', () 
     assert.equal(duplicate.sticker.descAi, '开心啦');
     assert.deepEqual(duplicate.sticker.tags, ['开心']);
     assert.equal(duplicate.sticker.descriptionAttempts, 1);
+    const used = repository.recordStickerUse(inserted.sticker.id, 106);
+    assert.equal(used?.useCount, 1);
+    assert.equal(used?.lastUsedAt, 106);
 
     repository.markMissingStickers(detail.account, [], 104);
     assert.equal(repository.stickerById(inserted.sticker.id)?.missing, true);

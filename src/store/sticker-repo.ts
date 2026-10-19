@@ -41,6 +41,7 @@ export interface StickerRepository {
   recordStickerDescriptionAttempt(id: number, now: number): void;
   saveStickerDescription(id: number, descAi: string, tags: string[], now: number): void;
   updateSticker(id: number, update: StickerUpdate, now: number): StickerRecord | undefined;
+  recordStickerUse(id: number, now: number): StickerRecord | undefined;
 }
 
 function numberValue(value: unknown, field: string): number {
@@ -138,6 +139,9 @@ export function createStickerQueries(database: DatabaseSync): StickerRepository 
   const updateStickerFields = database.prepare(`
     UPDATE stickers SET enabled = ?, tags_json = ?, desc_ai = ?, desc_qq = ?, updated_at = ? WHERE id = ?
   `);
+  const updateStickerUse = database.prepare(`
+    UPDATE stickers SET use_count = use_count + 1, last_used_at = ?, updated_at = ? WHERE id = ?
+  `);
 
   return {
     listStickers(account) {
@@ -225,6 +229,15 @@ export function createStickerQueries(database: DatabaseSync): StickerRepository 
       updateStickerFields.run(enabled ? 1 : 0, JSON.stringify(tags), descAi, descQq, now, id);
       const saved = selectById.get(id) as Record<string, unknown>;
       return stickerFromRow(saved);
+    },
+
+    recordStickerUse(id, now) {
+      positiveId(id, 'sticker id');
+      if (!Number.isFinite(now)) throw new RangeError('更新时间无效');
+      const result = updateStickerUse.run(now, now, id);
+      if (numberValue(result.changes, 'changes') === 0) return undefined;
+      const row = selectById.get(id) as Record<string, unknown>;
+      return stickerFromRow(row);
     },
   };
 }

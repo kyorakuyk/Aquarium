@@ -16,6 +16,8 @@ import type { AffinityService } from '../affinity/service.ts';
 import type { ImpressionsService } from '../impressions/service.ts';
 import type { PersonaTraits } from '../../persona/load.ts';
 import type { SleepWakeState } from '../sleep.ts';
+import type { StickerService } from '../stickers/service.ts';
+import type { StickerOffer } from '../stickers/selection.ts';
 
 export interface PipelineResult {
   replied: boolean;
@@ -67,6 +69,7 @@ export interface MessagePipelineOptions {
   moodService?: MoodService;
   affinityService?: AffinityService;
   impressionsService?: ImpressionsService;
+  stickerService?: StickerService;
   sleepWakeState?: SleepWakeState;
   onError?: (error: unknown, message: IncomingMessage) => void;
 }
@@ -110,6 +113,11 @@ export interface PipelineState {
   activityDecisionDetail?: Record<string, unknown>;
   energy?: number;
   proactiveMode?: ProactiveMode;
+  stickerOffer?: StickerOffer;
+  stickerOffered?: number[];
+  chosenSticker?: StickerOffer['candidates'][number];
+  stickerOnly?: boolean;
+  stickerSent?: { id: number; stickerOnly: boolean };
   promptFingerprints: PromptFingerprint[];
   promptTemplates: PromptTemplateSet;
 }
@@ -144,7 +152,7 @@ const safeTraceReasons: Record<PipelineStepName, readonly string[]> = {
     'judge_skip', 'proactive_cooldown',
   ],
   context: ['persona_error'],
-  generate: ['llm_error', 'empty_reply'],
+  generate: ['llm_error', 'empty_reply', 'sticker_only_capped'],
   deliver: ['send_error', 'replied', 'replay'],
 };
 

@@ -144,6 +144,7 @@ export interface StoreRepository extends PersonaVersionRepository, StickerReposi
   setCaption(key: string, caption: string, time?: number): void;
   recordDecision(decision: DecisionRecord): void;
   recentDecisions(count: number): StoredDecision[];
+  decisionsInRange(sessionId: string, fromTime: number, toTime: number): StoredDecision[];
   latestReplyDecision(): StoredDecision | undefined;
   decisionMessageText(sessionId: string, messageId: string): string | undefined;
   decisionById(id: number): StoredDecision | undefined;
@@ -280,6 +281,12 @@ export function createRepository(
     FROM decisions
     ORDER BY time DESC, id DESC
     LIMIT ?
+  `);
+  const selectDecisionsInRange = database.prepare(`
+    SELECT id, time, session_id, message_id, replied, reason, detail_json
+    FROM decisions
+    WHERE session_id = ? AND time >= ? AND time <= ?
+    ORDER BY time, id
   `);
 
   const insertDebugTrace = database.prepare(`
@@ -477,6 +484,22 @@ export function createRepository(
       const limit = limitValue(count);
       if (limit === 0) return [];
       const rows = selectRecentDecisions.all(limit) as Array<Record<string, unknown>>;
+      return rows.map((row) => ({
+        id: numberValue(row.id, 'id'),
+        time: numberValue(row.time, 'time'),
+        sessionId: stringValue(row.session_id, 'session_id'),
+        messageId: stringValue(row.message_id, 'message_id'),
+        replied: numberValue(row.replied, 'replied') === 1,
+        reason: stringValue(row.reason, 'reason'),
+        detail: JSON.parse(stringValue(row.detail_json, 'detail_json')) as unknown,
+      }));
+    },
+
+    decisionsInRange(sessionId, fromTime, toTime) {
+      if (!Number.isFinite(fromTime) || !Number.isFinite(toTime) || toTime < fromTime) {
+        throw new RangeError('决策时间范围无效');
+      }
+      const rows = selectDecisionsInRange.all(sessionId, fromTime, toTime) as Array<Record<string, unknown>>;
       return rows.map((row) => ({
         id: numberValue(row.id, 'id'),
         time: numberValue(row.time, 'time'),

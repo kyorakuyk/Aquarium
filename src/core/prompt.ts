@@ -18,6 +18,7 @@ export interface BuildPromptOptions {
     memberTags?: string;
     affinity?: string;
     float?: string;
+    stickers?: string;
   };
 }
 
@@ -62,6 +63,7 @@ function resolvePromptBlocks(options: BuildPromptOptions): RenderedPromptBlock[]
     { id: 'memberTags', text: options.blocks?.memberTags ?? '' },
     { id: 'affinity', text: options.blocks?.affinity ?? '' },
     { id: 'float', text: options.blocks?.float ?? '' },
+    { id: 'stickers', text: options.blocks?.stickers ?? '' },
   ];
 }
 

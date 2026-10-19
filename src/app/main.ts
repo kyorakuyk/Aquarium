@@ -300,6 +300,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     moodService,
     affinityService,
     impressionsService,
+    stickerService,
     sleepWakeState,
     onError: (error, message) => {
       logger.error(`消息 ${message.messageId} 的辅助操作失败：${describeError(error)}`);

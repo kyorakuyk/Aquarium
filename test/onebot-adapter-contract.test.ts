@@ -137,6 +137,7 @@ test('自定义表情动作映射详情、添加、修改备注与 get_image', a
     desc: 'QQ 备注',
   }]);
   fake.state.rawResults.set('add_custom_face', { emoji_id: 'emoji-2' });
+  fake.state.rawResults.set('send_custom_face', { message_id: 777 });
   fake.state.imageInfo = { url: 'https://gchat.qpic.cn/refreshed.png' };
   const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => fake.client);
   t.after(() => adapter.close());
@@ -152,10 +153,15 @@ test('自定义表情动作映射详情、添加、修改备注与 get_image', a
   assert.deepEqual(await adapter.customFaces.addCustomFace('base64://AAAA'), { emojiId: 'emoji-2' });
   await adapter.customFaces.modifyCustomFace('emoji-2', '新的备注');
   assert.equal(await adapter.customFaces.getImageUrl('file-1'), 'https://gchat.qpic.cn/refreshed.png');
+  assert.deepEqual(
+    await adapter.customFaces.sendCustomFace({ session: { account, kind: 'group', peer: 123456 }, emojiId: 'emoji-2' }),
+    { messageId: '777' },
+  );
   assert.deepEqual(fake.state.rawCalls, [
     ['fetch_custom_face_detail', { count: 300 }],
     ['add_custom_face', { file: 'base64://AAAA' }],
     ['modify_custom_face', { emoji_id: 'emoji-2', desc: '新的备注' }],
+    ['send_custom_face', { emoji_id: 'emoji-2', group_id: 123456 }],
   ]);
   assert.deepEqual(fake.state.imageCalls, [{ file: 'file-1' }]);
 });

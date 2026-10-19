@@ -50,7 +50,10 @@ function createEvaluationConfig(): AquariumConfig {
 
 function createUnusedTemplates(): PromptTemplateSet {
   return {
-    replySystem: { source: '', version: '', system: '', groupNote: '', request: '', groupTags: '', memberTags: '' },
+    replySystem: {
+      source: '', version: '', system: '', groupNote: '', request: '',
+      groupTags: '', memberTags: '', stickers: '',
+    },
     judge: { source: '', version: '', system: '', user: '' },
     vision: { source: '', version: '', system: '', user: '' },
     stickerDescribe: { source: '', version: '', system: '', user: '' },

@@ -32,6 +32,10 @@ export interface CustomFaceActions {
   addCustomFace(file: string): Promise<{ emojiId: string }>;
   modifyCustomFace(emojiId: string, desc: string): Promise<void>;
   getImageUrl(file: string): Promise<string>;
+  sendCustomFace(input: {
+    session: SessionKey;
+    emojiId: string;
+  }): Promise<{ messageId: string }>;
 }
 
 export interface ProtocolAdapter {

@@ -8,6 +8,7 @@ import { createIdleBackoff } from '../src/core/activity/backoff.ts';
 import { createActivityThreshold } from '../src/core/activity/threshold.ts';
 import { createMessagePipeline } from '../src/core/pipeline.ts';
 import type { ProtocolAdapter } from '../src/adapters/types.ts';
+import type { StickerService } from '../src/core/stickers/service.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
 
@@ -107,6 +108,7 @@ export function createHarness(
     replyText?: string;
     modelError?: Error;
     getConfig?: () => ReturnType<typeof makeConfig>;
+    stickerService?: StickerService;
   } = {},
 ) {
   const adapter = new FakeAdapter();
@@ -118,6 +120,7 @@ export function createHarness(
     adapter,
     getNickname: () => adapter.nickname,
     personaRoot,
+    ...(options.stickerService === undefined ? {} : { stickerService: options.stickerService }),
     callModel: async (slot, messages) => {
       modelRequests.push({ slot, messages: messages as Array<{ role: string; content: string }> });
       if (options.modelError) throw options.modelError;

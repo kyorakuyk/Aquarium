@@ -85,6 +85,22 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   const traitsBlock = ctx.state.personaTraits
     ? renderTraitsBlock(ctx.state.personaTraits, effectiveTalk, ctx.state.promptTemplates.traits)
     : '';
+  const stickersBlock = (() => {
+    if (ctx.processOptions.replay || !ctx.options.stickerService) return '';
+    const offer = ctx.options.stickerService.offer({
+      sessionId: ctx.currentSessionId,
+      messageText: ctx.message.plainText,
+      moodBand: ctx.options.moodService?.currentBand({
+        account: ctx.message.session.account,
+        now: ctx.now(),
+      }) ?? 'calm',
+      now: ctx.now(),
+    });
+    if (!offer) return '';
+    ctx.state.stickerOffer = offer;
+    ctx.state.stickerOffered = offer.candidates.map((candidate) => candidate.id);
+    return ctx.state.promptTemplates.replySystem.stickers.replaceAll('{{list}}', offer.promptList);
+  })();
   const promptOptions = {
     persona,
     ownerId: config.owner,
@@ -98,6 +114,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
       ...(tagBlocks.groupTags === undefined ? {} : { groupTags: tagBlocks.groupTags }),
       ...(tagBlocks.memberTags === undefined ? {} : { memberTags: tagBlocks.memberTags }),
       ...(affinityBlock === undefined ? {} : { affinity: affinityBlock }),
+      ...(stickersBlock ? { stickers: stickersBlock } : {}),
     },
     replySystemTemplate: ctx.state.promptTemplates.replySystem,
   };

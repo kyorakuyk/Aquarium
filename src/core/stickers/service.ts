@@ -10,10 +10,12 @@ import {
 import path from 'node:path';
 import { budgetState } from '../../llm/budget.ts';
 import { downloadImageAsDataUrl } from '../images.ts';
-import { sessionId, type IncomingMessage, type Segment } from '../events.ts';
+import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../events.ts';
 import type { AquariumConfig } from '../../config/schema.ts';
+import type { MoodBand } from '../../store/affect-repo.ts';
 import type { StoreRepository } from '../../store/repository.ts';
 import type { CustomFaceActions, CustomFaceDetail } from '../../adapters/types.ts';
+import { selectStickerCandidates, type StickerOffer } from './selection.ts';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const STICKER_SYNC_COUNT = 300;
@@ -39,6 +41,18 @@ export interface StickerService {
   upload(dataBase64: string, filename: string): Promise<{ synced: boolean }>;
   modifyCustomFace(emojiId: string, desc: string): Promise<void>;
   getLastSyncAt(): number | null;
+  offer(input: {
+    sessionId: string;
+    messageText: string;
+    moodBand: MoodBand;
+    now: number;
+  }): StickerOffer | null;
+  stickerBase64(file: string): string | null;
+  sendSticker(input: {
+    session: SessionKey;
+    sticker: StickerOffer['candidates'][number];
+  }): Promise<{ messageId: string }>;
+  recordUse(stickerId: number, now: number): void;
 }
 
 export interface StickerServiceOptions {
@@ -353,5 +367,27 @@ export function createStickerService(options: StickerServiceOptions): StickerSer
     upload,
     modifyCustomFace: (emojiId, desc) => options.adapter.modifyCustomFace(emojiId, desc),
     getLastSyncAt: () => lastSyncAt,
+    offer(input) {
+      return selectStickerCandidates({
+        config: options.getConfig().stickers,
+        stickers: options.repository.listStickers(options.account),
+        history: options.repository.decisionsInRange(input.sessionId, input.now - 2 * 60 * 60 * 1000, input.now),
+        messageText: input.messageText,
+        moodBand: input.moodBand,
+        sessionId: input.sessionId,
+        now: input.now,
+      });
+    },
+    stickerBase64(file) {
+      const dataUrl = readStickerDataUrl(options.dataDirectory, file);
+      return dataUrl?.slice(dataUrl.indexOf(',') + 1) ?? null;
+    },
+    sendSticker: (input) => options.adapter.sendCustomFace({
+      session: input.session,
+      emojiId: input.sticker.emojiId,
+    }),
+    recordUse: (stickerId, at) => {
+      options.repository.recordStickerUse(stickerId, at);
+    },
   };
 }

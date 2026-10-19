@@ -1,5 +1,6 @@
 import type { CustomFaceActions, CustomFaceDetail } from '../types.ts';
 import type { OneBotClient } from './client.ts';
+import type { SessionKey } from '../../core/events.ts';
 
 export type OneBotActionRunner = <T>(action: string, run: () => Promise<T>) => Promise<T>;
 
@@ -66,6 +67,20 @@ export function createOneBotCustomFaceActions(
         throw new Error('get_image 未返回图片 URL');
       }
       return result.url;
+    },
+
+    async sendCustomFace(input: { session: SessionKey; emojiId: string }) {
+      if (!input.emojiId.trim()) throw new TypeError('表情 emoji_id 不能为空');
+      const result = await runAction('send_custom_face', () => getClient().raw('send_custom_face', {
+        emoji_id: input.emojiId,
+        ...(input.session.kind === 'group'
+          ? { group_id: input.session.peer }
+          : { user_id: input.session.peer }),
+      }));
+      if (!isRecord(result) || typeof result.message_id !== 'number' || !Number.isSafeInteger(result.message_id)) {
+        throw new Error('send_custom_face 未返回消息 ID');
+      }
+      return { messageId: String(result.message_id) };
     },
   };
 }

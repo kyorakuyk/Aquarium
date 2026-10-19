@@ -54,6 +54,12 @@ function convertOneBotSegment(raw: unknown): Segment {
         ? { type: 'unknown', raw }
         : { type: 'face', id };
     }
+    case 'mface': {
+      const emojiId = stringValue(data.emoji_id) ?? stringValue(data.emojiId);
+      return emojiId === undefined
+        ? { type: 'unknown', raw }
+        : { type: 'sticker', emojiId };
+    }
     default:
       return { type: 'unknown', raw };
   }
@@ -112,6 +118,8 @@ export function toOneBotSegments(segments: Segment[]): AnyMessageSegment[] {
         break;
       case 'face':
         converted.push(message.face(segment.id));
+        break;
+      case 'sticker':
         break;
       case 'unknown':
         break;

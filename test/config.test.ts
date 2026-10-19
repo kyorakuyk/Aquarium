@@ -34,6 +34,24 @@ test('send.dedupeWindowMs 默认 8000，且 0 表示关闭', () => {
   assert.equal(disabled.send.dedupeWindowMs, 0);
 });
 
+test('stickers 默认关闭并校验比例、冷却与候选数', () => {
+  const legacyConfig = structuredClone(exampleConfig) as Record<string, unknown>;
+  delete legacyConfig.stickers;
+  const defaults = AquariumConfigSchema.parse(legacyConfig);
+
+  assert.deepEqual(defaults.stickers, {
+    enabled: false,
+    maxRatio: 0.3,
+    onlyStickerRatio: 0.1,
+    cooldownSec: 300,
+    candidates: 8,
+  });
+  assert.throws(() => AquariumConfigSchema.parse({
+    ...legacyConfig,
+    stickers: { enabled: true, maxRatio: 1.1 },
+  }));
+});
+
 test('V4 defaults keep legacy provider and slot configuration compatible', () => {
   const legacyConfig = structuredClone(exampleConfig) as Record<string, any>;
   for (const provider of Object.values(legacyConfig.providers) as Array<Record<string, unknown>>) {
