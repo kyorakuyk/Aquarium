@@ -1,6 +1,6 @@
 # Aquarium 施工计划书（唯一任务清单）
 
-> 写给接手编码的模型。最后更新：2026-10-16。**当前任务：§12.6 的 V13–V16（分支 `dev/persona-v13`）；所有任务先遵守 §0.1 提速规则。**
+> 写给接手编码的模型。最后更新：2026-10-16。**当前任务：§12.6 的 V17（分支 `dev/persona-v13`），之后是 §12.7 的 V18（分支 `dev/stickers`）；所有任务先遵守 §0.1 提速规则。**
 > **本文是唯一的任务清单。**文档优先级：`PLAN.md` > `HANDOFF.md`（只作为架构、接口、环境的参考）> `DESIGN.md`（设计依据）。
 > `REVIEW-2026-10-12.md` 与 `NIGHT-RUN.md` 已并入本文，**作废，不再阅读**。`MORNING.md` 只作为历史记录。
 > 开工前按顺序读：本文全文 → `HANDOFF.md` §1、§3、§4 → `DESIGN.md`（需要时查阅）。
@@ -1415,3 +1415,64 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
 > 3. 用量：切换时间范围；不同接入分行显示。
 > 4. 模型页：给某个用途设温度后试聊，决策追踪里能看到参数；在 `.env` 里确认密钥已写入，但界面只显示后四位。
 > 5. 导入一份随手写的人设 md，逐项对照后接受；表单与源文件切换后内容一致。
+
+### 12.7 表情包（V18，2026-10-19）
+> 分支：V17 合并进 main 后，从 `main` 新建 `dev/stickers`。按 §0.1 执行。拆成 V18a–V18d 四个提交，**V18d 之后为停止点 V18**。
+> 参考：`reference/QQ-agent`（MIT）的 `src/sticker-manager.js`、`src/stickers.js`、`src/sender.js`。只借鉴思路，如需复制代码，在文件头注明来源与 MIT 许可。
+> SnowLuma 接口依据：`reference/SnowLuma/packages/onebot/src/actions/extended.ts` 中的 `fetch_custom_face_detail`、`add_custom_face`、`modify_custom_face`、`get_image`，以及 `message.ts` 中的 `send_custom_face`。
+
+- [ ] **V18a 发送可靠性前置**（来自 QQ-agent 的教训）
+  1. **动作超时分档**：适配器调用动作时，发送类（`send_*`、`add_custom_face`、`upload_*`）超时改为 60 秒，其余保持 10 秒。超时错误信息要写明动作名和用时。
+  2. **发出消息去重**：同一会话 8 秒内，文本完全相同的消息只发一次，第二次直接跳过并写 debug 日志。窗口可配置，`send.dedupeWindowMs` 默认 8000，0 表示关闭。注意 0 不能被当成“未设置”。
+  3. **配置损坏不回落默认值**：确认配置文件解析或校验失败时，保留上一次的有效配置继续运行并报错，**绝不**把默认值写回文件。已经是这样的话，只补一条测试。
+  4. **日志大小上限**：`data/logs` 下单个文件超过 50MB 就停止写入，并在末尾留一行“已达上限”；第二天新文件照常写。
+  - 测试点：超时分档；去重窗口（含 0）；配置损坏不覆写；日志上限。
+
+- [ ] **V18b 表情库与收藏**
+  - **来源只有 QQ 收藏表情**：小号在 QQ 里收藏的表情就是表情库，这是唯一的来源。控制台上传和“回复收藏”也都会先调用 `add_custom_face` 存进 QQ 收藏，再同步回来。
+  - **数据表**（迁移 v8）：`stickers(id, account, emoji_id, md5, file TEXT NULL, desc_qq, desc_ai, tags_json, enabled, missing, use_count, last_used_at, created_at, updated_at, UNIQUE(account, md5))`。
+    - `file` 存的是**相对 `data/stickers/` 的文件名**，例如 `<md5>.gif`，**不存绝对路径**；读取时再拼上数据目录。
+  - **同步**：账号上线时同步一次，之后每 10 分钟一次，控制台也可以手动触发。
+    - 调用 `fetch_custom_face_detail { count: 300 }`，遇到新的 md5 就新建一行，并立即把图片下载到 `data/stickers/`。下载复用现有图片下载的域名白名单和大小限制，扩展名按文件头判断。
+    - QQ 收藏里已经没有的记录，标记 `missing=1`，不删除。
+    - 下载失败的条目保留，`file` 为 NULL，下次同步再试。
+  - **描述**：新表情下载成功后，用 `vision` 槽位调用一次新模板 `prompts/sticker-describe.md`。要求模型只输出 JSON：`{"desc": "不超过20字，写情绪和适合的场合", "tags": ["2-4字", …最多5个]}`。解析失败就留空，下次同步时重试，每条最多试 3 次。预算 `exceeded` 时跳过。
+  - **回复收藏**：主人在群里或私聊里**回复一张图片**，消息正文去掉空白后恰好是“收藏”或“收藏这个”时，就把被回复消息中的第一张图交给 `add_custom_face`，然后立即同步，并回一句“收好了”。失败时回“没收藏上：{原因}”。
+    - 这条消息由管理指令那一层处理，**不进入回复流水线**；非主人发送时完全忽略。
+    - 被回复消息里的图片地址，从本地 messages 表的 segments 里取；如果已经过期，就用 `get_image` 重新获取。
+  - **API**：
+    - `GET /api/stickers`：列表，带图片地址 `/api/stickers/:id/image`，由服务端从 `data/stickers/` 读取文件，并做路径越界检查；
+    - `PATCH /api/stickers/:id`：可改 `{ enabled?, tags?, descAi? }`。改了描述时，同时调用 `modify_custom_face` 把描述写回 QQ；
+    - `POST /api/stickers/sync`：手动同步；
+    - `POST /api/stickers/upload`：请求体 `{ dataBase64, filename }`，大小不超过 5MB，调用 `add_custom_face`（以 `base64://` 传入）后再同步。
+  - 测试点（用假适配器）：同步时新增、标记缺失、按 md5 去重；只存相对路径；描述的解析与重试上限；“回复收藏”只认主人、只认这两个词；上传；图片接口拒绝越界路径。
+
+- [ ] **V18c 发送表情**
+  - **配置**：顶层可选项 `stickers: { enabled: false, maxRatio: 0.3, onlyStickerRatio: 0.1, cooldownSec: 300, candidates: 8 }`，默认关闭。
+  - **壳子决定是否给机会**：满足以下全部条件，才在提示词里放候选表情：
+    - 本会话距上次发表情不少于 `cooldownSec`；
+    - 本会话过去 2 小时内，bot 的回复里带表情的比例低于 `maxRatio`；
+    - 表情库里至少有 3 个满足 `enabled=1`、`missing=0`、`file` 不为空的表情。
+  - **候选挑选**（纯函数，不调用模型）：给每个可用表情打分，取分数最高的 `candidates` 个。分数由三部分相加：
+    - 触发消息文本与表情 `desc_ai` 加 `tags` 的**字符二元组重合数**；
+    - 当前心情档位对应的词（low 低落/难过，annoyed 无语/生气，happy 开心/好耶，excited 激动/兴奋，calm 不加）命中 tags 时加 2；
+    - 本会话 30 分钟内用过的减 3；
+    - 同分时按 `id` 的稳定随机顺序排列（以“会话 id + 当前小时”为种子）。
+  - **提示词**：新块 `stickers`，放在 `float` **之后**、最末尾。模板在 `prompts/reply-system.md` 的新键 `stickers` 里：
+    `可以发表情包（不发也完全可以）。想发时在回复最后单独一行写 [表情:编号]，最多一个：{{list}}`，其中 `list` 格式为 `1 摊手无奈 / 2 狗头 / …`，用的是 `desc_ai`。
+  - **解析与发送**（deliver 步骤）：
+    - 先把回复中**所有** `[表情:...]` 标记剥掉，非法的也剥，绝不能原样发进群里；
+    - 合法编号只取第一个。正文的各条发完之后，再调用 `send_custom_face { emoji_id }` 发送表情；失败时回退为图片段 `{ type: 'image', data: { file: 'base64://…', sub_type: 1, summary: '[动画表情]' } }`，用的是本地文件；再失败就只写日志，不重试；
+    - 成功后 `use_count + 1`，并更新 `last_used_at`。
+  - **只发表情**：剥掉标记后正文为空，并且有合法表情时，只发这个表情；但本会话过去 2 小时内“只发表情”的比例必须低于 `onlyStickerRatio`，否则这次回复整条丢弃，记 `reason='sticker_only_capped'`。
+  - **追踪**：决策 detail 中记录 `stickerOffered`（候选 id 列表，没给机会时为 null）和 `stickerSent`（id 或 null）。
+  - 测试点：没给机会时不注入 stickers 块；挑选打分与稳定排序；标记全部被剥掉（包括非法标记）；发送回退；只发表情的上限；比例与冷却。
+
+- [ ] **V18d 控制台“表情包”页**（侧栏“塑造”分组，位于人设之下）
+  - 顶部：最近同步时间、“同步 QQ 收藏”和“上传”两个按钮，以及设置卡（开关、比例、只发表情比例、冷却、候选数），写入顶层 `stickers` 配置，与 `/api/defaults` 一样校验并热重载。
+  - 主体：图片网格，每张卡片 120px，显示图片、`desc_ai`（可就地编辑）、标签（标签加圆形 ＋）、使用次数和启用开关。已从 QQ 收藏移除的卡片用半透明显示，并标注“已从 QQ 收藏移除”。
+  - 可按“全部 / 已启用 / 未描述 / 已移除”筛选。
+  - 视觉遵守 `doc/design/console-v2` 的样式；`panel:build` 成功。
+
+> **⛔ 停止点 V18**：V18d 完成后停下。
+> **【用户】验收**：用手机在小号收藏 3 张以上表情 → 控制台“同步 QQ 收藏”后能看到图片和描述 → 在群里回复一张图说“收藏”，它回“收好了”，表情包页多了这张 → 打开 `stickers.enabled` 聊一会，偶尔会跟一个表情，并且发出来的是 QQ 原生表情的样式。
