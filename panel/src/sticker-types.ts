@@ -48,3 +48,7 @@ export function formatStickerTime(value: number | null): string {
 export function stickerTagLength(value: string): number {
   return Array.from(value.trim()).length;
 }
+
+export function removeStickerTag(tags: string[], tag: string): string[] {
+  return tags.filter((current) => current !== tag);
+}

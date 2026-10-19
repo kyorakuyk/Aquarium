@@ -34,7 +34,10 @@
 .sticker-description:focus { border-color: var(--accent); outline: 2px solid var(--accent-soft); }
 .sticker-description::placeholder { color: var(--muted); }
 .sticker-tags { display: flex; min-height: 44px; flex-wrap: wrap; align-items: center; justify-content: center; gap: 5px; }
-.sticker-tag { display: inline-flex; min-height: 28px; align-items: center; padding: 0 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-2); font-size: 11px; }
+.sticker-tag { display: inline-flex; min-height: 28px; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-2); font-size: 11px; }
+.sticker-tag-remove { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; padding: 0 2px; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.sticker-tag-remove:hover .sticker-tag { border-color: var(--warn); color: var(--warn-ink); }
+.sticker-tag-remove:focus-visible { border-radius: 9px; outline: 2px solid var(--accent); outline-offset: -2px; }
 .sticker-tag-add { display: grid; width: 44px; height: 44px; flex: none; place-items: center; border: 1px dashed var(--accent); border-radius: 50%; background: transparent; color: var(--accent); cursor: pointer; font-size: 20px; }
 .sticker-tag-input { width: 76px; min-height: 44px; padding: 0 8px; text-align: center; }
 .sticker-meta { display: flex; min-height: 44px; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; color: var(--muted); font-size: 10px; }

@@ -4,6 +4,7 @@ import { StickerImage } from '../components/StickerImage.tsx';
 import { StickerSettingsCard } from '../components/StickerSettingsCard.tsx';
 import {
   formatStickerTime as formatTime,
+  removeStickerTag,
   stickerFilters as filters,
   stickerTagLength as tagLength,
   type StickerFilter as Filter,
@@ -240,7 +241,19 @@ export function StickersPage() {
                   }}
                 />
                 <div className="sticker-tags">
-                  {sticker.tags.map((tag) => <span className="sticker-tag" key={tag}>{tag}</span>)}
+                  {sticker.tags.map((tag, index) => (
+                    <button
+                      className="sticker-tag-remove"
+                      key={`${tag}-${index}`}
+                      type="button"
+                      aria-label={`移除表情 ${sticker.id} 的标签 ${tag}`}
+                      onClick={() => void updateSticker(sticker.id, {
+                        tags: removeStickerTag(sticker.tags, tag),
+                      })}
+                    >
+                      <span className="sticker-tag">{tag}<span aria-hidden="true">×</span></span>
+                    </button>
+                  ))}
                   {tagEditing === sticker.id ? (
                     <input
                       className="sticker-tag-input"

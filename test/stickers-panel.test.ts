@@ -103,7 +103,7 @@ test('表情列表 API 返回图片地址且不泄漏本地文件名', async () 
   }, exampleConfig.owner, { stickerServices: () => [service] });
 });
 
-test('表情备注 PATCH 先写回 QQ 再读回本地描述与标签', async () => {
+test('表情 PATCH 写回 QQ 描述、读取标签并支持删除最后一个标签', async () => {
   const modified: Array<{ emojiId: string; desc: string }> = [];
   const service = fakeStickerService(async () => ({ synced: true }));
   service.modifyCustomFace = async (emojiId, desc) => { modified.push({ emojiId, desc }); };
@@ -129,6 +129,14 @@ test('表情备注 PATCH 先写回 QQ 再读回本地描述与标签', async () 
     assert.equal(repository.stickerById(sticker.id)?.descAi, '开心啦');
     assert.equal(repository.stickerById(sticker.id)?.descQq, '开心啦');
     assert.deepEqual(modified, [{ emojiId: 'emoji-edit', desc: '开心啦' }]);
+
+    const removed = await app.request(`/api/stickers/${sticker.id}`, {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: [] }),
+    });
+    assert.equal(removed.status, 200);
+    assert.deepEqual(repository.stickerById(sticker.id)?.tags, []);
   }, exampleConfig.owner, { stickerServices: () => [service] });
 });
 
