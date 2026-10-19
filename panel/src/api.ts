@@ -174,6 +174,31 @@ export interface ImpressionsView {
   members: Array<{ userId: number; name: string; affinity: AffinityView; tags: TagView[] }>;
 }
 
+export type PrivacyFactLevel = 'L0' | 'L1' | 'L2';
+
+export interface PrivacyFactEvidenceView {
+  messageId: string;
+  time: number;
+  quote: string;
+}
+
+export interface PrivacyFactView {
+  id: number;
+  text: string;
+  textRedacted: boolean;
+  keywords: string[];
+  level: PrivacyFactLevel;
+  levelSource: 'auto' | 'manual';
+  mentions: number;
+  evidence: PrivacyFactEvidenceView[];
+}
+
+export interface PrivacyFactsView {
+  userId: number;
+  name: string;
+  facts: PrivacyFactView[];
+}
+
 export type HistoryImportPhase = 'fetching' | 'extracting' | 'done' | 'cancelled' | 'error';
 
 export interface HistoryImportJobView {

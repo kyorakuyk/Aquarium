@@ -69,6 +69,21 @@ export interface PrivateFactMentionRepository {
   recordPrivateFactMention(input: PrivateFactMentionInput): PrivateFactMentionResult;
 }
 
+export interface PrivateFactControlsInput {
+  account: number;
+  ownerId: number;
+  id: number;
+  text?: string;
+  level?: PrivateFactLevel;
+  auto?: boolean;
+  promoteMentions: number;
+  updatedAt: number;
+}
+
+export interface PrivateFactControlsRepository {
+  updatePrivateFactControls(input: PrivateFactControlsInput): PrivateFactRecord | undefined;
+}
+
 export interface PrivacyRepository {
   listPrivateFactsForOwner(account: number, ownerId: number, status?: PrivateFactStatus): PrivateFactRecord[];
   listPrivateFactsForGroup(account: number, groupSessionId: string): PrivateFactRecord[];

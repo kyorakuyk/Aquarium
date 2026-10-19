@@ -1,0 +1,40 @@
+.privacy-facts-panel { display: grid; gap: 14px; }
+.privacy-facts-notice { margin: 0; padding: 11px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-accent); color: var(--ink-2); font-size: 12px; line-height: 1.55; }
+.privacy-facts-layout { display: grid; grid-template-columns: minmax(190px, .38fr) minmax(0, 1fr); align-items: start; gap: 16px; }
+.privacy-friends, .privacy-fact-list { min-width: 0; padding: 18px; }
+.privacy-friends { position: sticky; top: 16px; }
+.privacy-friend-list { display: grid; gap: 5px; max-height: 65vh; overflow: auto; }
+.privacy-friend { display: grid; width: 100%; min-height: 54px; align-content: center; gap: 3px; padding: 7px 9px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--ink-2); cursor: pointer; text-align: left; }
+.privacy-friend:hover, .privacy-friend.is-selected { border-color: var(--line); background: var(--surface-accent); }
+.privacy-friend.is-selected { border-left: 3px solid var(--accent); }
+.privacy-friend .mono { font-size: 10px; }
+.privacy-fact-list > .section-heading { margin-bottom: 12px; }
+.privacy-fact-list > .section-heading h2 { margin: 0; font-family: var(--serif); font-size: 18px; }
+.privacy-fact-list > .section-heading p { margin: 4px 0 0; font-size: 11px; }
+.privacy-fact { display: grid; gap: 12px; padding: 16px; margin-bottom: 10px; }
+.privacy-fact-heading, .privacy-fact-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.privacy-fact-heading { justify-content: space-between; }
+.privacy-level { display: inline-flex; min-height: 30px; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); color: var(--ink-2); font-size: 11px; font-weight: 700; }
+.privacy-level-l0 { color: var(--muted); }
+.privacy-level-l2 { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.privacy-fact-text-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.privacy-fact-text-form label, .privacy-fact-text-form input { min-width: 0; width: 100%; }
+.privacy-fact-text-form input { min-height: 44px; padding: 8px 10px; }
+.privacy-fact-controls select { min-width: 190px; min-height: 44px; padding: 7px 9px; }
+.privacy-fact-keywords { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 10px; }
+.privacy-keyword { min-height: 26px; padding: 5px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); }
+.privacy-redaction-note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--warn-ink); font-size: 11px; line-height: 1.5; }
+.privacy-fact-evidence { border-top: 1px solid var(--line); }
+.privacy-fact-evidence summary { min-height: 44px; padding-top: 11px; color: var(--accent); cursor: pointer; font-size: 12px; font-weight: 700; }
+.privacy-fact-evidence ul { display: grid; gap: 11px; margin: 0; padding: 0 0 4px; list-style: none; }
+.privacy-fact-evidence li { display: grid; gap: 5px; }
+.privacy-fact-evidence time { font-size: 10px; }
+.privacy-fact-evidence blockquote { margin: 0; padding: 9px 11px; border-left: 2px solid var(--line); background: var(--bg); color: var(--ink-2); font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .privacy-facts-layout { grid-template-columns: minmax(0, 1fr); }
+  .privacy-friends { position: static; }
+  .privacy-friend-list { max-height: 240px; }
+  .privacy-fact-text-form { grid-template-columns: minmax(0, 1fr); }
+  .privacy-fact-controls { align-items: stretch; }
+  .privacy-fact-controls > label, .privacy-fact-controls select { width: 100%; }
+}

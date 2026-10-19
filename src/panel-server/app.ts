@@ -23,6 +23,7 @@ import { callSlot } from '../llm/slots.ts';
 import { registerPersonaRoutes } from './personas.ts';
 import { registerSessionRoutes } from './session-routes.ts';
 import { registerAffectRoutes } from './affect-routes.ts';
+import { registerPrivacyRoutes } from './privacy-routes.ts';
 import { registerSleepRoutes } from './sleep-routes.ts';
 import { registerUsageRoutes } from './usage-routes.ts';
 import { registerProviderRoutes } from './provider-routes.ts';
@@ -246,6 +247,12 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     accounts: options.accounts,
     sleepWakeState: options.sleepWakeState,
     historyImports: options.historyImports,
+    now,
+  });
+  registerPrivacyRoutes(app, {
+    getConfig: options.getConfig,
+    repository: options.repository,
+    accounts: options.accounts,
     now,
   });
   registerSleepRoutes(app, {
