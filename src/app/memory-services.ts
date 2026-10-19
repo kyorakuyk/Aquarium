@@ -2,12 +2,14 @@ import type { AquariumConfig } from '../config/schema.ts';
 import { createHistoryImportService } from '../core/impressions/history-import.ts';
 import { createImpressionsService } from '../core/impressions/service.ts';
 import { createPrivateFactsService } from '../core/privacy/service.ts';
+import { createPrivacyGateService } from '../core/privacy/group-gate.ts';
 import { promptTemplateStore } from '../core/prompt-templates.ts';
 import type { StoreRepository } from '../store/repository.ts';
 
 interface ServiceLogger {
   error(message: string): void;
   info(message: string): void;
+  warn(message: string): void;
 }
 
 export function createMemoryServices(options: {
@@ -38,11 +40,21 @@ export function createMemoryServices(options: {
       );
     },
   });
+  const privacyGateService = createPrivacyGateService({
+    repository: options.repository,
+    getConfig: options.getConfig,
+    onError: ({ account, sessionId }) => {
+      options.logger.error(`群聊隐私守门失败：账号 ${account} 会话 ${sessionId}`);
+    },
+    onEgress: ({ account, sessionId, factId }) => {
+      options.logger.warn(`群聊隐私出口拦截：账号 ${account} 会话 ${sessionId} 条目 ${factId}`);
+    },
+  });
   const historyImports = createHistoryImportService({
     repository: options.repository,
     getConfig: options.getConfig,
     impressionsService,
     getTemplate: () => promptTemplateStore.get().extractTags,
   });
-  return { impressionsService, privateFactsService, historyImports };
+  return { impressionsService, privateFactsService, privacyGateService, historyImports };
 }

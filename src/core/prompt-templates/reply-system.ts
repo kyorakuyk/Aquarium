@@ -7,6 +7,7 @@ export interface ReplySystemTemplate extends PromptTemplate {
   groupTags: string;
   memberTags: string;
   privateFacts: string;
+  knownFacts: string;
   stickers: string;
 }
 
@@ -28,8 +29,9 @@ export function parseReplySystemTemplate(
     || typeof fields.groupTags !== 'string' || fields.groupTags.length === 0
     || typeof fields.memberTags !== 'string' || fields.memberTags.length === 0
     || typeof fields.privateFacts !== 'string' || fields.privateFacts.length === 0
+    || typeof fields.knownFacts !== 'string' || fields.knownFacts.length === 0
     || typeof fields.stickers !== 'string' || fields.stickers.length === 0) {
-    throw new Error('reply-system.md 必须包含非空 system、groupNote、request、groupTags、memberTags、privateFacts 和 stickers 文本');
+    throw new Error('reply-system.md 必须包含非空 system、groupNote、request、groupTags、memberTags、privateFacts、knownFacts 和 stickers 文本');
   }
   const replySystem = {
     ...template,
@@ -39,6 +41,7 @@ export function parseReplySystemTemplate(
     groupTags: fields.groupTags,
     memberTags: fields.memberTags,
     privateFacts: fields.privateFacts,
+    knownFacts: fields.knownFacts,
     stickers: fields.stickers,
   };
   validatePlaceholders('reply-system.md', replySystem.system, ['ownerRule', 'modeHint'], ['ownerRule', 'modeHint']);
@@ -47,6 +50,7 @@ export function parseReplySystemTemplate(
   validatePlaceholders('reply-system.md', replySystem.groupTags, ['tags'], ['tags']);
   validatePlaceholders('reply-system.md', replySystem.memberTags, ['name', 'tags'], ['name', 'tags']);
   validatePlaceholders('reply-system.md', replySystem.privateFacts, ['name', 'facts'], ['name', 'facts']);
+  validatePlaceholders('reply-system.md', replySystem.knownFacts, ['facts'], ['facts']);
   validatePlaceholders('reply-system.md', replySystem.stickers, ['list'], ['list']);
   return replySystem;
 }

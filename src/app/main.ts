@@ -96,7 +96,7 @@ const moodService = createMoodService({
     logger.error(`情绪后台任务失败：${describeError(error)}`);
   },
 });
-const { impressionsService, privateFactsService, historyImports } = createMemoryServices({
+const { impressionsService, privateFactsService, privacyGateService, historyImports } = createMemoryServices({
   repository,
   getConfig: () => configWatcher.getConfig(),
   logger,
@@ -289,6 +289,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     affinityService,
     impressionsService,
     privateFactsService,
+    privacyGateService,
     stickerService,
     sleepWakeState,
     onError: (error, message) => {

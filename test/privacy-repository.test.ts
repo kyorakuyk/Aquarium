@@ -91,3 +91,36 @@ test('private facts and privacy run cursors persist and read back without cross-
     assert.equal(repository.getPrivacyRun(groupSession.account, `${groupSession.account}:private:42`)?.lastRunAt, null);
   });
 });
+
+test('group privacy facts include only active owners who have spoken in that group', async () => {
+  await withRepository(async (repository) => {
+    const groupKey = `${groupSession.account}:group:555`;
+    for (const message of [
+      { messageId: 'group-owner', sessionId: groupKey, senderId: 42, isSelf: false },
+      { messageId: 'group-self', sessionId: groupKey, senderId: groupSession.account, isSelf: true },
+      { messageId: 'other-group-owner', sessionId: `${groupSession.account}:group:777`, senderId: 43, isSelf: false },
+    ]) {
+      repository.saveMessage({
+        sessionId: message.sessionId,
+        messageId: message.messageId,
+        senderId: message.senderId,
+        senderName: 'sender',
+        isSelf: message.isSelf,
+        plainText: 'group message',
+        segments: [],
+        time: 1,
+      });
+    }
+    const visibleId = repository.insertPrivateFact(fact({ ownerId: 42, sessionId: `${groupSession.account}:private:42` }));
+    repository.insertPrivateFact(fact({ ownerId: 43, sessionId: `${groupSession.account}:private:43` }));
+    repository.insertPrivateFact(fact({ ownerId: 99, sessionId: `${groupSession.account}:private:99` }));
+    repository.insertPrivateFact(fact({
+      ownerId: 42,
+      sessionId: `${groupSession.account}:private:42`,
+      text: '已删除的群友事实',
+      status: 'deleted',
+    }));
+
+    assert.deepEqual(repository.listPrivateFactsForGroup(groupSession.account, groupKey).map(({ id }) => id), [visibleId]);
+  });
+});

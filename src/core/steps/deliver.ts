@@ -89,6 +89,22 @@ export const deliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'deliver'
   if (!result || replyText === undefined || nickname === undefined) {
     throw new Error('generate step must run before deliver step');
   }
+  try {
+    const egress = ctx.options.privacyGateService?.checkEgress({ session: ctx.message.session, text: replyText });
+    if (egress?.blocked) {
+      return {
+        next: false,
+        reason: 'privacy_egress',
+        detail: { privacyEgress: { id: egress.factId, level: 'L0' } },
+      };
+    }
+  } catch {
+    return {
+      next: false,
+      reason: 'privacy_egress',
+      detail: { privacyEgress: { level: 'L0', checkFailed: true } },
+    };
+  }
   const parts = splitReply(replyText, maxPartsForContext(ctx));
   ctx.state.parts = parts;
   const sticker = ctx.state.chosenSticker;

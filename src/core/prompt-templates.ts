@@ -3,8 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { parseReplySystemTemplate, type ReplySystemTemplate } from './prompt-templates/reply-system.ts';
+import { parsePrivacyGateTemplate, type PrivacyGatePromptTemplate } from './prompt-templates/privacy-gate.ts';
 
 export type { ReplySystemTemplate } from './prompt-templates/reply-system.ts';
+export type { PrivacyGatePromptTemplate } from './prompt-templates/privacy-gate.ts';
 
 export interface PromptTemplate {
   source: string;
@@ -94,6 +96,7 @@ export interface PromptTemplateSet {
   sleep: SleepPromptTemplate;
   extractTags: ExtractTagsPromptTemplate;
   extractPrivate: ExtractPrivatePromptTemplate;
+  privacyGate: PrivacyGatePromptTemplate;
   personaImport: PersonaImportPromptTemplate;
 }
 
@@ -323,6 +326,12 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
   const sleep = parseSleepTemplate(readTemplate(root, 'sleep.md'));
   const extractTags = parseExtractTagsTemplate(readTemplate(root, 'extract-tags.md'));
   const extractPrivate = parseExtractPrivateTemplate(readTemplate(root, 'extract-private.md'));
+  const privacyGateSource = readTemplate(root, 'privacy-gate.md');
+  const privacyGate = parsePrivacyGateTemplate(
+    privacyGateSource,
+    parseTemplateFields(privacyGateSource, 'privacy-gate.md'),
+    validatePlaceholders,
+  );
   const personaImport = parsePersonaImportTemplate(readTemplate(root, 'persona-import.md'));
   return Object.freeze({
     replySystem: Object.freeze(replySystem),
@@ -335,6 +344,7 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
     sleep: Object.freeze({ ...sleep, goodnight: Object.freeze(sleep.goodnight) }),
     extractTags: Object.freeze(extractTags),
     extractPrivate: Object.freeze(extractPrivate),
+    privacyGate: Object.freeze(privacyGate),
     personaImport: Object.freeze(personaImport),
   });
 }

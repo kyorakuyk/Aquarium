@@ -176,6 +176,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
             ? { injectedAffectBlocks: { ...ctx.state.injectedAffectBlocks } }
             : {}),
           ...(ctx.state.droppedTags ? { droppedTags: ctx.state.droppedTags } : {}),
+          ...(ctx.state.privacyDecisionDetail ? { privacy: ctx.state.privacyDecisionDetail } : {}),
         };
         if (typeof detail === 'object' && detail !== null && !Array.isArray(detail)) {
           return { ...detail, ...fingerprint };

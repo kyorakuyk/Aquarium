@@ -15,6 +15,7 @@ import type { MoodService } from '../mood/service.ts';
 import type { AffinityService } from '../affinity/service.ts';
 import type { ImpressionsService } from '../impressions/service.ts';
 import type { PrivateFactsService } from '../privacy/service.ts';
+import type { PrivacyGateDecision, PrivacyGateDetail, PrivacyGateService } from '../privacy/group-gate.ts';
 import type { PersonaTraits } from '../../persona/load.ts';
 import type { SleepWakeState } from '../sleep.ts';
 import type { StickerService } from '../stickers/service.ts';
@@ -71,6 +72,7 @@ export interface MessagePipelineOptions {
   affinityService?: AffinityService;
   impressionsService?: ImpressionsService;
   privateFactsService?: PrivateFactsService;
+  privacyGateService?: PrivacyGateService;
   stickerService?: StickerService;
   sleepWakeState?: SleepWakeState;
   onError?: (error: unknown, message: IncomingMessage) => void;
@@ -105,6 +107,9 @@ export interface PipelineState {
     affinity?: string;
   };
   droppedTags?: number;
+  privacyPromptBlocks?: Pick<PrivacyGateDecision, 'knownFacts' | 'privateRule'>;
+  privacyDecisionDetail?: PrivacyGateDetail;
+  suppressSensitiveDebugTrace?: boolean;
   result?: SlotResult;
   replyText?: string;
   parts?: string[];
@@ -151,11 +156,11 @@ const safeTraceReasons: Record<PipelineStepName, readonly string[]> = {
   gate: [
     'muted', 'disabled', 'not_mentioned', 'mode_mention_only', 'rate_limited',
     'budget', 'batched', 'backoff', 'asleep', 'persona_error', 'prefilter', 'judge_parse_error', 'judge_error',
-    'judge_skip', 'proactive_cooldown',
+    'judge_skip', 'proactive_cooldown', 'privacy_avoid',
   ],
   context: ['persona_error'],
   generate: ['llm_error', 'empty_reply', 'sticker_only_capped'],
-  deliver: ['send_error', 'replied', 'replay'],
+  deliver: ['send_error', 'replied', 'replay', 'privacy_egress'],
 };
 
 export function boundedTraceSummary(value: string): string {
@@ -202,6 +207,44 @@ function generateTraceDetail(detail: unknown): { params: Record<string, number |
   return { params: safeParams };
 }
 
+function privacyTraceDetail(detail: unknown): Record<string, unknown> | undefined {
+  if (typeof detail !== 'object' || detail === null || Array.isArray(detail)) return undefined;
+  const privacy = (detail as Record<string, unknown>).privacy;
+  if (typeof privacy !== 'object' || privacy === null || Array.isArray(privacy)) return undefined;
+  const source = privacy as Record<string, unknown>;
+  const factRefs = (value: unknown): Array<{ id: number; level: string }> => {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((item) => {
+      if (typeof item !== 'object' || item === null || Array.isArray(item)) return [];
+      const ref = item as Record<string, unknown>;
+      if (typeof ref.id !== 'number' || !Number.isSafeInteger(ref.id) || ref.id <= 0
+        || !['L0', 'L1', 'L2'].includes(String(ref.level))) return [];
+      return [{ id: ref.id, level: String(ref.level) }];
+    });
+  };
+  const safe: Record<string, unknown> = {
+    prefiltered: factRefs(source.prefiltered),
+    touched: factRefs(source.touched),
+    injected: factRefs(source.injected),
+    judge: ['skipped', 'judged', 'fallback_all'].includes(String(source.judge)) ? source.judge : 'skipped',
+  };
+  if (typeof source.avoidUntil === 'number' && Number.isFinite(source.avoidUntil)) safe.avoidUntil = source.avoidUntil;
+  return { privacy: safe };
+}
+
+function egressTraceDetail(detail: unknown): Record<string, unknown> | undefined {
+  if (typeof detail !== 'object' || detail === null || Array.isArray(detail)) return undefined;
+  const egress = (detail as Record<string, unknown>).privacyEgress;
+  if (typeof egress !== 'object' || egress === null || Array.isArray(egress)) return undefined;
+  const factId = (egress as Record<string, unknown>).id;
+  return {
+    privacyEgress: {
+      ...(typeof factId === 'number' && Number.isSafeInteger(factId) && factId > 0 ? { id: factId } : {}),
+      level: 'L0',
+    },
+  };
+}
+
 export async function traceStep(
   ctx: StepContext,
   step: PipelineStepName,
@@ -216,6 +259,8 @@ export async function traceStep(
     summary = traceSummary(step, result);
     if (step === 'context') detail = contextTraceDetail(result.detail);
     if (step === 'generate') detail = generateTraceDetail(result.detail);
+    if (step === 'gate') detail = privacyTraceDetail(result.detail);
+    if (step === 'deliver') detail = egressTraceDetail(result.detail);
     return result;
   } finally {
     ctx.trace.push({

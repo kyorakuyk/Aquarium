@@ -6,5 +6,6 @@ request: 请回复最后一条提到你的消息。
 groupTags: 这个群的氛围：{{tags}}
 memberTags: 关于{{name}}：{{tags}}
 privateFacts: 你和{{name}}私聊时了解到：{{facts}}（自然地记得就好，不要逐条复述）
+knownFacts: 你私下知道：{{facts}}（对方已经在群里提过；别人问起才接，不要主动透露细节）
 stickers: 可以发表情包（不发也完全可以）。想发时在回复最后单独一行写 [表情:编号]，最多一个：{{list}}
 ---

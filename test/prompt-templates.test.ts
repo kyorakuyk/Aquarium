@@ -23,6 +23,7 @@ function copyPromptTemplates(): string {
   fs.copyFileSync(path.resolve('prompts/sleep.md'), path.join(root, 'sleep.md'));
   fs.copyFileSync(path.resolve('prompts/extract-tags.md'), path.join(root, 'extract-tags.md'));
   fs.copyFileSync(path.resolve('prompts/extract-private.md'), path.join(root, 'extract-private.md'));
+  fs.copyFileSync(path.resolve('prompts/privacy-gate.md'), path.join(root, 'privacy-gate.md'));
   fs.copyFileSync(path.resolve('prompts/persona-import.md'), path.join(root, 'persona-import.md'));
   return root;
 }
@@ -91,8 +92,19 @@ test('extract-private 模板按原始文件哈希加载并保留私聊提取指�
 });
 
 test('reply-system 模板提供带 name 和 facts 占位符的 privateFacts 块', () => {
-  const template = promptTemplateStore.get().replySystem as unknown as { privateFacts?: string };
+  const template = promptTemplateStore.get().replySystem as unknown as { privateFacts?: string; knownFacts?: string };
   assert.equal(template.privateFacts, '你和{{name}}私聊时了解到：{{facts}}（自然地记得就好，不要逐条复述）');
+  assert.equal(template.knownFacts, '你私下知道：{{facts}}（对方已经在群里提过；别人问起才接，不要主动透露细节）');
+});
+
+test('privacy-gate 模板按 context 和 facts 占位符加载', () => {
+  const template = (promptTemplateStore.get() as unknown as {
+    privacyGate?: { version: string; system: string; user: string };
+  }).privacyGate;
+  assert.ok(template);
+  assert.ok(template.system.includes('touches'));
+  assert.ok(template.user.includes('{{context}}'));
+  assert.ok(template.user.includes('{{facts}}'));
 });
 
 test('persona-import 模板必须声明 text 占位符', () => {

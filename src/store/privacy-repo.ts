@@ -51,6 +51,7 @@ export interface PrivacyRunRecord {
 
 export interface PrivacyRepository {
   listPrivateFactsForOwner(account: number, ownerId: number, status?: PrivateFactStatus): PrivateFactRecord[];
+  listPrivateFactsForGroup(account: number, groupSessionId: string): PrivateFactRecord[];
   countPrivateOwnerMessagesAfter(sessionId: string, ownerId: number, afterTime: number): number;
   privateFactById(id: number): PrivateFactRecord | undefined;
   insertPrivateFact(fact: NewPrivateFactRecord): number;
@@ -186,6 +187,17 @@ export function createPrivacyQueries(database: DatabaseSync): PrivacyRepository 
     WHERE account = ? AND owner_id = ? AND status = ?
     ORDER BY updated_at DESC, id DESC
   `);
+  const selectGroupFacts = database.prepare(`
+    SELECT id, account, owner_id, session_id, text, keywords_json, level, level_source, mentions,
+      mention_evidence_json, evidence_json, status, created_at, updated_at
+    FROM private_facts AS fact
+    WHERE account = ? AND status = 'active'
+      AND EXISTS (
+        SELECT 1 FROM messages
+        WHERE session_id = ? AND sender_id = fact.owner_id AND is_self = 0
+      )
+    ORDER BY updated_at DESC, id DESC
+  `);
   const selectFactById = database.prepare(`
     SELECT id, account, owner_id, session_id, text, keywords_json, level, level_source, mentions,
       mention_evidence_json, evidence_json, status, created_at, updated_at
@@ -225,6 +237,15 @@ export function createPrivacyQueries(database: DatabaseSync): PrivacyRepository 
     listPrivateFactsForOwner(account, ownerId, status = 'active') {
       validateIdentity(account, ownerId);
       const rows = selectOwnerFacts.all(account, ownerId, status) as Array<Record<string, unknown>>;
+      return rows.map(privateFactFromRow);
+    },
+
+    listPrivateFactsForGroup(account, groupSessionId) {
+      if (!Number.isSafeInteger(account) || account <= 0
+        || typeof groupSessionId !== 'string' || !groupSessionId.startsWith(`${account}:group:`)) {
+        throw new RangeError('群聊私聊事实查询参数无效');
+      }
+      const rows = selectGroupFacts.all(account, groupSessionId) as Array<Record<string, unknown>>;
       return rows.map(privateFactFromRow);
     },
 

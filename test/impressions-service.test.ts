@@ -557,6 +557,7 @@ test('标签注入在来源会话与目标会话不一致时经策略拒绝', as
         groupTags: 'group {{tags}}',
         memberTags: 'member {{name}} {{tags}}',
         privateFacts: 'private {{name}} {{facts}}',
+        knownFacts: 'known {{facts}}',
         stickers: '',
       },
     });

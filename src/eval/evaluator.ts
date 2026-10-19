@@ -52,7 +52,7 @@ function createUnusedTemplates(): PromptTemplateSet {
   return {
     replySystem: {
       source: '', version: '', system: '', groupNote: '', request: '',
-      groupTags: '', memberTags: '', privateFacts: '', stickers: '',
+      groupTags: '', memberTags: '', privateFacts: '', knownFacts: '', stickers: '',
     },
     judge: { source: '', version: '', system: '', user: '' },
     vision: { source: '', version: '', system: '', user: '' },
@@ -79,6 +79,7 @@ function createUnusedTemplates(): PromptTemplateSet {
     sleep: { source: '', version: '', goodnight: [] },
     extractTags: { source: '', version: '', system: '', user: '{{context}}{{existing}}' },
     extractPrivate: { source: '', version: '', system: '', user: '{{context}}{{existing}}' },
+    privacyGate: { source: '', version: '', system: '', user: '{{context}}{{facts}}' },
     personaImport: { source: '', version: '', system: '', user: '{{text}}' },
   };
 }
