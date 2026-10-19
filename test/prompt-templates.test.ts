@@ -22,6 +22,7 @@ function copyPromptTemplates(): string {
   fs.copyFileSync(path.resolve('prompts/traits.md'), path.join(root, 'traits.md'));
   fs.copyFileSync(path.resolve('prompts/sleep.md'), path.join(root, 'sleep.md'));
   fs.copyFileSync(path.resolve('prompts/extract-tags.md'), path.join(root, 'extract-tags.md'));
+  fs.copyFileSync(path.resolve('prompts/extract-private.md'), path.join(root, 'extract-private.md'));
   fs.copyFileSync(path.resolve('prompts/persona-import.md'), path.join(root, 'persona-import.md'));
   return root;
 }
@@ -77,6 +78,16 @@ test('startup template load hashes raw bytes and parses the exact vision and jud
   assert.equal(stickerDescribe.version, createHash('sha256').update(stickerBytes).digest('hex').slice(0, 8));
   assert.ok(stickerDescribe.system.includes('JSON'));
   assert.ok(stickerDescribe.user.length > 0);
+});
+
+test('extract-private 模板按原始文件哈希加载并保留私聊提取指令', () => {
+  const template = promptTemplateStore.get().extractPrivate;
+  const bytes = fs.readFileSync(path.resolve('prompts/extract-private.md'));
+  assert.equal(template.version, createHash('sha256').update(bytes).digest('hex').slice(0, 8));
+  assert.ok(template.system.includes('不要记录身份证号'));
+  assert.ok(template.system.includes('同一件事优先用 update 更新'));
+  assert.ok(template.user.includes('{{context}}'));
+  assert.ok(template.user.includes('{{existing}}'));
 });
 
 test('persona-import 模板必须声明 text 占位符', () => {

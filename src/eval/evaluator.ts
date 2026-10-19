@@ -78,6 +78,7 @@ function createUnusedTemplates(): PromptTemplateSet {
     },
     sleep: { source: '', version: '', goodnight: [] },
     extractTags: { source: '', version: '', system: '', user: '{{context}}{{existing}}' },
+    extractPrivate: { source: '', version: '', system: '', user: '{{context}}{{existing}}' },
     personaImport: { source: '', version: '', system: '', user: '{{text}}' },
   };
 }

@@ -13,5 +13,16 @@ export const persistStep: PipelineStep = async (ctx) => traceStep(ctx, 'persist'
       template: ctx.state.promptTemplates.extractTags,
     });
   }
+  if (!ctx.processOptions.replay && ctx.message.session.kind === 'private'
+    && ctx.message.senderId === ctx.message.session.peer
+    && ctx.message.senderId !== ctx.message.session.account) {
+    ctx.options.privateFactsService?.maybeExtract({
+      session: ctx.message.session,
+      messageId: ctx.message.messageId,
+      senderId: ctx.message.senderId,
+      now: ctx.now(),
+      template: ctx.state.promptTemplates.extractPrivate,
+    });
+  }
   return { next: true };
 });

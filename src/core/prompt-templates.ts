@@ -42,6 +42,11 @@ export interface ExtractTagsPromptTemplate extends PromptTemplate {
   user: string;
 }
 
+export interface ExtractPrivatePromptTemplate extends PromptTemplate {
+  system: string;
+  user: string;
+}
+
 export interface PersonaImportPromptTemplate extends PromptTemplate {
   system: string;
   user: string;
@@ -94,6 +99,7 @@ export interface PromptTemplateSet {
   traits: TraitsPromptTemplate;
   sleep: SleepPromptTemplate;
   extractTags: ExtractTagsPromptTemplate;
+  extractPrivate: ExtractPrivatePromptTemplate;
   personaImport: PersonaImportPromptTemplate;
 }
 
@@ -294,6 +300,18 @@ function parseExtractTagsTemplate(template: PromptTemplate): ExtractTagsPromptTe
   return extractTags;
 }
 
+function parseExtractPrivateTemplate(template: PromptTemplate): ExtractPrivatePromptTemplate {
+  const fields = parseTemplateFields(template, 'extract-private.md');
+  if (typeof fields.system !== 'string' || fields.system.length === 0
+    || typeof fields.user !== 'string' || fields.user.length === 0) {
+    throw new Error('extract-private.md 必须包含非空 system 和 user 文本');
+  }
+  const extractPrivate = { ...template, system: fields.system, user: fields.user };
+  validatePlaceholders('extract-private.md', extractPrivate.system, [], []);
+  validatePlaceholders('extract-private.md', extractPrivate.user, ['context', 'existing'], ['context', 'existing']);
+  return extractPrivate;
+}
+
 function parsePersonaImportTemplate(template: PromptTemplate): PersonaImportPromptTemplate {
   const fields = parseTemplateFields(template, 'persona-import.md');
   if (typeof fields.system !== 'string' || fields.system.length === 0
@@ -333,6 +351,7 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
   const traits = parseTraitsTemplate(readTemplate(root, 'traits.md'));
   const sleep = parseSleepTemplate(readTemplate(root, 'sleep.md'));
   const extractTags = parseExtractTagsTemplate(readTemplate(root, 'extract-tags.md'));
+  const extractPrivate = parseExtractPrivateTemplate(readTemplate(root, 'extract-private.md'));
   const personaImport = parsePersonaImportTemplate(readTemplate(root, 'persona-import.md'));
   return Object.freeze({
     replySystem: Object.freeze(replySystem),
@@ -344,6 +363,7 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
     traits: Object.freeze(traits),
     sleep: Object.freeze({ ...sleep, goodnight: Object.freeze(sleep.goodnight) }),
     extractTags: Object.freeze(extractTags),
+    extractPrivate: Object.freeze(extractPrivate),
     personaImport: Object.freeze(personaImport),
   });
 }

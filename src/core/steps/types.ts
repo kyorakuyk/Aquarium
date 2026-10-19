@@ -14,6 +14,7 @@ import type { ActivityThreshold, ProactiveMode } from '../activity/threshold.ts'
 import type { MoodService } from '../mood/service.ts';
 import type { AffinityService } from '../affinity/service.ts';
 import type { ImpressionsService } from '../impressions/service.ts';
+import type { PrivateFactsService } from '../privacy/service.ts';
 import type { PersonaTraits } from '../../persona/load.ts';
 import type { SleepWakeState } from '../sleep.ts';
 import type { StickerService } from '../stickers/service.ts';
@@ -69,6 +70,7 @@ export interface MessagePipelineOptions {
   moodService?: MoodService;
   affinityService?: AffinityService;
   impressionsService?: ImpressionsService;
+  privateFactsService?: PrivateFactsService;
   stickerService?: StickerService;
   sleepWakeState?: SleepWakeState;
   onError?: (error: unknown, message: IncomingMessage) => void;

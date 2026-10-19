@@ -15,6 +15,7 @@ import { createSessionQueue } from '../core/session-queue.ts';
 import { createAffinityService } from '../core/affinity/service.ts';
 import { createMoodService } from '../core/mood/service.ts';
 import { createImpressionsService } from '../core/impressions/service.ts';
+import { createPrivateFactsService } from '../core/privacy/service.ts';
 import { createHistoryImportService } from '../core/impressions/history-import.ts';
 import { createSleepWakeState } from '../core/sleep.ts';
 import { createSleepGoodnightScheduler } from '../core/sleep/goodnight.ts';
@@ -109,6 +110,18 @@ const impressionsService = createImpressionsService({
     );
   },
 });
+const privateFactsService = createPrivateFactsService({
+  repository,
+  getConfig: () => configWatcher.getConfig(),
+  onError: ({ account, sessionId: currentSessionId }) => {
+    logger.error(`私聊记忆提取失败：账号 ${account} 会话 ${currentSessionId}`);
+  },
+  onExtract: (summary) => {
+    logger.info(
+      `私聊记忆提取 ${summary.sessionId}：${summary.status}，新增 ${summary.inserted}、更新 ${summary.updated}、过时 ${summary.deleted}、丢弃 ${summary.dropped}。`,
+    );
+  },
+});
 const historyImports = createHistoryImportService({
   repository,
   getConfig: () => configWatcher.getConfig(),
@@ -160,6 +173,7 @@ async function shutdown(signal: string): Promise<void> {
     logger.error(`Windows 托管关闭失败：${describeError(error)}`);
   }
   await sessionQueue.idle();
+  await privateFactsService.idle();
   await cliRuntime.stopAll();
   database.close();
   logger.info('Aquarium 已关闭。');
@@ -300,6 +314,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     moodService,
     affinityService,
     impressionsService,
+    privateFactsService,
     stickerService,
     sleepWakeState,
     onError: (error, message) => {
