@@ -84,7 +84,7 @@ export function SlotDialogRowCard({
   function maxTokensError(value: string): string | undefined {
     if (!value.trim()) return undefined;
     const parsed = Number(value);
-    return Number.isSafeInteger(parsed) && parsed > 0 ? undefined : '最大长度需为正整数。';
+    return Number.isSafeInteger(parsed) && parsed > 0 ? undefined : '最大输出需为正整数。';
   }
 
   function onTemperatureChange(value: string, update: (value: string) => void): void {
@@ -191,9 +191,9 @@ export function SlotDialogRowCard({
           </InlineModelParamCell>
           <InlineModelParamCell
             variant="pill"
-            label="长度"
+            label="最大输出"
             value={row.maxTokens}
-            displayValue={row.maxTokens || '默认'}
+            displayValue={row.maxTokens ? `${row.maxTokens} token` : '默认'}
             {...maxTokensInfo}
             disabled={parameterDisabled}
             allowOverride={provider?.kind === 'api' && Boolean(row.model.trim())}

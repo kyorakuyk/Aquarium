@@ -1,6 +1,6 @@
 # Aquarium 施工计划书（唯一任务清单）
 
-> 写给接手编码的模型。最后更新：2026-10-19。**当前任务：§12.6 的 V17b（分支 `dev/persona-v13`），完成后停在停止点 V13；之后是 §12.7 的 V18（分支 `dev/stickers`）；所有任务先遵守 §0.1 提速规则。**
+> 写给接手编码的模型。最后更新：2026-10-19。**当前任务：§12.7 的 V18a–V18d（分支 `dev/stickers`），V18d 完成后停在停止点 V18；所有任务先遵守 §0.1 提速规则。**
 > **本文是唯一的任务清单。**文档优先级：`PLAN.md` > `HANDOFF.md`（只作为架构、接口、环境的参考）> `DESIGN.md`（设计依据）。
 > `REVIEW-2026-10-12.md` 与 `NIGHT-RUN.md` 已并入本文，**作废，不再阅读**。`MORNING.md` 只作为历史记录。
 > 开工前按顺序读：本文全文 → `HANDOFF.md` §1、§3、§4 → `DESIGN.md`（需要时查阅）。
@@ -506,6 +506,7 @@
 | 2026-10-19 | V16b | check 485/485; panel131 |
 | 2026-10-19 | V17 | 用途表浮层/能力重置；未启用群导入；自动提取仍跳过；487/487，panel 132 |
 | 2026-10-19 | V17b | 卡片化、拖拽排序、胶囊编辑；check 487/487；panel 134 modules |
+| 2026-10-19 | V18a | 超时/去重/日志/配置；最大输出文案；check 492/492，panel 134 |
 
 ---
 
@@ -1438,7 +1439,7 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
 > 参考：`reference/QQ-agent`（MIT）的 `src/sticker-manager.js`、`src/stickers.js`、`src/sender.js`。只借鉴思路，如需复制代码，在文件头注明来源与 MIT 许可。
 > SnowLuma 接口依据：`reference/SnowLuma/packages/onebot/src/actions/extended.ts` 中的 `fetch_custom_face_detail`、`add_custom_face`、`modify_custom_face`、`get_image`，以及 `message.ts` 中的 `send_custom_face`。
 
-- [ ] **V18a 发送可靠性前置**（来自 QQ-agent 的教训）
+- [x] **V18a 发送可靠性前置**（来自 QQ-agent 的教训）
   1. **动作超时分档**：适配器调用动作时，发送类（`send_*`、`add_custom_face`、`upload_*`）超时改为 60 秒，其余保持 10 秒。超时错误信息要写明动作名和用时。
   2. **发出消息去重**：同一会话 8 秒内，文本完全相同的消息只发一次，第二次直接跳过并写 debug 日志。窗口可配置，`send.dedupeWindowMs` 默认 8000，0 表示关闭。注意 0 不能被当成“未设置”。
   3. **配置损坏不回落默认值**：确认配置文件解析或校验失败时，保留上一次的有效配置继续运行并报错，**绝不**把默认值写回文件。已经是这样的话，只补一条测试。

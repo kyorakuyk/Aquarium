@@ -133,6 +133,7 @@
 .slot-param-default { display: flex; min-height: 44px; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
 .slot-param-default input { width: 16px !important; height: 16px; min-height: 16px !important; accent-color: var(--accent); }
 .slot-max-tokens-editor > input { min-height: 44px !important; }
+.slot-max-tokens-note { color: var(--muted); font-size: 9px; line-height: 1.5; }
 .slot-reasoning-editor { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
 .slot-reasoning-editor button { min-width: 0; min-height: 44px; padding: 4px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink-2); font-size: 11px; }
 .slot-reasoning-editor button.is-selected { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }

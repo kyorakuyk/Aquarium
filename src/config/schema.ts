@@ -116,6 +116,10 @@ const hostSchema = z.object({
   scanIntervalSec: 5,
 });
 
+const sendSchema = z.object({
+  dedupeWindowMs: z.number().int().nonnegative().default(8_000),
+}).strict().default({ dedupeWindowMs: 8_000 });
+
 const moodSchema = z.object({
   enabled: z.boolean().default(true),
   baseline: z.object({
@@ -169,6 +173,7 @@ export const AquariumConfigSchema = z.object({
   sessions: z.record(z.string(), sessionOverrideSchema),
   debug: debugSchema,
   host: hostSchema,
+  send: sendSchema,
   panel: z.object({
     host: z.string().min(1),
     port: z.number().int().min(1).max(65535),

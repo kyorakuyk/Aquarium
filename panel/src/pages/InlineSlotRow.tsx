@@ -92,7 +92,7 @@ export function InlineSlotRow({ definition, chain, providers, providerModels, di
       if (text !== '') {
         const parsed = Number(text);
         if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-          return '最大长度需为正整数。';
+          return '最大输出需为正整数。';
         }
         value = parsed;
       }
@@ -186,8 +186,9 @@ export function InlineSlotRow({ definition, chain, providers, providerModels, di
         />}
       </InlineModelParamCell></td>
       <td><InlineModelParamCell
-        label="最大长度"
+        label="最大输出"
         value={draft.maxTokens}
+        displayValue={draft.maxTokens ? `${draft.maxTokens} token` : '默认'}
         {...maxTokensInfo}
         disabled={parameterDisabled}
         allowOverride={provider?.kind === 'api' && Boolean(first?.model.trim())}

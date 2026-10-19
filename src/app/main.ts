@@ -247,6 +247,8 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     adapter = new OneBotAdapter({
       account: accountConfig.uin,
       snowlumaDir: accountConfig.snowlumaDir,
+      getSendDedupeWindowMs: () => configWatcher.getConfig().send.dedupeWindowMs,
+      onDebug: (message) => logger.debug(message),
       onConnectionError: (error) => {
         logger.error(`OneBot 连接异常，将继续重试：${describeError(error)}`);
       },

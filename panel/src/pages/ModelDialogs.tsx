@@ -274,7 +274,7 @@ export function SlotDialog({ definition, chain, providers, providerModels, pageB
         return;
       }
       if (maxTokens !== undefined && (!Number.isSafeInteger(maxTokens) || maxTokens <= 0)) {
-        setError('最大长度需为正整数。');
+        setError('最大输出需为正整数。');
         return;
       }
       chainBody.push({

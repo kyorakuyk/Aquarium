@@ -43,7 +43,7 @@ test('读取首个 wsServers、关闭 SDK 重连并校验登录账号', async (t
   assert.deepEqual(capturedOptions, {
     url: 'ws://127.0.0.1:3001/onebot',
     accessToken: undefined,
-    requestTimeoutMs: 10_000,
+    requestTimeoutMs: 60_000,
     reconnect: false,
   });
   assert.equal(fake.state.connectCalls, 1);
@@ -124,6 +124,56 @@ test('发送、历史顺序与标记已读保持在当前会话范围内', async
   assert.deepEqual(fake.state.sentGroup, [[123456, [{ type: 'text', data: { text: 'hello' } }]]]);
   assert.deepEqual(history.map((message) => message.messageId), ['19', '20']);
   assert.deepEqual(fake.state.markedGroup, [[20, 123456]]);
+});
+
+test('相同会话的纯文本在窗口内只发送一次，并在窗口过期后恢复发送', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  const debug: string[] = [];
+  let now = 1_000;
+  const adapter = new OneBotAdapter({
+    account,
+    snowlumaDir: root,
+    getSendDedupeWindowMs: () => 8_000,
+    onDebug: (message) => debug.push(message),
+  }, () => fake.client, { now: () => now });
+  t.after(() => adapter.close());
+  await adapter.connect();
+  const session = { account, kind: 'group' as const, peer: 123456 };
+  const text = [{ type: 'text', text: '相同内容' }] as const;
+
+  const first = await adapter.send(session, [...text]);
+  now += 7_999;
+  const duplicate = await adapter.send(session, [...text]);
+  await adapter.send({ ...session, peer: 654321 }, [...text]);
+  now += 1;
+  await adapter.send(session, [...text]);
+
+  assert.deepEqual(duplicate, first);
+  assert.equal(fake.state.sentGroup.length, 3);
+  assert.equal(debug.length, 1);
+  assert.match(debug[0]!, /重复文本发送已跳过/);
+});
+
+test('dedupeWindowMs 为 0 时不抑制重复文本', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  let now = 1_000;
+  const adapter = new OneBotAdapter({
+    account,
+    snowlumaDir: root,
+    getSendDedupeWindowMs: () => 0,
+  }, () => fake.client, { now: () => now });
+  t.after(() => adapter.close());
+  await adapter.connect();
+  const session = { account, kind: 'group' as const, peer: 123456 };
+  const text = [{ type: 'text', text: '相同内容' }] as const;
+
+  await adapter.send(session, [...text]);
+  now += 1;
+  await adapter.send(session, [...text]);
+
+  assert.equal(fake.state.sentGroup.length, 2);
 });
 
 test('群聊历史分页传递负数锚点并去掉重复锚点消息', async (t) => {

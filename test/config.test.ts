@@ -24,6 +24,16 @@ test('config.example.yaml 符合配置 schema 并默认关闭所有会话', () =
   assert.equal(result.data.accounts.length, 1);
 });
 
+test('send.dedupeWindowMs 默认 8000，且 0 表示关闭', () => {
+  const legacyConfig = structuredClone(exampleConfig) as Record<string, unknown>;
+  delete legacyConfig.send;
+  const defaults = AquariumConfigSchema.parse(legacyConfig);
+  const disabled = AquariumConfigSchema.parse({ ...legacyConfig, send: { dedupeWindowMs: 0 } });
+
+  assert.equal(defaults.send.dedupeWindowMs, 8_000);
+  assert.equal(disabled.send.dedupeWindowMs, 0);
+});
+
 test('V4 defaults keep legacy provider and slot configuration compatible', () => {
   const legacyConfig = structuredClone(exampleConfig) as Record<string, any>;
   for (const provider of Object.values(legacyConfig.providers) as Array<Record<string, unknown>>) {
@@ -253,6 +263,21 @@ test('非法配置会被拒绝而不会被示例内容覆盖', () => {
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('无法解析的 YAML 配置被拒绝且原文件保持不变', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-config-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const configPath = path.join(root, 'config.yaml');
+  const invalidText = 'owner: [\n';
+  fs.writeFileSync(configPath, invalidText, 'utf8');
+
+  assert.throws(() => loadConfig({
+    configPath,
+    examplePath: path.resolve('config.example.yaml'),
+    logger: { info: () => undefined, error: () => undefined },
+  }), /配置 YAML 无法解析/);
+  assert.equal(fs.readFileSync(configPath, 'utf8'), invalidText);
 });
 
 test('writeConfig 原子写入 YAML 并清理临时文件', (t) => {

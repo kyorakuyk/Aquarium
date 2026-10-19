@@ -6,7 +6,7 @@ import type {
   OneBotMessageEvent,
   SnowLumaWebSocketClientOptions,
 } from '@snowluma/sdk';
-import type { IncomingMessage, Segment, SessionKey } from '../../core/events.ts';
+import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../../core/events.ts';
 import type {
   AdapterStatus,
   ContactFriend,
@@ -46,6 +46,12 @@ interface OneBotClient {
 }
 
 type ClientFactory = (options: SnowLumaWebSocketClientOptions) => OneBotClient;
+
+interface TextSendRecord {
+  sentAt?: number;
+  messageId?: string;
+  pending?: Promise<{ messageId: string }>;
+}
 
 interface WsServerConfig {
   host: string;
@@ -121,9 +127,16 @@ function numericMessageId(messageId: string): number {
 const INITIAL_RETRY_DELAY_MS = 2_000;
 const MAX_RETRY_DELAY_MS = 30_000;
 const ADAPTER_ACTION_TIMEOUT_MS = 10_000;
+const SEND_ACTION_TIMEOUT_MS = 60_000;
 const QUICK_RECONNECT_WINDOW_MS = 30_000;
 const QUICK_RETRY_DELAY_MS = 1_000;
 const QUICK_CONNECT_TIMEOUT_MS = 3_000;
+
+function timeoutForAction(action: string): number {
+  return action.startsWith('send_') || action === 'add_custom_face' || action.startsWith('upload_')
+    ? SEND_ACTION_TIMEOUT_MS
+    : ADAPTER_ACTION_TIMEOUT_MS;
+}
 
 class AccountMismatchError extends Error {}
 
@@ -142,6 +155,7 @@ class AdapterOfflineError extends Error {
 }
 
 interface OneBotAdapterRuntimeOptions {
+  now?: () => number;
   setActionTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   clearActionTimer?: typeof globalThis.clearTimeout;
   setRetryTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
@@ -161,6 +175,10 @@ export class OneBotAdapter implements ProtocolAdapter {
   private clientRequiresReplacement = false;
   private accountVerified = false;
   private readonly onConnectionError: ((error: unknown) => void) | undefined;
+  private readonly onDebug: ((message: string) => void) | undefined;
+  private readonly getSendDedupeWindowMs: () => number;
+  private readonly now: () => number;
+  private readonly recentTextSends = new Map<string, Map<string, TextSendRecord>>();
   private readonly messageListeners = new Set<(message: IncomingMessage) => void>();
   private readonly statusListeners = new Set<(status: AdapterStatus) => void>();
   private readonly setActionTimer: NonNullable<OneBotAdapterRuntimeOptions['setActionTimer']>;
@@ -179,13 +197,22 @@ export class OneBotAdapter implements ProtocolAdapter {
   private started = false;
 
   constructor(
-    options: { account: number; snowlumaDir: string; onConnectionError?: (error: unknown) => void },
+    options: {
+      account: number;
+      snowlumaDir: string;
+      onConnectionError?: (error: unknown) => void;
+      onDebug?: (message: string) => void;
+      getSendDedupeWindowMs?: () => number;
+    },
     clientFactory: ClientFactory = createClient,
     runtimeOptions: OneBotAdapterRuntimeOptions = {},
   ) {
     this.account = options.account;
     this.clientFactory = clientFactory;
     this.onConnectionError = options.onConnectionError;
+    this.onDebug = options.onDebug;
+    this.getSendDedupeWindowMs = options.getSendDedupeWindowMs ?? (() => 8_000);
+    this.now = runtimeOptions.now ?? Date.now;
     this.setActionTimer = runtimeOptions.setActionTimer
       ?? ((callback, delayMs) => globalThis.setTimeout(callback, delayMs));
     this.clearActionTimer = runtimeOptions.clearActionTimer ?? globalThis.clearTimeout;
@@ -196,7 +223,7 @@ export class OneBotAdapter implements ProtocolAdapter {
     this.clientOptions = {
       url: `ws://${ws.host}:${ws.port}${ws.path}`,
       accessToken: ws.accessToken,
-      requestTimeoutMs: ADAPTER_ACTION_TIMEOUT_MS,
+      requestTimeoutMs: SEND_ACTION_TIMEOUT_MS,
       reconnect: false,
     };
     this.client = this.clientFactory(this.clientOptions);
@@ -421,12 +448,71 @@ export class OneBotAdapter implements ProtocolAdapter {
     this.assertSessionAccount(session);
     this.assertOnline();
     const messageSegments = toOneBotSegments(segments);
+    const text = segments.length > 0 && segments.every((segment) => segment.type === 'text')
+      ? segments.map((segment) => segment.type === 'text' ? segment.text : '').join('')
+      : '';
+    const windowMs = this.getSendDedupeWindowMs();
+    if (!text || windowMs <= 0) return this.sendOneBotMessage(session, messageSegments);
+
+    const key = sessionId(session);
+    const now = this.now();
+    let records = this.recentTextSends.get(key);
+    if (records) {
+      for (const [recordedText, record] of records) {
+        if (!record.pending && record.sentAt !== undefined && now - record.sentAt >= windowMs) {
+          records.delete(recordedText);
+        }
+      }
+      if (records.size === 0) {
+        this.recentTextSends.delete(key);
+        records = undefined;
+      }
+    }
+    const existing = records?.get(text);
+    if (existing?.pending) {
+      this.logDuplicateTextSend(session);
+      return existing.pending;
+    }
+    if (existing?.messageId !== undefined && existing.sentAt !== undefined && now - existing.sentAt < windowMs) {
+      this.logDuplicateTextSend(session);
+      return { messageId: existing.messageId };
+    }
+
+    if (!records) {
+      records = new Map();
+      this.recentTextSends.set(key, records);
+    }
+    const record: TextSendRecord = { sentAt: now };
+    const pending = this.sendOneBotMessage(session, messageSegments).then((result) => {
+      record.sentAt = this.now();
+      record.messageId = result.messageId;
+      record.pending = undefined;
+      return result;
+    }).catch((error: unknown) => {
+      if (records?.get(text) === record) records.delete(text);
+      if (records?.size === 0) this.recentTextSends.delete(key);
+      throw error;
+    });
+    record.pending = pending;
+    records.set(text, record);
+    return pending;
+  }
+
+  private sendOneBotMessage(session: SessionKey, messageSegments: unknown[]): Promise<{ messageId: string }> {
     return this.withActionTimeout('send_message', async () => {
       const result = session.kind === 'group'
         ? await this.client.sendGroupMessage(session.peer, messageSegments)
         : await this.client.sendPrivateMessage(session.peer, messageSegments);
       return { messageId: String(result.message_id) };
     });
+  }
+
+  private logDuplicateTextSend(session: SessionKey): void {
+    try {
+      this.onDebug?.(`会话 ${sessionId(session)} 的重复文本发送已跳过。`);
+    } catch {
+      // 日志故障不应让消息发送失败。
+    }
   }
 
   async listGroups(): Promise<ContactGroup[]> {
@@ -538,7 +624,7 @@ export class OneBotAdapter implements ProtocolAdapter {
     action: string,
     run: () => Promise<T>,
     requireOnline = true,
-    timeoutMs = ADAPTER_ACTION_TIMEOUT_MS,
+    timeoutMs = timeoutForAction(action),
   ): Promise<T> {
     const client = this.client;
     let timer: ReturnType<typeof setTimeout> | undefined;
