@@ -43,7 +43,7 @@ test('读取首个 wsServers、关闭 SDK 重连并校验登录账号', async (t
   assert.deepEqual(capturedOptions, {
     url: 'ws://127.0.0.1:3001/onebot',
     accessToken: undefined,
-    requestTimeoutMs: 10_000,
+    requestTimeoutMs: 60_000,
     reconnect: false,
   });
   assert.equal(fake.state.connectCalls, 1);
@@ -124,6 +124,96 @@ test('发送、历史顺序与标记已读保持在当前会话范围内', async
   assert.deepEqual(fake.state.sentGroup, [[123456, [{ type: 'text', data: { text: 'hello' } }]]]);
   assert.deepEqual(history.map((message) => message.messageId), ['19', '20']);
   assert.deepEqual(fake.state.markedGroup, [[20, 123456]]);
+});
+
+test('自定义表情动作映射详情、添加、修改备注与 get_image', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  fake.state.rawResults.set('fetch_custom_face_detail', [{
+    emoji_id: 'emoji-1',
+    resId: 'res-1',
+    url: 'https://gchat.qpic.cn/sticker.png',
+    md5: '0123456789abcdef0123456789abcdef',
+    desc: 'QQ 备注',
+  }]);
+  fake.state.rawResults.set('add_custom_face', { emoji_id: 'emoji-2' });
+  fake.state.rawResults.set('send_custom_face', { message_id: 777 });
+  fake.state.imageInfo = { url: 'https://gchat.qpic.cn/refreshed.png' };
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => fake.client);
+  t.after(() => adapter.close());
+  await adapter.connect();
+
+  assert.deepEqual(await adapter.customFaces.fetchDetails(300), [{
+    emojiId: 'emoji-1',
+    resId: 'res-1',
+    url: 'https://gchat.qpic.cn/sticker.png',
+    md5: '0123456789abcdef0123456789abcdef',
+    desc: 'QQ 备注',
+  }]);
+  assert.deepEqual(await adapter.customFaces.addCustomFace('base64://AAAA'), { emojiId: 'emoji-2' });
+  await adapter.customFaces.modifyCustomFace('emoji-2', '新的备注');
+  assert.equal(await adapter.customFaces.getImageUrl('file-1'), 'https://gchat.qpic.cn/refreshed.png');
+  assert.deepEqual(
+    await adapter.customFaces.sendCustomFace({ session: { account, kind: 'group', peer: 123456 }, emojiId: 'emoji-2' }),
+    { messageId: '777' },
+  );
+  assert.deepEqual(fake.state.rawCalls, [
+    ['fetch_custom_face_detail', { count: 300 }],
+    ['add_custom_face', { file: 'base64://AAAA' }],
+    ['modify_custom_face', { emoji_id: 'emoji-2', desc: '新的备注' }],
+    ['send_custom_face', { emoji_id: 'emoji-2', group_id: 123456 }],
+  ]);
+  assert.deepEqual(fake.state.imageCalls, [{ file: 'file-1' }]);
+});
+
+test('相同会话的纯文本在窗口内只发送一次，并在窗口过期后恢复发送', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  const debug: string[] = [];
+  let now = 1_000;
+  const adapter = new OneBotAdapter({
+    account,
+    snowlumaDir: root,
+    getSendDedupeWindowMs: () => 8_000,
+    onDebug: (message) => debug.push(message),
+  }, () => fake.client, { now: () => now });
+  t.after(() => adapter.close());
+  await adapter.connect();
+  const session = { account, kind: 'group' as const, peer: 123456 };
+  const text = [{ type: 'text', text: '相同内容' }] as const;
+
+  const first = await adapter.send(session, [...text]);
+  now += 7_999;
+  const duplicate = await adapter.send(session, [...text]);
+  await adapter.send({ ...session, peer: 654321 }, [...text]);
+  now += 1;
+  await adapter.send(session, [...text]);
+
+  assert.deepEqual(duplicate, first);
+  assert.equal(fake.state.sentGroup.length, 3);
+  assert.equal(debug.length, 1);
+  assert.match(debug[0]!, /重复文本发送已跳过/);
+});
+
+test('dedupeWindowMs 为 0 时不抑制重复文本', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  let now = 1_000;
+  const adapter = new OneBotAdapter({
+    account,
+    snowlumaDir: root,
+    getSendDedupeWindowMs: () => 0,
+  }, () => fake.client, { now: () => now });
+  t.after(() => adapter.close());
+  await adapter.connect();
+  const session = { account, kind: 'group' as const, peer: 123456 };
+  const text = [{ type: 'text', text: '相同内容' }] as const;
+
+  await adapter.send(session, [...text]);
+  now += 1;
+  await adapter.send(session, [...text]);
+
+  assert.equal(fake.state.sentGroup.length, 2);
 });
 
 test('群聊历史分页传递负数锚点并去掉重复锚点消息', async (t) => {

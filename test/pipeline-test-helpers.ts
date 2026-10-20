@@ -8,6 +8,8 @@ import { createIdleBackoff } from '../src/core/activity/backoff.ts';
 import { createActivityThreshold } from '../src/core/activity/threshold.ts';
 import { createMessagePipeline } from '../src/core/pipeline.ts';
 import type { ProtocolAdapter } from '../src/adapters/types.ts';
+import type { StickerService } from '../src/core/stickers/service.ts';
+import type { PrivacyGateService } from '../src/core/privacy/group-gate.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
 
@@ -107,6 +109,7 @@ export function createHarness(
     replyText?: string;
     modelError?: Error;
     getConfig?: () => ReturnType<typeof makeConfig>;
+    stickerService?: StickerService;
   } = {},
 ) {
   const adapter = new FakeAdapter();
@@ -118,6 +121,7 @@ export function createHarness(
     adapter,
     getNickname: () => adapter.nickname,
     personaRoot,
+    ...(options.stickerService === undefined ? {} : { stickerService: options.stickerService }),
     callModel: async (slot, messages) => {
       modelRequests.push({ slot, messages: messages as Array<{ role: string; content: string }> });
       if (options.modelError) throw options.modelError;
@@ -150,6 +154,7 @@ export function createProactiveHarness(
     idleBackoff?: ReturnType<typeof createIdleBackoff>;
     activityThreshold?: ReturnType<typeof createActivityThreshold>;
     now?: () => number;
+    privacyGateService?: PrivacyGateService;
   } = {},
 ) {
   const key = sessionId(groupSession);
@@ -181,6 +186,7 @@ export function createProactiveHarness(
     adapter,
     getNickname: () => adapter.nickname,
     personaRoot,
+    ...(options.privacyGateService === undefined ? {} : { privacyGateService: options.privacyGateService }),
     idleBackoff: options.idleBackoff,
     activityThreshold: options.activityThreshold,
     onError: (error) => { onErrors.push(error); },

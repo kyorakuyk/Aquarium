@@ -35,4 +35,7 @@ defaults:
   groupNote: ''
 sessions: {}
 debug: { enabled: false, sessions: {}, retainDays: 7 } # 默认关闭；会话键可覆盖总开关
+send: { dedupeWindowMs: 8000 } # 同会话内相同文本的发送去重窗口；0 表示关闭
+stickers: { enabled: false, maxRatio: 0.3, onlyStickerRatio: 0.1, cooldownSec: 300, candidates: 8 }
+privacy: { enabled: true, promoteMentions: 3, avoidMinutes: 10 }
 panel: { host: 127.0.0.1, port: 5180, passwordEnv: AQUARIUM_PANEL_PASSWORD }

@@ -127,20 +127,24 @@ test('提示词块按固定顺序渲染并跳过空块', () => {
       groupTags: '块-群标签',
       mood: '',
       memberTags: '块-群友标签',
+      privateFacts: '块-私聊记忆',
+      knownFacts: '块-群里已知事实',
+      privacyRule: '块-隐私规则',
       affinity: '块-好感',
       float: '块-浮动值',
+      stickers: '块-表情候选',
     },
   };
   const messages = buildPromptMessages(options);
   const systemContent = String(messages[0]?.content);
-  const positions = ['块-人设', '块-性格底色', '块-群说明', '块-群标签', '块-群友标签', '块-好感', '块-浮动值']
+  const positions = ['块-人设', '块-性格底色', '块-群说明', '块-群标签', '块-私聊记忆', '块-群友标签', '块-群里已知事实', '块-隐私规则', '块-好感', '块-浮动值', '块-表情候选']
     .map((text) => systemContent.indexOf(text));
 
   assert.ok(positions.every((position) => position >= 0));
   assert.deepEqual(positions, [...positions].sort((left, right) => left - right));
   assert.deepEqual(
     describePromptBlocks(options).map(({ id }) => id),
-    ['persona', 'traits', 'rules', 'groupNote', 'groupTags', 'memberTags', 'affinity', 'float'],
+    ['persona', 'traits', 'rules', 'groupNote', 'groupTags', 'privateFacts', 'memberTags', 'knownFacts', 'privacyRule', 'affinity', 'float', 'stickers'],
   );
 });
 

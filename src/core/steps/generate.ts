@@ -1,5 +1,7 @@
 import { cleanReply } from '../text.ts';
 import type { SlotRequestParams } from '../../llm/slots.ts';
+import { canSendStickerOnly } from '../stickers/selection.ts';
+import { parseStickerReply } from '../stickers/parse.ts';
 import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep } from './types.ts';
 
@@ -38,8 +40,29 @@ export const generateStep: PipelineStep = async (ctx) => traceStep(ctx, 'generat
 
   ctx.state.result = result;
   const params = safeRequestParams(result.params);
-  const replyText = cleanReply(result.text, [nickname, ...settings.nicknames]);
+  const offer = ctx.processOptions.replay ? undefined : ctx.state.stickerOffer;
+  const parsed = parseStickerReply(cleanReply(result.text, [nickname, ...settings.nicknames]), offer);
+  const replyText = parsed.text;
   ctx.state.replyText = replyText;
+  if (parsed.sticker) ctx.state.chosenSticker = parsed.sticker;
+  if (!replyText && parsed.sticker) {
+    const service = ctx.options.stickerService;
+    const allowed = !ctx.processOptions.replay && service !== undefined
+      && canSendStickerOnly(
+        ctx.options.repository.decisionsInRange(
+          ctx.currentSessionId,
+          ctx.now() - 2 * 60 * 60 * 1000,
+          ctx.now(),
+        ),
+        ctx.now(),
+        ctx.state.config?.stickers.onlyStickerRatio ?? 0,
+      );
+    if (!allowed) {
+      return { next: false, reason: 'sticker_only_capped', detail: { model: result.model, params } };
+    }
+    ctx.state.stickerOnly = true;
+    return { next: true, detail: { params } };
+  }
   if (!replyText) return { next: false, reason: 'empty_reply', detail: { model: result.model, params } };
   return { next: true, detail: { params } };
 });

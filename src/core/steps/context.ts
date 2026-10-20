@@ -41,10 +41,12 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     message: ctx.message,
     repository: ctx.options.repository,
     visionTemplate: ctx.state.promptTemplates.vision,
+    visionModel: config.slots.vision?.[0]?.model ?? 'unknown',
     callVision: (messages) => ctx.modelCall('vision', messages, callOptions),
     ...(ctx.options.downloadImage === undefined ? {} : { downloadImage: ctx.options.downloadImage }),
     ...(ctx.options.onError === undefined ? {} : { onError: ctx.options.onError }),
     now: ctx.now,
+    persistMd5: !ctx.processOptions.replay,
   });
 
   const contextCount = ctx.state.proactiveMode ? 8 : settings.contextMessages;
@@ -53,7 +55,12 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     : ctx.options.repository.recentMessages(ctx.currentSessionId, contextCount))
     .map((record) => ({
       ...record,
-      plainText: messageTextWithImageCaptions(record, ctx.options.repository),
+      plainText: messageTextWithImageCaptions(
+        record,
+        ctx.options.repository,
+        ctx.state.promptTemplates.vision.version,
+        config.slots.vision?.[0]?.model ?? 'unknown',
+      ),
     }));
   const tagBlocks = ctx.options.impressionsService?.promptBlocks({
     session: ctx.message.session,
@@ -64,6 +71,12 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     template: ctx.state.promptTemplates.replySystem,
   }) ?? { droppedTags: 0 };
   if (tagBlocks.droppedTags > 0) ctx.state.droppedTags = tagBlocks.droppedTags;
+  const privateFactsBlock = ctx.options.privateFactsService?.promptBlock({
+    session: ctx.message.session,
+    name: ctx.message.senderName,
+    now: ctx.now(),
+    template: ctx.state.promptTemplates.replySystem,
+  });
   const moodBlocks = ctx.options.moodService?.promptBlocks({
     account: ctx.message.session.account,
     now: ctx.now(),
@@ -85,6 +98,22 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   const traitsBlock = ctx.state.personaTraits
     ? renderTraitsBlock(ctx.state.personaTraits, effectiveTalk, ctx.state.promptTemplates.traits)
     : '';
+  const stickersBlock = (() => {
+    if (ctx.processOptions.replay || !ctx.options.stickerService) return '';
+    const offer = ctx.options.stickerService.offer({
+      sessionId: ctx.currentSessionId,
+      messageText: ctx.message.plainText,
+      moodBand: ctx.options.moodService?.currentBand({
+        account: ctx.message.session.account,
+        now: ctx.now(),
+      }) ?? 'calm',
+      now: ctx.now(),
+    });
+    if (!offer) return '';
+    ctx.state.stickerOffer = offer;
+    ctx.state.stickerOffered = offer.candidates.map((candidate) => candidate.id);
+    return ctx.state.promptTemplates.replySystem.stickers.replaceAll('{{list}}', offer.promptList);
+  })();
   const promptOptions = {
     persona,
     ownerId: config.owner,
@@ -96,8 +125,14 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
       traits: traitsBlock,
       ...moodBlocks,
       ...(tagBlocks.groupTags === undefined ? {} : { groupTags: tagBlocks.groupTags }),
+      ...(privateFactsBlock === undefined ? {} : { privateFacts: privateFactsBlock }),
       ...(tagBlocks.memberTags === undefined ? {} : { memberTags: tagBlocks.memberTags }),
+      ...(ctx.state.privacyPromptBlocks?.knownFacts === undefined
+        ? {} : { knownFacts: ctx.state.privacyPromptBlocks.knownFacts }),
+      ...(ctx.state.privacyPromptBlocks?.privateRule === undefined
+        ? {} : { privacyRule: ctx.state.privacyPromptBlocks.privateRule }),
       ...(affinityBlock === undefined ? {} : { affinity: affinityBlock }),
+      ...(stickersBlock ? { stickers: stickersBlock } : {}),
     },
     replySystemTemplate: ctx.state.promptTemplates.replySystem,
   };

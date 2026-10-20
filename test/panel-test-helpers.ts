@@ -73,6 +73,8 @@ export class FakeAdapter implements ProtocolAdapter {
 export async function withPanel<T>(
   run: (options: {
     app: ReturnType<typeof createPanelApp>;
+    root: string;
+    database: ReturnType<typeof openDatabase>;
     repository: ReturnType<typeof createRepository>;
     adapter: FakeAdapter;
     historyImports: ReturnType<typeof createHistoryImportService>;
@@ -90,6 +92,7 @@ export async function withPanel<T>(
     testProvider?: (provider: string, model: string, config: ReturnType<typeof AquariumConfigSchema.parse>) => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
     cliRuntime?: CliRuntime;
     callModel?: PanelServerOptions['callModel'];
+    stickerServices?: PanelServerOptions['stickerServices'];
   } = {},
 ): Promise<T> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-panel-test-'));
@@ -159,6 +162,7 @@ export async function withPanel<T>(
     ...(panelOptions.fetch ? { fetch: panelOptions.fetch } : {}),
     ...(panelOptions.testProvider ? { testProvider: panelOptions.testProvider } : {}),
     ...(panelOptions.cliRuntime ? { cliRuntime: panelOptions.cliRuntime } : {}),
+    ...(panelOptions.stickerServices ? { stickerServices: panelOptions.stickerServices } : {}),
     callModel: panelOptions.callModel ?? (async (slot: string, _messages: unknown[], options: SlotCallOptions): Promise<SlotResult> => {
       modelSlots.push(slot);
       options.recordUsage({
@@ -202,6 +206,8 @@ export async function withPanel<T>(
   try {
     return await run({
       app,
+      root,
+      database,
       repository,
       adapter,
       historyImports,

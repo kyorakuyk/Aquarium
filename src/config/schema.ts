@@ -116,6 +116,34 @@ const hostSchema = z.object({
   scanIntervalSec: 5,
 });
 
+const sendSchema = z.object({
+  dedupeWindowMs: z.number().int().nonnegative().default(8_000),
+}).strict().default({ dedupeWindowMs: 8_000 });
+
+const stickersSchema = z.object({
+  enabled: z.boolean().default(false),
+  maxRatio: z.number().min(0).max(1).default(0.3),
+  onlyStickerRatio: z.number().min(0).max(1).default(0.1),
+  cooldownSec: z.number().int().min(0).max(86_400).default(300),
+  candidates: z.number().int().min(1).max(50).default(8),
+}).strict().default({
+  enabled: false,
+  maxRatio: 0.3,
+  onlyStickerRatio: 0.1,
+  cooldownSec: 300,
+  candidates: 8,
+});
+
+const privacySchema = z.object({
+  enabled: z.boolean().default(true),
+  promoteMentions: z.number().int().min(2).default(3),
+  avoidMinutes: z.number().int().positive().default(10),
+}).strict().default({
+  enabled: true,
+  promoteMentions: 3,
+  avoidMinutes: 10,
+});
+
 const moodSchema = z.object({
   enabled: z.boolean().default(true),
   baseline: z.object({
@@ -169,6 +197,9 @@ export const AquariumConfigSchema = z.object({
   sessions: z.record(z.string(), sessionOverrideSchema),
   debug: debugSchema,
   host: hostSchema,
+  send: sendSchema,
+  stickers: stickersSchema,
+  privacy: privacySchema,
   panel: z.object({
     host: z.string().min(1),
     port: z.number().int().min(1).max(65535),

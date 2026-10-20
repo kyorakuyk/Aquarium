@@ -2,21 +2,25 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
+import { parseReplySystemTemplate, type ReplySystemTemplate } from './prompt-templates/reply-system.ts';
+import { parsePrivacyGateTemplate, type PrivacyGatePromptTemplate } from './prompt-templates/privacy-gate.ts';
+import { parsePrivacyMentionTemplate, type PrivacyMentionPromptTemplate } from './prompt-templates/privacy-mention.ts';
+
+export type { ReplySystemTemplate } from './prompt-templates/reply-system.ts';
+export type { PrivacyGatePromptTemplate } from './prompt-templates/privacy-gate.ts';
+export type { PrivacyMentionPromptTemplate } from './prompt-templates/privacy-mention.ts';
 
 export interface PromptTemplate {
   source: string;
   version: string;
 }
 
-export interface ReplySystemTemplate extends PromptTemplate {
+export interface VisionPromptTemplate extends PromptTemplate {
   system: string;
-  groupNote: string;
-  request: string;
-  groupTags: string;
-  memberTags: string;
+  user: string;
 }
 
-export interface VisionPromptTemplate extends PromptTemplate {
+export interface StickerDescribePromptTemplate extends PromptTemplate {
   system: string;
   user: string;
 }
@@ -32,6 +36,11 @@ export interface AppraisePromptTemplate extends PromptTemplate {
 }
 
 export interface ExtractTagsPromptTemplate extends PromptTemplate {
+  system: string;
+  user: string;
+}
+
+export interface ExtractPrivatePromptTemplate extends PromptTemplate {
   system: string;
   user: string;
 }
@@ -82,11 +91,15 @@ export interface PromptTemplateSet {
   replySystem: ReplySystemTemplate;
   judge: JudgePromptTemplate;
   vision: VisionPromptTemplate;
+  stickerDescribe: StickerDescribePromptTemplate;
   appraise: AppraisePromptTemplate;
   affect: AffectPromptTemplate;
   traits: TraitsPromptTemplate;
   sleep: SleepPromptTemplate;
   extractTags: ExtractTagsPromptTemplate;
+  extractPrivate: ExtractPrivatePromptTemplate;
+  privacyGate: PrivacyGatePromptTemplate;
+  privacyMention: PrivacyMentionPromptTemplate;
   personaImport: PersonaImportPromptTemplate;
 }
 
@@ -124,31 +137,6 @@ function parseTemplateFields(template: PromptTemplate, fileName: string): Record
   return parsed as Record<string, unknown>;
 }
 
-function parseReplySystemTemplate(template: PromptTemplate): ReplySystemTemplate {
-  const fields = parseTemplateFields(template, 'reply-system.md');
-  if (typeof fields.system !== 'string' || fields.system.length === 0
-    || typeof fields.groupNote !== 'string' || fields.groupNote.length === 0
-    || typeof fields.request !== 'string' || fields.request.length === 0
-    || typeof fields.groupTags !== 'string' || fields.groupTags.length === 0
-    || typeof fields.memberTags !== 'string' || fields.memberTags.length === 0) {
-    throw new Error('reply-system.md 必须包含非空 system、groupNote、request、groupTags 和 memberTags 文本');
-  }
-  const replySystem = {
-    ...template,
-    system: fields.system,
-    groupNote: fields.groupNote,
-    request: fields.request,
-    groupTags: fields.groupTags,
-    memberTags: fields.memberTags,
-  };
-  validatePlaceholders('reply-system.md', replySystem.system, ['ownerRule', 'modeHint'], ['ownerRule', 'modeHint']);
-  validatePlaceholders('reply-system.md', replySystem.groupNote, ['groupNote'], ['groupNote']);
-  validatePlaceholders('reply-system.md', replySystem.request, [], []);
-  validatePlaceholders('reply-system.md', replySystem.groupTags, ['tags'], ['tags']);
-  validatePlaceholders('reply-system.md', replySystem.memberTags, ['name', 'tags'], ['name', 'tags']);
-  return replySystem;
-}
-
 function parseVisionTemplate(template: PromptTemplate): VisionPromptTemplate {
   const fields = parseTemplateFields(template, 'vision.md');
   if (typeof fields.system !== 'string' || fields.system.length === 0
@@ -156,6 +144,18 @@ function parseVisionTemplate(template: PromptTemplate): VisionPromptTemplate {
     throw new Error('vision.md 必须包含非空 system 和 user 文本');
   }
   return { ...template, system: fields.system, user: fields.user };
+}
+
+function parseStickerDescribeTemplate(template: PromptTemplate): StickerDescribePromptTemplate {
+  const fields = parseTemplateFields(template, 'sticker-describe.md');
+  if (typeof fields.system !== 'string' || fields.system.length === 0
+    || typeof fields.user !== 'string' || fields.user.length === 0) {
+    throw new Error('sticker-describe.md 必须包含非空 system 和 user 文本');
+  }
+  const stickerDescribe = { ...template, system: fields.system, user: fields.user };
+  validatePlaceholders('sticker-describe.md', stickerDescribe.system, [], []);
+  validatePlaceholders('sticker-describe.md', stickerDescribe.user, [], []);
+  return stickerDescribe;
 }
 
 function parseJudgeTemplate(template: PromptTemplate): JudgePromptTemplate {
@@ -272,6 +272,18 @@ function parseExtractTagsTemplate(template: PromptTemplate): ExtractTagsPromptTe
   return extractTags;
 }
 
+function parseExtractPrivateTemplate(template: PromptTemplate): ExtractPrivatePromptTemplate {
+  const fields = parseTemplateFields(template, 'extract-private.md');
+  if (typeof fields.system !== 'string' || fields.system.length === 0
+    || typeof fields.user !== 'string' || fields.user.length === 0) {
+    throw new Error('extract-private.md 必须包含非空 system 和 user 文本');
+  }
+  const extractPrivate = { ...template, system: fields.system, user: fields.user };
+  validatePlaceholders('extract-private.md', extractPrivate.system, [], []);
+  validatePlaceholders('extract-private.md', extractPrivate.user, ['context', 'existing'], ['context', 'existing']);
+  return extractPrivate;
+}
+
 function parsePersonaImportTemplate(template: PromptTemplate): PersonaImportPromptTemplate {
   const fields = parseTemplateFields(template, 'persona-import.md');
   if (typeof fields.system !== 'string' || fields.system.length === 0
@@ -302,24 +314,47 @@ function validatePlaceholders(
 }
 
 function readPromptTemplateSet(root: string): PromptTemplateSet {
-  const replySystem = parseReplySystemTemplate(readTemplate(root, 'reply-system.md'));
+  const replySystemSource = readTemplate(root, 'reply-system.md');
+  const replySystem = parseReplySystemTemplate(
+    replySystemSource,
+    parseTemplateFields(replySystemSource, 'reply-system.md'),
+    validatePlaceholders,
+  );
   const judge = parseJudgeTemplate(readTemplate(root, 'judge.md'));
   const vision = parseVisionTemplate(readTemplate(root, 'vision.md'));
+  const stickerDescribe = parseStickerDescribeTemplate(readTemplate(root, 'sticker-describe.md'));
   const appraise = parseAppraiseTemplate(readTemplate(root, 'appraise.md'));
   const affect = parseAffectTemplate(readTemplate(root, 'affect.md'));
   const traits = parseTraitsTemplate(readTemplate(root, 'traits.md'));
   const sleep = parseSleepTemplate(readTemplate(root, 'sleep.md'));
   const extractTags = parseExtractTagsTemplate(readTemplate(root, 'extract-tags.md'));
+  const extractPrivate = parseExtractPrivateTemplate(readTemplate(root, 'extract-private.md'));
+  const privacyGateSource = readTemplate(root, 'privacy-gate.md');
+  const privacyGate = parsePrivacyGateTemplate(
+    privacyGateSource,
+    parseTemplateFields(privacyGateSource, 'privacy-gate.md'),
+    validatePlaceholders,
+  );
+  const privacyMentionSource = readTemplate(root, 'privacy-mention.md');
+  const privacyMention = parsePrivacyMentionTemplate(
+    privacyMentionSource,
+    parseTemplateFields(privacyMentionSource, 'privacy-mention.md'),
+    validatePlaceholders,
+  );
   const personaImport = parsePersonaImportTemplate(readTemplate(root, 'persona-import.md'));
   return Object.freeze({
     replySystem: Object.freeze(replySystem),
     judge: Object.freeze(judge),
     vision: Object.freeze(vision),
+    stickerDescribe: Object.freeze(stickerDescribe),
     appraise: Object.freeze(appraise),
     affect: Object.freeze(affect),
     traits: Object.freeze(traits),
     sleep: Object.freeze({ ...sleep, goodnight: Object.freeze(sleep.goodnight) }),
     extractTags: Object.freeze(extractTags),
+    extractPrivate: Object.freeze(extractPrivate),
+    privacyGate: Object.freeze(privacyGate),
+    privacyMention: Object.freeze(privacyMention),
     personaImport: Object.freeze(personaImport),
   });
 }

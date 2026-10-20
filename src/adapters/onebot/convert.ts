@@ -40,7 +40,13 @@ function convertOneBotSegment(raw: unknown): Segment {
       const file = stringValue(data.file);
       const url = stringValue(data.url) ?? file;
       if (!url) return { type: 'unknown', raw };
-      return file ? { type: 'image', url, file } : { type: 'image', url };
+      const subType = accountNumber(data.sub_type);
+      return {
+        type: 'image',
+        url,
+        ...(file === undefined ? {} : { file }),
+        ...(subType === undefined ? {} : { subType }),
+      };
     }
     case 'reply': {
       const messageId = stringValue(data.id);
@@ -53,6 +59,13 @@ function convertOneBotSegment(raw: unknown): Segment {
       return id === undefined
         ? { type: 'unknown', raw }
         : { type: 'face', id };
+    }
+    case 'mface': {
+      const emojiId = stringValue(data.emoji_id) ?? stringValue(data.emojiId);
+      const summary = stringValue(data.summary);
+      return emojiId === undefined
+        ? { type: 'unknown', raw }
+        : { type: 'sticker', emojiId, ...(summary === undefined ? {} : { summary }) };
     }
     default:
       return { type: 'unknown', raw };
@@ -112,6 +125,8 @@ export function toOneBotSegments(segments: Segment[]): AnyMessageSegment[] {
         break;
       case 'face':
         converted.push(message.face(segment.id));
+        break;
+      case 'sticker':
         break;
       case 'unknown':
         break;

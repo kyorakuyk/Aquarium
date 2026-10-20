@@ -26,10 +26,58 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
   };
   ctx.state.config = config;
   ctx.state.settings = settings;
-  const callOptions = ctx.state.callOptions ?? createSlotCallOptions(ctx, config);
+  let callOptions = ctx.state.callOptions ?? createSlotCallOptions(ctx, config);
   ctx.state.callOptions = callOptions;
 
+  async function checkGroupPrivacy(triggered: boolean) {
+    if (ctx.message.session.kind !== 'group' || !ctx.options.privacyGateService) return undefined;
+    const records = ctx.processOptions.replay
+      ? ctx.options.repository.recentMessagesThrough(ctx.currentSessionId, ctx.message.messageId, 8)
+      : ctx.options.repository.recentMessages(ctx.currentSessionId, 8);
+    const messages = records.map((record) => ({
+      ...record,
+      plainText: messageTextWithImageCaptions(
+        record,
+        ctx.options.repository,
+        ctx.state.promptTemplates.vision.version,
+        config.slots.vision?.[0]?.model ?? 'unknown',
+      ),
+    }));
+    const result = await ctx.options.privacyGateService.evaluateGroup({
+      session: ctx.message.session,
+      senderId: ctx.message.senderId,
+      triggered,
+      now: ctx.now(),
+      messages,
+      template: ctx.state.promptTemplates.privacyGate,
+      knownFactsTemplate: ctx.state.promptTemplates.replySystem.knownFacts,
+    });
+    ctx.state.privacyDecisionDetail = result.detail;
+    if (result.knownFacts !== undefined || result.privateRule !== undefined) {
+      ctx.state.privacyPromptBlocks = {
+        ...(result.knownFacts === undefined ? {} : { knownFacts: result.knownFacts }),
+        ...(result.privateRule === undefined ? {} : { privateRule: result.privateRule }),
+      };
+    }
+    if (result.suppressDebugTrace) {
+      ctx.state.suppressSensitiveDebugTrace = true;
+      const safeOptions = { ...callOptions };
+      delete safeOptions.debugTrace;
+      callOptions = safeOptions;
+      ctx.state.callOptions = safeOptions;
+    }
+    return result;
+  }
+
   if (ctx.processOptions.batched) {
+    const privacyAvoid = ctx.options.privacyGateService?.activeAvoid({
+      session: ctx.message.session,
+      now: ctx.now(),
+    });
+    if (privacyAvoid) {
+      ctx.state.privacyDecisionDetail = privacyAvoid.detail;
+      return { next: false, reason: 'privacy_avoid', detail: { privacy: privacyAvoid.detail } };
+    }
     return { next: false, reason: 'batched', detail: { trigger: 'proactive' } };
   }
 
@@ -37,6 +85,20 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
   if (!settings.enabled) return { next: false, reason: 'disabled', detail: { enabled: false } };
 
   const trigger = messageTrigger(ctx.message, settings.nicknames);
+  if (trigger === 'none' && settings.mode !== 'mention_only') {
+    const proactivePrivacyAvoid = ctx.options.privacyGateService?.activeAvoid({
+      session: ctx.message.session,
+      now: ctx.now(),
+    });
+    if (proactivePrivacyAvoid) {
+      ctx.state.privacyDecisionDetail = proactivePrivacyAvoid.detail;
+      return {
+        next: false,
+        reason: 'privacy_avoid',
+        detail: { privacy: proactivePrivacyAvoid.detail },
+      };
+    }
+  }
   const sleepNow = ctx.now();
   const plan = sleepPlan(sleepNow, config.sleep.bedtime, config.sleep.wake);
   const wakeState = ctx.options.sleepWakeState;
@@ -65,6 +127,10 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
       ? ctx.rateLimiter.preview(ctx.message.session, ctx.message.senderId, settings.rate)
       : ctx.rateLimiter.check(ctx.message.session, ctx.message.senderId, settings.rate);
     if (!rate.allowed) return { next: false, reason: 'rate_limited', detail: { limit: rate.reason } };
+    const privacy = await checkGroupPrivacy(true);
+    if (privacy?.action === 'avoid') {
+      return { next: false, reason: 'privacy_avoid', detail: { privacy: privacy.detail } };
+    }
     if (!ctx.processOptions.replay) {
       ctx.options.moodService?.recordCalled({
         account: ctx.message.session.account,
@@ -78,7 +144,12 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
         now: ctx.now(),
       });
     }
-    return { next: true };
+    return {
+      next: true,
+      ...(ctx.state.privacyDecisionDetail
+        ? { detail: { privacy: ctx.state.privacyDecisionDetail } }
+        : {}),
+    };
   }
   if (settings.mode === 'mention_only') {
     return { next: false, reason: 'mode_mention_only', detail: { trigger: 'none' } };
@@ -119,11 +190,25 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
     return { next: false, reason: 'prefilter', detail: prefilterDetail };
   }
 
+  const privacy = await checkGroupPrivacy(false);
+  if (privacy?.action === 'avoid') {
+    return { next: false, reason: 'privacy_avoid', detail: { ...prefilterDetail, privacy: privacy.detail } };
+  }
+  const privacyDetail = ctx.state.privacyDecisionDetail;
+  const prefilterDecisionDetail = privacyDetail
+    ? { ...prefilterDetail, privacy: privacyDetail }
+    : prefilterDetail;
+
   const judgeContext = ctx.options.repository.recentMessages(ctx.currentSessionId, 8).map((record) => ({
     time: record.time,
     senderName: record.senderName,
     isSelf: record.isSelf,
-    plainText: messageTextWithImageCaptions(record, ctx.options.repository),
+    plainText: messageTextWithImageCaptions(
+      record,
+      ctx.options.repository,
+      ctx.state.promptTemplates.vision.version,
+      config.slots.vision?.[0]?.model ?? 'unknown',
+    ),
   }));
   const judge = await runJudge(
     judgeContext,
@@ -139,7 +224,7 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
   );
   if (!judge.ok) {
     if (!ctx.processOptions.replay) backoff.recordNoReply(ctx.currentSessionId, ctx.now());
-    return { next: false, reason: judge.reason, detail: prefilterDetail };
+    return { next: false, reason: judge.reason, detail: prefilterDecisionDetail };
   }
 
   if (ctx.state.personaTraits === undefined) {
@@ -166,7 +251,7 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
     thresholds.recordJudgment(ctx.currentSessionId, settings.mode, judge.probability, ctx.now());
   }
   const decisionDetail = {
-    ...prefilterDetail,
+    ...prefilterDecisionDetail,
     probability: judge.probability,
     threshold,
     ...(config.sleep.enabled ? { energy } : {}),

@@ -213,6 +213,113 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 8,
+    up(database) {
+      database.exec(`
+        CREATE TABLE stickers (
+          id INTEGER PRIMARY KEY,
+          account INTEGER NOT NULL,
+          emoji_id TEXT NOT NULL,
+          md5 TEXT NOT NULL,
+          file TEXT,
+          desc_qq TEXT NOT NULL DEFAULT '',
+          desc_ai TEXT NOT NULL DEFAULT '',
+          tags_json TEXT NOT NULL DEFAULT '[]',
+          enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+          missing INTEGER NOT NULL DEFAULT 0 CHECK (missing IN (0, 1)),
+          use_count INTEGER NOT NULL DEFAULT 0 CHECK (use_count >= 0),
+          last_used_at INTEGER,
+          description_attempts INTEGER NOT NULL DEFAULT 0 CHECK (description_attempts BETWEEN 0 AND 3),
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          UNIQUE (account, md5)
+        );
+        CREATE INDEX idx_stickers_account_enabled ON stickers (account, enabled, missing);
+      `);
+    },
+  },
+  {
+    version: 9,
+    up(database) {
+      const decisionsTable = database.prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'decisions'",
+      ).get();
+      if (decisionsTable) {
+        database.exec(`
+          CREATE INDEX IF NOT EXISTS idx_decisions_session_time
+          ON decisions (session_id, time, id)
+        `);
+      }
+    },
+  },
+  {
+    version: 10,
+    up(database) {
+      const imageCaptions = database.prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'image_captions'",
+      ).get();
+      if (imageCaptions) {
+        const columns = new Set((database.prepare("PRAGMA table_info('image_captions')").all() as Array<{ name: string }>)
+          .map(({ name }) => name));
+        const additions = [
+          ['md5', 'TEXT'],
+          ['kind', 'TEXT'],
+          ['description', 'TEXT'],
+          ['text', 'TEXT'],
+          ['legible', 'INTEGER'],
+          ['vision_model', 'TEXT'],
+          ['vision_template_version', 'TEXT'],
+        ] as const;
+        for (const [name, definition] of additions) {
+          if (!columns.has(name)) database.exec(`ALTER TABLE image_captions ADD COLUMN ${name} ${definition}`);
+        }
+      }
+
+      const stickers = database.prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'stickers'",
+      ).get();
+      if (stickers) {
+        const columns = new Set((database.prepare("PRAGMA table_info('stickers')").all() as Array<{ name: string }>)
+          .map(({ name }) => name));
+        if (!columns.has('manual_desc')) {
+          database.exec("ALTER TABLE stickers ADD COLUMN manual_desc TEXT NOT NULL DEFAULT ''");
+        }
+      }
+    },
+  },
+  {
+    version: 11,
+    up(database) {
+      database.exec(`
+        CREATE TABLE private_facts (
+          id INTEGER PRIMARY KEY,
+          account INTEGER NOT NULL,
+          owner_id INTEGER NOT NULL,
+          session_id TEXT NOT NULL,
+          text TEXT NOT NULL,
+          keywords_json TEXT NOT NULL,
+          level TEXT NOT NULL CHECK (level IN ('L0', 'L1', 'L2')),
+          level_source TEXT NOT NULL CHECK (level_source IN ('auto', 'manual')),
+          mentions INTEGER NOT NULL DEFAULT 0 CHECK (mentions >= 0),
+          mention_evidence_json TEXT NOT NULL DEFAULT '[]',
+          evidence_json TEXT NOT NULL DEFAULT '[]',
+          status TEXT NOT NULL CHECK (status IN ('active', 'deleted')),
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX idx_private_facts_owner_status ON private_facts (account, owner_id, status);
+
+        CREATE TABLE privacy_runs (
+          account INTEGER NOT NULL,
+          session_id TEXT NOT NULL,
+          last_run_at INTEGER,
+          last_message_time INTEGER,
+          PRIMARY KEY (account, session_id)
+        );
+      `);
+    },
+  },
 ];
 
 export function openDatabase(databasePath = join(process.cwd(), 'data', 'aquarium.db')): DatabaseSync {

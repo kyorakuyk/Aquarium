@@ -14,9 +14,10 @@ export function sessionId(key: SessionKey): string {
 export type Segment =
   | { type: 'text'; text: string }
   | { type: 'at'; target: number | 'all' }
-  | { type: 'image'; url: string; file?: string }
+  | { type: 'image'; url: string; file?: string; subType?: number; md5?: string }
   | { type: 'reply'; messageId: string }
   | { type: 'face'; id: string }
+  | { type: 'sticker'; emojiId: string; summary?: string }
   | { type: 'unknown'; raw: unknown };
 
 export interface IncomingMessage {

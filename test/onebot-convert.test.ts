@@ -74,6 +74,31 @@ test('映射 image、reply、face，并将不支持的段保留为 unknown', () 
   assert.equal(result.plainText, '');
 });
 
+test('收到的 image 保留 sub_type=1 QQ 表情元数据', () => {
+  const result = convertIncomingMessage(groupEvent([
+    { type: 'image', data: { file: 'cache/sticker-1', url: 'https://example.invalid/sticker.gif', sub_type: 1 } },
+  ]), account);
+
+  assert.deepEqual(result.segments, [{
+    type: 'image',
+    url: 'https://example.invalid/sticker.gif',
+    file: 'cache/sticker-1',
+    subType: 1,
+  }]);
+});
+
+test('商城表情保留 emoji_id 与 summary', () => {
+  const result = convertIncomingMessage(groupEvent([
+    { type: 'mface', data: { emoji_id: 'market-emoji', summary: '[动画表情]' } },
+  ]), account);
+
+  assert.deepEqual(result.segments, [{
+    type: 'sticker',
+    emojiId: 'market-emoji',
+    summary: '[动画表情]',
+  }]);
+});
+
 test('私聊生成 private SessionKey，群名片优先于昵称', () => {
   const group = convertIncomingMessage(groupEvent([], {
     sender: { user_id: 42, nickname: '昵称', card: '群名片' },

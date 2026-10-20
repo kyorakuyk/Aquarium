@@ -39,6 +39,7 @@ export interface MoodService {
     energy?: number;
     record: boolean;
   }): MoodPromptBlocks;
+  currentBand(input: { account: number; now: number }): MoodBand;
   recordCalled(input: { account: number; sessionId: string; now: number }): void;
   afterReply(input: {
     account: number;
@@ -145,6 +146,11 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
         });
       }
       return renderMoodBlocks(input.template, band, current.arousal, input.energy ?? 1);
+    },
+
+    currentBand(input) {
+      if (!options.getConfig().mood.enabled) return bandOf(options.getConfig().mood.baseline.valence);
+      return loadState(input.account, input.now).band;
     },
 
     recordCalled(input) {

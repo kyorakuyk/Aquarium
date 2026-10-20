@@ -14,6 +14,15 @@ import {
   type TagRunRecord,
   type TagUpdate,
 } from './affect-repo.ts';
+import {
+  createPrivacyQueries,
+  type PrivateFactControlsRepository,
+  type PrivateFactMentionRepository,
+  type PrivacyRepository,
+} from './privacy-repo.ts';
+import { createPrivateFactControlsQueries } from './privacy-controls-repo.ts';
+import { createPrivateFactMentionQueries } from './privacy-mention-repo.ts';
+import { createStickerQueries, type StickerRepository } from './sticker-repo.ts';
 
 export interface MessageStorageRecord {
   sessionId: string;
@@ -52,6 +61,20 @@ export interface UsageSummary {
 }
 
 export type UsageRange = 'today' | '7d' | '30d';
+
+export type ImageCaptionKind = 'sticker' | 'photo' | 'screenshot' | 'other';
+
+export interface ImageCaptionRecord {
+  md5: string;
+  caption: string;
+  kind: ImageCaptionKind;
+  desc: string;
+  text: string;
+  legible: boolean;
+  visionModel: string;
+  visionTemplateVersion: string;
+  time: number;
+}
 
 export interface UsageSlotSummary {
   slot: string;
@@ -121,8 +144,9 @@ export interface StoredPipelineTrace extends PipelineTraceRecord {
   id: number;
 }
 
-export interface StoreRepository extends PersonaVersionRepository {
+export interface StoreRepository extends PersonaVersionRepository, PrivacyRepository, PrivateFactMentionRepository, PrivateFactControlsRepository, StickerRepository {
   saveMessage(message: MessageStorageRecord): boolean;
+  updateMessageSegments(sessionId: string, messageId: string, segments: unknown[]): void;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
   messagesInRange(sessionId: string, fromTime: number, toTime: number): MessageStorageRecord[];
   lastMessageTime(sessionId: string): number | null;
@@ -141,8 +165,11 @@ export interface StoreRepository extends PersonaVersionRepository {
   usageByRange(range: UsageRange, now: number): UsageRangeSummary;
   getCaption(key: string): string | undefined;
   setCaption(key: string, caption: string, time?: number): void;
+  getImageCaption(md5: string): ImageCaptionRecord | undefined;
+  setImageCaption(record: ImageCaptionRecord): void;
   recordDecision(decision: DecisionRecord): void;
   recentDecisions(count: number): StoredDecision[];
+  decisionsInRange(sessionId: string, fromTime: number, toTime: number): StoredDecision[];
   latestReplyDecision(): StoredDecision | undefined;
   decisionMessageText(sessionId: string, messageId: string): string | undefined;
   decisionById(id: number): StoredDecision | undefined;
@@ -171,6 +198,7 @@ export interface StoreRepository extends PersonaVersionRepository {
   tagById(id: number): StoredTag | undefined;
   listTagsForSubject(account: number, sessionId: string, userId: number | null): StoredTag[];
   listTagsForSession(account: number, sessionId: string): StoredTag[];
+  listGroupTagsForUser(account: number, userId: number): StoredTag[];
   senderNameFor(sessionId: string, senderId: number): string | undefined;
   updateTag(id: number, update: TagUpdate): void;
   getTagRun(account: number, sessionId: string): TagRunRecord | undefined;
@@ -205,6 +233,9 @@ export function createRepository(
       (session_id, message_id, sender_id, sender_name, is_self, plain_text, segments_json, time)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
+  const updateMessageSegments = database.prepare(
+    'UPDATE messages SET segments_json = ? WHERE session_id = ? AND message_id = ?',
+  );
   const selectRecentMessages = database.prepare(`
     SELECT session_id, message_id, sender_id, sender_name, is_self, plain_text, segments_json, time
     FROM messages
@@ -270,6 +301,25 @@ export function createRepository(
     VALUES (?, ?, ?)
     ON CONFLICT(key) DO UPDATE SET caption = excluded.caption, time = excluded.time
   `);
+  const selectImageCaption = database.prepare(`
+    SELECT md5, caption, kind, description, text, legible, vision_model, vision_template_version, time
+    FROM image_captions WHERE key = ? AND md5 = ?
+  `);
+  const upsertImageCaption = database.prepare(`
+    INSERT INTO image_captions
+      (key, caption, time, md5, kind, description, text, legible, vision_model, vision_template_version)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET
+      caption = excluded.caption,
+      time = excluded.time,
+      md5 = excluded.md5,
+      kind = excluded.kind,
+      description = excluded.description,
+      text = excluded.text,
+      legible = excluded.legible,
+      vision_model = excluded.vision_model,
+      vision_template_version = excluded.vision_template_version
+  `);
   const insertDecision = database.prepare(`
     INSERT INTO decisions (time, session_id, message_id, replied, reason, detail_json)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -279,6 +329,12 @@ export function createRepository(
     FROM decisions
     ORDER BY time DESC, id DESC
     LIMIT ?
+  `);
+  const selectDecisionsInRange = database.prepare(`
+    SELECT id, time, session_id, message_id, replied, reason, detail_json
+    FROM decisions
+    WHERE session_id = ? AND time >= ? AND time <= ?
+    ORDER BY time, id
   `);
 
   const insertDebugTrace = database.prepare(`
@@ -312,6 +368,10 @@ export function createRepository(
     ...createPanelQueries(database, clock),
     ...createAffectQueries(database),
     ...createPersonaVersionRepository(database, clock),
+    ...createPrivacyQueries(database),
+    ...createPrivateFactMentionQueries(database),
+    ...createPrivateFactControlsQueries(database),
+    ...createStickerQueries(database),
     saveMessage(message) {
       const result = insertMessage.run(
         message.sessionId,
@@ -324,6 +384,10 @@ export function createRepository(
         message.time,
       );
       return result.changes === 1 || result.changes === 1n;
+    },
+
+    updateMessageSegments(sessionId, messageId, segments) {
+      updateMessageSegments.run(JSON.stringify(segments), sessionId, messageId);
     },
 
     recentMessages(sessionId, count) {
@@ -460,6 +524,47 @@ export function createRepository(
       upsertCaption.run(key, caption, time);
     },
 
+    getImageCaption(md5) {
+      if (!/^[a-f\d]{32}$/iu.test(md5)) throw new TypeError('图片 md5 格式无效');
+      const normalized = md5.toLowerCase();
+      const row = selectImageCaption.get(normalized, normalized) as Record<string, unknown> | undefined;
+      if (!row || !['sticker', 'photo', 'screenshot', 'other'].includes(String(row.kind))
+        || typeof row.md5 !== 'string' || typeof row.caption !== 'string'
+        || typeof row.description !== 'string' || typeof row.text !== 'string'
+        || (row.legible !== 0 && row.legible !== 1)
+        || typeof row.vision_model !== 'string' || typeof row.vision_template_version !== 'string') return undefined;
+      return {
+        md5: row.md5,
+        caption: row.caption,
+        kind: row.kind as ImageCaptionKind,
+        desc: row.description,
+        text: row.text,
+        legible: row.legible === 1,
+        visionModel: row.vision_model,
+        visionTemplateVersion: row.vision_template_version,
+        time: numberValue(row.time, 'time'),
+      };
+    },
+
+    setImageCaption(record) {
+      if (!/^[a-f\d]{32}$/iu.test(record.md5)) throw new TypeError('图片 md5 格式无效');
+      if (!['sticker', 'photo', 'screenshot', 'other'].includes(record.kind)) throw new TypeError('图片类型无效');
+      if (typeof record.legible !== 'boolean' || !Number.isFinite(record.time)) throw new TypeError('图片缓存元数据无效');
+      const md5 = record.md5.toLowerCase();
+      upsertImageCaption.run(
+        md5,
+        record.caption,
+        record.time,
+        md5,
+        record.kind,
+        record.desc,
+        record.text,
+        record.legible ? 1 : 0,
+        record.visionModel,
+        record.visionTemplateVersion,
+      );
+    },
+
     recordDecision(decision) {
       insertDecision.run(
         decision.time,
@@ -475,6 +580,22 @@ export function createRepository(
       const limit = limitValue(count);
       if (limit === 0) return [];
       const rows = selectRecentDecisions.all(limit) as Array<Record<string, unknown>>;
+      return rows.map((row) => ({
+        id: numberValue(row.id, 'id'),
+        time: numberValue(row.time, 'time'),
+        sessionId: stringValue(row.session_id, 'session_id'),
+        messageId: stringValue(row.message_id, 'message_id'),
+        replied: numberValue(row.replied, 'replied') === 1,
+        reason: stringValue(row.reason, 'reason'),
+        detail: JSON.parse(stringValue(row.detail_json, 'detail_json')) as unknown,
+      }));
+    },
+
+    decisionsInRange(sessionId, fromTime, toTime) {
+      if (!Number.isFinite(fromTime) || !Number.isFinite(toTime) || toTime < fromTime) {
+        throw new RangeError('决策时间范围无效');
+      }
+      const rows = selectDecisionsInRange.all(sessionId, fromTime, toTime) as Array<Record<string, unknown>>;
       return rows.map((row) => ({
         id: numberValue(row.id, 'id'),
         time: numberValue(row.time, 'time'),

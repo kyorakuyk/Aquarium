@@ -9,6 +9,7 @@ import { DecisionsPage } from './pages/DecisionsPage.tsx';
 import { UsagePage } from './pages/UsagePage.tsx';
 import { ImpressionsPage } from './pages/ImpressionsPage.tsx';
 import { ModelsPage } from './pages/ModelsPage.tsx';
+import { StickersPage } from './pages/StickersPage.tsx';
 
 export function App() {
   const [authenticated, setAuthenticated] = useState(
@@ -46,6 +47,7 @@ export function App() {
         {page === 'sandbox' && <DecisionsPage />}
         {page === 'usage' && <UsagePage />}
         {page === 'impressions' && <ImpressionsPage />}
+        {page === 'stickers' && <StickersPage />}
       </main>
     </div>
   );

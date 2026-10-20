@@ -75,7 +75,7 @@ export function MaxTokensParameterControls({ value, fallback, disabled, onChange
         min={1}
         step={1}
         value={value || fallback}
-        aria-label="最大长度"
+        aria-label="最大输出"
         disabled={disabled}
         onChange={(event) => onChange(event.currentTarget.value)}
       />
@@ -83,6 +83,7 @@ export function MaxTokensParameterControls({ value, fallback, disabled, onChange
         <input type="checkbox" checked={!value} disabled={disabled} onChange={(event) => onChange(event.currentTarget.checked ? '' : value || fallback)} />
         使用默认值
       </label>
+      <small className="slot-max-tokens-note">单位 token，中文约 0.6 token/字；设太小会截断回复。开启思考时，部分模型会把思考内容也计入这个上限。</small>
     </div>
   );
 }

@@ -23,6 +23,7 @@ import { callSlot } from '../llm/slots.ts';
 import { registerPersonaRoutes } from './personas.ts';
 import { registerSessionRoutes } from './session-routes.ts';
 import { registerAffectRoutes } from './affect-routes.ts';
+import { registerPrivacyRoutes } from './privacy-routes.ts';
 import { registerSleepRoutes } from './sleep-routes.ts';
 import { registerUsageRoutes } from './usage-routes.ts';
 import { registerProviderRoutes } from './provider-routes.ts';
@@ -31,6 +32,8 @@ import type { ContactSnapshot, PanelAccountRuntime } from './types.ts';
 import { budgetState } from '../llm/budget.ts';
 import type { SleepWakeState } from '../core/sleep.ts';
 import type { HistoryImportService } from '../core/impressions/history-import.ts';
+import type { StickerService } from '../core/stickers/service.ts';
+import { registerStickerRoutes } from './sticker-routes.ts';
 
 export interface PanelServerOptions {
   password: string;
@@ -47,6 +50,7 @@ export interface PanelServerOptions {
   replayMessage?: (message: IncomingMessage) => Promise<PipelineResult | undefined>;
   sleepWakeState?: SleepWakeState;
   historyImports?: HistoryImportService;
+  stickerServices?: () => StickerService[];
   envPath?: string;
   env?: NodeJS.ProcessEnv;
   fetch?: typeof fetch;
@@ -195,15 +199,34 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     };
   };
 
-  app.use('/api/*', bodyLimit({
+  const standardBodyLimit = bodyLimit({
     maxSize: 2 * 1024 * 1024,
     onError: (context) => context.json({ error: 'Request body too large' }, 413),
-  }));
+  });
+  const stickerUploadBodyLimit = bodyLimit({
+    maxSize: 7 * 1024 * 1024,
+    onError: (context) => context.json({ error: 'Request body too large' }, 413),
+  });
+  app.use('/api/*', (context, next) => (
+    context.req.path === '/api/stickers/upload'
+      ? stickerUploadBodyLimit(context, next)
+      : standardBodyLimit(context, next)
+  ));
   app.use('/api/*', async (context, next) => {
     if (!bearerMatches(context.req.header('Authorization'), options.password)) {
       return context.json({ error: 'Unauthorized' }, 401);
     }
     await next();
+  });
+  registerStickerRoutes(app, {
+    root,
+    repository: options.repository,
+    accounts: options.accounts,
+    services: options.stickerServices ?? (() => []),
+    now,
+    getConfig: options.getConfig,
+    saveConfig: options.saveConfig,
+    serializeConfigWrite,
   });
   registerPersonaRoutes(app, root, {
     getConfig: options.getConfig,
@@ -224,6 +247,12 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     accounts: options.accounts,
     sleepWakeState: options.sleepWakeState,
     historyImports: options.historyImports,
+    now,
+  });
+  registerPrivacyRoutes(app, {
+    getConfig: options.getConfig,
+    repository: options.repository,
+    accounts: options.accounts,
     now,
   });
   registerSleepRoutes(app, {

@@ -142,6 +142,34 @@ test('假模型下完成一次提取：观察转正、新标签、成员标签�
   });
 });
 
+test('外链分享卡片宣传文案不作为群友观点或标签证据', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const key = sessionId(groupSession);
+    const harness = createImpressionsHarness(repository, makeConfig({ nicknames: [] }), personaRoot, {
+      extractText: JSON.stringify({
+        group: { observe: [], new: [{ text: '爱聊游戏', messageId: 'share-card' }], contradict: [] },
+        members: [],
+      }),
+    });
+
+    await pump(harness, groupSession, 9);
+    harness.clock.value += 1_000;
+    await harness.pipeline(makeIncoming({
+      messageId: 'share-card',
+      time: harness.clock.value - 1_000,
+      plainText: '这张地图超级好玩，快点击链接和我一起开黑→平台标题：@url:https://example.invalid/card',
+    }));
+    await harness.impressionsService.idle();
+
+    const prompt = harness.extractRequests[0] ?? '';
+    assert.ok(prompt.includes('分享了外链卡片'));
+    assert.equal(prompt.includes('超级好玩'), false);
+    assert.equal(prompt.includes('example.invalid'), false);
+    assert.equal(repository.listTagsForSubject(account, key, null).length, 0);
+    assert.equal(harness.summaries[0]?.dropped, 1);
+  });
+});
+
 test('触发条件：60 条且 30 分钟，或 10 条且 6 小时', async () => {
   await withRepository(async (repository, personaRoot) => {
     const groupA: SessionKey = { account, kind: 'group', peer: 111111 };
@@ -487,5 +515,54 @@ test('已确认标签注入群与群友块，私聊不注入，丢弃数进追�
     };
     assert.deepEqual(privateDetail.promptBlocks?.map((block) => block.id), ['persona', 'rules', 'groupNote']);
     assert.equal(privateDetail.droppedTags, undefined);
+  });
+});
+
+test('标签注入在来源会话与目标会话不一致时经策略拒绝', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const harness = createImpressionsHarness(repository, makeConfig(), personaRoot);
+    const sourceSessionId = `${account}:group:999999`;
+    const at = harness.clock.value;
+    for (const userId of [null, 42]) {
+      const text = userId === null ? '其他群氛围' : '其他群成员标签';
+      repository.insertTag({
+        account,
+        sessionId: sourceSessionId,
+        userId,
+        text,
+        norm: text,
+        status: 'confirmed',
+        source: 'auto',
+        samples: 2,
+        evidence: [],
+        firstSeen: at,
+        lastSeen: at,
+        supersededBy: null,
+        updatedAt: at,
+      });
+    }
+
+    const blocks = harness.impressionsService.promptBlocks({
+      session: groupSession,
+      sessionId: sourceSessionId,
+      senderId: 42,
+      senderName: '小明',
+      now: at,
+      template: {
+        source: '',
+        version: 'test',
+        system: '',
+        groupNote: '',
+        request: '',
+        groupTags: 'group {{tags}}',
+        memberTags: 'member {{name}} {{tags}}',
+        privateFacts: 'private {{name}} {{facts}}',
+        knownFacts: 'known {{facts}}',
+        stickers: '',
+      },
+    });
+
+    assert.equal(blocks.groupTags, undefined);
+    assert.equal(blocks.memberTags, undefined);
   });
 });

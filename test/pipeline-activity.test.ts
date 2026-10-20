@@ -7,6 +7,7 @@ import test from 'node:test';
 import yaml from 'yaml';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
 import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../src/core/events.ts';
+import { computeImageMd5 } from '../src/core/images/fingerprint.ts';
 import { createIdleBackoff } from '../src/core/activity/backoff.ts';
 import { createActivityThreshold } from '../src/core/activity/threshold.ts';
 import { createMessagePipeline } from '../src/core/pipeline.ts';
@@ -99,7 +100,10 @@ test('active mode runs p0, judge, dynamic threshold, reply, and records safe dec
       ['vision', 'vision-test-version'],
       ['reply', 'reply-test-version'],
     ]);
-    assert.equal(repository.getCaption('active-image'), '桌上有一盘菜。');
+    assert.equal(
+      repository.getImageCaption(computeImageMd5(Buffer.from('AQID', 'base64')))?.caption,
+      '[图片：桌上有一盘菜。]',
+    );
 
     const traceRecord = repository.pipelineTraceFor(sessionKey, 'active-proactive');
     const trace = (traceRecord?.trace ?? []) as Array<{ step: string; summary: string }>;

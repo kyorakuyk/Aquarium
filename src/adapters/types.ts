@@ -19,6 +19,25 @@ export interface HistoryOptions {
   beforeMessageId?: string | number;
 }
 
+export interface CustomFaceDetail {
+  emojiId: string;
+  resId: string;
+  url: string;
+  md5: string;
+  desc: string;
+}
+
+export interface CustomFaceActions {
+  fetchDetails(count: number): Promise<CustomFaceDetail[]>;
+  addCustomFace(file: string): Promise<{ emojiId: string }>;
+  modifyCustomFace(emojiId: string, desc: string): Promise<void>;
+  getImageUrl(file: string): Promise<string>;
+  sendCustomFace(input: {
+    session: SessionKey;
+    emojiId: string;
+  }): Promise<{ messageId: string }>;
+}
+
 export interface ProtocolAdapter {
   readonly account: number;
   connect(): Promise<void>;

@@ -16,8 +16,12 @@ export interface BuildPromptOptions {
     groupTags?: string;
     mood?: string;
     memberTags?: string;
+    privateFacts?: string;
     affinity?: string;
+    knownFacts?: string;
+    privacyRule?: string;
     float?: string;
+    stickers?: string;
   };
 }
 
@@ -59,9 +63,13 @@ function resolvePromptBlocks(options: BuildPromptOptions): RenderedPromptBlock[]
     { id: 'groupNote', text: groupNote },
     { id: 'groupTags', text: options.blocks?.groupTags ?? '' },
     { id: 'mood', text: options.blocks?.mood ?? '' },
+    { id: 'privateFacts', text: options.blocks?.privateFacts ?? '' },
     { id: 'memberTags', text: options.blocks?.memberTags ?? '' },
+    { id: 'knownFacts', text: options.blocks?.knownFacts ?? '' },
+    { id: 'privacyRule', text: options.blocks?.privacyRule ?? '' },
     { id: 'affinity', text: options.blocks?.affinity ?? '' },
     { id: 'float', text: options.blocks?.float ?? '' },
+    { id: 'stickers', text: options.blocks?.stickers ?? '' },
   ];
 }
 

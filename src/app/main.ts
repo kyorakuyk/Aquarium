@@ -14,8 +14,6 @@ import { sessionId } from '../core/events.ts';
 import { createSessionQueue } from '../core/session-queue.ts';
 import { createAffinityService } from '../core/affinity/service.ts';
 import { createMoodService } from '../core/mood/service.ts';
-import { createImpressionsService } from '../core/impressions/service.ts';
-import { createHistoryImportService } from '../core/impressions/history-import.ts';
 import { createSleepWakeState } from '../core/sleep.ts';
 import { createSleepGoodnightScheduler } from '../core/sleep/goodnight.ts';
 import { getCliRuntime } from '../llm/cli.ts';
@@ -28,6 +26,8 @@ import type { Host } from '../host/types.ts';
 import { bindHostTrayAfterLoad, createWindowsTray } from '../host/tray.ts';
 import { createWindowsHost } from '../host/windows/host.ts';
 import { createAccountActivityRouter } from './activity-routing.ts';
+import { createMemoryServices } from './memory-services.ts';
+import { createAccountStickerService, startStickerSyncTimer } from './stickers.ts';
 import { startAdapterForHost } from './adapter-start.ts';
 import {
   createHostLifecycleQueue,
@@ -59,6 +59,7 @@ pruneTraces();
 const debugPruneTimer = setInterval(pruneTraces, 6 * 60 * 60 * 1000);
 debugPruneTimer.unref();
 const adapters: OneBotAdapter[] = [];
+const stickerServices: ReturnType<typeof createAccountStickerService>[] = [];
 const injectedUins = new Set<number>();
 const panelAccounts: PanelAccountRuntime[] = [];
 const managementControllers: ManagementCommands[] = [];
@@ -95,23 +96,11 @@ const moodService = createMoodService({
     logger.error(`情绪后台任务失败：${describeError(error)}`);
   },
 });
-const impressionsService = createImpressionsService({
+const { impressionsService, privateFactsService, privateMentionService, privacyGateService, historyImports } = createMemoryServices({
   repository,
   getConfig: () => configWatcher.getConfig(),
-  onError: (error) => {
-    logger.error(`印象提取失败：${describeError(error)}`);
-  },
-  onExtract: (summary) => {
-    logger.info(
-      `印象提取 ${summary.sessionId}：${summary.status}，新增 ${summary.inserted}、观察 ${summary.observed}、推翻 ${summary.superseded}、丢弃 ${summary.dropped}。`,
-    );
-  },
-});
-const historyImports = createHistoryImportService({
-  repository,
-  getConfig: () => configWatcher.getConfig(),
-  impressionsService,
-  getTemplate: () => promptTemplateStore.get().extractTags,
+  logger,
+  describeError,
 });
 let panelServer: ReturnType<typeof startPanelServer> | undefined;
 let managedHost: Host | undefined;
@@ -158,6 +147,8 @@ async function shutdown(signal: string): Promise<void> {
     logger.error(`Windows 托管关闭失败：${describeError(error)}`);
   }
   await sessionQueue.idle();
+  await privateFactsService.idle();
+  await privateMentionService.idle();
   await cliRuntime.stopAll();
   database.close();
   logger.info('Aquarium 已关闭。');
@@ -247,6 +238,8 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     adapter = new OneBotAdapter({
       account: accountConfig.uin,
       snowlumaDir: accountConfig.snowlumaDir,
+      getSendDedupeWindowMs: () => configWatcher.getConfig().send.dedupeWindowMs,
+      onDebug: (message) => logger.debug(message),
       onConnectionError: (error) => {
         logger.error(`OneBot 连接异常，将继续重试：${describeError(error)}`);
       },
@@ -258,6 +251,16 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
 
   adapters.push(adapter);
   let currentStatus: AdapterStatus = managedHost ? 'waiting_login' : 'connecting';
+  const stickerService = createAccountStickerService({
+    adapter,
+    root: process.cwd(),
+    repository,
+    getConfig: () => configWatcher.getConfig(),
+    getPromptTemplate: () => promptTemplateStore.get().stickerDescribe,
+    onError: () => logger.error('表情库同步或处理失败；后续同步将重试未完成项目。'),
+  });
+  stickerServices.push(stickerService);
+  subscriptions.push(startStickerSyncTimer(stickerService, () => currentStatus === 'online', () => {}));
   adapterStatuses.set(accountConfig.uin, currentStatus);
   panelAccounts.push({
     adapter,
@@ -273,6 +276,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     onError: (error, message) => {
       logger.error(`管理指令消息 ${message.messageId} 执行失败：${describeError(error)}`);
     },
+    collectSticker: (message) => stickerService.collect(message),
   });
   managementControllers.push(management);
   const pipeline = createMessagePipeline({
@@ -285,6 +289,10 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     moodService,
     affinityService,
     impressionsService,
+    privateFactsService,
+    privateMentionService,
+    privacyGateService,
+    stickerService,
     sleepWakeState,
     onError: (error, message) => {
       logger.error(`消息 ${message.messageId} 的辅助操作失败：${describeError(error)}`);
@@ -310,6 +318,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
       void catchUpHistory().catch((error: unknown) => {
         logger.error(`账号 ${adapter.account} 的离线补课启动失败：${describeError(error)}`);
       });
+      void stickerService.sync().catch(() => {});
     }
   }));
   const activityRouter = createAccountActivityRouter({
@@ -355,6 +364,7 @@ await startPanelWhileAccountStartupRuns(accountStartup, () => {
           },
           repository,
           accounts: () => panelAccounts,
+          stickerServices: () => stickerServices,
           historyImports,
           sleepWakeState,
           cliRuntime,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
   apiRequest,
   patch,
@@ -13,6 +13,8 @@ import {
 import { AffinityPanel, MemberAffinity } from '../components/AffinityPanel.tsx';
 import { ImpressionTag, InlineTagAdd } from '../components/ImpressionTag.tsx';
 import { redactSensitiveText } from '../sensitive-text.ts';
+
+const PrivateFactsPanel = lazy(() => import('../components/PrivateFactsPanel.tsx').then((module) => ({ default: module.PrivateFactsPanel })));
 
 type TagAction = (id: number, status: TagStatus) => Promise<boolean>;
 type TagRename = (id: number, text: string) => Promise<boolean>;
@@ -97,8 +99,10 @@ function GroupTags({ tags, busy, onAction, onRename, onAdd }: {
 
 export function ImpressionsPage() {
   const [groups, setGroups] = useState<SessionView[]>([]);
+  const [privateSessions, setPrivateSessions] = useState<SessionView[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState('');
-  const [tab, setTab] = useState<'groups' | 'people'>('groups');
+  const [tab, setTab] = useState<'groups' | 'people' | 'privacy'>('groups');
   const [view, setView] = useState<ImpressionsView>();
   const [models, setModels] = useState<ModelsView>();
   const [error, setError] = useState('');
@@ -117,8 +121,10 @@ export function ImpressionsPage() {
     void apiRequest<SessionView[]>('/api/sessions').then((rows) => {
       const groupRows = rows.filter((row) => row.kind === 'group');
       setGroups(groupRows);
+      setPrivateSessions(rows.filter((row) => row.kind === 'private'));
       setSelectedId((current) => current || groupRows[0]?.sessionId || '');
-    }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : '读取会话失败'));
+    }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : '读取会话失败'))
+      .finally(() => setSessionsLoading(false));
   }, []);
 
   useEffect(() => {
@@ -273,13 +279,14 @@ export function ImpressionsPage() {
     <div className="page">
       <header className="page-header">
         <h1>印象</h1>
-        <p className="page-description">从群聊里慢慢攒出来的标签；确认后的标签会随回复提示词一起生效。</p>
+        <p className="page-description">群聊印象、所有人标签与私聊记忆分开管理；跨场景使用受隐私等级控制。</p>
       </header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
       <div className="impressions-controls">
         <div className="page-tabs" role="tablist" aria-label="印象视图">
           <button className={tab === 'groups' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'groups'} onClick={() => setTab('groups')}>群聊</button>
           <button className={tab === 'people' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'people'} onClick={() => setTab('people')}>所有人</button>
+          <button className={tab === 'privacy' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'privacy'} onClick={() => setTab('privacy')}>私聊</button>
         </div>
         {tab === 'groups' && <div className="impressions-group-tools">
           <label className="impressions-group-select">
@@ -298,6 +305,9 @@ export function ImpressionsPage() {
         </div>}
       </div>
       {tab === 'people' && <AffinityPanel />}
+      {tab === 'privacy' && <Suspense fallback={<div className="empty-state">正在载入私聊记忆…</div>}>
+        <PrivateFactsPanel sessions={privateSessions} loadingFriends={sessionsLoading} />
+      </Suspense>}
       {tab === 'groups' && <>
       {!view && <div className="empty-state">选择一个群，查看它攒下的标签。</div>}
       {view && (

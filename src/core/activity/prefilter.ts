@@ -50,9 +50,11 @@ export function calculatePrefilterFeatures(
   ].join('\n');
   const contentSegments = messages.flatMap((message) => message.segments
     .filter((segment) => segment.type !== 'reply'));
-  const hasMedia = contentSegments.some((segment) => segment.type === 'image' || segment.type === 'face');
+  const hasMedia = contentSegments.some((segment) => (
+    segment.type === 'image' || segment.type === 'face' || segment.type === 'sticker'
+  ));
   const hasNonMediaContent = contentSegments.some((segment) => {
-    if (segment.type === 'image' || segment.type === 'face') return false;
+    if (segment.type === 'image' || segment.type === 'face' || segment.type === 'sticker') return false;
     return segment.type !== 'text' || segment.text.trim() !== '';
   });
   const hasTextContent = text.trim() !== '';

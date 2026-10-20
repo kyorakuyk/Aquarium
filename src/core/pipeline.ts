@@ -176,6 +176,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
             ? { injectedAffectBlocks: { ...ctx.state.injectedAffectBlocks } }
             : {}),
           ...(ctx.state.droppedTags ? { droppedTags: ctx.state.droppedTags } : {}),
+          ...(ctx.state.privacyDecisionDetail ? { privacy: ctx.state.privacyDecisionDetail } : {}),
         };
         if (typeof detail === 'object' && detail !== null && !Array.isArray(detail)) {
           return { ...detail, ...fingerprint };
@@ -246,17 +247,27 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
           }
         });
       };
+      const stickerOutcome = (): Record<string, unknown> => ({
+        stickerOffered: ctx.state.stickerOffered ?? null,
+        stickerSent: ctx.state.stickerSent?.id ?? null,
+        ...(ctx.state.stickerSent?.stickerOnly ? { stickerOnly: true } : {}),
+      });
       for (const step of activeSteps) {
         const result = await step(ctx);
         if (!result.next) {
-          const decision = recordDecision(result.reason, result.detail, result.replied ?? false);
+          const completedDetail = result.reason === 'replied'
+            ? { ...(typeof result.detail === 'object' && result.detail !== null && !Array.isArray(result.detail)
+              ? result.detail as Record<string, unknown>
+              : {}), ...stickerOutcome() }
+            : result.detail;
+          const decision = recordDecision(result.reason, completedDetail, result.replied ?? false);
           if (!processOptions.replay && result.reason === 'replied' && result.replied === true) {
             appraiseAfterReply();
           }
           return decision;
         }
       }
-      return recordDecision('replied', {}, true);
+      return recordDecision('replied', stickerOutcome(), true);
     } finally {
       if (!processOptions.replay && runState && runState.sentMessageIds.length > 0) {
         pipelineOptions.idleBackoff?.recordReply(currentSessionId);

@@ -67,6 +67,10 @@ function formatExistingTags(existing: ExistingTagsInput): string {
   return lines.length > 0 ? lines.join('\n') : '（暂无）';
 }
 
+export function isExternalLinkShareText(text: string): boolean {
+  return /@url\s*:/iu.test(text);
+}
+
 // 每行格式同回复上下文，额外带上 #消息ID 与发送者 QQ 号。
 export function buildExtractMessages(
   records: readonly MessageStorageRecord[],
@@ -77,7 +81,10 @@ export function buildExtractMessages(
     const speaker = record.isSelf
       ? `你(QQ ${record.senderId})`
       : `${JSON.stringify(record.senderName)}(QQ ${record.senderId})`;
-    return `[${formatTime(record.time)}] ${speaker}: ${record.plainText} #${record.messageId}`;
+    const text = isExternalLinkShareText(record.plainText)
+      ? '分享了外链卡片（卡片文案不代表发言者观点）'
+      : record.plainText;
+    return `[${formatTime(record.time)}] ${speaker}: ${text} #${record.messageId}`;
   }).join('\n');
 
   return [

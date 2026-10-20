@@ -318,6 +318,7 @@ test('get_login_info 超时会替换仍保持连接的 SDK client', async (t) =>
   adapter.start();
   await new Promise<void>((resolve) => setImmediate(resolve));
   assert.equal(first.state.connected, true);
+  assert.deepEqual([...actionTimers.pending.values()].map((timer) => timer.delay), [10_000]);
   assert.equal(actionTimers.pending.size, 1);
   actionTimers.runNext();
   await new Promise<void>((resolve) => setImmediate(resolve));
@@ -361,8 +362,9 @@ test('公开动作超时会让仍连接的 socket 离线并替换 client', async
   );
   await new Promise<void>((resolve) => setImmediate(resolve));
   assert.equal(first.state.connected, true);
+  assert.deepEqual([...actionTimers.pending.values()].map((timer) => timer.delay), [60_000]);
   actionTimers.runNext();
-  await assert.rejects(sending, /timed out/);
+  await assert.rejects(sending, /send_message timed out after 60000ms/u);
 
   assert.equal(statuses.at(-1), 'offline');
   assert.equal(first.state.closeCalls, 1);
@@ -393,8 +395,8 @@ test('适配器动作总超时覆盖断线后等待重连握手的时间', async
   fake.state.disconnectBeforeGroupSend = true;
   const action = adapter.send({ account, kind: 'group', peer: 123456 }, []);
   await new Promise<void>((resolve) => setImmediate(resolve));
-  assert.deepEqual([...actionTimers.pending.values()].map((timer) => timer.delay), [10_000]);
-  const rejection = assert.rejects(action, /timed out after 10000ms/u);
+  assert.deepEqual([...actionTimers.pending.values()].map((timer) => timer.delay), [60_000]);
+  const rejection = assert.rejects(action, /send_message timed out after 60000ms/u);
   actionTimers.runNext();
   await rejection;
 

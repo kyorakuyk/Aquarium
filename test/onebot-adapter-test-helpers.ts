@@ -73,6 +73,9 @@ export function createFakeClient(loginUserId = account, failedConnections = 0, h
     markedGroup: [] as unknown[],
     markedPrivate: [] as unknown[],
     rawCalls: [] as unknown[],
+    rawResults: new Map<string, unknown>(),
+    imageCalls: [] as unknown[],
+    imageInfo: { url: 'https://gchat.qpic.cn/image.png' } as unknown,
     recalled: [] as unknown[],
     groupHistory: [] as unknown[],
     groupHistoryCalls: [] as Array<{ group_id: number; count: number; message_id: number; reverse_order: boolean }>,
@@ -161,8 +164,13 @@ export function createFakeClient(loginUserId = account, failedConnections = 0, h
       async markPrivateMessageAsRead(...args: unknown[]) {
         state.markedPrivate.push(args);
       },
+      async getImage(params: { file: string }) {
+        state.imageCalls.push(params);
+        return state.imageInfo;
+      },
       async raw(...args: unknown[]) {
         state.rawCalls.push(args);
+        return state.rawResults.get(String(args[0]));
       },
       async deleteMessage(...args: unknown[]) {
         state.recalled.push(args);

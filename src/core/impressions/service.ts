@@ -5,12 +5,14 @@ import { callSlot } from '../../llm/slots.ts';
 import type { StoredTag } from '../../store/affect-repo.ts';
 import type { MessageStorageRecord, StoreRepository } from '../../store/repository.ts';
 import { sessionId, type SessionKey } from '../events.ts';
+import { decide } from '../privacy/policy.ts';
 import type { ExtractTagsPromptTemplate, ReplySystemTemplate } from '../prompt-templates.ts';
 import type { PipelineModelCall } from '../steps/types.ts';
 import {
   asContradictItem,
   asNewItem,
   asObserveItem,
+  isExternalLinkShareText,
   runExtract,
   type ExtractSubjectItems,
   type ParsedExtractResponse,
@@ -128,7 +130,13 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     account: number,
     sessionKey: string,
     userId: number | null,
-    recordsById: Map<string, { time: number; plainText: string; senderId: number; isSelf: boolean }>,
+    recordsById: Map<string, {
+      time: number;
+      plainText: string;
+      senderId: number;
+      isSelf: boolean;
+      externalLinkShare: boolean;
+    }>,
     at: number,
     counters: { inserted: number; observed: number; superseded: number; dropped: number },
   ): void {
@@ -137,7 +145,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
 
     const evidenceFor = (messageId: string, evidenceUserId: number | null) => {
       const record = recordsById.get(messageId);
-      if (!record || record.isSelf) return undefined;
+      if (!record || record.isSelf || record.externalLinkShare) return undefined;
       if (evidenceUserId !== null && record.senderId !== evidenceUserId) return undefined;
       return {
         messageId,
@@ -352,6 +360,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         plainText: record.plainText,
         senderId: record.senderId,
         isSelf: record.isSelf,
+        externalLinkShare: isExternalLinkShareText(record.plainText),
       },
     ]));
     const senderIds = new Set<number>();
@@ -457,12 +466,25 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       if (input.session.kind !== 'group') return { droppedTags: 0 };
       const account = input.session.account;
       const at = input.now;
-      const groupSelection = selectInjectableTags(
-        options.repository.listTagsForSubject(account, input.sessionId, null),
-        at,
-        GROUP_TAGS_LIMIT,
-      );
-      const memberSelection = input.senderId === account
+      const target = { kind: 'group' as const, sessionId: sessionId(input.session) };
+      const groupAllowed = decide({
+        info: { origin: 'group', sessionId: input.sessionId, ownerId: null },
+        target,
+        purpose: 'prompt',
+      }) === 'allow';
+      const groupSelection = groupAllowed
+        ? selectInjectableTags(
+          options.repository.listTagsForSubject(account, input.sessionId, null),
+          at,
+          GROUP_TAGS_LIMIT,
+        )
+        : { tags: [] as StoredTag[], dropped: 0 };
+      const memberAllowed = input.senderId !== account && decide({
+        info: { origin: 'group', sessionId: input.sessionId, ownerId: input.senderId },
+        target,
+        purpose: 'prompt',
+      }) === 'allow';
+      const memberSelection = !memberAllowed
         ? { tags: [] as StoredTag[], dropped: 0 }
         : selectInjectableTags(
           options.repository.listTagsForSubject(account, input.sessionId, input.senderId),
