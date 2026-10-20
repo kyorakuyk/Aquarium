@@ -183,6 +183,7 @@ export function SlotDialog({ definition, chain, providers, providerModels, pageB
     model: entry.model,
     temperature: entry.temperature === undefined ? '' : String(entry.temperature),
     maxTokens: entry.maxTokens === undefined ? '' : String(entry.maxTokens),
+    timeoutSec: String(entry.timeoutSec ?? (definition.slot === 'extract' ? 90 : 30)),
     reasoning: entry.reasoning ?? 'off',
   });
   const [rows, setRows] = useState<SlotDialogRow[]>(() => chain.map(toRow));
@@ -196,7 +197,10 @@ export function SlotDialog({ definition, chain, providers, providerModels, pageB
 
   function addRow() {
     const first = providers[0]?.id ?? '';
-    setRows((current) => [...current, { key: nextKey.current++, provider: first, model: '', temperature: '', maxTokens: '', reasoning: 'off' }]);
+    setRows((current) => [...current, {
+      key: nextKey.current++, provider: first, model: '', temperature: '', maxTokens: '',
+      timeoutSec: String(definition.slot === 'extract' ? 90 : 30), reasoning: 'off',
+    }]);
   }
 
   function move(index: number, direction: -1 | 1) {
@@ -265,6 +269,7 @@ export function SlotDialog({ definition, chain, providers, providerModels, pageB
     for (const row of rows) {
       const temperature = row.temperature.trim() === '' ? undefined : Number(row.temperature);
       const maxTokens = row.maxTokens.trim() === '' ? undefined : Number(row.maxTokens);
+      const timeoutSec = Number(row.timeoutSec);
       if (!row.provider || !row.model.trim()) {
         setError('每一项都需要选择接入并填写模型名。');
         return;
@@ -277,11 +282,16 @@ export function SlotDialog({ definition, chain, providers, providerModels, pageB
         setError('最大输出需为正整数。');
         return;
       }
+      if (!Number.isSafeInteger(timeoutSec) || timeoutSec < 1 || timeoutSec > 3600) {
+        setError('超时需为 1 到 3600 秒之间的整数。');
+        return;
+      }
       chainBody.push({
         provider: row.provider,
         model: row.model.trim(),
         ...(temperature !== undefined ? { temperature } : {}),
         ...(maxTokens !== undefined ? { maxTokens } : {}),
+        timeoutSec,
         reasoning: row.reasoning,
       });
     }

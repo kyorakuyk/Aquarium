@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createImpressionsService, type ExtractSummary } from '../src/core/impressions/service.ts';
+import { promptTemplateStore } from '../src/core/prompt-templates.ts';
 import { createMessagePipeline } from '../src/core/pipeline.ts';
 import { sessionId, type SessionKey } from '../src/core/events.ts';
 import {
@@ -145,6 +146,82 @@ test('假模型下完成一次提取：观察转正、新标签、成员标签�
     const run = repository.getTagRun(account, key);
     assert.equal(run?.lastRunAt, harness.clock.value);
     assert.equal(run?.lastMessageTime, t0 + 9_000);
+  });
+});
+
+test('模型提取异常发出安全 WARN，保留错误分类且不输出模型正文', async () => {
+  await withRepository(async (repository) => {
+    const config = makeConfig({ nicknames: [] });
+    const warnings: string[] = [];
+    const secretLikeBody = 'private request body must not be logged';
+    const service = createImpressionsService({
+      repository,
+      getConfig: () => config,
+      now: () => 20,
+      callModel: async () => {
+        throw Object.assign(new Error(secretLikeBody), { name: 'APIConnectionTimeoutError' });
+      },
+      onWarn: (message) => warnings.push(message),
+    });
+    const release = service.tryAcquireSession(sessionId(groupSession));
+    assert.ok(release);
+    try {
+      const summary = await service.extractWindowUnderSessionLock({
+        session: groupSession,
+        records: [],
+        now: 20,
+        template: promptTemplateStore.get().extractTags,
+      });
+
+      assert.equal(summary.status, 'error');
+      assert.equal(summary.failureReason, 'timeout');
+      assert.equal(warnings.length, 1);
+      assert.match(warnings[0] ?? '', /slot=extract provider=\S+ model=\S+ durationMs=\d+ reason=模型超时/u);
+      assert.equal(warnings[0]?.includes(secretLikeBody), false);
+    } finally {
+      release();
+    }
+  });
+});
+
+test('WARN 记录实际失败的降级模型，而不是链首模型', async () => {
+  await withRepository(async (repository) => {
+    const base = makeConfig({ nicknames: [] });
+    const config = {
+      ...base,
+      slots: {
+        ...base.slots,
+        extract: [
+          { provider: 'deepseek', model: 'deepseek-flash', reasoning: 'off' as const },
+          { provider: 'mimo', model: 'mimo-model', reasoning: 'off' as const },
+        ],
+      },
+    };
+    const warnings: string[] = [];
+    const service = createImpressionsService({
+      repository,
+      getConfig: () => config,
+      callModel: async (_slot, _messages, callOptions) => {
+        callOptions.recordUsage({
+          time: 20, account, slot: 'extract', provider: 'mimo', model: 'mimo-model',
+          inputTokens: 0, cachedTokens: 0, outputTokens: 0, costCny: 0, latencyMs: 0, ok: false,
+        });
+        throw Object.assign(new Error('private failure body'), { status: 503 });
+      },
+      onWarn: (message) => warnings.push(message),
+    });
+    const release = service.tryAcquireSession(sessionId(groupSession));
+    assert.ok(release);
+    try {
+      await service.extractWindowUnderSessionLock({
+        session: groupSession, records: [], now: 20,
+        template: promptTemplateStore.get().extractTags,
+      });
+      assert.match(warnings[0] ?? '', /slot=extract provider=mimo model=mimo-model .*HTTP 503/u);
+      assert.equal(warnings.length, 1);
+    } finally {
+      release();
+    }
   });
 });
 

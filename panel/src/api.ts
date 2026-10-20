@@ -271,6 +271,9 @@ export interface HistoryImportJobView {
   inserted: number;
   windowsDone: number;
   windowsTotal: number;
+  windowsFailed: number;
+  failureReason?: 'timeout' | 'network' | 'http' | 'other';
+  failureHttpStatus?: number;
   tagsInserted: number;
   tagsObserved: number;
   costCny: number;
@@ -425,6 +428,7 @@ export interface ModelSlotEntryView {
   model: string;
   temperature?: number;
   maxTokens?: number;
+  timeoutSec?: number;
   reasoning: ModelReasoning;
 }
 

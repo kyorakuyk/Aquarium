@@ -201,7 +201,7 @@ test('provider key endpoint writes .env, updates the status, and never echoes th
 test('slot updates validate references and provider tests record usage without exposing parameters', async () => {
   await withPanel(async ({ app, repository }) => {
     const headers = { ...authHeaders(), 'Content-Type': 'application/json' };
-    const chain = [{ provider: 'deepseek', model: 'deepseek-flash', temperature: 0.7, maxTokens: 128, reasoning: 'medium' }];
+    const chain = [{ provider: 'deepseek', model: 'deepseek-flash', temperature: 0.7, maxTokens: 128, timeoutSec: 45, reasoning: 'medium' }];
     const updated = await app.request('/api/slots/reply', {
       method: 'PUT',
       headers,
@@ -211,6 +211,30 @@ test('slot updates validate references and provider tests record usage without e
     const updatedBody = await updated.json() as { chain: typeof chain };
     assert.equal(updatedBody.chain[0]?.temperature, 0.7);
     assert.equal(updatedBody.chain[0]?.reasoning, 'medium');
+    assert.equal(updatedBody.chain[0]?.timeoutSec, 45);
+
+    const extractTimeout = await app.request('/api/slots/extract', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ chain: [{ provider: 'deepseek', model: 'deepseek-flash' }] }),
+    });
+    assert.equal(extractTimeout.status, 200);
+    assert.equal(((await extractTimeout.json()) as { chain: Array<{ timeoutSec?: number }> }).chain[0]?.timeoutSec, 90);
+
+    const fallbackTimeout = await app.request('/api/slots/reply', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ chain: [{ provider: 'deepseek', model: 'deepseek-flash' }] }),
+    });
+    assert.equal(fallbackTimeout.status, 200);
+    assert.equal(((await fallbackTimeout.json()) as { chain: Array<{ timeoutSec?: number }> }).chain[0]?.timeoutSec, 30);
+
+    const invalidTimeout = await app.request('/api/slots/extract', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ chain: [{ provider: 'deepseek', model: 'deepseek-flash', timeoutSec: 3601 }] }),
+    });
+    assert.equal(invalidTimeout.status, 400);
 
     const patched = await app.request('/api/slots/reply', {
       method: 'PATCH',

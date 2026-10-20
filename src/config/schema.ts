@@ -89,6 +89,7 @@ export const SlotEntryConfigSchema = z.object({
   model: z.string().min(1),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().int().positive().optional(),
+  timeoutSec: z.number().int().min(1).max(3600).optional(),
   reasoning: z.enum(['off', 'low', 'medium', 'high']).default('off'),
 }).strict();
 

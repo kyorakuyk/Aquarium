@@ -115,6 +115,8 @@
 .slot-row-menu-list button { display: block; width: 100%; min-height: 44px; padding: 6px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--ink-2); text-align: left; }
 .slot-row-menu-list button:hover:not(:disabled) { background: var(--surface-2); color: var(--accent); }
 .slot-parameter-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.slot-timeout-field { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+.slot-timeout-field input { width: 92px; min-height: 44px; padding: 6px 8px; }
 .inline-param-trigger.slot-param-trigger { width: auto; min-width: 0; min-height: 44px; flex: none; gap: 6px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink-2); font-family: var(--sans); font-size: 11px; }
 .inline-param-trigger.slot-param-trigger:hover, .inline-param-trigger.slot-param-trigger:focus-visible { border-color: var(--accent); background: var(--surface); color: var(--accent); }
 .slot-param-pill-label { color: var(--ink-2); }

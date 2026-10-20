@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHistoryImportService } from '../src/core/impressions/history-import.ts';
 import { createImpressionsService } from '../src/core/impressions/service.ts';
+import type { ExtractFailureType } from '../src/core/impressions/extract-error.ts';
 import { sessionId, type IncomingMessage, type SessionKey } from '../src/core/events.ts';
 import type { ExtractTagsPromptTemplate } from '../src/core/prompt-templates.ts';
 import type { MessageStorageRecord } from '../src/store/repository.ts';
@@ -168,6 +169,7 @@ test('history import pages idempotently and extracts 80-message windows oldest-f
     assert.equal(job?.inserted, 199);
     assert.equal(job?.windowsTotal, 3);
     assert.equal(job?.windowsDone, 3);
+    assert.equal(job?.windowsFailed, 0);
     assert.equal(job?.costCny, 0.03);
     assert.equal(adapter.requests.length, 4);
     assert.deepEqual(adapter.requests.map((request) => request.count), [50, 50, 50, 50]);
@@ -233,6 +235,161 @@ test('history import stops at a short page and after three consecutive page erro
     assert.equal(imports.get(failedJob.id)?.phase, 'error');
     assert.equal(imports.get(failedJob.id)?.error, '连续三页拉取失败');
     assert.equal(failedPage.requests.length, 3);
+  });
+});
+
+test('history import retries a failed extraction window once and continues when retry succeeds', async () => {
+  await withRepository(async (repository) => {
+    const config = makeConfig({ nicknames: [] });
+    const messages = Array.from({ length: 80 }, (_, index) => incomingMessage(index));
+    const adapter = new PagedHistoryAdapter();
+    adapter.pages = [messages.slice(40), messages.slice(0, 40), []];
+    const waits: number[] = [];
+    let calls = 0;
+    const impressions = createImpressionsService({
+      repository, getConfig: () => config,
+      callModel: async () => {
+        calls += 1;
+        if (calls === 1) throw Object.assign(new Error('offline fixture'), { code: 'ECONNRESET' });
+        return {
+          text: '{"group":{"observe":[],"new":[],"contradict":[]},"members":[]}',
+          provider: 'fake', model: 'fixture-model',
+          usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+        };
+      },
+    });
+    const imports = createHistoryImportService({
+      repository, getConfig: () => config, impressionsService: impressions,
+      getTemplate: () => extractTemplate, wait: async (milliseconds) => { waits.push(milliseconds); },
+    });
+    const started = imports.start({ session: groupSession, target: 200, adapter });
+    assert.ok(started);
+    await imports.idle();
+    const job = imports.get(started.id);
+    assert.equal(job?.phase, 'done');
+    assert.equal(job?.windowsDone, 1);
+    assert.equal(job?.windowsFailed, 0);
+    assert.equal(job?.failureReason, undefined);
+    assert.equal(calls, 2);
+    assert.deepEqual(waits.filter((milliseconds) => milliseconds === 5_000), [5_000]);
+  });
+});
+
+test('history import skips one failed window and continues, showing its failure reason in the job', async () => {
+  await withRepository(async (repository) => {
+    const config = makeConfig({ nicknames: [] });
+    const messages = Array.from({ length: 100 }, (_, index) => incomingMessage(index));
+    const adapter = new PagedHistoryAdapter();
+    adapter.pages = [messages.slice(50), messages.slice(0, 50), []];
+    let calls = 0;
+    const impressions = createImpressionsService({
+      repository,
+      getConfig: () => config,
+      callModel: async () => {
+        calls += 1;
+        if (calls <= 2) throw Object.assign(new Error('temporary network issue'), { code: 'ECONNRESET' });
+        return {
+          text: '{"group":{"observe":[],"new":[],"contradict":[]},"members":[]}',
+          provider: 'fake', model: 'fixture-model',
+          usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+        };
+      },
+    });
+    const imports = createHistoryImportService({
+      repository, getConfig: () => config, impressionsService: impressions,
+      getTemplate: () => extractTemplate, wait: async () => {},
+    });
+
+    const started = imports.start({ session: groupSession, target: 200, adapter });
+    assert.ok(started);
+    await imports.idle();
+    const job = imports.get(started.id);
+
+    assert.equal(job?.phase, 'done');
+    assert.equal(job?.windowsTotal, 2);
+    assert.equal(job?.windowsDone, 1);
+    assert.equal(job?.windowsFailed, 1);
+    assert.equal(job?.failureReason, 'network');
+    assert.equal(job?.failureHttpStatus, undefined);
+    assert.equal(calls, 3);
+  });
+});
+
+test('三段提取连续失败后终止并保留最后失败原因', async () => {
+  await withRepository(async (repository) => {
+    const config = makeConfig({ nicknames: [] });
+    const messages = Array.from({ length: 200 }, (_, index) => incomingMessage(index));
+    const adapter = new PagedHistoryAdapter();
+    adapter.pages = [messages.slice(150), messages.slice(100, 150), messages.slice(50, 100), messages.slice(0, 50), []];
+    const waits: number[] = [];
+    let calls = 0;
+    const impressions = createImpressionsService({
+      repository, getConfig: () => config,
+      callModel: async () => {
+        calls += 1;
+        throw Object.assign(new Error('timeout fixture'), { name: 'APIConnectionTimeoutError' });
+      },
+    });
+    const imports = createHistoryImportService({
+      repository, getConfig: () => config, impressionsService: impressions,
+      getTemplate: () => extractTemplate, wait: async (milliseconds) => { waits.push(milliseconds); },
+    });
+    const started = imports.start({ session: groupSession, target: 200, adapter });
+    assert.ok(started);
+    await imports.idle();
+    const job = imports.get(started.id);
+    assert.equal(job?.phase, 'error');
+    assert.equal(job?.windowsDone, 0);
+    assert.equal(job?.windowsFailed, 3);
+    assert.equal(job?.failureReason, 'timeout' satisfies ExtractFailureType);
+    assert.equal(job?.failureHttpStatus, undefined);
+    assert.equal(job?.error, '提取失败：模型超时（3 个窗口跳过）');
+    assert.equal(calls, 6);
+    assert.equal(waits.filter((milliseconds) => milliseconds === 5_000).length, 3);
+  });
+});
+
+test('导入中间窗口成功会重置连续失败计数', async () => {
+  await withRepository(async (repository) => {
+    const config = makeConfig({ nicknames: [] });
+    const messages = Array.from({ length: 320 }, (_, index) => incomingMessage(index));
+    const adapter = new PagedHistoryAdapter();
+    adapter.pages = [
+      messages.slice(270), messages.slice(220, 270), messages.slice(170, 220),
+      messages.slice(120, 170), messages.slice(70, 120), messages.slice(20, 70),
+      messages.slice(0, 20), [],
+    ];
+    let calls = 0;
+    const impressions = createImpressionsService({
+      repository,
+      getConfig: () => config,
+      callModel: async () => {
+        calls += 1;
+        if (calls <= 4 || calls >= 6) {
+          throw Object.assign(new Error('temporary failure'), { code: 'ECONNRESET' });
+        }
+        return {
+          text: '{"group":{"observe":[],"new":[],"contradict":[]},"members":[]}',
+          provider: 'fake', model: 'fixture-model',
+          usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+        };
+      },
+    });
+    const imports = createHistoryImportService({
+      repository, getConfig: () => config, impressionsService: impressions,
+      getTemplate: () => extractTemplate, wait: async () => {},
+    });
+    const started = imports.start({ session: groupSession, target: 500, adapter });
+    assert.ok(started);
+    await imports.idle();
+    const job = imports.get(started.id);
+
+    assert.equal(job?.phase, 'done');
+    assert.equal(job?.windowsDone, 1);
+    assert.equal(job?.windowsFailed, 3);
+    assert.equal(calls, 7);
+    assert.equal(job?.failureReason, 'network');
+    assert.equal(job?.failureHttpStatus, undefined);
   });
 });
 

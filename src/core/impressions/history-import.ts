@@ -5,6 +5,7 @@ import { sessionId, type IncomingMessage, type SessionKey } from '../events.ts';
 import type { ExtractTagsPromptTemplate } from '../prompt-templates.ts';
 import type { StoreRepository } from '../../store/repository.ts';
 import type { ImpressionsService } from './service.ts';
+import { extractFailureLabel, type ExtractFailureType } from './extract-error.ts';
 
 const PAGE_SIZE = 50;
 const WINDOW_SIZE = 80;
@@ -23,6 +24,9 @@ export interface HistoryImportJob {
   inserted: number;
   windowsDone: number;
   windowsTotal: number;
+  windowsFailed: number;
+  failureReason?: ExtractFailureType;
+  failureHttpStatus?: number;
   tagsInserted: number;
   tagsObserved: number;
   costCny: number;
@@ -72,6 +76,7 @@ export function createHistoryImportService(options: HistoryImportServiceOptions)
     const imported = new Map<string, number>();
     let beforeMessageId: string | undefined;
     let consecutiveErrors = 0;
+    let consecutiveWindowFailures = 0;
 
     try {
       while (job.fetched < target && !job.cancelRequested) {
@@ -145,26 +150,46 @@ export function createHistoryImportService(options: HistoryImportServiceOptions)
 
       for (const [index, window] of windows.entries()) {
         if (job.cancelRequested) break;
-        const summary = await options.impressionsService.extractWindowUnderSessionLock({
-          session,
-          records: window,
-          now: now(),
-          template: options.getTemplate(),
-        });
-        job.tagsInserted += summary.inserted;
-        job.tagsObserved += summary.observed;
-        job.costCny += summary.costCny;
-        if (summary.status === 'budget') {
-          job.phase = 'error';
-          job.error = '预算已用尽';
-          return;
+        let succeeded = false;
+        let failureReason: ExtractFailureType = 'other';
+        let failureHttpStatus: number | undefined;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const summary = await options.impressionsService.extractWindowUnderSessionLock({
+            session,
+            records: window,
+            now: now(),
+            template: options.getTemplate(),
+          });
+          job.tagsInserted += summary.inserted;
+          job.tagsObserved += summary.observed;
+          job.costCny += summary.costCny;
+          if (summary.status === 'budget') {
+            job.phase = 'error';
+            job.error = '预算已用尽';
+            return;
+          }
+          if (summary.status === 'done') {
+            succeeded = true;
+            break;
+          }
+          failureReason = summary.failureReason ?? 'other';
+          failureHttpStatus = summary.failureHttpStatus;
+          if (attempt === 0) await wait(5_000);
         }
-        if (summary.status !== 'done') {
-          job.phase = 'error';
-          job.error = '印象提取失败';
-          return;
+        if (succeeded) {
+          job.windowsDone += 1;
+          consecutiveWindowFailures = 0;
+        } else {
+          job.windowsFailed += 1;
+          consecutiveWindowFailures += 1;
+          job.failureReason = failureReason;
+          job.failureHttpStatus = failureHttpStatus;
+          if (consecutiveWindowFailures >= 3) {
+            job.phase = 'error';
+            job.error = `提取失败：${extractFailureLabel({ type: failureReason, ...(failureHttpStatus !== undefined ? { httpStatus: failureHttpStatus } : {}) })}（${job.windowsFailed} 个窗口跳过）`;
+            return;
+          }
         }
-        job.windowsDone += 1;
         if (job.cancelRequested) break;
         if (index < windows.length - 1) await wait(WINDOW_DELAY_MS);
       }
@@ -207,6 +232,7 @@ export function createHistoryImportService(options: HistoryImportServiceOptions)
         inserted: 0,
         windowsDone: 0,
         windowsTotal: 0,
+        windowsFailed: 0,
         tagsInserted: 0,
         tagsObserved: 0,
         costCny: 0,

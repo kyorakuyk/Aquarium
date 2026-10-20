@@ -39,6 +39,7 @@ export function createMemoryServices(options: {
     tagSubjects: options.tagSubjects,
     getConfig: options.getConfig,
     onError: (error) => options.logger.error(`印象提取失败：${options.describeError(error)}`),
+    onWarn: (message) => options.logger.warn(message),
     onMemberSummaryCheck: memberSummaryService.maybeGenerate,
     onExtract: (summary) => {
       options.logger.info(

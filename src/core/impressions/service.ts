@@ -8,6 +8,7 @@ import { sessionId, type SessionKey } from '../events.ts';
 import { decide } from '../privacy/policy.ts';
 import type { ExtractTagsPromptTemplate, ReplySystemTemplate } from '../prompt-templates.ts';
 import type { PipelineModelCall } from '../steps/types.ts';
+import { classifyExtractFailure, extractFailureLabel, type ExtractFailureType } from './extract-error.ts';
 import {
   asContradictItem,
   asNewItem,
@@ -45,6 +46,8 @@ export interface ExtractSummary {
   superseded: number;
   dropped: number;
   costCny: number;
+  failureReason?: ExtractFailureType;
+  failureHttpStatus?: number;
 }
 
 export interface ImpressionsPromptBlocks {
@@ -60,6 +63,7 @@ export interface ImpressionsServiceOptions {
   callModel?: PipelineModelCall;
   now?: () => number;
   onError?: (error: unknown) => void;
+  onWarn?: (message: string) => void;
   onExtract?: (summary: ExtractSummary) => void;
   onMemberSummaryCheck?: (account: number, userId: number, at: number) => void;
 }
@@ -384,10 +388,18 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     updateTagRun = true,
   ): Promise<ExtractSummary> {
     const account = session.account;
+    let attemptedProvider = config.slots.extract?.[0]?.provider ?? 'unknown';
+    let attemptedModel = config.slots.extract?.[0]?.model ?? 'unknown';
     const counters = { inserted: 0, observed: 0, superseded: 0, dropped: 0 };
     let costCny = 0;
+    let failureReason: ExtractFailureType | undefined;
+    let failureHttpStatus: number | undefined;
     const finish = (status: ExtractSummary['status']): ExtractSummary => {
-      const summary = { account, sessionId: sessionKey, status, ...counters, costCny };
+      const summary = {
+        account, sessionId: sessionKey, status, ...counters, costCny,
+        ...(failureReason ? { failureReason } : {}),
+        ...(failureHttpStatus !== undefined ? { failureHttpStatus } : {}),
+      };
       report(summary);
       return summary;
     };
@@ -417,6 +429,12 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       tags: options.repository.listTagsForSubject(account, sessionKey, userId).filter(keepStatuses),
     }));
 
+    const selected = config.slots.extract?.[0];
+    const selectedProvider = selected?.provider ?? 'unknown';
+    const selectedModel = selected && config.providers[selected.provider]?.kind === 'cli'
+      ? 'cli-model'
+      : selected?.model ?? 'unknown';
+    const startedAt = now();
     const result = await runExtract(
       records,
       {
@@ -430,16 +448,20 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
           config,
           account,
           costToday: () => options.repository.costToday(),
-          recordUsage: (usage) => options.repository.recordUsage({ ...usage, account }),
+          recordUsage: (usage) => {
+            attemptedProvider = usage.provider;
+            attemptedModel = usage.model === 'cli-model'
+              && config.providers[usage.provider]?.kind === 'cli'
+              ? `cli:${usage.provider}`
+              : usage.model;
+            options.repository.recordUsage({ ...usage, account });
+          },
           now,
         });
         costCny += response.usage.costCny;
         return response;
       },
-    ).catch((error: unknown) => {
-      reportError(error);
-      return { ok: false, reason: 'extract_error' } as const;
-    });
+    );
 
     const newestTime = records.reduce((max, record) => Math.max(max, record.time), 0);
     if (updateTagRun) {
@@ -452,6 +474,16 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     }
 
     if (!result.ok) {
+      if (result.reason === 'extract_error') {
+        const classified = classifyExtractFailure(result.error);
+        failureReason = classified.type;
+        const elapsedMs = Math.max(0, now() - startedAt);
+        const message = `印象提取失败：slot=extract provider=${attemptedProvider} model=${attemptedModel} durationMs=${elapsedMs} reason=${extractFailureLabel(classified)}`;
+        try { options.onWarn?.(message); } catch { /* 日志回调失败不影响提取结果。 */ }
+        if (classified.httpStatus !== undefined) failureHttpStatus = classified.httpStatus;
+      } else {
+        failureReason = 'other';
+      }
       return finish(result.reason === 'extract_parse_error' ? 'parse_error' : 'error');
     }
 

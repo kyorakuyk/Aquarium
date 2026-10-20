@@ -33,6 +33,14 @@ function isHistoryImportTerminal(job: HistoryImportJobView | undefined): boolean
   return job !== undefined && ['done', 'cancelled', 'error'].includes(job.phase);
 }
 
+function historyFailureLabel(job: HistoryImportJobView): string {
+  const { failureReason: reason, failureHttpStatus } = job;
+  if (reason === 'timeout') return '模型超时';
+  if (reason === 'network') return '网络错误';
+  if (reason === 'http') return `HTTP ${failureHttpStatus ?? '错误'}`;
+  return '其他错误';
+}
+
 function estimatedHistoryImportCost(target: HistoryImportTarget, models: ModelsView | undefined): number | undefined {
   const first = models?.slots.extract?.[0];
   if (!first) return undefined;
@@ -398,17 +406,22 @@ export function ImpressionsPage() {
           {historyJob.cancelRequested ? '；取消将在当前页完成后生效。' : '。'}
         </p>}
         {historyJob?.phase === 'extracting' && <p className="history-import-status" aria-live="polite">
-          正在整理 第 {Math.min(historyJob.windowsDone + 1, historyJob.windowsTotal)} / {historyJob.windowsTotal} 段
+          正在整理 第 {Math.min(historyJob.windowsDone + historyJob.windowsFailed + 1, historyJob.windowsTotal)} / {historyJob.windowsTotal} 段
           {historyJob.cancelRequested ? '；取消将在当前段完成后生效。' : '。'}
         </p>}
         {historyJob?.phase === 'done' && <p className="history-import-status" role="status">
           完成：新增 {historyJob.inserted} 条消息，新增标签 {historyJob.tagsInserted} 个，确认 {historyJob.tagsObserved} 次观察，花费 ¥{historyJob.costCny.toFixed(2)}。
+          {historyJob.windowsFailed > 0 && ` 提取失败：${historyFailureLabel(historyJob)}（${historyJob.windowsFailed} 个窗口跳过）`}
         </p>}
         {historyJob?.phase === 'cancelled' && <p className="history-import-status" role="status">
           已取消：已获取 {historyJob.fetched} 条，新增 {historyJob.inserted} 条消息；花费 ¥{historyJob.costCny.toFixed(2)}。
+          {historyJob.windowsFailed > 0 && ` 提取失败：${historyFailureLabel(historyJob)}（${historyJob.windowsFailed} 个窗口跳过）`}
         </p>}
         {historyJob?.phase === 'error' && <p className="history-import-status is-error" role="alert">
-          导入停止：{historyJob.error ?? '未知错误'}；已获取 {historyJob.fetched} 条，新增 {historyJob.inserted} 条消息。
+          导入停止：{historyJob.error ?? '未知错误'}
+          {historyJob.windowsFailed > 0 && !historyJob.error?.startsWith('提取失败：')
+            && `；提取失败：${historyFailureLabel(historyJob)}（${historyJob.windowsFailed} 个窗口跳过）`}
+          ；已获取 {historyJob.fetched} 条，新增 {historyJob.inserted} 条消息。
         </p>}
         {historyError && <p className="history-import-error" role="alert">{historyError}</p>}
         <div className="history-import-footer">

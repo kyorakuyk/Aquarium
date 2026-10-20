@@ -41,7 +41,8 @@ export interface ParsedExtractResponse {
 
 export type ExtractResult =
   | { ok: true; parsed: ParsedExtractResponse }
-  | { ok: false; reason: 'extract_parse_error' | 'extract_error' };
+  | { ok: false; reason: 'extract_parse_error' }
+  | { ok: false; reason: 'extract_error'; error: unknown };
 
 export type ExtractSlotCall = (
   slot: 'extract',
@@ -209,8 +210,8 @@ export async function runExtract(
   let response: { text: string };
   try {
     response = await callModel('extract', messages);
-  } catch {
-    return { ok: false, reason: 'extract_error' };
+  } catch (error) {
+    return { ok: false, reason: 'extract_error', error };
   }
 
   const parsed = parseExtractResponse(response.text);
