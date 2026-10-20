@@ -1,6 +1,6 @@
 # Aquarium 施工计划书（唯一任务清单）
 
-> 写给接手编码的模型。最后更新：2026-10-20。**当前任务：§15 夜间任务包（V18f → §13）；所有任务先遵守 §0.1 提速规则。**
+> 写给接手编码的模型。最后更新：2026-10-21。**当前任务：§16 夜间大任务包（结构整理 → 缓存命中 → 印象 v4）；所有任务先遵守 §0.1 提速规则。**
 > **本文是唯一的任务清单。**文档优先级：`PLAN.md` > `HANDOFF.md`（只作为架构、接口、环境的参考）> `DESIGN.md`（设计依据）。
 > `REVIEW-2026-10-12.md` 与 `NIGHT-RUN.md` 已并入本文，**作废，不再阅读**。`MORNING.md` 只作为历史记录。
 > 开工前按顺序读：本文全文 → `HANDOFF.md` §1、§3、§4 → `DESIGN.md`（需要时查阅）。
@@ -550,8 +550,8 @@
 
 > 适用：用户睡觉期间运行，无人能回答问题、无人能在 QQ 上做验证。
 
-### 7.1 范围（当前有效：§15）
-- **本次无人值守运行的唯一范围是 §15 列出的两步**（V18f → §13 P1–P7、R7），按顺序执行；其余章节已完成或不在本次范围。阶段 D 的 §7.1 旧范围已于 2026-10-15 完成，**不再执行、不再收尾**。
+### 7.1 范围（当前有效：§16）
+- **本次无人值守运行的唯一范围是 §16 的 16.1–16.4**（S1–S4 → K1–K3 → M1–M8 → R9），按顺序执行；§15 已于 2026-10-20 完成，不再执行。
 - 所有【用户】验收步骤不执行，写进早上检查清单。
 
 ### 7.2 遇到问题时
@@ -1787,3 +1787,173 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
 - 早上检查清单写在 `doc/plans/MORNING-2026-10-20.md`，结构同 §7.4。进度日志要记录每项的开始和结束时间。
 - 结束条件：R7 完成；或满足 §7.6 的任一条（运行时间上限为 10 小时）。
 - 禁止：npm start、真实模型或 QQ 请求、连接 SnowLuma、修改 reference/、在 main 上提交、合并任何分支。
+
+---
+
+## 16. 夜间大任务包（2026-10-21 夜）：结构整理 → 缓存命中 → 印象 v4
+
+> 用户在睡觉，按 §7 无人值守规则执行。**§7.1 本次范围 = 本节 16.1–16.4，按顺序做。** 按 §0.1 执行。
+> **分支**：从 `main`（已合并 `dev/profiles`，`586bf6e`）新建 `dev/impressions-v4`。第一个提交 = `docs: 加入 §16 与印象 v4 参照页`，内容是本文的改动和 `doc/design/console-v2/ImpressionsV4*.html`（这两样已由 Claude 放进工作区，未提交）。
+> **视觉参照**：`doc/design/console-v2/ImpressionsV4.html`（选中群）、`ImpressionsV4Member.html`（选中群友）、`ImpressionsV4Dialogs.html`（各对话框）。**严格照参照页做**，参照页与本文冲突时以本文为准。
+> 早上检查清单：`doc/plans/MORNING-2026-10-21.md`，结构同 §7.4。进度日志记录每项的开始和结束时间。
+> **结束条件**：R9 完成；或满足 §7.6 的任一条，运行时间上限改为 **14 小时**。未做完的任务原样留着，早上接着做。
+> **禁止**：同 §15（npm start、真实模型或 QQ 请求、连接 SnowLuma、修改 reference/、在 main 上提交、合并分支）。SnowLuma 新接口一律用 FakeAdapter 测试。
+
+### 16.1 结构整理（S1–S4：只搬家，不改行为）
+
+规则：**每一项只移动文件、改 import 路径和导出位置，不改任何逻辑**；现有测试原样通过（只允许改测试里的 import 路径）。每项一个提交，提交前 `npm run check` 全绿。
+
+- [ ] **S1 迁移拆分**：`src/store/db.ts` 里的迁移移到 `src/store/migrations/`，每个版本一个文件 `v01.ts … v15.ts`，各自导出 `{ version, up(db) }`；`migrations/index.ts` 按版本排序汇总。`db.ts` 只保留打开数据库和执行迁移。新增测试：版本号从 1 开始连续、不重复，并且等于数组下标 + 1。
+- [ ] **S2 标签模型归位**：`src/store/tag-profile.ts` 里的分类常量、半衰期、`isTag*`、`normalizeTagSubject`、`canonicalizeTagSubject` 等纯函数和类型，移到 `src/core/impressions/tag-model.ts`。store 改为从 core 导入（**允许 store → core/impressions/tag-model.ts 这一处依赖**，在 `scripts/check-boundaries.mjs` 里加白名单）。`tag-profile.ts` 删除。
+- [ ] **S3 出没统计归位**：`src/core/activity/stats.ts` 移到 `src/core/profiles/presence.ts`，同目录放 Q4 的作息标签计算（如果分散在别处，一起移过来）。`core/activity/` 只保留“要不要发言”的引擎。
+- [ ] **S4 core 根目录归类**：
+  - `core/shared/`：logger、text、split、hysteresis、events、rate-limit；
+  - `core/conversation/`：pipeline、steps/（整个目录）、sessions、session-queue、pacing、history-catchup、management；
+  - 同名“文件 + 文件夹”合并：`sleep.ts` → `sleep/index.ts`，`images.ts` → `images/index.ts`，`prompt.ts` 和 `prompt-templates.ts` → `prompt/index.ts`、`prompt/templates.ts`，原来的 `prompt-templates/` 目录 → `prompt/templates/`。
+  - 完成后 `src/core/` 根目录下不再有 `.ts` 文件。
+  - S4 改动量大：如果 3 次尝试都不能让 check 全绿，按 §7.2 放弃 S4（`git restore`），继续 16.2。
+
+### 16.2 提示词缓存命中（K1–K3）
+
+**背景**：DeepSeek 按“请求开头的最长相同前缀”命中缓存。现在 `buildPromptMessages` 把 mood、affinity、float、memberTags、stickers 这些**每条消息都可能变化**的块放在 system 里、聊天记录之前。只要其中一个变了，后面整段聊天记录都无法命中缓存。另外，聊天记录是“最近 N 条”的滑动窗口，每来一条新消息，窗口开头就往后挪一条，前缀也就跟着变了。
+
+- [ ] **K1 稳定前缀、动态放尾部**：`buildPromptMessages` 的输出改成：
+  1. `system`：只放**慢变化**的块，顺序为 persona → traits → rules → groupNote → groupTags。`rules` 里不能再有任何按消息变化的内容：`{{modeHint}}` 从 `prompts/reply-system.md` 的 system 段删除，`reply-system.ts` 里对应的占位符校验一起改掉。
+  2. `user`：先放聊天记录行（格式不变），然后空一行，接一段动态尾部 `【此刻】\n…`，依次是 modeHint、mood、affinity、float、privateFacts、memberTags、knownFacts、privacyRule、stickers，最后是 request。空的块跳过。
+  - `describePromptBlocks` 和决策追踪里的 block id 不变，只是位置变了。试聊页显示的提示词也跟着变。
+  - 表情候选（stickers）本来就是按消息挑选的，留在尾部，不需要改成确定性的。
+  - 测试：构造两次相邻请求，只有 mood、stickers 不同，断言两次请求从开头到最后一条相同聊天记录行为止完全一致。
+- [ ] **K2 锚定聊天记录窗口**：把“最近 N 条”改成“锚定窗口”：记住每个会话当前窗口的起点消息（只存在内存里，按 sessionId 记），新消息只往窗口末尾追加。窗口长度超过 `ceil(N × 1.5)` 时，把起点前移，让长度回到 N。起点消息被删除，或者不在最近 2N 条里时，重新锚定。主动模式的 8 条窗口用同样的规则。`replay` 模式不变（仍按 messageId 截取）。测试：连续追加消息时，起点不变，直到超过 1.5N 才跳一次；跳完之后长度等于 N。
+- [ ] **K3 其他用途审查**：`judge`、`extract`、`member-summary`、`classify-tags`、`privacy-gate`、`privacy-mention` 的提示词都按同一原则调整：**固定的说明在前，变化的数据在后**。如果某个用途的说明里插了会变的内容（时间、名字、计数），就移到末尾。只调整顺序，不改措辞。每个用途补 1 条测试：两次不同输入的请求，开头的说明部分完全相同。
+- 早上检查清单里写明：**【用户】**用真实模型在试聊页跑 10 条，对比改动前后回复的风格，并到用量页看各用途的缓存命中率是否上升（用量页已有“缓存命中”一列，不需要再加）。
+
+### 16.3 印象 v4（M1–M8）
+
+#### M1 分类体系 v2 与标签写法
+- 分类表在 §14.1 的基础上调整：
+
+| key | 中文 | 适用 | 半衰期 | 说明 |
+|---|---|---|---|---|
+| `schedule` | 作息 | 群、群友 | 不衰减 | **只能由统计或主人手动生成**，模型输出一律丢弃 |
+| `positioning` | 定位 | 群 | 180 天 | 技术 / 学习 / 游戏 / 交友 / 追星 / 同学…… |
+| `topic` | 话题 | 群 | 30 天 | 多级主题，见下 |
+| `atmosphere` | 氛围 | 群 | 14 天 | 斗图、起外号、复读、玩梗 |
+| `meme` | 群梗 | 群 | 60 天 | 引号里的原话，见下 |
+| `norms` | 规矩 | 群 | 180 天 | 不聊政治、开黑先报名 |
+| `identity` | 自我认同 | 群友 | 180 天 | 同 §14 |
+| `personality` | 性格 | 群友 | 30 天 | 同 §14 |
+| `fandom` | 成分 | 群友 | 30 天 | 多级主题，见下 |
+| `speech` | 说话风格 | 群友 | 30 天 | **简短形容**：短句连发、游戏黑话 |
+| `catchphrase` | 口头禅 | 群友 | 60 天 | 引号里的原话，见下 |
+| `social` | 社交方式 | 群友 | 30 天 | 召集开黑、给人起外号 |
+| `recent` | 近况 | 群、群友 | 3 天 | 同 §14 |
+| `dislike` | 雷点 | 群友 | 60 天 | 同 §14 |
+| `misc` | 其他 | 群、群友 | 30 天 | 同 §14 |
+
+- `atmosphere` 原本是群标签唯一的分类，迁移时保留它的旧数据；之后由 M1 的整理任务重新分类。
+- **多级主题**（`topic`、`fandom`）：`subject` 存除最后一级以外的路径，用 `/` 连接，最多两级，例如 `游戏/FPS`；`text` 存最后一级，例如 `CS2`。显示为 `游戏 › FPS › CS2`。只有一级时，`subject` 为空、`text` 为 `游戏`。`tag_subjects` 的归一按**每一级分别**比对别名。
+- **标签写法**（写进提取模板，并由代码校验）：
+  - `text` 是不超过 8 个字的名词或短语；
+  - 开头的 `爱|常|经常|喜欢|总是|老是` 由代码去掉，喜好交给 `polarity`。去掉后为空的，整条丢弃；
+  - `catchphrase` 和 `meme`：`text` 必须是不超过 12 个字的原话，并且**原样出现在至少一条证据消息里**，否则丢弃。显示时加「」；
+  - `recent` 的 `text` 以 `常|经常|总是|一直` 开头时丢弃（习惯不是近况）；
+  - 任何分类中，`text` 含 `深夜|熬夜|夜猫|凌晨|早起|作息|通宵` 的，丢弃，并在 `droppedTags` 里记 reason `schedule_by_stats`。
+- **统计作息补充**（扩展 §14.4）：群和群友都计算“占比最高的连续 3 小时窗口”。占比 ≥ 0.35 时生成 `「{from}–{to} 点最活跃」`，群用 `「{from}–{to} 点最热闹」`。周的规则对群也适用（群写成“周X最热闹”：某一天占比 ≥ 0.25 时生成）。群不使用“夜猫子”“早上不在线”这两条规则。
+- 迁移：`schema v16`，内容是新分类的 key 白名单，再加一个“需要重新整理”的标记。**重新整理**复用 Q3 的流程，`prompts/classify-tags.md` 更新为新的分类表和写法规则：给群标签重新分类，把“爱 xx”改写成短名词，再做合并。
+- 测试：写法校验的每一条规则 1 条；多级主题的归一；作息词被丢弃；群的窗口标签。
+
+#### M2 删除并不再学（否决）
+- 新表 `tag_vetoes(id, account, session_id, user_id NULL, category, subject_norm, text_norm, created_at)`，`user_id` 为空表示群标签。
+- `DELETE /api/tags/:id`：删除标签，并写一条否决记录。`DELETE /api/tag-vetoes/:id`：撤销否决。`GET /api/tag-vetoes?sessionId=`：列出否决记录。
+- 提取和整理写入标签前，先按“同一会话、同一对象、同一分类，规范化后的 subject 和 text 相同”检查。命中否决的，丢弃，并在 `droppedTags` 里记 reason `vetoed`。（只做规范化后的精确匹配，不做语义相似判断。）
+- 控制台：鼠标悬停在标签上时，右侧出现 ×，点击直接删除。标签详情对话框里有“删除并不再学”。在“印象数据”菜单里加一项“已否决的标签…”，可以列出和撤销否决。
+- 测试：删除后再次提取到同一标签，会被丢弃；撤销否决后，可以重新学到。
+
+#### M3 增量拉取与证据去重
+- **证据去重**：一次观察要计入 `samples`，它的证据 messageId 必须是这条标签的 evidence 里还**没有**的。已有的 messageId 不再计数，也不刷新 `lastSeen`。这条规则对日常提取和历史导入都生效。
+- **增量拉取**（历史导入）：
+  - 往前翻页时，如果某一页里出现了已经存过的 messageId，就把这一页里新的消息存下来，然后停止翻页；
+  - 提取只处理 `time > 水位线` 的消息，水位线是 `tag_runs.lastMessageTime`；处理完一个窗口，就把水位线推进到这个窗口里最新那条消息的时间；
+  - 弹窗新增两种模式：**增量**（默认）和**重新整理全部**（忽略水位线，从头整理）。弹窗显示“上次整理到”的时间。拉取完成后、开始提取前，显示“新消息 N 条，预计 ¥X”，X = 窗口数 × 近 30 次 `extract` 调用的平均花费（没有数据时显示“—”）。用户确认后才开始提取。
+- 测试：重复导入同一批消息，samples 不增加；增量模式在遇到已存消息的那一页停止；水位线逐窗口推进；重新整理全部会忽略水位线。
+
+#### M4 QQ 资料（来自 SnowLuma v2.0.3）
+- 适配器新增方法，通过 `client.raw(action, params)` 调用，字段名以 SnowLuma v2.0.3 的接口文档为准：
+  - `getGroupInfo(groupId)` → `get_group_info`：`group_name, member_count, max_member_count, group_create_time, group_level, group_description`
+  - `getGroupMembers(groupId)` → `get_group_member_list`：每人的 `user_id, nickname, card, role, title, join_time, last_sent_time, level, sex, age, is_robot`
+  - `getGroupHonors(groupId)` → `get_group_honor_info`（`type: 'all'`）：取龙王和各类荣誉的当前持有人
+  - `getStrangerInfo(userId)` → `get_stranger_info`：`long_nick`（个性签名）、`qage`（没有就用 `reg_time` 算整年数）
+  - `getGroupNoticeLatest(groupId)` → `_get_group_notice`，取最新一条的正文
+  - `getEssenceCount(groupId)` → `get_essence_msg_list` 的长度
+  - 任何一个调用失败时，只让对应字段显示“—”，不报错，也不重试刷屏。
+- 新表 `qq_group_profiles(account, group_id, json, fetched_at)`、`qq_member_profiles(account, group_id, user_id, json, fetched_at)`。**24 小时内最多自动刷新一次**，在打开该群的印象页时触发。控制台提供“刷新资料”按钮。
+- **签名自述**：如果 `long_nick` 里出现整词 `[IE][NS][TF][JP]`（不区分大小写），就写入或更新一条 `identity` 标签：`origin = self_report`、`status = confirmed`、evidence 为 `{ kind: 'signature', text, fetchedAt }`。签名里去掉之后，删除这条由签名生成的标签（只删签名来源的）。
+- **注入规则**：群名片、头衔、身份（群主 / 管理员）可以出现在 memberTags 里，格式为 `关于"{name}"（管理员，头衔：测试头衔）：…`。**性别、年龄、Q 龄、等级、入群时间永不注入**，只在控制台显示，界面上带锁标记。
+- 控制台“群资料”和“QQ 资料”两块照参照页做。成员构成用两条条形图：性别；入群时长（≥3 年、1–3 年、1 年内）。地区固定显示“QQ 不提供”。
+- 测试：FakeAdapter 返回固定资料时，入库并缓存；24 小时内不重复请求；签名里的 MBTI 写入，去掉后删除；注入里不包含性别和年龄。
+
+#### M5 身份与关系
+- 新表 `account_kinds(account, user_id, kind, created_at)`，kind 取值 `human | bot | alt | owner`，**只能手动设置**。`is_robot = true` 时，控制台显示建议“QQ 标记为机器人，设为 bot？”，点了才写入。
+- 新表 `relations(id, account, a_user_id, b_user_id, type, label NULL, locked, created_at)`，type 取值 `alt | lover | brother | sister | roommate | enemy | other`（`other` 用 label 写名称）。只有 `alt` 是有向的：b 是 a 的小号。其余关系是双向的，两边的卡片上都显示。**只能手动建立，模型不推测**：提取模板里明确写“不要输出人际关系”。
+- **bot**：`kind = bot` 的账号发来的消息照常入库、进入聊天记录，但**永远不触发回复**（gate 跳过，reason 为 `from_bot`，@眷属 也一样）。在 memberTags 里，名字后面加“（bot）”。
+- **小号合并**（用户已确认的两条）：
+  1. 小号发的消息，在提示词里**当作主号本人**：speaker 显示主号的名字，好感度、标签、出没统计都算在主号上。消息原样入库，`sender_id` 不改，在读取的那一层做映射。
+  2. 解除链接后，已经并入主号的标签**留在主号上，不拆回去**。解除之后，小号的新消息重新独立计算。
+  - 建立小号链接的那一刻，把小号现有的标签并进主号（samples 和 evidence 合并，用 M3 的去重规则），小号上的原标签标为 `superseded`。
+- **关系注入**：没有锁定的关系，写进双方的 memberTags 行，格式为“和"群友D"是兄弟”。锁定的不注入。
+- 控制台照参照页：“身份与关系”块，以及“链接一个账号”对话框（搜索范围是本群群友、好友，也可以直接填 QQ 号）。
+- 测试：bot 发的消息不触发回复；小号的消息在提示词里显示为主号名字；建立链接时标签合并、解除后标签留在主号；锁定的关系不出现在注入里。
+
+#### M6 口头禅与群梗
+- `catchphrase`（群友）和 `meme`（群）按 M1 的规则提取和校验。注入时，口头禅排在说话风格之后，格式为 `口头禅「要饭」「饿死了」`。群梗进入 groupTags 块，格式相同。
+- 已有的“说话风格”标签里，如果是引号原话（以「」或“”包住），在整理时移到 `catchphrase`。
+- 测试：原话不在证据里时丢弃；注入格式。
+
+#### M7 导出、导入、初始化
+- `GET /api/impressions/export?sessionId=&include=tags,summaries,subjects,vetoes,relations,activity,l1`：返回 JSON `{ version: 1, exportedAt, account, sessionId, groupName, tags, summaries, subjects, vetoes, relations, accountKinds, activity?, privateFactsL1? }`。默认包含前五项；`activity` 和 `l1` 需要显式指定。**L0 永远不导出**，传了也忽略。
+- `POST /api/impressions/import/preview`（body 是导出文件）：返回 `{ added, conflicts, vetoes, summaries }` 的计数。`POST /api/impressions/import`（`mode: 'merge' | 'overwrite'`）：
+  - merge：现有标签保留，文件里新的标签补进来，冲突（同对象、同分类、同规范化 text）时保留现有的；
+  - overwrite：冲突时以文件为准；
+  - 两种模式下，**现有锁定的标签都不动**；
+  - version 不是 1，或者文件里的 sessionId 对应的会话不存在时，返回 400。
+- `POST /api/impressions/reset`（body `{ sessionId, confirm: <群名> }`）：confirm 和当前群名不一致时返回 400。清空这个会话的标签、一句话印象、否决记录、水位线；不动聊天记录、出没统计、好感度、私聊记忆、身份与关系。
+- **导入和初始化之前，自动导出一份**，写到 `data/backups/impressions-<sessionId>-<YYYYMMDD-HHmmss>.json`，内容是默认的五项。写入失败就中止操作，并返回 500。
+- 控制台：右上角“印象数据”菜单，里面是导出 / 导入 / 已否决的标签 / 初始化，以及三个对话框，照参照页做。初始化需要输入群名，和群名一致时按钮才可以点。
+- 测试：导出不包含 L0；merge 和 overwrite 的冲突处理；锁定的标签不被改动；reset 的 confirm 校验；自动备份写入失败时中止（用临时目录模拟）。
+
+#### M8 控制台布局（照参照页）
+- 左栏只有一个盒子：最上面是群卡片（选中时有描边，内容是群名、“N 人 · 有记录 M 人”、定位标签、迷你时段条、“最热 X–Y 点”），下面是搜索框（按名字、群名片、标签文本过滤）和排序（最近发言 / 发言量 / 好感度），再下面是群友列表（有发言记录的人）。没发过言的人折叠成“另有 N 人还没说过话 · 显示”。
+- 右侧是**共用的详情组件**：选中群时显示群，选中群友时显示群友。从上到下依次是：头部 + 一句话印象（群也有一句话印象，复用 §14.6 的生成逻辑，对象是群）、作息与出没热力图（时段轴的刻度到 24）、群资料 / QQ 资料、身份与关系（只有群友有）、分类标签行、“它眼里的这个群 / 人”、图例。
+- 分类行的顺序：群为 作息、定位、话题、氛围、群梗、规矩、近况、其他；群友为 作息、自我认同、性格、成分、说话风格、口头禅、社交方式、近况、雷点、其他。
+- 统计和模型推测冲突时，在热力图下方显示提示条：“模型曾推测「…」，与统计（X–Y 点最活跃）不符，已自动丢弃。作息只认统计。”提示内容取自最近 7 天内 reason 为 `schedule_by_stats` 的 droppedTags，最多显示 1 条。
+- 原来的“群的氛围”栏和左栏下方的“群级出没”删除，内容都并入群详情。
+- `panel:build` 成功。
+
+### 16.4 收尾
+
+- [ ] **S1–S4**（16.1）
+- [ ] **K1–K3**（16.2）
+- [ ] **M1** 分类 v2、写法校验、统计作息补充、重新整理
+- [ ] **M2** 否决
+- [ ] **M3** 增量拉取与证据去重
+- [ ] **M4** QQ 资料
+- [ ] **M5** 身份与关系、bot、小号合并
+- [ ] **M6** 口头禅与群梗
+- [ ] **M7** 导出、导入、初始化
+- [ ] **M8** 控制台布局
+- [ ] **🔍 R9 阶段审查**：重点检查四件事：L0 不出现在导出和任何注入里；性别、年龄等资料不出现在注入里；bot 不触发回复；锁定的标签和关系不出现在注入里。
+- 测试点以各小节列出的为准，每点 1–2 条。
+
+> **⛔ 停止点 V4**：R9 完成后停下。
+> **【用户】验收**：
+> 1. 先 `npm start`，打开印象页，点“刷新资料”，群资料和 QQ 资料出现；
+> 2. 从菜单里选“整理旧标签”或“重新整理”，群标签变成定位 / 话题 / 氛围这样的短名词，不再全是“爱 xx”；
+> 3. 删除一个标签，再拉一次历史，确认它没有回来；
+> 4. 把一个账号设成 bot，让它在群里 @眷属，眷属不回；
+> 5. 导出一份，初始化，再导入，标签恢复原样；
+> 6. 用真实模型在试聊页跑 10 条，对比回复风格，到用量页看缓存命中率。
+
+### 16.5 待评估（不在本次范围）
+- “你眼里的 TA”：主人亲手写的一段描述，作为质量最高的输入。
+- “代表性瞬间”：每人 3–5 条具体的事或原话，按话题相关度挑一条注入。
+- “张力”式记录：两面并存的特质，并写明各自出现的场合。
