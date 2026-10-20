@@ -533,6 +533,7 @@
 | 2026-10-20 | R8 | 锁定/身份/时区审查及修正；check 638/638 |
 | 2026-10-21 | S1 | 03:09–03:20；迁移拆分；check 655/655 |
 | 2026-10-21 | S2 | 03:24–03:30；模型归位；check 656/656 |
+| 2026-10-21 | S3 | 03:32–03:37；出没归位；check 656/656 |
 
 ---
 
@@ -1807,7 +1808,7 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
 
 - [x] **S1 迁移拆分**：`src/store/db.ts` 里的迁移移到 `src/store/migrations/`，每个版本一个文件 `v01.ts … v15.ts`，各自导出 `{ version, up(db) }`；`migrations/index.ts` 按版本排序汇总。`db.ts` 只保留打开数据库和执行迁移。新增测试：版本号从 1 开始连续、不重复，并且等于数组下标 + 1。
 - [x] **S2 标签模型归位**：`src/store/tag-profile.ts` 里的分类常量、半衰期、`isTag*`、`normalizeTagSubject`、`canonicalizeTagSubject` 等纯函数和类型，移到 `src/core/impressions/tag-model.ts`。store 改为从 core 导入（**允许 store → core/impressions/tag-model.ts 这一处依赖**，在 `scripts/check-boundaries.mjs` 里加白名单）。`tag-profile.ts` 删除。
-- [ ] **S3 出没统计归位**：`src/core/activity/stats.ts` 移到 `src/core/profiles/presence.ts`，同目录放 Q4 的作息标签计算（如果分散在别处，一起移过来）。`core/activity/` 只保留“要不要发言”的引擎。
+- [x] **S3 出没统计归位**：`src/core/activity/stats.ts` 移到 `src/core/profiles/presence.ts`，同目录放 Q4 的作息标签计算（如果分散在别处，一起移过来）。`core/activity/` 只保留“要不要发言”的引擎。
 - [ ] **S4 core 根目录归类**：
   - `core/shared/`：logger、text、split、hysteresis、events、rate-limit；
   - `core/conversation/`：pipeline、steps/（整个目录）、sessions、session-queue、pacing、history-catchup、management；

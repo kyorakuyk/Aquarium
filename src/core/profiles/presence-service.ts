@@ -5,14 +5,14 @@ import type { MessageStorageRecord, StoreRepository } from '../../store/reposito
 import type { ActivitySuggestionRepository } from '../../store/activity-suggestion-repo.ts';
 import { normalizeTagText } from '../impressions/tags.ts';
 import { parseSessionId } from '../sessions.ts';
-import { resolveMode } from './mode.ts';
+import { resolveMode } from '../activity/mode.ts';
 import {
   buildActivityResponse,
   buildActivitySuggestion,
   localDateKey,
   localStartOfDays,
   type ActivitySuggestion,
-} from './stats.ts';
+} from './presence.ts';
 
 export interface ProfileActivityServiceOptions {
   repository: StoreRepository;

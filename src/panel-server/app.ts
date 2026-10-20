@@ -37,7 +37,7 @@ import type { StickerService } from '../core/stickers/service.ts';
 import { registerStickerRoutes } from './sticker-routes.ts';
 import { registerTagClassificationRoutes } from './tag-classification-routes.ts';
 import { registerActivityRoutes } from './activity-routes.ts';
-import type { ProfileActivityService } from '../core/activity/service.ts';
+import type { ProfileActivityService } from '../core/profiles/presence-service.ts';
 import type { TagSubjectRepository } from '../store/tag-subject-repo.ts';
 import type { MemberSummaryRepository } from '../store/member-summary-repo.ts';
 import { registerTagSubjectRoutes } from './tag-subject-routes.ts';

@@ -3,7 +3,7 @@ import test from 'node:test';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
 import { createActivitySuggestionRepository } from '../src/store/activity-suggestion-repo.ts';
-import { createProfileActivityService } from '../src/core/activity/service.ts';
+import { createProfileActivityService } from '../src/core/profiles/presence-service.ts';
 import { makeConfig } from './pipeline-test-helpers.ts';
 
 const account = 7;

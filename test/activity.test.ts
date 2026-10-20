@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildActivityResponse, buildActivitySuggestion } from '../src/core/activity/stats.ts';
+import { buildActivityResponse, buildActivitySuggestion } from '../src/core/profiles/presence.ts';
 import type { MessageStorageRecord } from '../src/store/repository.ts';
 
 const sessionId = '7:group:9';

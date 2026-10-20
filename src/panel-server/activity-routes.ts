@@ -9,8 +9,8 @@ import {
   type ActivityCalendarResponse,
   type ActivityDistributionResponse,
   type ActivityView,
-} from '../core/activity/stats.ts';
-import type { ProfileActivityService } from '../core/activity/service.ts';
+} from '../core/profiles/presence.ts';
+import type { ProfileActivityService } from '../core/profiles/presence-service.ts';
 import type { StoreRepository } from '../store/repository.ts';
 
 const suggestionBodySchema = z.object({

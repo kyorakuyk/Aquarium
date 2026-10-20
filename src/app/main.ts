@@ -33,7 +33,7 @@ import { createAccountActivityRouter } from './activity-routing.ts';
 import { createMemoryServices } from './memory-services.ts';
 import { createAccountStickerService, startStickerSyncTimer } from './stickers.ts';
 import { startAdapterForHost } from './adapter-start.ts';
-import { createProfileActivityService } from '../core/activity/service.ts';
+import { createProfileActivityService } from '../core/profiles/presence-service.ts';
 import { startProfileActivitySchedule } from './profile-activity.ts';
 import {
   createHostLifecycleQueue,

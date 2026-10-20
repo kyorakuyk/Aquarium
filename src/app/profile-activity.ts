@@ -1,4 +1,4 @@
-import type { ProfileActivityService } from '../core/activity/service.ts';
+import type { ProfileActivityService } from '../core/profiles/presence-service.ts';
 
 export interface ProfileActivityScheduleOptions {
   service: Pick<ProfileActivityService, 'recomputeSchedules'>;
