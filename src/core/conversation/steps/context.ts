@@ -1,9 +1,9 @@
-import { buildPromptMessages, describePromptBlocks, hashPromptMessages } from '../prompt.ts';
-import { captionIncomingImages, messageTextWithImageCaptions } from '../images.ts';
-import { loadPersona } from '../../persona/load.ts';
-import { effectiveTalkLevel, renderTraitsBlock } from '../../persona/traits.ts';
-import { renderFloatBlock } from '../mood/render.ts';
-import { redactSensitiveText } from '../impressions/sensitive-text.ts';
+import { buildPromptMessages, describePromptBlocks, hashPromptMessages } from '../../prompt/index.ts';
+import { captionIncomingImages, messageTextWithImageCaptions } from '../../images/index.ts';
+import { loadPersona } from '../../../persona/load.ts';
+import { effectiveTalkLevel, renderTraitsBlock } from '../../../persona/traits.ts';
+import { renderFloatBlock } from '../../mood/render.ts';
+import { redactSensitiveText } from '../../impressions/sensitive-text.ts';
 import { createSlotCallOptions } from './call-options.ts';
 import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep } from './types.ts';

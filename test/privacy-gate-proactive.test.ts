@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createAccountActivityRouter } from '../src/app/activity-routing.ts';
-import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { createPrivacyGateService } from '../src/core/privacy/group-gate.ts';
-import { sessionId } from '../src/core/events.ts';
-import { createSessionQueue } from '../src/core/session-queue.ts';
+import { sessionId } from '../src/core/shared/events.ts';
+import { createSessionQueue } from '../src/core/conversation/session-queue.ts';
 import type { PrivateFactRecord } from '../src/store/privacy-repo.ts';
 import {
   baseTime,

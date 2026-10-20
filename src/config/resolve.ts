@@ -1,4 +1,4 @@
-import { sessionId, type SessionKey } from '../core/events.ts';
+import { sessionId, type SessionKey } from '../core/shared/events.ts';
 import type { AquariumConfig, SessionOverride, SessionSettings } from './schema.ts';
 
 function isRecord(value: unknown): value is Record<string, unknown> {

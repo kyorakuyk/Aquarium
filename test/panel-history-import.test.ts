@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { IncomingMessage } from '../src/core/events.ts';
-import { sessionId } from '../src/core/events.ts';
+import type { IncomingMessage } from '../src/core/shared/events.ts';
+import { sessionId } from '../src/core/shared/events.ts';
 import { account, authHeaders, groupSession, withPanel } from './panel-test-helpers.ts';
 
 function jsonHeaders(): HeadersInit {

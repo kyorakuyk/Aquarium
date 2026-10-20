@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type OpenAI from 'openai';
-import type { MessageStorageRecord } from '../store/repository.ts';
-import { promptTemplateStore, type ReplySystemTemplate } from './prompt-templates.ts';
+import type { MessageStorageRecord } from '../../store/repository.ts';
+import { promptTemplateStore, type ReplySystemTemplate } from './templates.ts';
 
 export interface BuildPromptOptions {
   persona: string;

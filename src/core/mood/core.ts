@@ -1,5 +1,5 @@
 import type { MoodBand } from '../../store/affect-repo.ts';
-import { nextLevel, type HysteresisParams } from '../hysteresis.ts';
+import { nextLevel, type HysteresisParams } from '../shared/hysteresis.ts';
 
 // 情绪基线：valence 愉悦度 [-1, 1]，arousal 兴奋度 [0, 1]。
 export const MOOD_BASELINE = { valence: 0.1, arousal: 0.4 } as const;

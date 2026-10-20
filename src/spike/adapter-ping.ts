@@ -1,5 +1,5 @@
 import { OneBotAdapter } from '../adapters/onebot/adapter.ts';
-import type { Segment } from '../core/events.ts';
+import type { Segment } from '../core/shared/events.ts';
 
 const snowlumaDir = process.env.SNOWLUMA_DIR;
 const account = Number(process.env.BOT_UIN);

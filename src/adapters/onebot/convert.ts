@@ -1,5 +1,5 @@
 import { message, type AnyMessageSegment, type OneBotMessageEvent } from '@snowluma/sdk';
-import type { IncomingMessage, Segment } from '../../core/events.ts';
+import type { IncomingMessage, Segment } from '../../core/shared/events.ts';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

@@ -1,5 +1,5 @@
 import type { PersonaTraits } from './load.ts';
-import type { TraitPromptLevel, TraitsPromptTemplate } from '../core/prompt-templates.ts';
+import type { TraitPromptLevel, TraitsPromptTemplate } from '../core/prompt/templates.ts';
 
 const traitDimensions = ['order', 'morality', 'talk', 'mind', 'humor', 'openness', 'imitation'] as const;
 

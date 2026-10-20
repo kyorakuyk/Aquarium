@@ -1,4 +1,4 @@
-import type { IncomingMessage, Segment, SessionKey } from '../core/events.ts';
+import type { IncomingMessage, Segment, SessionKey } from '../core/shared/events.ts';
 
 export interface ContactGroup {
   groupId: number;

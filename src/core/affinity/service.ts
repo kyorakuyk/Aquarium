@@ -1,7 +1,7 @@
 import type { AquariumConfig } from '../../config/schema.ts';
 import type { AffinityEventRecord, AffinityStateRecord } from '../../store/affect-repo.ts';
 import type { StoreRepository } from '../../store/repository.ts';
-import type { AffectPromptTemplate } from '../prompt-templates.ts';
+import type { AffectPromptTemplate } from '../prompt/templates.ts';
 import {
   affinityLevelOf,
   appraiseAffinityDelta,

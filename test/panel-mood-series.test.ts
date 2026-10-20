@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { sessionId } from '../src/core/events.ts';
+import { sessionId } from '../src/core/shared/events.ts';
 import { account, authHeaders, groupSession, now, withPanel } from './panel-test-helpers.ts';
 
 const hourMs = 60 * 60_000;

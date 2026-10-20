@@ -1,7 +1,7 @@
-import type { ContactFriend, ContactGroup, ProtocolAdapter } from '../adapters/types.ts';
-import { resolveSession } from '../config/resolve.ts';
-import type { AquariumConfig } from '../config/schema.ts';
-import { sessionId, type SessionKey } from './events.ts';
+import type { ContactFriend, ContactGroup, ProtocolAdapter } from '../../adapters/types.ts';
+import { resolveSession } from '../../config/resolve.ts';
+import type { AquariumConfig } from '../../config/schema.ts';
+import { sessionId, type SessionKey } from '../shared/events.ts';
 
 export function parseSessionId(value: string): SessionKey | undefined {
   const parts = value.split(':');

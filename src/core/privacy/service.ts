@@ -3,12 +3,12 @@ import { budgetState } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
 import type { StoreRepository } from '../../store/repository.ts';
 import type { NewPrivateFactRecord, PrivateFactEvidence, PrivateFactRecord } from '../../store/privacy-repo.ts';
-import type { ExtractPrivatePromptTemplate, ReplySystemTemplate } from '../prompt-templates.ts';
+import type { ExtractPrivatePromptTemplate, ReplySystemTemplate } from '../prompt/templates.ts';
 import { buildPrivateExtractionMessages, parsePrivateFactResponse } from './extract.ts';
 import { buildPrivateFactsBlock } from './prompt.ts';
 import { decide } from './policy.ts';
-import type { PipelineModelCall } from '../steps/types.ts';
-import { sessionId, type SessionKey } from '../events.ts';
+import type { PipelineModelCall } from '../conversation/steps/types.ts';
+import { sessionId, type SessionKey } from '../shared/events.ts';
 
 const twentyMessages = 20;
 const fiveMessages = 5;

@@ -4,7 +4,7 @@ import type { TagEvidence, TagRecord } from '../../store/affect-repo.ts';
 import type { MessageStorageRecord, StoreRepository } from '../../store/repository.ts';
 import type { ActivitySuggestionRepository } from '../../store/activity-suggestion-repo.ts';
 import { normalizeTagText } from '../impressions/tags.ts';
-import { parseSessionId } from '../sessions.ts';
+import { parseSessionId } from '../conversation/sessions.ts';
 import { resolveMode } from '../activity/mode.ts';
 import {
   buildActivityResponse,

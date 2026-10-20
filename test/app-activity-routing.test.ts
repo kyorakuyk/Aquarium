@@ -5,8 +5,8 @@ import test from 'node:test';
 import yaml from 'yaml';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
 import { createAccountActivityRouter } from '../src/app/activity-routing.ts';
-import { sessionId, type IncomingMessage, type SessionKey } from '../src/core/events.ts';
-import { createSessionQueue } from '../src/core/session-queue.ts';
+import { sessionId, type IncomingMessage, type SessionKey } from '../src/core/shared/events.ts';
+import { createSessionQueue } from '../src/core/conversation/session-queue.ts';
 import type { RoutedActivityOptions } from '../src/core/activity/router.ts';
 
 const baseConfig = AquariumConfigSchema.parse(yaml.parse(

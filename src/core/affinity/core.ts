@@ -1,4 +1,4 @@
-import { nextLevel, type HysteresisCause, type HysteresisState } from '../hysteresis.ts';
+import { nextLevel, type HysteresisCause, type HysteresisState } from '../shared/hysteresis.ts';
 
 export type AffinityLevel = 'cold' | 'cool' | 'neutral' | 'warm' | 'close';
 export type AffinityEventSource = 'appraise' | 'called' | 'manual' | 'band';

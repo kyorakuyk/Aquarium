@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { sessionId } from '../src/core/events.ts';
-import { createMessagePipeline } from '../src/core/pipeline.ts';
-import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { sessionId } from '../src/core/shared/events.ts';
+import { createMessagePipeline } from '../src/core/conversation/pipeline.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import type { PrivateMentionService } from '../src/core/privacy/mentions.ts';
 import { baseTime, FakeAdapter, groupSession, makeConfig, makeIncoming, withRepository } from './pipeline-test-helpers.ts';
 

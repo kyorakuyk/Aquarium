@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { sleepEnergy, sleepPlan } from '../src/core/sleep.ts';
+import { sleepEnergy, sleepPlan } from '../src/core/sleep/index.ts';
 
 function at(year: number, month: number, day: number, hour: number, minute = 0): number {
   return new Date(year, month, day, hour, minute).getTime();

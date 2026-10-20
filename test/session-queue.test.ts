@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createSessionQueue } from '../src/core/session-queue.ts';
+import { createSessionQueue } from '../src/core/conversation/session-queue.ts';
 
 function deferred() {
   let resolve!: () => void;

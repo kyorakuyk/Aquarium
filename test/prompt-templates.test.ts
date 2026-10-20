@@ -9,7 +9,7 @@ import {
   bindPromptTemplateReload,
   createPromptTemplateStore,
   promptTemplateStore,
-} from '../src/core/prompt-templates.ts';
+} from '../src/core/prompt/templates.ts';
 
 function copyPromptTemplates(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-prompt-templates-'));

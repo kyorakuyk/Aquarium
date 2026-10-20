@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ProtocolAdapter } from '../adapters/types.ts';
 import { AquariumConfigSchema, type AquariumConfig } from '../config/schema.ts';
-import type { IncomingMessage } from '../core/events.ts';
-import { createRateLimiter } from '../core/rate-limit.ts';
-import { gateStep } from '../core/steps/gate.ts';
-import type { PipelineModelCall, StepContext } from '../core/steps/types.ts';
-import type { PromptTemplateSet } from '../core/prompt-templates.ts';
+import type { IncomingMessage } from '../core/shared/events.ts';
+import { createRateLimiter } from '../core/shared/rate-limit.ts';
+import { gateStep } from '../core/conversation/steps/gate.ts';
+import type { PipelineModelCall, StepContext } from '../core/conversation/steps/types.ts';
+import type { PromptTemplateSet } from '../core/prompt/templates.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import { EvalSampleSchema, parseSessionId, type EvalSample } from './cli-args.ts';
 

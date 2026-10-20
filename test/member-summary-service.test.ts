@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createMemberSummaryService } from '../src/core/impressions/member-summary.ts';
-import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { createRepository, type StoreRepository } from '../src/store/repository.ts';
 import { createMemberSummaryRepository } from '../src/store/member-summary-repo.ts';
 import { openDatabase } from '../src/store/db.ts';

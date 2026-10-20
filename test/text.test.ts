@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cleanReply } from '../src/core/text.ts';
+import { cleanReply } from '../src/core/shared/text.ts';
 
 test('cleanReply 只去成对格式标记并处理已知昵称前缀', () => {
   assert.equal(cleanReply('**小鱼：**\n> 你好，*朋友*！', ['小鱼']), '你好，*朋友*！');

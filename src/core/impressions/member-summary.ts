@@ -1,8 +1,8 @@
 import type { AquariumConfig } from '../../config/schema.ts';
 import { budgetState } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
-import type { MemberSummaryPromptTemplate } from '../prompt-templates/member-summary.ts';
-import type { PipelineModelCall } from '../steps/types.ts';
+import type { MemberSummaryPromptTemplate } from '../prompt/templates/member-summary.ts';
+import type { PipelineModelCall } from '../conversation/steps/types.ts';
 import type { MemberSummaryRecord, MemberSummaryRepository, MemberSummaryWrite } from '../../store/member-summary-repo.ts';
 import type { StoreRepository } from '../../store/repository.ts';
 import { formatMemberTags } from './member-tags.ts';

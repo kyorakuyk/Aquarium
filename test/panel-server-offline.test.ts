@@ -6,7 +6,7 @@ import test from 'node:test';
 import yaml from 'yaml';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
 import type { ContactFriend, ContactGroup, ProtocolAdapter } from '../src/adapters/types.ts';
-import { sessionId, type Segment, type SessionKey } from '../src/core/events.ts';
+import { sessionId, type Segment, type SessionKey } from '../src/core/shared/events.ts';
 import { createPanelApp } from '../src/panel-server/app.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';

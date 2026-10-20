@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
-import { sessionId } from '../src/core/events.ts';
-import { createMessagePipeline } from '../src/core/pipeline.ts';
+import { sessionId } from '../src/core/shared/events.ts';
+import { createMessagePipeline } from '../src/core/conversation/pipeline.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
 import { FakeAdapter, groupSession, makeConfig, makeIncoming, withRepository } from './pipeline-test-helpers.ts';

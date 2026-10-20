@@ -1,6 +1,6 @@
 import type { CustomFaceActions, CustomFaceDetail } from '../types.ts';
 import type { OneBotClient } from './client.ts';
-import type { SessionKey } from '../../core/events.ts';
+import type { SessionKey } from '../../core/shared/events.ts';
 
 export type OneBotActionRunner = <T>(action: string, run: () => Promise<T>) => Promise<T>;
 

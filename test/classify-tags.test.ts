@@ -9,7 +9,7 @@ import {
   createTagClassificationService,
   parseClassifyTagsResponse,
 } from '../src/core/impressions/classify-tags.ts';
-import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { makeConfig } from './pipeline-test-helpers.ts';
 import type { TagRecord } from '../src/store/tag-repo.ts';
 

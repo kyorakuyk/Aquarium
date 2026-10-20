@@ -1,17 +1,17 @@
 import type OpenAI from 'openai';
-import { sessionId, type IncomingMessage, type Segment } from './events.ts';
-import type { ImageCaptionRecord, MessageStorageRecord, StoreRepository } from '../store/repository.ts';
-import type { SlotResult } from '../llm/slots.ts';
-import type { VisionPromptTemplate } from './prompt-templates.ts';
-import { computeImageMd5, imageBytesFromDataUrl, imageMd5FromFile } from './images/fingerprint.ts';
-import { decodeGifFrames, selectGifFrames } from './images/gif.ts';
-import { createGifMontage, encodePng } from './images/png.ts';
+import { sessionId, type IncomingMessage, type Segment } from '../shared/events.ts';
+import type { ImageCaptionRecord, MessageStorageRecord, StoreRepository } from '../../store/repository.ts';
+import type { SlotResult } from '../../llm/slots.ts';
+import type { VisionPromptTemplate } from '../prompt/templates.ts';
+import { computeImageMd5, imageBytesFromDataUrl, imageMd5FromFile } from './fingerprint.ts';
+import { decodeGifFrames, selectGifFrames } from './gif.ts';
+import { createGifMontage, encodePng } from './png.ts';
 import {
   parseVisionDescription,
   renderVisionDescription,
   withUnreadableText,
   type VisionDescription,
-} from './images/description.ts';
+} from './description.ts';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const IMAGE_DOWNLOAD_TIMEOUT_MS = 10_000;

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
-import { sessionId } from '../src/core/events.ts';
-import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { sessionId } from '../src/core/shared/events.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { createPrivacyGateService } from '../src/core/privacy/group-gate.ts';
 import type { PrivateFactRecord } from '../src/store/privacy-repo.ts';
 import { groupSession, makeConfig, withRepository } from './pipeline-test-helpers.ts';

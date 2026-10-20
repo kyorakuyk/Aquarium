@@ -1,4 +1,4 @@
-import type { AffectPromptTemplate } from '../prompt-templates.ts';
+import type { AffectPromptTemplate } from '../prompt/templates.ts';
 import type { MoodBand } from '../../store/affect-repo.ts';
 
 export interface MoodPromptBlocks {

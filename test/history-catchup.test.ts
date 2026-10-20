@@ -5,12 +5,12 @@ import path from 'node:path';
 import test from 'node:test';
 import yaml from 'yaml';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
-import { sessionId, type IncomingMessage, type SessionKey } from '../src/core/events.ts';
-import { createSessionQueue } from '../src/core/session-queue.ts';
+import { sessionId, type IncomingMessage, type SessionKey } from '../src/core/shared/events.ts';
+import { createSessionQueue } from '../src/core/conversation/session-queue.ts';
 import type { ProtocolAdapter, ContactFriend, ContactGroup, HistoryOptions } from '../src/adapters/types.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
-import { createHistoryCatchUp } from '../src/core/history-catchup.ts';
+import { createHistoryCatchUp } from '../src/core/conversation/history-catchup.ts';
 
 const exampleConfig = AquariumConfigSchema.parse(yaml.parse(
   fs.readFileSync(path.resolve('config.example.yaml'), 'utf8'),

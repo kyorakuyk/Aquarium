@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { IncomingMessage, Segment } from '../src/core/events.ts';
+import type { IncomingMessage, Segment } from '../src/core/shared/events.ts';
 import {
   calculatePrefilterActivity,
   calculatePrefilterFeatures,

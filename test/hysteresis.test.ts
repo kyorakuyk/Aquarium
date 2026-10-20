@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { nextLevel } from '../src/core/hysteresis.ts';
+import { nextLevel } from '../src/core/shared/hysteresis.ts';
 
 const params = {
   bounds: [10, 20],

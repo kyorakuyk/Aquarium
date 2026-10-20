@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createRateLimiter } from '../src/core/rate-limit.ts';
-import type { SessionKey } from '../src/core/events.ts';
+import { createRateLimiter } from '../src/core/shared/rate-limit.ts';
+import type { SessionKey } from '../src/core/shared/events.ts';
 
 const firstSession: SessionKey = { account: 1, kind: 'group', peer: 100 };
 const secondSession: SessionKey = { account: 1, kind: 'group', peer: 200 };

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createImpressionsService } from '../src/core/impressions/service.ts';
-import { sessionId, type SessionKey } from '../src/core/events.ts';
-import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { sessionId, type SessionKey } from '../src/core/shared/events.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
 import { createTagSubjectRepository } from '../src/store/tag-subject-repo.ts';

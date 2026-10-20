@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { resolveSession } from '../src/config/resolve.ts';
-import { sessionId } from '../src/core/events.ts';
+import { sessionId } from '../src/core/shared/events.ts';
 import {
   account,
   authHeaders,

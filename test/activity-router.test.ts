@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createActivityMessageRouter } from '../src/core/activity/router.ts';
-import { createSessionQueue } from '../src/core/session-queue.ts';
-import type { IncomingMessage, SessionKey } from '../src/core/events.ts';
+import { createSessionQueue } from '../src/core/conversation/session-queue.ts';
+import type { IncomingMessage, SessionKey } from '../src/core/shared/events.ts';
 
 const session: SessionKey = { account: 7, kind: 'group', peer: 9 };
 

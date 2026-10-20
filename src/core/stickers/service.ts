@@ -9,9 +9,9 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { budgetState } from '../../llm/budget.ts';
-import { downloadImageAsDataUrl } from '../images.ts';
+import { downloadImageAsDataUrl } from '../images/index.ts';
 import { computeImageMd5 } from '../images/fingerprint.ts';
-import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../events.ts';
+import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../shared/events.ts';
 import type { AquariumConfig } from '../../config/schema.ts';
 import type { MoodBand } from '../../store/affect-repo.ts';
 import type { StoreRepository } from '../../store/repository.ts';

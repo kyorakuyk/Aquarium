@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { sessionId } from '../src/core/events.ts';
-import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { sessionId } from '../src/core/shared/events.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { createPrivacyMentionService } from '../src/core/privacy/mentions.ts';
 import type { PrivateFactRecord } from '../src/store/privacy-repo.ts';
 import { baseTime, groupSession, makeConfig, withRepository } from './pipeline-test-helpers.ts';

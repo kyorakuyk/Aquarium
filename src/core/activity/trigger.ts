@@ -1,4 +1,4 @@
-import type { IncomingMessage } from '../events.ts';
+import type { IncomingMessage } from '../shared/events.ts';
 
 export type MessageTrigger = 'private' | 'mention' | 'nickname' | 'none';
 

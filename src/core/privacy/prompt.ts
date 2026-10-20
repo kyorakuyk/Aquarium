@@ -2,8 +2,8 @@ import type { StoredTag } from '../../store/affect-repo.ts';
 import type { PrivateFactRecord } from '../../store/privacy-repo.ts';
 import { selectInjectableTags } from '../impressions/tags.ts';
 import { formatMemberTags } from '../impressions/member-tags.ts';
-import { sessionId, type SessionKey } from '../events.ts';
-import type { ReplySystemTemplate } from '../prompt-templates.ts';
+import { sessionId, type SessionKey } from '../shared/events.ts';
+import type { ReplySystemTemplate } from '../prompt/templates.ts';
 import { decide } from './policy.ts';
 
 const privateFactLimit = { max: 6, maxChars: 200 } as const;

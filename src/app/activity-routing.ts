@@ -3,9 +3,9 @@ import type { AquariumConfig } from '../config/schema.ts';
 import { createActivityMessageRouter, type RoutedActivityOptions } from '../core/activity/router.ts';
 import { resolveMode } from '../core/activity/mode.ts';
 import { messageTrigger } from '../core/activity/trigger.ts';
-import type { IncomingMessage } from '../core/events.ts';
-import { isManagementCommand, type ManagementCommands } from '../core/management.ts';
-import type { SessionQueue } from '../core/session-queue.ts';
+import type { IncomingMessage } from '../core/shared/events.ts';
+import { isManagementCommand, type ManagementCommands } from '../core/conversation/management.ts';
+import type { SessionQueue } from '../core/conversation/session-queue.ts';
 import { budgetState } from '../llm/budget.ts';
 
 export interface AccountActivityRouterOptions<Timer> {

@@ -1,4 +1,4 @@
-import type { PromptTemplate } from '../prompt-templates.ts';
+import type { PromptTemplate } from '../templates.ts';
 
 export interface ReplySystemTemplate extends PromptTemplate {
   system: string;

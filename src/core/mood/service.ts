@@ -4,8 +4,8 @@ import { callSlot } from '../../llm/slots.ts';
 import type { MoodBand, MoodEventRecord } from '../../store/affect-repo.ts';
 import type { StoreRepository } from '../../store/repository.ts';
 import type { AffinityService } from '../affinity/service.ts';
-import type { AffectPromptTemplate, AppraisePromptTemplate } from '../prompt-templates.ts';
-import type { PipelineModelCall } from '../steps/types.ts';
+import type { AffectPromptTemplate, AppraisePromptTemplate } from '../prompt/templates.ts';
+import type { PipelineModelCall } from '../conversation/steps/types.ts';
 import { runAppraise } from './appraise.ts';
 import { renderFloatBlock, renderMoodBlocks, type MoodPromptBlocks } from './render.ts';
 import {

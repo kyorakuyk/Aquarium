@@ -1,7 +1,7 @@
-import { cleanReply } from '../text.ts';
-import type { SlotRequestParams } from '../../llm/slots.ts';
-import { canSendStickerOnly } from '../stickers/selection.ts';
-import { parseStickerReply } from '../stickers/parse.ts';
+import { cleanReply } from '../../shared/text.ts';
+import type { SlotRequestParams } from '../../../llm/slots.ts';
+import { canSendStickerOnly } from '../../stickers/selection.ts';
+import { parseStickerReply } from '../../stickers/parse.ts';
 import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep } from './types.ts';
 

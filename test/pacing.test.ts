@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { replyDelayMs } from '../src/core/pacing.ts';
+import { replyDelayMs } from '../src/core/conversation/pacing.ts';
 
 test('replyDelayMs 按字数夹紧基准延迟后施加 0.8 到 1.3 抖动', () => {
   assert.equal(replyDelayMs('🌱', () => 0), 640);

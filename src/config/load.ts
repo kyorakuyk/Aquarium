@@ -2,7 +2,7 @@ import { constants, copyFileSync, existsSync, mkdirSync, readFileSync } from 'no
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'yaml';
-import { createLogger } from '../core/logger.ts';
+import { createLogger } from '../core/shared/logger.ts';
 import { AquariumConfigSchema, type AquariumConfig } from './schema.ts';
 
 export interface ConfigLogSink {

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createImpressionsService, type ExtractSummary } from '../src/core/impressions/service.ts';
-import { promptTemplateStore } from '../src/core/prompt-templates.ts';
-import { createMessagePipeline } from '../src/core/pipeline.ts';
-import { sessionId, type SessionKey } from '../src/core/events.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
+import { createMessagePipeline } from '../src/core/conversation/pipeline.ts';
+import { sessionId, type SessionKey } from '../src/core/shared/events.ts';
 import {
   FakeAdapter,
   groupSession,

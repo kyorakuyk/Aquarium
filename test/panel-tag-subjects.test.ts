@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createPanelApp } from '../src/panel-server/app.ts';
-import { sessionId } from '../src/core/events.ts';
+import { sessionId } from '../src/core/shared/events.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
 import { createTagSubjectRepository } from '../src/store/tag-subject-repo.ts';

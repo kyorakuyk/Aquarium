@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { effectiveTalkLevel, renderTraitsBlock, replyPartLimitForTalk } from '../src/persona/traits.ts';
 import type { PersonaTraits } from '../src/persona/load.ts';
-import type { TraitsPromptTemplate } from '../src/core/prompt-templates.ts';
+import type { TraitsPromptTemplate } from '../src/core/prompt/templates.ts';
 
 const template: TraitsPromptTemplate = {
   source: '',

@@ -1,4 +1,4 @@
-import type { IncomingMessage } from '../events.ts';
+import type { IncomingMessage } from '../shared/events.ts';
 import { PREFILTER_WEIGHTS } from './prefilter-weights.ts';
 
 export const PREFILTER_THRESHOLD = 0.15;

@@ -4,7 +4,7 @@ import { createRepository } from '../src/store/repository.ts';
 import { createActivitySuggestionRepository } from '../src/store/activity-suggestion-repo.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createProfileActivityService } from '../src/core/profiles/presence-service.ts';
-import { sessionId, type SessionKey } from '../src/core/events.ts';
+import { sessionId, type SessionKey } from '../src/core/shared/events.ts';
 import { createPanelApp } from '../src/panel-server/app.ts';
 import { makeConfig } from './pipeline-test-helpers.ts';
 

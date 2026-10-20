@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { watch, type FSWatcher } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { createLogger } from '../core/logger.ts';
+import { createLogger } from '../core/shared/logger.ts';
 import type { AquariumConfig } from './schema.ts';
 import { loadConfig, type ConfigLogSink } from './load.ts';
 

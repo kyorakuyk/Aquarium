@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { downloadImageAsDataUrl } from '../src/core/images.ts';
+import { downloadImageAsDataUrl } from '../src/core/images/index.ts';
 
 const imageUrl = 'https://multimedia.nt.qq.com.cn/cat.png';
 const maxImageBytes = 5 * 1024 * 1024;

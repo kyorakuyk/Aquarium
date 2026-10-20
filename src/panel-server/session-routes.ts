@@ -4,8 +4,8 @@ import type { ProtocolAdapter } from '../adapters/types.ts';
 import type { AquariumConfig } from '../config/schema.ts';
 import { AquariumConfigSchema, ModeScheduleSchema } from '../config/schema.ts';
 import { resolveSession } from '../config/resolve.ts';
-import { parseSessionId } from '../core/sessions.ts';
-import { sessionId, type SessionKey } from '../core/events.ts';
+import { parseSessionId } from '../core/conversation/sessions.ts';
+import { sessionId, type SessionKey } from '../core/shared/events.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import type { ContactSnapshot, PanelAccountRuntime } from './types.ts';
 

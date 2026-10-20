@@ -1,9 +1,9 @@
 import type { ProtocolAdapter } from '../../adapters/types.ts';
 import type { AquariumConfig } from '../../config/schema.ts';
 import type { StoreRepository } from '../../store/repository.ts';
-import { listEnabledSessions } from '../sessions.ts';
-import { sessionId, type SessionKey } from '../events.ts';
-import { sleepPlan } from '../sleep.ts';
+import { listEnabledSessions } from '../conversation/sessions.ts';
+import { sessionId, type SessionKey } from '../shared/events.ts';
+import { sleepPlan } from './index.ts';
 
 const TICK_INTERVAL_MS = 60_000;
 const RECENT_BOT_ACTIVITY_MS = 2 * 60 * 60_000;

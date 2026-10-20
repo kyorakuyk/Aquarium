@@ -1,8 +1,8 @@
-import type { Segment } from '../events.ts';
-import type { StickerOffer } from '../stickers/selection.ts';
+import type { Segment } from '../../shared/events.ts';
+import type { StickerOffer } from '../../stickers/selection.ts';
 import { replyDelayMs } from '../pacing.ts';
-import { splitReply } from '../split.ts';
-import { effectiveTalkLevel, replyPartLimitForTalk } from '../../persona/traits.ts';
+import { splitReply } from '../../shared/split.ts';
+import { effectiveTalkLevel, replyPartLimitForTalk } from '../../../persona/traits.ts';
 import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep, type StepContext } from './types.ts';
 

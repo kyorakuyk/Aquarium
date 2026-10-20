@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { redactSensitiveText } from '../src/core/impressions/sensitive-text.ts';
-import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { parsePersonaMarkdown } from '../src/persona/load.ts';
 import { buildSections, parseSections, renderPersonaSectionBlocks } from '../src/persona/sections.ts';
 import { effectiveTalkLevel, renderTraitsBlock } from '../src/persona/traits.ts';

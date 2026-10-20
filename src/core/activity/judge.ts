@@ -1,5 +1,5 @@
 import type OpenAI from 'openai';
-import type { JudgePromptTemplate } from '../prompt-templates.ts';
+import type { JudgePromptTemplate } from '../prompt/templates.ts';
 
 export interface JudgeContextMessage {
   time: number;

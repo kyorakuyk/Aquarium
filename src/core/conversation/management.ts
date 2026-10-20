@@ -1,10 +1,10 @@
-import { budgetState } from '../llm/budget.ts';
-import { resolveSession } from '../config/resolve.ts';
-import type { AquariumConfig } from '../config/schema.ts';
-import { sessionId, type IncomingMessage, type Segment, type SessionKey } from './events.ts';
+import { budgetState } from '../../llm/budget.ts';
+import { resolveSession } from '../../config/resolve.ts';
+import type { AquariumConfig } from '../../config/schema.ts';
+import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../shared/events.ts';
 import { listEnabledSessions } from './sessions.ts';
-import type { ProtocolAdapter } from '../adapters/types.ts';
-import type { StoreRepository } from '../store/repository.ts';
+import type { ProtocolAdapter } from '../../adapters/types.ts';
+import type { StoreRepository } from '../../store/repository.ts';
 
 const DEFAULT_MUTE_MINUTES = 60;
 const MINUTE_MS = 60_000;

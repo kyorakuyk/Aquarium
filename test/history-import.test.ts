@@ -3,8 +3,8 @@ import test from 'node:test';
 import { createHistoryImportService } from '../src/core/impressions/history-import.ts';
 import { createImpressionsService } from '../src/core/impressions/service.ts';
 import type { ExtractFailureType } from '../src/core/impressions/extract-error.ts';
-import { sessionId, type IncomingMessage, type SessionKey } from '../src/core/events.ts';
-import type { ExtractTagsPromptTemplate } from '../src/core/prompt-templates.ts';
+import { sessionId, type IncomingMessage, type SessionKey } from '../src/core/shared/events.ts';
+import type { ExtractTagsPromptTemplate } from '../src/core/prompt/templates.ts';
 import type { MessageStorageRecord } from '../src/store/repository.ts';
 import { FakeAdapter, groupSession, makeConfig, withRepository } from './pipeline-test-helpers.ts';
 

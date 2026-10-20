@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { adjustThresholdForTalk } from '../src/core/activity/threshold.ts';
-import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { renderMoodBlocks } from '../src/core/mood/render.ts';
-import { sessionId, type SessionKey } from '../src/core/events.ts';
+import { sessionId, type SessionKey } from '../src/core/shared/events.ts';
 import { createRepository } from '../src/store/repository.ts';
 import { groupSession, withRepository } from './pipeline-test-helpers.ts';
 

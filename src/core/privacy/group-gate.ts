@@ -4,10 +4,10 @@ import { budgetState } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
 import type { PrivateFactLevel, PrivateFactRecord } from '../../store/privacy-repo.ts';
 import type { MessageStorageRecord, StoreRepository } from '../../store/repository.ts';
-import { sessionId, type SessionKey } from '../events.ts';
+import { sessionId, type SessionKey } from '../shared/events.ts';
 import { decide } from './policy.ts';
-import type { PipelineModelCall } from '../steps/types.ts';
-import type { PrivacyGatePromptTemplate } from '../prompt-templates.ts';
+import type { PipelineModelCall } from '../conversation/steps/types.ts';
+import type { PrivacyGatePromptTemplate } from '../prompt/templates.ts';
 
 const privacyRule = '群里正在聊的话题可能涉及别人的私事。你对此一无所知，不追问、不展开、不猜测。';
 const minuteMs = 60 * 1_000;

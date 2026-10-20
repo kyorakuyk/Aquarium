@@ -4,7 +4,7 @@ import { callSlot, type SlotCallOptions, type SlotResult } from '../llm/slots.ts
 import type { OneBotAdapter } from '../adapters/onebot/adapter.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import type { AquariumConfig } from '../config/schema.ts';
-import type { StickerDescribePromptTemplate } from '../core/prompt-templates.ts';
+import type { StickerDescribePromptTemplate } from '../core/prompt/templates.ts';
 import { createStickerService, type StickerService } from '../core/stickers/service.ts';
 
 export type StickerVisionCall = (

@@ -183,9 +183,9 @@ function checkImport(file, relativeFile, specifier) {
     const allowed = isWithin(source, 'adapters/onebot')
       || source === 'adapters/types.ts'
       || source === 'adapters/types'
-      || source === 'core/events.ts'
-      || source === 'core/events';
-    if (!allowed) issues.push('OneBot 适配器只能依赖自身、adapters/types 与 core/events');
+      || source === 'core/shared/events.ts'
+      || source === 'core/shared/events';
+    if (!allowed) issues.push('OneBot 适配器只能依赖自身、adapters/types 与 core/shared/events');
   }
 
   return issues;

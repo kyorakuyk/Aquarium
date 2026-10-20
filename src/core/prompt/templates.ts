@@ -2,16 +2,16 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { parseReplySystemTemplate, type ReplySystemTemplate } from './prompt-templates/reply-system.ts';
-import { parsePrivacyGateTemplate, type PrivacyGatePromptTemplate } from './prompt-templates/privacy-gate.ts';
-import { parsePrivacyMentionTemplate, type PrivacyMentionPromptTemplate } from './prompt-templates/privacy-mention.ts';
-import { parseClassifyTagsTemplate, type ClassifyTagsPromptTemplate } from './prompt-templates/classify-tags.ts';
-import { parseMemberSummaryTemplate, type MemberSummaryPromptTemplate } from './prompt-templates/member-summary.ts';
+import { parseReplySystemTemplate, type ReplySystemTemplate } from './templates/reply-system.ts';
+import { parsePrivacyGateTemplate, type PrivacyGatePromptTemplate } from './templates/privacy-gate.ts';
+import { parsePrivacyMentionTemplate, type PrivacyMentionPromptTemplate } from './templates/privacy-mention.ts';
+import { parseClassifyTagsTemplate, type ClassifyTagsPromptTemplate } from './templates/classify-tags.ts';
+import { parseMemberSummaryTemplate, type MemberSummaryPromptTemplate } from './templates/member-summary.ts';
 
-export type { ReplySystemTemplate } from './prompt-templates/reply-system.ts';
-export type { PrivacyGatePromptTemplate } from './prompt-templates/privacy-gate.ts';
-export type { PrivacyMentionPromptTemplate } from './prompt-templates/privacy-mention.ts';
-export type { ClassifyTagsPromptTemplate } from './prompt-templates/classify-tags.ts';
+export type { ReplySystemTemplate } from './templates/reply-system.ts';
+export type { PrivacyGatePromptTemplate } from './templates/privacy-gate.ts';
+export type { PrivacyMentionPromptTemplate } from './templates/privacy-mention.ts';
+export type { ClassifyTagsPromptTemplate } from './templates/classify-tags.ts';
 
 export interface PromptTemplate {
   source: string;

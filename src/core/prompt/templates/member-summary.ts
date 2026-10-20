@@ -1,4 +1,4 @@
-import type { PromptTemplate } from '../prompt-templates.ts';
+import type { PromptTemplate } from '../templates.ts';
 import type { PlaceholderValidator } from './reply-system.ts';
 
 export interface MemberSummaryPromptTemplate extends PromptTemplate {

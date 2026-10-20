@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createAffinityService } from '../src/core/affinity/service.ts';
 import { createMoodService } from '../src/core/mood/service.ts';
-import { createMessagePipeline } from '../src/core/pipeline.ts';
-import { sessionId } from '../src/core/events.ts';
+import { createMessagePipeline } from '../src/core/conversation/pipeline.ts';
+import { sessionId } from '../src/core/shared/events.ts';
 import {
   FakeAdapter,
   groupSession,

@@ -5,10 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
-import { createConsoleSink } from '../src/core/logger.ts';
+import { createConsoleSink } from '../src/core/shared/logger.ts';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const loggerUrl = pathToFileURL(path.join(repoRoot, 'src', 'core', 'logger.ts')).href;
+const loggerUrl = pathToFileURL(path.join(repoRoot, 'src', 'core', 'shared', 'logger.ts')).href;
 
 function fakeOutput(isTTY: boolean, columns?: number): NodeJS.WriteStream & { output: string } {
   const stream = {

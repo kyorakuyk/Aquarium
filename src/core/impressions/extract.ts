@@ -3,7 +3,7 @@ import type { StoredTag } from '../../store/affect-repo.ts';
 import type { MessageStorageRecord } from '../../store/repository.ts';
 import { isTagCategoryKey, isTagPolarity, normalizeTagSubject, type TagCategoryKey, type TagPolarity } from './tag-model.ts';
 import type { TagSubjectRecord } from '../../store/tag-subject-repo.ts';
-import type { ExtractTagsPromptTemplate } from '../prompt-templates.ts';
+import type { ExtractTagsPromptTemplate } from '../prompt/templates.ts';
 
 export interface ExtractObserveItem {
   id: number;

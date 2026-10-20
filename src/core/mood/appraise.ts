@@ -1,5 +1,5 @@
 import type OpenAI from 'openai';
-import type { AppraisePromptTemplate } from '../prompt-templates.ts';
+import type { AppraisePromptTemplate } from '../prompt/templates.ts';
 
 export interface AppraiseContextMessage {
   time: number;

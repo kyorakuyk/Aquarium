@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { sessionId } from '../src/core/events.ts';
+import { sessionId } from '../src/core/shared/events.ts';
 import type { StickerOffer } from '../src/core/stickers/selection.ts';
 import type { StickerService } from '../src/core/stickers/service.ts';
 import { baseTime, createHarness, groupSession, makeConfig, makeIncoming, withRepository } from './pipeline-test-helpers.ts';

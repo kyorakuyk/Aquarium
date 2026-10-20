@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import { z } from 'zod';
 import type { AquariumConfig } from '../config/schema.ts';
-import { parseSessionId } from '../core/sessions.ts';
+import { parseSessionId } from '../core/conversation/sessions.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
 import { isTagCategory, type TagCategory } from '../core/impressions/tag-model.ts';
 import type { TagSubjectRecord, TagSubjectRepository } from '../store/tag-subject-repo.ts';

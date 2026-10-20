@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AquariumConfig } from '../config/schema.ts';
 import { AquariumConfigSchema, ScheduleTimeSchema } from '../config/schema.ts';
-import type { SleepWakeState } from '../core/sleep.ts';
-import { sleepEnergy, sleepPlan } from '../core/sleep.ts';
+import type { SleepWakeState } from '../core/sleep/index.ts';
+import { sleepEnergy, sleepPlan } from '../core/sleep/index.ts';
 import type { StoreRepository } from '../store/repository.ts';
 
 const sleepPatchSchema = z.object({

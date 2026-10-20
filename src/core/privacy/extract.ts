@@ -1,6 +1,6 @@
 import type OpenAI from 'openai';
 import type { MessageStorageRecord } from '../../store/repository.ts';
-import type { ExtractPrivatePromptTemplate } from '../prompt-templates.ts';
+import type { ExtractPrivatePromptTemplate } from '../prompt/templates.ts';
 
 export interface ExistingPrivateFactSummary {
   id: number;

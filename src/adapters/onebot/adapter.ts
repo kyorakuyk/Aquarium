@@ -2,7 +2,7 @@ import type {
   JsonObject,
   SnowLumaWebSocketClientOptions,
 } from '@snowluma/sdk';
-import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../../core/events.ts';
+import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../../core/shared/events.ts';
 import type {
   AdapterStatus,
   ContactFriend,

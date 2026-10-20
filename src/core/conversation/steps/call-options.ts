@@ -1,6 +1,6 @@
-import { isDebugEnabled } from '../../config/debug.ts';
-import type { AquariumConfig } from '../../config/schema.ts';
-import type { SlotCallOptions } from '../../llm/slots.ts';
+import { isDebugEnabled } from '../../../config/debug.ts';
+import type { AquariumConfig } from '../../../config/schema.ts';
+import type { SlotCallOptions } from '../../../llm/slots.ts';
 import type { StepContext } from './types.ts';
 
 export function createSlotCallOptions(

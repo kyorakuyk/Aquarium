@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { ProtocolAdapter } from '../../adapters/types.ts';
 import type { AquariumConfig } from '../../config/schema.ts';
-import { sessionId, type IncomingMessage, type SessionKey } from '../events.ts';
-import type { ExtractTagsPromptTemplate } from '../prompt-templates.ts';
+import { sessionId, type IncomingMessage, type SessionKey } from '../shared/events.ts';
+import type { ExtractTagsPromptTemplate } from '../prompt/templates.ts';
 import type { StoreRepository } from '../../store/repository.ts';
 import type { ImpressionsService } from './service.ts';
 import { extractFailureLabel, type ExtractFailureType } from './extract-error.ts';

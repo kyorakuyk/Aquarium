@@ -2,7 +2,7 @@ import type { Hono } from 'hono';
 import { z } from 'zod';
 import type { AquariumConfig } from '../config/schema.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
-import { parseSessionId } from '../core/sessions.ts';
+import { parseSessionId } from '../core/conversation/sessions.ts';
 import type { MemberSummaryRepository } from '../store/member-summary-repo.ts';
 import type { StoreRepository } from '../store/repository.ts';
 

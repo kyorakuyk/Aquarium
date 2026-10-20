@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { createPrivateFactsService, type PrivateFactsSummary } from '../src/core/privacy/service.ts';
 import type { PrivateFactRecord } from '../src/store/privacy-repo.ts';
 import { AquariumConfigSchema } from '../src/config/schema.ts';

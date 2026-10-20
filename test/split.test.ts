@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { splitReply } from '../src/core/split.ts';
+import { splitReply } from '../src/core/shared/split.ts';
 
 test('splitReply 总长度不超过 80 时原样保留为一条', () => {
   assert.deepEqual(splitReply('你好呀！'), ['你好呀！']);

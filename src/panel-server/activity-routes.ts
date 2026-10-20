@@ -2,7 +2,7 @@ import type { Hono } from 'hono';
 import { z } from 'zod';
 import { AquariumConfigSchema, type AquariumConfig } from '../config/schema.ts';
 import { resolveSession } from '../config/resolve.ts';
-import { parseSessionId } from '../core/sessions.ts';
+import { parseSessionId } from '../core/conversation/sessions.ts';
 import {
   buildActivityResponse,
   localStartOfDays,

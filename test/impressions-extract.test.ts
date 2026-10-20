@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildExtractMessages, asContradictItem, asNewItem, runExtract } from '../src/core/impressions/extract.ts';
-import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 
 const profile = {
   category: 'identity',

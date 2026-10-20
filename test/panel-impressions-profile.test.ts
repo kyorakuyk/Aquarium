@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { sessionId } from '../src/core/events.ts';
+import { sessionId } from '../src/core/shared/events.ts';
 import { buildMemberTagPrompt } from '../src/core/impressions/member-tags.ts';
-import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { account, authHeaders, groupSession, now, withPanel } from './panel-test-helpers.ts';
 
 function jsonHeaders(): HeadersInit {

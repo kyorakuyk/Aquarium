@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import yaml from 'yaml';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
-import { sessionId, type IncomingMessage, type SessionKey } from '../src/core/events.ts';
+import { sessionId, type IncomingMessage, type SessionKey } from '../src/core/shared/events.ts';
 import { createStickerService, type StickerAdapter } from '../src/core/stickers/service.ts';
 import { computeImageMd5 } from '../src/core/images/fingerprint.ts';
 import { openDatabase } from '../src/store/db.ts';

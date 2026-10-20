@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { messageTrigger } from '../src/core/activity/trigger.ts';
-import type { IncomingMessage, SessionKey } from '../src/core/events.ts';
+import type { IncomingMessage, SessionKey } from '../src/core/shared/events.ts';
 
 const group: SessionKey = { account: 7, kind: 'group', peer: 9 };
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { IncomingMessage, Segment } from '../src/core/events.ts';
-import { captionIncomingImages, messageTextWithImageCaptions } from '../src/core/images.ts';
+import type { IncomingMessage, Segment } from '../src/core/shared/events.ts';
+import { captionIncomingImages, messageTextWithImageCaptions } from '../src/core/images/index.ts';
 import type { MessageStorageRecord } from '../src/store/repository.ts';
 import { groupSession, withRepository } from './pipeline-test-helpers.ts';
 

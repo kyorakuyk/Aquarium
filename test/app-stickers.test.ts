@@ -6,7 +6,7 @@ import test from 'node:test';
 import yaml from 'yaml';
 import type OpenAI from 'openai';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
-import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { createAccountStickerService } from '../src/app/stickers.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';

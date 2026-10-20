@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { sessionId, type IncomingMessage, type Segment } from '../src/core/events.ts';
-import { captionIncomingImages, messageTextWithImageCaptions } from '../src/core/images.ts';
+import { sessionId, type IncomingMessage, type Segment } from '../src/core/shared/events.ts';
+import { captionIncomingImages, messageTextWithImageCaptions } from '../src/core/images/index.ts';
 import type { ImageCaptionRecord } from '../src/store/repository.ts';
 import { computeImageMd5 } from '../src/core/images/fingerprint.ts';
 import { onePixelGif } from './gif-fixtures.ts';

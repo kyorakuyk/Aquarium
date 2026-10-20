@@ -4,10 +4,10 @@ import { budgetState } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
 import type { StoredTag } from '../../store/affect-repo.ts';
 import type { MessageStorageRecord, StoreRepository } from '../../store/repository.ts';
-import { sessionId, type SessionKey } from '../events.ts';
+import { sessionId, type SessionKey } from '../shared/events.ts';
 import { decide } from '../privacy/policy.ts';
-import type { ExtractTagsPromptTemplate, ReplySystemTemplate } from '../prompt-templates.ts';
-import type { PipelineModelCall } from '../steps/types.ts';
+import type { ExtractTagsPromptTemplate, ReplySystemTemplate } from '../prompt/templates.ts';
+import type { PipelineModelCall } from '../conversation/steps/types.ts';
 import { classifyExtractFailure, extractFailureLabel, type ExtractFailureType } from './extract-error.ts';
 import {
   asContradictItem,

@@ -4,9 +4,9 @@ import { budgetState } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
 import type { PrivateFactMentionEvidence, PrivateFactRecord } from '../../store/privacy-repo.ts';
 import type { StoreRepository } from '../../store/repository.ts';
-import type { PrivacyMentionPromptTemplate } from '../prompt-templates.ts';
-import type { PipelineModelCall } from '../steps/types.ts';
-import { sessionId, type SessionKey } from '../events.ts';
+import type { PrivacyMentionPromptTemplate } from '../prompt/templates.ts';
+import type { PipelineModelCall } from '../conversation/steps/types.ts';
+import { sessionId, type SessionKey } from '../shared/events.ts';
 import { decide } from './policy.ts';
 
 interface MentionInput {

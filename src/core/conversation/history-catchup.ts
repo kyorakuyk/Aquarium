@@ -1,9 +1,9 @@
-import type { ProtocolAdapter } from '../adapters/types.ts';
-import { resolveSession } from '../config/resolve.ts';
-import type { AquariumConfig } from '../config/schema.ts';
-import { sessionId, type IncomingMessage, type SessionKey } from './events.ts';
+import type { ProtocolAdapter } from '../../adapters/types.ts';
+import { resolveSession } from '../../config/resolve.ts';
+import type { AquariumConfig } from '../../config/schema.ts';
+import { sessionId, type IncomingMessage, type SessionKey } from '../shared/events.ts';
 import { listEnabledSessions } from './sessions.ts';
-import type { StoreRepository } from '../store/repository.ts';
+import type { StoreRepository } from '../../store/repository.ts';
 
 const HISTORY_LIMIT = 50;
 const RECENT_REPLY_WINDOW_MS = 10 * 60 * 1000;

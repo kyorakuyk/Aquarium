@@ -6,7 +6,7 @@ import { createImpressionsService } from '../core/impressions/service.ts';
 import { createPrivateFactsService } from '../core/privacy/service.ts';
 import { createPrivacyGateService } from '../core/privacy/group-gate.ts';
 import { createPrivacyMentionService } from '../core/privacy/mentions.ts';
-import { promptTemplateStore } from '../core/prompt-templates.ts';
+import { promptTemplateStore } from '../core/prompt/templates.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import type { TagSubjectRepository } from '../store/tag-subject-repo.ts';
 import type { TagClassificationRepository } from '../store/tag-classification-repo.ts';

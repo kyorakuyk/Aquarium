@@ -1,6 +1,6 @@
 import { createActivityBatcher, type ActivityBatch } from './batcher.ts';
-import { sessionId, type IncomingMessage } from '../events.ts';
-import type { SessionQueue } from '../session-queue.ts';
+import { sessionId, type IncomingMessage } from '../shared/events.ts';
+import type { SessionQueue } from '../conversation/session-queue.ts';
 
 export interface RoutedActivityOptions {
   batched?: true;

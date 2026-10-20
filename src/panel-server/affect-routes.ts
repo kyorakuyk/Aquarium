@@ -1,15 +1,15 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AquariumConfig } from '../config/schema.ts';
-import { parseSessionId } from '../core/sessions.ts';
+import { parseSessionId } from '../core/conversation/sessions.ts';
 import { bandOf, decayValue, nextBand } from '../core/mood/core.ts';
 import { buildMoodSeriesPoints, distanceToNextBand } from '../core/mood/series.ts';
-import { sleepEnergy, sleepPlan, type SleepWakeState } from '../core/sleep.ts';
+import { sleepEnergy, sleepPlan, type SleepWakeState } from '../core/sleep/index.ts';
 import { normalizeTagText, tagActivation, tagHalfLifeMs } from '../core/impressions/tags.ts';
 import { TAG_TEXT_MAX, TAG_TEXT_MIN } from '../core/impressions/service.ts';
 import { buildMemberTagPrompt } from '../core/impressions/member-tags.ts';
 import { decide } from '../core/privacy/policy.ts';
-import { promptTemplateStore } from '../core/prompt-templates.ts';
+import { promptTemplateStore } from '../core/prompt/templates.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
 import { createAffinityService } from '../core/affinity/service.ts';
 import type { MoodBand, StoredMoodEvent, StoredTag } from '../store/affect-repo.ts';

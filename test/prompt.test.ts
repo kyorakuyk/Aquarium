@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildPromptMessages, describePromptBlocks } from '../src/core/prompt.ts';
-import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { buildPromptMessages, describePromptBlocks } from '../src/core/prompt/index.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 
 test('buildPromptMessages 固定 system 前缀顺序并把上下文格式化成单条 user 消息', () => {
   const ownerId = 12345;

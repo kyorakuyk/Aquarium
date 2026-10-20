@@ -5,7 +5,7 @@ import {
   shouldDispatchMessage,
   toOneBotSegments,
 } from '../src/adapters/onebot/convert.ts';
-import type { IncomingMessage, Segment } from '../src/core/events.ts';
+import type { IncomingMessage, Segment } from '../src/core/shared/events.ts';
 
 const account = 900000001;
 
