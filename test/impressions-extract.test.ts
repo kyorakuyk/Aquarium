@@ -71,3 +71,44 @@ test('提取上下文包含现有 tag_subjects canonical names 与 aliases', () 
   assert.ok(content.includes('守望先锋'));
   assert.ok(content.includes('C.S.G.O.'));
 });
+
+test('locked 标签不会进入 extract-tags 的 existing 上下文', () => {
+  const lockedTag = {
+    id: 9,
+    account: 7,
+    sessionId: '7:group:8',
+    userId: 42,
+    text: '不应进入模型的敏感标签',
+    norm: '不应进入模型的敏感标签',
+    category: 'personality' as const,
+    subject: null,
+    polarity: null,
+    origin: 'inferred' as const,
+    locked: true,
+    status: 'confirmed' as const,
+    source: 'auto' as const,
+    samples: 1,
+    evidence: [],
+    firstSeen: 1,
+    lastSeen: 1,
+    supersededBy: null,
+    updatedAt: 1,
+  };
+  const messages = buildExtractMessages([{
+    sessionId: '7:group:8',
+    messageId: 'm1',
+    senderId: 42,
+    senderName: 'A',
+    isSelf: false,
+    plainText: '普通消息',
+    segments: [],
+    time: 1,
+  }], {
+    group: [lockedTag],
+    members: [{ userId: 42, tags: [lockedTag] }],
+    subjects: [],
+  }, promptTemplateStore.get().extractTags);
+
+  assert.ok(!messages.map((message) => String(message.content)).join('\n').includes(lockedTag.text));
+  assert.ok(!messages.map((message) => String(message.content)).join('\n').includes('#9'));
+});

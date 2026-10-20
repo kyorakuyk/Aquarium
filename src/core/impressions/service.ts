@@ -190,7 +190,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       evidence: ReturnType<typeof evidenceFor>,
       lockSensitive = false,
     ): boolean => {
-      if (!evidence) return false;
+      if (!evidence || target.locked) return false;
       const outcome = applyTagObservation(current, {
         text: target.text,
         norm: target.norm,
@@ -242,7 +242,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       }
       const norm = normalizeTagText(item.text);
       const existing = current.find((tag) => tag.norm === norm);
-      if (existing && incrementedTagIds.has(existing.id)) {
+      if (existing && (existing.locked || incrementedTagIds.has(existing.id))) {
         counters.dropped += 1;
         continue;
       }
@@ -312,7 +312,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       const evidence = evidenceForItem(item);
       const profile = profileFor(item);
       const target = current.find((tag) => tag.id === item.id);
-      if (!evidence || !profile || !target || target.status === 'superseded') {
+      if (!evidence || !profile || !target || target.locked || target.status === 'superseded') {
         counters.dropped += 1;
         continue;
       }

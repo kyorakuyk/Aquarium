@@ -63,12 +63,14 @@ function formatTime(timestamp: number): string {
 
 function formatExistingTags(existing: ExistingTagsInput): string {
   const lines: string[] = [];
-  if (existing.group.length > 0) {
-    lines.push(`群标签：${existing.group.map((tag) => `#${tag.id} ${tag.text}（${tag.status}）`).join('；')}`);
+  const groupTags = existing.group.filter((tag) => !tag.locked);
+  if (groupTags.length > 0) {
+    lines.push(`群标签：${groupTags.map((tag) => `#${tag.id} ${tag.text}（${tag.status}）`).join('；')}`);
   }
   for (const member of existing.members) {
-    if (member.tags.length === 0) continue;
-    lines.push(`群友 ${member.userId} 的标签：${member.tags.map((tag) => `#${tag.id} ${tag.text}（${tag.status}）`).join('；')}`);
+    const tags = member.tags.filter((tag) => !tag.locked);
+    if (tags.length === 0) continue;
+    lines.push(`群友 ${member.userId} 的标签：${tags.map((tag) => `#${tag.id} ${tag.text}（${tag.status}）`).join('；')}`);
   }
   const subjects = existing.subjects ?? [];
   lines.push(`可复用的 fandom tag_subjects（规范名；别名）：${subjects.length > 0

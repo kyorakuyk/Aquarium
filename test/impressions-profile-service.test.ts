@@ -215,6 +215,46 @@ test('新提取识别出已有敏感标签后立即锁定', async () => {
   }
 });
 
+test('locked 标签的 id 不会让模型观察结果改写其证据', async () => {
+  const database = openDatabase(':memory:');
+  try {
+    const repository = createRepository(database);
+    const subjects = createTagSubjectRepository(database);
+    const id = repository.insertTag({
+      account: groupSession.account,
+      sessionId: key,
+      userId: 42,
+      text: '锁定内容',
+      norm: '锁定内容',
+      category: 'personality',
+      subject: null,
+      polarity: null,
+      origin: 'inferred',
+      locked: true,
+      status: 'confirmed',
+      source: 'auto',
+      samples: 1,
+      evidence: [{ messageId: 'seed', time: at - 1_000, quote: '锁定内容' }],
+      firstSeen: at - 1_000,
+      lastSeen: at - 1_000,
+      supersededBy: null,
+      updatedAt: at - 1_000,
+    });
+    const { summary } = await runWindow(repository, subjects, [message('m1', 42, '新消息')], {
+      group: { observe: [], new: [], contradict: [] },
+      members: [{ userId: 42, observe: [{ id, messageId: 'm1' }], new: [], contradict: [] }],
+    });
+
+    const unchanged = repository.tagById(id);
+    assert.equal(summary.dropped, 1);
+    assert.equal(unchanged?.samples, 1);
+    assert.equal(unchanged?.lastSeen, at - 1_000);
+    assert.deepEqual(unchanged?.evidence.map(({ messageId }) => messageId), ['seed']);
+  } finally {
+    database.close();
+  }
+});
+
 test('提取会话携带 tag_subjects 并在 fandom 标签落库前复用 canonical name', async () => {
   const database = openDatabase(':memory:');
   try {
