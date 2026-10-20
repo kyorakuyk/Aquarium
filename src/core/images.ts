@@ -149,29 +149,35 @@ export async function downloadImageAsDataUrl(
     throw new RangeError('图片下载超时设置无效');
   }
 
-  const response = await fetcher(imageUrl, { signal: AbortSignal.timeout(timeoutMs) });
-  if (!response.ok) {
-    await response.body?.cancel().catch(() => {});
-    throw new Error(`图片下载失败（HTTP ${response.status}）`);
-  }
-
-  const mediaType = response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
-  if (!mediaType || !SUPPORTED_IMAGE_TYPES.has(mediaType)) {
-    await response.body?.cancel().catch(() => {});
-    throw new Error('图片响应 content-type 不受支持');
-  }
-
-  const contentLengthHeader = response.headers.get('content-length');
-  if (contentLengthHeader !== null) {
-    const contentLength = Number(contentLengthHeader);
-    if (Number.isFinite(contentLength) && contentLength > MAX_IMAGE_BYTES) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetcher(imageUrl, { signal: controller.signal });
+    if (!response.ok) {
       await response.body?.cancel().catch(() => {});
-      throw new Error('图片响应超过 5 MiB 限制');
+      throw new Error(`图片下载失败（HTTP ${response.status}）`);
     }
-  }
 
-  const bytes = await readBoundedImageBody(response);
-  return `data:${mediaType};base64,${Buffer.from(bytes).toString('base64')}`;
+    const mediaType = response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+    if (!mediaType || !SUPPORTED_IMAGE_TYPES.has(mediaType)) {
+      await response.body?.cancel().catch(() => {});
+      throw new Error('图片响应 content-type 不受支持');
+    }
+
+    const contentLengthHeader = response.headers.get('content-length');
+    if (contentLengthHeader !== null) {
+      const contentLength = Number(contentLengthHeader);
+      if (Number.isFinite(contentLength) && contentLength > MAX_IMAGE_BYTES) {
+        await response.body?.cancel().catch(() => {});
+        throw new Error('图片响应超过 5 MiB 限制');
+      }
+    }
+
+    const bytes = await readBoundedImageBody(response);
+    return `data:${mediaType};base64,${Buffer.from(bytes).toString('base64')}`;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function visionMessages(urls: string[], template: VisionPromptTemplate): OpenAI.ChatCompletionMessageParam[] {
