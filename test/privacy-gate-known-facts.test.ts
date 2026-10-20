@@ -40,7 +40,7 @@ test('touched L1 fact enters knownFacts after memberTags and is excluded from de
       userId: 42,
       text: '夜猫子',
       norm: '夜猫子',
-      category: 'misc',
+      category: 'schedule',
       subject: null,
       polarity: null,
       origin: 'inferred',

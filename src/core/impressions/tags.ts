@@ -10,7 +10,7 @@ export const GROUP_TAG_HALF_LIFE_MS = 14 * 24 * 60 * 60 * 1000;
 export const ACTIVATION_MIN = 0.25;
 
 export const GROUP_TAGS_LIMIT = { max: 6, maxChars: 120 } as const;
-export const MEMBER_TAGS_LIMIT = { max: 5, maxChars: 80 } as const;
+export const MEMBER_TAGS_LIMIT = { max: 5, maxChars: 160 } as const;
 
 export interface TagSelectionLimit {
   max: number;
@@ -125,7 +125,8 @@ export function selectInjectableTags(
   limit: TagSelectionLimit,
 ): { tags: StoredTag[]; dropped: number } {
   const eligible = tags
-    .filter((tag) => tag.status === 'confirmed' && tagActivation(tag, now) >= ACTIVATION_MIN)
+    .filter((tag) => !tag.locked && tag.category !== 'misc'
+      && tag.status === 'confirmed' && tagActivation(tag, now) >= ACTIVATION_MIN)
     .sort((left, right) => {
       if (left.source !== right.source) return left.source === 'manual' ? -1 : 1;
       if (left.samples !== right.samples) return right.samples - left.samples;

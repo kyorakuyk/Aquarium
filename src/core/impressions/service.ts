@@ -23,10 +23,10 @@ import {
   applyTagContradiction,
   applyTagObservation,
   GROUP_TAGS_LIMIT,
-  MEMBER_TAGS_LIMIT,
   normalizeTagText,
   selectInjectableTags,
 } from './tags.ts';
+import { buildMemberTagPrompt } from './member-tags.ts';
 import type { TagSubjectRepository } from '../../store/tag-subject-repo.ts';
 
 export const EXTRACT_BATCH_TRIGGER = { messages: 60, sinceMs: 30 * 60 * 1000 } as const;
@@ -531,11 +531,10 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         purpose: 'prompt',
       }) === 'allow';
       const memberSelection = !memberAllowed
-        ? { tags: [] as StoredTag[], dropped: 0 }
-        : selectInjectableTags(
+        ? { text: '', dropped: 0 }
+        : buildMemberTagPrompt(
           options.repository.listTagsForSubject(account, input.sessionId, input.senderId),
           at,
-          MEMBER_TAGS_LIMIT,
         );
       const blocks: ImpressionsPromptBlocks = {
         droppedTags: groupSelection.dropped + memberSelection.dropped,
@@ -544,10 +543,10 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         blocks.groupTags = input.template.groupTags
           .replaceAll('{{tags}}', groupSelection.tags.map((tag) => tag.text).join('、'));
       }
-      if (memberSelection.tags.length > 0) {
+      if (memberSelection.text.length > 0) {
         blocks.memberTags = input.template.memberTags
           .replaceAll('{{name}}', JSON.stringify(input.senderName))
-          .replaceAll('{{tags}}', memberSelection.tags.map((tag) => tag.text).join('、'));
+          .replaceAll('{{tags}}', memberSelection.text);
       }
       return blocks;
     },

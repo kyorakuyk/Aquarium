@@ -164,11 +164,11 @@ test('画像类别决定半衰期；schedule 不衰减', () => {
 test('注入选择只取已确认且激活度达标的标签，按 manual、samples、last_seen 排序', () => {
   const now = 100 * dayMs;
   const tags = [
-    tag({ id: 1, status: 'candidate', samples: 5, lastSeen: now }),
-    tag({ id: 2, status: 'confirmed', samples: 2, lastSeen: now - 65 * dayMs }),
-    tag({ id: 3, status: 'confirmed', samples: 2, lastSeen: now }),
-    tag({ id: 4, status: 'confirmed', source: 'manual', origin: 'manual', samples: 1, lastSeen: now - 10 * dayMs }),
-    tag({ id: 5, status: 'confirmed', samples: 3, lastSeen: now - dayMs }),
+    tag({ id: 1, category: 'personality', status: 'candidate', samples: 5, lastSeen: now }),
+    tag({ id: 2, category: 'personality', status: 'confirmed', samples: 2, lastSeen: now - 65 * dayMs }),
+    tag({ id: 3, category: 'personality', status: 'confirmed', samples: 2, lastSeen: now }),
+    tag({ id: 4, category: 'personality', status: 'confirmed', source: 'manual', origin: 'manual', samples: 1, lastSeen: now - 10 * dayMs }),
+    tag({ id: 5, category: 'personality', status: 'confirmed', samples: 3, lastSeen: now - dayMs }),
   ];
 
   const selected = selectInjectableTags(tags, now, GROUP_TAGS_LIMIT);
@@ -182,6 +182,7 @@ test('注入选择遵守数量与总长上限并记录丢弃数', () => {
   const now = 100 * dayMs;
   const many = Array.from({ length: 8 }, (_, index) => tag({
     id: index + 1,
+    category: 'personality',
     status: 'confirmed',
     samples: 5,
     lastSeen: now - index * 1_000,
@@ -194,12 +195,23 @@ test('注入选择遵守数量与总长上限并记录丢弃数', () => {
 
   const long = Array.from({ length: 3 }, (_, index) => tag({
     id: index + 11,
+    category: 'personality',
     status: 'confirmed',
     samples: 5,
     lastSeen: now - index * 1_000,
-    text: '很长的标签'.repeat(9),
+    text: '很长的标签'.repeat(25),
   }));
   const member = selectInjectableTags(long, now, MEMBER_TAGS_LIMIT);
   assert.equal(member.tags.length, 1);
   assert.equal(member.dropped, 2);
+});
+
+test('注入选择不返回 locked 或 misc 标签', () => {
+  const now = 100 * dayMs;
+  const selected = selectInjectableTags([
+    tag({ category: 'personality', status: 'confirmed', locked: true, lastSeen: now }),
+    tag({ id: 2, category: 'misc', status: 'confirmed', lastSeen: now }),
+  ], now, GROUP_TAGS_LIMIT);
+
+  assert.deepEqual(selected, { tags: [], dropped: 0 });
 });

@@ -481,7 +481,7 @@ test('已确认标签注入群与群友块，私聊不注入，丢弃数进追�
         userId,
         text,
         norm: text,
-        category: 'misc',
+        category: userId === null ? 'atmosphere' : 'schedule',
         subject: null,
         polarity: null,
         origin: 'inferred',
@@ -512,7 +512,7 @@ test('已确认标签注入群与群友块，私聊不注入，丢弃数进追�
 
     const groupPrompt = harness.replyPrompts[0] ?? '';
     assert.ok(groupPrompt.includes('这个群的氛围：爱聊游戏、扩展一、扩展二、扩展三、扩展四、扩展五'));
-    assert.ok(groupPrompt.includes('关于"小明"：夜猫子'));
+    assert.ok(groupPrompt.includes('关于"小明"：作息：夜猫子'));
     const groupDetail = repository.recentDecisions(1)[0]?.detail as {
       promptBlocks?: Array<{ id: string }>;
       droppedTags?: number;
