@@ -101,6 +101,18 @@ test('分类提示只携带未锁定 misc 标签，解析器拒绝 misc 和 sche
   })), undefined);
 });
 
+test('分类用途的固定说明先于 scope 和标签数据', () => {
+  const template = promptTemplateStore.get().classifyTags;
+  const group = buildClassifyTagsMessages([], 'group', template);
+  const member = buildClassifyTagsMessages([], 'member', template);
+  const fixedPrefix = '以下是本批次最多 50 条待分类标签的 JSON：\nscope: ';
+
+  assert.equal(group[0]?.content, member[0]?.content);
+  assert.ok(String(group[1]?.content).startsWith(fixedPrefix));
+  assert.ok(String(member[1]?.content).startsWith(fixedPrefix));
+  assert.notEqual(group[1]?.content, member[1]?.content);
+});
+
 test('分类按 50 条分批、同义标签合并并持久化完成标记', async () => {
   const database = openDatabase(':memory:');
   try {

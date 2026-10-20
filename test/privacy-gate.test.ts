@@ -91,6 +91,52 @@ test('no keyword hit skips judge and never includes private fact text', async ()
   });
 });
 
+test('隐私守门先放固定判断说明，再附上下文和候选事实', async () => {
+  await withRepository(async (repository) => {
+    repository.insertPrivateFact(fact({ ownerId: 42, text: '正在讨论话题甲', keywords: ['话题甲', '讨论甲'] }));
+    repository.insertPrivateFact(fact({ ownerId: 43, text: '正在讨论话题乙', keywords: ['话题乙', '讨论乙'] }));
+    saveGroupMessage(repository, 'gate-a', 42, '正在讨论话题甲');
+    saveGroupMessage(repository, 'gate-b', 43, '正在讨论话题乙', now + 60_000);
+    const prompts: Array<{ system: string; user: string }> = [];
+    const service = createPrivacyGateService({
+      repository,
+      getConfig: makeConfig,
+      callModel: async (_slot, messages) => {
+        prompts.push({ system: String(messages[0]?.content), user: String(messages[1]?.content) });
+        return result(JSON.stringify({ touches: [] }));
+      },
+    });
+    const template = promptTemplateStore.get().privacyGate;
+    const knownFactsTemplate = promptTemplateStore.get().replySystem.knownFacts;
+
+    await service.evaluateGroup({
+      session: groupSession,
+      senderId: 42,
+      triggered: true,
+      now,
+      messages: [repository.messageBySessionAndId(groupKey, 'gate-a')!],
+      template,
+      knownFactsTemplate,
+    });
+    await service.evaluateGroup({
+      session: groupSession,
+      senderId: 43,
+      triggered: true,
+      now: now + 60_000,
+      messages: [repository.messageBySessionAndId(groupKey, 'gate-b')!],
+      template,
+      knownFactsTemplate,
+    });
+
+    assert.equal(prompts.length, 2);
+    assert.equal(prompts[0]?.system, prompts[1]?.system);
+    const instruction = '请结合上下文判断哪些事实正在被讨论，只返回对应 id。';
+    assert.ok(prompts[0]?.user.startsWith(instruction));
+    assert.ok(prompts[1]?.user.startsWith(instruction));
+    assert.notEqual(prompts[0]?.user, prompts[1]?.user);
+  });
+});
+
 test('L0 topic hit blocks proactive replies, starts cooldown, and called replies get only the fixed rule', async () => {
   await withRepository(async (repository) => {
     const id = repository.insertPrivateFact(fact({ ownerId: 42, text: '最近正在准备考研，感到压力很大' }));

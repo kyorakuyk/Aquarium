@@ -80,6 +80,25 @@ test('提取上下文包含现有 tag_subjects canonical names 与 aliases', () 
   assert.ok(content.includes('C.S.G.O.'));
 });
 
+test('extract-tags 的固定说明位于可变消息和标签数据之前', () => {
+  const template = promptTemplateStore.get().extractTags;
+  const first = buildExtractMessages([{
+    sessionId: '7:group:8', messageId: 'first', senderId: 42, senderName: '甲',
+    isSelf: false, plainText: '第一条消息', segments: [], time: 1,
+  }], { group: [], members: [] }, template);
+  const second = buildExtractMessages([{
+    sessionId: '7:group:8', messageId: 'second', senderId: 43, senderName: '乙',
+    isSelf: false, plainText: '另一条消息', segments: [], time: 60_001,
+  }], { group: [], members: [] }, template);
+  const fixedPrefix = '以下是该群最近的消息（每行开头是 #消息ID，括号里是发送者 QQ 号）：\n'
+    + '该群已有标签与可复用的 tag_subjects（群标签、群友标签附 id 与状态；subject 附规范名和别名）：\n';
+
+  assert.equal(first[0]?.content, second[0]?.content);
+  assert.ok(String(first[1]?.content).startsWith(fixedPrefix));
+  assert.ok(String(second[1]?.content).startsWith(fixedPrefix));
+  assert.notEqual(first[1]?.content, second[1]?.content);
+});
+
 test('locked 标签不会进入 extract-tags 的 existing 上下文', () => {
   const lockedTag = {
     id: 9,

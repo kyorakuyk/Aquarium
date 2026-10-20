@@ -92,6 +92,50 @@ test('三条 confirmed 画像变化后用 extract 槽位生成且只输入未锁
   }
 });
 
+test('成员摘要在不同标签输入下保留相同的固定开头', async () => {
+  const database = openDatabase(':memory:');
+  try {
+    const repository = createRepository(database);
+    const summaries = createMemberSummaryRepository(database);
+    for (const [targetUserId, texts] of [
+      [42, ['慢热', '夜猫子', '喜欢阅读']],
+      [43, ['健谈', '喜欢徒步', '常玩桌游']],
+    ] as const) {
+      for (const text of texts) insertTag(repository, { userId: targetUserId, text, norm: text });
+    }
+    const requests: Array<Array<{ role: string; content: string }>> = [];
+    const service = createMemberSummaryService({
+      repository,
+      summaryRepository: summaries,
+      getConfig: makeConfig,
+      getTemplate: () => promptTemplateStore.get().memberSummary,
+      callModel: async (_slot, messages) => {
+        requests.push(messages.map(({ role, content }) => ({ role, content: String(content) })));
+        return {
+          text: '平和稳重，兴趣广泛。',
+          provider: 'fake',
+          model: 'fake-summary',
+          usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+        };
+      },
+      now: () => now,
+    });
+
+    service.maybeGenerate(account, 42, now);
+    service.maybeGenerate(account, 43, now);
+    await service.idle();
+
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0]?.[0]?.content, requests[1]?.[0]?.content);
+    const fixedPrefix = '已确认的群友画像标签：\n';
+    assert.ok(requests[0]?.[1]?.content.startsWith(fixedPrefix));
+    assert.ok(requests[1]?.[1]?.content.startsWith(fixedPrefix));
+    assert.notEqual(requests[0]?.[1]?.content, requests[1]?.[1]?.content);
+  } finally {
+    database.close();
+  }
+});
+
 test('少于三条自上次摘要更新的 confirmed 标签时不调用模型', async () => {
   const database = openDatabase(':memory:');
   try {

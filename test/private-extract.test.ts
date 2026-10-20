@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildPrivateExtractionMessages, parsePrivateFactResponse } from '../src/core/privacy/extract.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import type { MessageStorageRecord } from '../src/store/repository.ts';
 
 const sessionId = '900000001:private:42';
@@ -45,6 +46,28 @@ test('private extraction messages distinguish the owner from the bot and include
   assert.ok(content.includes('#bot-1'));
   assert.ok(content.includes('#7 正在准备考试'));
   assert.equal(content.includes('QQ 42'), false);
+});
+
+test('private extraction puts fixed instructions before changing records and facts', () => {
+  const template = promptTemplateStore.get().extractPrivate;
+  const first = buildPrivateExtractionMessages({
+    records: [message()],
+    ownerId: 42,
+    existing: [],
+    template,
+  });
+  const second = buildPrivateExtractionMessages({
+    records: [message({ messageId: 'private-2', plainText: '已经开始新的计划。', time: new Date(2026, 9, 20, 9, 6).getTime() })],
+    ownerId: 42,
+    existing: [{ id: 7, text: '正在准备考试', keywords: ['考试', '学习'] }],
+    template,
+  });
+  const fixedInstruction = '请只输出 new、update、obsolete 三个数组组成的 JSON。每个 text 必须有窗口内对方消息作为依据。';
+
+  assert.equal(first[0]?.content, second[0]?.content);
+  assert.ok(String(first[1]?.content).startsWith(fixedInstruction));
+  assert.ok(String(second[1]?.content).startsWith(fixedInstruction));
+  assert.notEqual(first[1]?.content, second[1]?.content);
 });
 
 test('private extraction parser requires all result arrays and preserves item fields', () => {

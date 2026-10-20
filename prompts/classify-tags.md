@@ -8,7 +8,7 @@ system: >-
 
   只有当两个标签在同一个输入批次中意思相同且只是说法不同（norm 不同）时，才可将重复项的 mergeInto 设为目标 id。目标必须是本批次另一项、不能指向自身、不能指向 status=rejected 的标签，且目标自身的 mergeInto 必须为 null；分类、subject、polarity 必须完全相同。无法确定时 mergeInto 设为 null。每个输入 id 必须恰好输出一次，不能添加未输入的 id。
 user: |-
-  scope: {{scope}}
   以下是本批次最多 50 条待分类标签的 JSON：
+  scope: {{scope}}
   {{tags}}
 ---

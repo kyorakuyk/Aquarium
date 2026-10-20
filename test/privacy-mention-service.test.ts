@@ -116,6 +116,36 @@ test('owner-only keyword matches call the mention judge and count once per day',
   });
 });
 
+test('私聊记忆提及判断先给出固定说明，再附单条消息和候选事实', async () => {
+  await withRepository(async (repository) => {
+    repository.insertPrivateFact(fact(42, '正在讨论话题甲', ['话题甲', '讨论甲']));
+    repository.insertPrivateFact(fact(43, '正在讨论话题乙', ['话题乙', '讨论乙']));
+    saveGroupMessage(repository, 'mention-a', 42, '我在聊话题甲');
+    saveGroupMessage(repository, 'mention-b', 43, '我在聊话题乙');
+    const prompts: Array<{ system: string; user: string }> = [];
+    const service = createPrivacyMentionService({
+      repository,
+      getConfig: makeConfig,
+      callModel: async (_slot, messages) => {
+        prompts.push({ system: String(messages[0]?.content), user: String(messages[1]?.content) });
+        return modelResult(JSON.stringify({ mentions: [] }));
+      },
+    });
+    const template = promptTemplateStore.get().privacyMention;
+
+    service.maybePromote({ session: groupSession, senderId: 42, messageId: 'mention-a', now: baseTime, template });
+    service.maybePromote({ session: groupSession, senderId: 43, messageId: 'mention-b', now: baseTime + 1, template });
+    await service.idle();
+
+    assert.equal(prompts.length, 2);
+    assert.equal(prompts[0]?.system, prompts[1]?.system);
+    const instruction = '判断发言者是否在讲这些自己的事实，只返回对应 id。';
+    assert.ok(prompts[0]?.user.startsWith(instruction));
+    assert.ok(prompts[1]?.user.startsWith(instruction));
+    assert.notEqual(prompts[0]?.user, prompts[1]?.user);
+  });
+});
+
 test('non-owner messages and keyword misses do not call the mention judge', async () => {
   await withRepository(async (repository) => {
     repository.insertPrivateFact(fact(42, '最近在准备考研，压力较大', ['考研', '压力']));

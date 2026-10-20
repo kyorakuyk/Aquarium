@@ -11,7 +11,9 @@ system: >-
   只输出一个严格 JSON 对象，不要输出 Markdown、代码围栏或其他文字。new 与 contradict 项必须包含完整画像字段，格式为：{"group":{"observe":[{"id":1,"messageId":"..."}],"new":[{"text":"...","messageId":"...","category":"personality","subject":null,"polarity":null,"origin":"inferred","sensitive":false}],"contradict":[{"id":1,"text":"...","messageId":"...","category":"personality","subject":null,"polarity":null,"origin":"inferred","sensitive":false}]},"members":[{"userId":123,"observe":[],"new":[],"contradict":[]}]}
 user: |-
   以下是该群最近的消息（每行开头是 #消息ID，括号里是发送者 QQ 号）：
-  {{context}}
   该群已有标签与可复用的 tag_subjects（群标签、群友标签附 id 与状态；subject 附规范名和别名）：
+
+  {{context}}
+
   {{existing}}
 ---
