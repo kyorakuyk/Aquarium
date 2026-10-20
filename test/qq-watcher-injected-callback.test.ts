@@ -5,8 +5,7 @@ import { createQqWatcher } from '../src/host/windows/qq-watcher.ts';
 test('成功注入后通知宿主立即重试匹配账号', async () => {
   const injectedUins: number[] = [];
   const client = {
-    listProcesses: async () => [{ pid: 123, name: 'QQ.exe' }],
-    probeLogin: async () => ({ port: 4301, uin: '10001', identityKnown: true }),
+    listProcesses: async () => [{ pid: 123, name: 'QQ.exe', loggedIn: true, uin: '10001' }],
     load: async () => ({ success: true }),
   };
   const watcher = createQqWatcher({

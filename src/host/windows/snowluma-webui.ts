@@ -4,23 +4,16 @@ const requireBuiltin = createRequire(import.meta.url);
 
 export interface SnowLumaProcessInfo {
   pid: number;
-  name: string;
-  path: string;
-  injected: boolean;
-  connected: boolean;
-  loggedIn: boolean;
-  uin: string;
-  status: string;
-  error: string;
-  method: string;
-}
-
-export interface SnowLumaLoginInfo {
-  port: number;
-  uin: string;
-  uid?: string;
-  nickName?: string;
-  identityKnown: boolean;
+  name?: string;
+  path?: string;
+  injected?: boolean;
+  connected?: boolean;
+  loggedIn?: boolean;
+  uin?: string | number;
+  account?: { uin?: string | number } | null;
+  status?: string;
+  error?: string;
+  method?: string;
 }
 
 export interface SnowLumaLoadResult {
@@ -74,16 +67,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isProcessInfo(value: unknown): value is SnowLumaProcessInfo {
   if (!isRecord(value)) return false;
-  return Number.isSafeInteger(value.pid) && Number(value.pid) > 0
-    && typeof value.name === 'string'
-    && typeof value.path === 'string'
-    && typeof value.injected === 'boolean'
-    && typeof value.connected === 'boolean'
-    && typeof value.loggedIn === 'boolean'
-    && typeof value.uin === 'string'
-    && typeof value.status === 'string'
-    && typeof value.error === 'string'
-    && typeof value.method === 'string';
+  return typeof value.pid === 'number' && Number.isSafeInteger(value.pid) && value.pid > 0
+    && (value.name === undefined || typeof value.name === 'string')
+    && (value.path === undefined || typeof value.path === 'string')
+    && (value.injected === undefined || typeof value.injected === 'boolean')
+    && (value.connected === undefined || typeof value.connected === 'boolean')
+    && (value.loggedIn === undefined || typeof value.loggedIn === 'boolean')
+    && (value.uin === undefined || typeof value.uin === 'string' || typeof value.uin === 'number')
+    && (value.account === undefined || value.account === null
+      || (isRecord(value.account)
+        && (value.account.uin === undefined || typeof value.account.uin === 'string' || typeof value.account.uin === 'number')))
+    && (value.status === undefined || typeof value.status === 'string')
+    && (value.error === undefined || typeof value.error === 'string')
+    && (value.method === undefined || typeof value.method === 'string');
 }
 
 function assertPid(pid: number): void {
@@ -275,33 +271,6 @@ export function createSnowLumaWebUIClient(options: SnowLumaWebUIClientOptions) {
     return payload.list;
   }
 
-  // 路由依据：server.ts 626–660、1464–1508；load 在 1492 行注册。
-  async function probeLogin(pid: number): Promise<SnowLumaLoginInfo | null> {
-    assertPid(pid);
-    const payload = await authenticatedPayload(`/api/processes/${pid}/probe-login`, 'GET');
-    if (!isRecord(payload) || !('info' in payload)) {
-      throw new SnowLumaWebUIError('SnowLuma WebUI returned an invalid login probe');
-    }
-    if (payload.info === null) return null;
-    if (!isRecord(payload.info)
-      || !Number.isSafeInteger(payload.info.port)
-      || Number(payload.info.port) < 0
-      || (Number(payload.info.port) === 0 && payload.info.identityKnown !== false)
-      || typeof payload.info.uin !== 'string'
-      || typeof payload.info.identityKnown !== 'boolean'
-      || (payload.info.uid !== undefined && typeof payload.info.uid !== 'string')
-      || (payload.info.nickName !== undefined && typeof payload.info.nickName !== 'string')) {
-      throw new SnowLumaWebUIError('SnowLuma WebUI returned an invalid login probe');
-    }
-    return {
-      port: Number(payload.info.port),
-      uin: payload.info.uin,
-      identityKnown: payload.info.identityKnown,
-      ...(typeof payload.info.uid === 'string' ? { uid: payload.info.uid } : {}),
-      ...(typeof payload.info.nickName === 'string' ? { nickName: payload.info.nickName } : {}),
-    };
-  }
-
   async function load(pid: number): Promise<SnowLumaLoadResult> {
     assertPid(pid);
     const payload = await authenticatedPayload(`/api/processes/${pid}/load`, 'POST');
@@ -311,5 +280,5 @@ export function createSnowLumaWebUIClient(options: SnowLumaWebUIClientOptions) {
     return { success: payload.success, process: payload.process };
   }
 
-  return { login, listProcesses, probeLogin, load };
+  return { login, listProcesses, load };
 }

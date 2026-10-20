@@ -108,13 +108,14 @@ test('客户端登录后使用内存 Bearer token 读取进程，日志不含密
     if (url.pathname === '/api/processes') {
       assert.equal(authHeader(init), `Bearer ${firstToken}`);
       return jsonResponse({ list: [{
-        pid: 123,
+        pid: 456,
         name: 'QQ.exe',
         path: '',
         injected: false,
         connected: false,
-        loggedIn: false,
-        uin: '0',
+        loggedIn: true,
+        uin: 10001,
+        account: { uin: 10001, nickname: 'fixture' },
         status: 'available',
         error: '',
         method: '',
@@ -131,7 +132,7 @@ test('客户端登录后使用内存 Bearer token 读取进程，日志不含密
 
   const processes = await client.listProcesses();
 
-  assert.deepEqual(processes.map((process) => process.pid), [123]);
+  assert.deepEqual(processes.map((process) => process.pid), [456]);
   assert.equal(calls.length, 2);
   assert.ok(logs.every((message) => !message.includes(fakePassword)));
   assert.ok(logs.every((message) => !message.includes(firstToken)));
@@ -303,7 +304,7 @@ test('WebUI 响应 body 读取也受请求超时约束', async () => {
   }
 });
 
-test('probe-login 与 load 使用约定路径；load 不发送 body', async () => {
+test('v2.0.3 process list 与 load 使用约定路径；load 不发送 body', async () => {
   const calls: Array<{ url: URL; init?: RequestInit }> = [];
   const fakeFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestUrl(input);
@@ -311,8 +312,15 @@ test('probe-login 与 load 使用约定路径；load 不发送 body', async () =
     if (url.pathname === '/api/login') {
       return jsonResponse({ success: true, token: firstToken, mustChangePassword: false });
     }
-    if (url.pathname === '/api/processes/456/probe-login') {
-      return jsonResponse({ info: { port: 4301, uin: '10001', identityKnown: true } });
+    if (url.pathname === '/api/processes') {
+      return jsonResponse({ list: [{
+        pid: 456,
+        name: 'QQ.exe',
+        status: 'available',
+        loggedIn: true,
+        uin: 10001,
+        account: { uin: 10001, nickname: 'fixture' },
+      }] });
     }
     if (url.pathname === '/api/processes/456/load') {
       return jsonResponse({ success: true, process: {
@@ -332,7 +340,14 @@ test('probe-login 与 load 使用约定路径；load 不发送 body', async () =
   }) as typeof fetch;
   const client = createSnowLumaWebUIClient({ baseUrl: 'http://127.0.0.1:5099', password: fakePassword, fetch: fakeFetch });
 
-  assert.deepEqual(await client.probeLogin(456), { port: 4301, uin: '10001', identityKnown: true });
+  assert.deepEqual(await client.listProcesses(), [{
+    pid: 456,
+    name: 'QQ.exe',
+    status: 'available',
+    loggedIn: true,
+    uin: 10001,
+    account: { uin: 10001, nickname: 'fixture' },
+  }]);
   assert.deepEqual(await client.load(456), { success: true, process: {
     pid: 456,
     name: 'QQ.exe',
@@ -345,9 +360,9 @@ test('probe-login 与 load 使用约定路径；load 不发送 body', async () =
     error: '',
     method: 'loadModuleManual',
   } });
-  const probeCall = calls.find((call) => call.url.pathname.endsWith('/probe-login'));
+  const processListCall = calls.find((call) => call.url.pathname === '/api/processes');
   const loadCall = calls.find((call) => call.url.pathname.endsWith('/load'));
-  assert.equal(probeCall?.init?.method, 'GET');
+  assert.equal(processListCall?.init?.method, 'GET');
   assert.equal(loadCall?.init?.method, 'POST');
   assert.equal(loadCall?.init?.body, undefined);
   assert.equal(authHeader(loadCall?.init), `Bearer ${firstToken}`);
@@ -381,24 +396,4 @@ test('WebUI fetch 禁止 redirect，阻止登录密码被 307/308 重放到外�
   await assert.rejects(client.login(), /network error/);
   assert.deepEqual(requestedUrls, ['http://127.0.0.1:5099/api/login']);
   assert.equal(externalReplayCount, 0);
-});
-
-test('probe-login 接受 SnowLuma 的端口 0 未知身份响应以便 watcher 后续重试', async () => {
-  const fakeFetch = (async (input: RequestInfo | URL) => {
-    const url = requestUrl(input);
-    if (url.pathname === '/api/login') {
-      return jsonResponse({ success: true, token: firstToken, mustChangePassword: false });
-    }
-    if (url.pathname === '/api/processes/789/probe-login') {
-      return jsonResponse({ info: { port: 0, uin: '', identityKnown: false } });
-    }
-    throw new Error(`unexpected request: ${url.pathname}`);
-  }) as typeof fetch;
-  const client = createSnowLumaWebUIClient({
-    baseUrl: 'http://127.0.0.1:5099',
-    password: fakePassword,
-    fetch: fakeFetch,
-  });
-
-  assert.deepEqual(await client.probeLogin(789), { port: 0, uin: '', identityKnown: false });
 });
