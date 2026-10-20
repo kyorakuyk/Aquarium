@@ -67,6 +67,28 @@ test('未知身份每轮重试，不匹配身份记为忽略，二者都不注�
   assert.deepEqual([...watcher.injectedUins()], []);
 });
 
+test('已在线目标账号首轮触发回调、不调用 load，后续扫描不重复回调', async () => {
+  let loadCalls = 0;
+  const injectedUins: number[] = [];
+  const watcher = createQqWatcher({
+    targetUins: [10001],
+    scanIntervalSec: 5,
+    getClient: () => ({
+      listProcesses: async () => [{ ...processInfo, status: 'online', loggedIn: true, uin: '10001' }],
+      load: async () => { loadCalls += 1; return { success: true }; },
+    }) as never,
+    onInjected: (uin) => injectedUins.push(uin),
+  });
+
+  await watcher.scanOnce();
+  assert.deepEqual(injectedUins, [10001]);
+  assert.equal(loadCalls, 0);
+
+  await watcher.scanOnce();
+  assert.deepEqual(injectedUins, [10001]);
+  assert.equal(loadCalls, 0);
+});
+
 test('load 失败后下一轮重试，成功后不再重复加载', async () => {
   let loadCalls = 0;
   const client = {

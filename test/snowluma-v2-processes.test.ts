@@ -67,7 +67,7 @@ test('watcher prefers logged-in top-level uin, falls back to account uin, and sk
   await watcher.scanOnce();
 
   assert.deepEqual(loaded, [801, 802]);
-  assert.deepEqual(injected, [10001, 10001]);
+  assert.deepEqual(injected, [10001, 10001, 10001]);
   assert.deepEqual([...watcher.injectedUins()], [10001]);
 });
 

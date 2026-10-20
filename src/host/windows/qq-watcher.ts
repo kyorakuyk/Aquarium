@@ -48,6 +48,14 @@ export function createQqWatcher(options: QqWatcherOptions) {
   let startRequested = false;
   let stopRequested = false;
 
+  function notifyInjected(uin: number): void {
+    try {
+      options.onInjected?.(uin);
+    } catch {
+      options.log?.('QQ watcher 注入成功回调失败。');
+    }
+  }
+
   async function scanInternal(): Promise<void> {
     if (stopRequested) return;
     const client = options.getClient();
@@ -83,6 +91,7 @@ export function createQqWatcher(options: QqWatcherOptions) {
           unknownWarned.delete(process.pid);
           dispositions.set(process.pid, { kind: 'injected', uin: matchedOnlineUin });
           options.debug?.(`PID ${process.pid} 状态为 online，已视为目标账号在线。`);
+          notifyInjected(matchedOnlineUin);
         }
         continue;
       }
@@ -109,11 +118,7 @@ export function createQqWatcher(options: QqWatcherOptions) {
         if (stopRequested) return;
         if (result.success) {
           dispositions.set(process.pid, { kind: 'injected', uin: matchedUin });
-          try {
-            options.onInjected?.(matchedUin);
-          } catch {
-            options.log?.('QQ watcher 注入成功回调失败。');
-          }
+          notifyInjected(matchedUin);
         } else {
           options.log?.(`QQ 目标进程 PID ${process.pid} 加载失败；下一轮将重试。`);
         }
