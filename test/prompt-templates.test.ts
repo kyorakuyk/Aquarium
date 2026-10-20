@@ -22,6 +22,7 @@ function copyPromptTemplates(): string {
   fs.copyFileSync(path.resolve('prompts/traits.md'), path.join(root, 'traits.md'));
   fs.copyFileSync(path.resolve('prompts/sleep.md'), path.join(root, 'sleep.md'));
   fs.copyFileSync(path.resolve('prompts/extract-tags.md'), path.join(root, 'extract-tags.md'));
+  fs.copyFileSync(path.resolve('prompts/member-summary.md'), path.join(root, 'member-summary.md'));
   fs.copyFileSync(path.resolve('prompts/classify-tags.md'), path.join(root, 'classify-tags.md'));
   fs.copyFileSync(path.resolve('prompts/extract-private.md'), path.join(root, 'extract-private.md'));
   fs.copyFileSync(path.resolve('prompts/privacy-gate.md'), path.join(root, 'privacy-gate.md'));
@@ -248,4 +249,14 @@ test('judge 模板必须声明 context 占位符', () => {
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('member-summary 模板声明标签输入并限制 50 字', () => {
+  const template = (promptTemplateStore.get() as unknown as {
+    memberSummary?: { system: string; user: string };
+  }).memberSummary;
+
+  assert.ok(template);
+  assert.ok(template.system.includes('50 个 Unicode 字符'));
+  assert.ok(template.user.includes('{{tags}}'));
 });

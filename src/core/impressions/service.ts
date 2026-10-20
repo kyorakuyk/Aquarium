@@ -61,6 +61,7 @@ export interface ImpressionsServiceOptions {
   now?: () => number;
   onError?: (error: unknown) => void;
   onExtract?: (summary: ExtractSummary) => void;
+  onMemberSummaryCheck?: (account: number, userId: number, at: number) => void;
 }
 
 export interface ImpressionsService {
@@ -463,6 +464,13 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       }
       const current = memberTags.find((entry) => entry.userId === member.userId)?.tags ?? [];
       applySubject(member, current, account, sessionKey, member.userId, recordsById, at, counters);
+    }
+    for (const userId of senderIds) {
+      try {
+        options.onMemberSummaryCheck?.(account, userId, at);
+      } catch (error) {
+        reportError(error);
+      }
     }
 
     return finish('done');

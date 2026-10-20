@@ -20,6 +20,7 @@ import { getCliRuntime } from '../llm/cli.ts';
 import { openDatabase } from '../store/db.ts';
 import { createRepository } from '../store/repository.ts';
 import { createActivitySuggestionRepository } from '../store/activity-suggestion-repo.ts';
+import { createMemberSummaryRepository } from '../store/member-summary-repo.ts';
 import { createTagSubjectRepository } from '../store/tag-subject-repo.ts';
 import { createTagClassificationRepository } from '../store/tag-classification-repo.ts';
 import { startPanelServer, type PanelAccountRuntime } from '../panel-server/server.ts';
@@ -45,6 +46,7 @@ const configPath = path.join(process.cwd(), 'data', 'config.yaml');
 const initialConfig = loadConfig({ configPath });
 const database = openDatabase();
 const repository = createRepository(database);
+const memberSummaryRepository = createMemberSummaryRepository(database);
 const tagSubjects = createTagSubjectRepository(database);
 const configWatcher = watchConfig({ initialConfig, configPath });
 const cliRuntime = getCliRuntime();
@@ -111,8 +113,9 @@ subscriptions.push(startProfileActivitySchedule({
   service: profileActivityService,
   onError: (error) => logger.error(`作息统计更新失败：${describeError(error)}`),
 }));
-const { impressionsService, tagClassificationService, privateFactsService, privateMentionService, privacyGateService, historyImports } = createMemoryServices({
+const { impressionsService, memberSummaryService, tagClassificationService, privateFactsService, privateMentionService, privacyGateService, historyImports } = createMemoryServices({
   repository,
+  memberSummaryRepository,
   tagSubjects,
   tagClassificationRepository: createTagClassificationRepository(database),
   getConfig: () => configWatcher.getConfig(),
@@ -165,6 +168,8 @@ async function shutdown(signal: string): Promise<void> {
     logger.error(`Windows 托管关闭失败：${describeError(error)}`);
   }
   await sessionQueue.idle();
+  await impressionsService.idle();
+  await memberSummaryService.idle();
   await tagClassificationService.idle();
   await privateFactsService.idle();
   await privateMentionService.idle();

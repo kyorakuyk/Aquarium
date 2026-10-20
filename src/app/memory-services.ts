@@ -1,6 +1,7 @@
 import type { AquariumConfig } from '../config/schema.ts';
 import { createHistoryImportService } from '../core/impressions/history-import.ts';
 import { createTagClassificationService } from '../core/impressions/classify-tags.ts';
+import { createMemberSummaryService } from '../core/impressions/member-summary.ts';
 import { createImpressionsService } from '../core/impressions/service.ts';
 import { createPrivateFactsService } from '../core/privacy/service.ts';
 import { createPrivacyGateService } from '../core/privacy/group-gate.ts';
@@ -9,6 +10,7 @@ import { promptTemplateStore } from '../core/prompt-templates.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import type { TagSubjectRepository } from '../store/tag-subject-repo.ts';
 import type { TagClassificationRepository } from '../store/tag-classification-repo.ts';
+import type { MemberSummaryRepository } from '../store/member-summary-repo.ts';
 
 interface ServiceLogger {
   error(message: string): void;
@@ -18,17 +20,26 @@ interface ServiceLogger {
 
 export function createMemoryServices(options: {
   repository: StoreRepository;
+  memberSummaryRepository: MemberSummaryRepository;
   tagSubjects: TagSubjectRepository;
   tagClassificationRepository: TagClassificationRepository;
   getConfig: () => AquariumConfig;
   logger: ServiceLogger;
   describeError: (error: unknown) => string;
 }) {
+  const memberSummaryService = createMemberSummaryService({
+    repository: options.repository,
+    summaryRepository: options.memberSummaryRepository,
+    getConfig: options.getConfig,
+    getTemplate: () => promptTemplateStore.get().memberSummary,
+    onError: (error) => options.logger.error(`一句话印象生成失败：${options.describeError(error)}`),
+  });
   const impressionsService = createImpressionsService({
     repository: options.repository,
     tagSubjects: options.tagSubjects,
     getConfig: options.getConfig,
     onError: (error) => options.logger.error(`印象提取失败：${options.describeError(error)}`),
+    onMemberSummaryCheck: memberSummaryService.maybeGenerate,
     onExtract: (summary) => {
       options.logger.info(
         `印象提取 ${summary.sessionId}：${summary.status}，新增 ${summary.inserted}、观察 ${summary.observed}、推翻 ${summary.superseded}、丢弃 ${summary.dropped}。`,
@@ -82,6 +93,7 @@ export function createMemoryServices(options: {
   });
   return {
     impressionsService,
+    memberSummaryService,
     tagClassificationService,
     privateFactsService,
     privateMentionService,
