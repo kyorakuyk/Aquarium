@@ -19,6 +19,7 @@ import { createSleepGoodnightScheduler } from '../core/sleep/goodnight.ts';
 import { getCliRuntime } from '../llm/cli.ts';
 import { openDatabase } from '../store/db.ts';
 import { createRepository } from '../store/repository.ts';
+import { createActivitySuggestionRepository } from '../store/activity-suggestion-repo.ts';
 import { createTagSubjectRepository } from '../store/tag-subject-repo.ts';
 import { createTagClassificationRepository } from '../store/tag-classification-repo.ts';
 import { startPanelServer, type PanelAccountRuntime } from '../panel-server/server.ts';
@@ -31,6 +32,8 @@ import { createAccountActivityRouter } from './activity-routing.ts';
 import { createMemoryServices } from './memory-services.ts';
 import { createAccountStickerService, startStickerSyncTimer } from './stickers.ts';
 import { startAdapterForHost } from './adapter-start.ts';
+import { createProfileActivityService } from '../core/activity/service.ts';
+import { startProfileActivitySchedule } from './profile-activity.ts';
 import {
   createHostLifecycleQueue,
   createSnowLumaRestartHandler,
@@ -99,6 +102,15 @@ const moodService = createMoodService({
     logger.error(`情绪后台任务失败：${describeError(error)}`);
   },
 });
+const profileActivityService = createProfileActivityService({
+  repository,
+  suggestionRepository: createActivitySuggestionRepository(database),
+  getConfig: () => configWatcher.getConfig(),
+});
+subscriptions.push(startProfileActivitySchedule({
+  service: profileActivityService,
+  onError: (error) => logger.error(`作息统计更新失败：${describeError(error)}`),
+}));
 const { impressionsService, tagClassificationService, privateFactsService, privateMentionService, privacyGateService, historyImports } = createMemoryServices({
   repository,
   tagSubjects,
@@ -374,6 +386,7 @@ await startPanelWhileAccountStartupRuns(accountStartup, () => {
           stickerServices: () => stickerServices,
           historyImports,
           tagClassificationService,
+          profileActivity: profileActivityService,
           sleepWakeState,
           cliRuntime,
           management: () => managementControllers,

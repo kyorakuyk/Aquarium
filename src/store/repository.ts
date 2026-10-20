@@ -149,6 +149,7 @@ export interface StoreRepository extends PersonaVersionRepository, PrivacyReposi
   updateMessageSegments(sessionId: string, messageId: string, segments: unknown[]): void;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
   messagesInRange(sessionId: string, fromTime: number, toTime: number): MessageStorageRecord[];
+  profileActivitySessions(fromTime: number, toTime: number): string[];
   lastMessageTime(sessionId: string): number | null;
   lastMessageBefore(sessionId: string, beforeTime: number): MessageStorageRecord | undefined;
   messageBySessionAndId(sessionId: string, messageId: string): MessageStorageRecord | undefined;
@@ -201,6 +202,7 @@ export interface StoreRepository extends PersonaVersionRepository, PrivacyReposi
   listGroupTagsForUser(account: number, userId: number): StoredTag[];
   senderNameFor(sessionId: string, senderId: number): string | undefined;
   updateTag(id: number, update: TagUpdate): void;
+  deleteActivityTag(id: number): void;
   getTagRun(account: number, sessionId: string): TagRunRecord | undefined;
   saveTagRun(run: TagRunRecord): void;
   countMessagesAfter(sessionId: string, time: number): number;
@@ -248,6 +250,12 @@ export function createRepository(
     FROM messages
     WHERE session_id = ? AND time >= ? AND time <= ?
     ORDER BY time, id
+  `);
+  const selectProfileActivitySessions = database.prepare(`
+    SELECT session_id FROM messages WHERE time >= ? AND time <= ?
+    UNION
+    SELECT session_id FROM tags WHERE origin = 'stats' AND category = 'schedule'
+    ORDER BY session_id
   `);
   const selectLastMessageTime = database.prepare(
     'SELECT MAX(time) AS latest_time FROM messages WHERE session_id = ?',
@@ -421,6 +429,14 @@ export function createRepository(
         segments: JSON.parse(stringValue(row.segments_json, 'segments_json')) as unknown[],
         time: numberValue(row.time, 'time'),
       }));
+    },
+
+    profileActivitySessions(fromTime, toTime) {
+      if (!Number.isFinite(fromTime) || !Number.isFinite(toTime) || toTime < fromTime) {
+        throw new RangeError('活动统计时间范围无效');
+      }
+      const rows = selectProfileActivitySessions.all(fromTime, toTime) as Array<Record<string, unknown>>;
+      return rows.map((row) => stringValue(row.session_id, 'session_id'));
     },
 
     lastMessageTime(sessionId) {

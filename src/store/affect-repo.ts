@@ -74,7 +74,7 @@ export type AffectRepositoryQueries = Pick<StoreRepository,
   'getMoodState' | 'saveMoodState' | 'recordMoodEvent' | 'recentMoodEvents' | 'moodEventsSince' | 'latestMoodEventAtOrBefore'
   | 'getAffinityState' | 'listAffinityStates' | 'saveAffinityState' | 'recordAffinityEvent' | 'recentAffinityEvents' | 'affinityEventsSince' | 'latestSenderNameForAccount'
   | 'insertTag' | 'tagById' | 'listTagsForSubject' | 'listTagsForSession' | 'listGroupTagsForUser' | 'senderNameFor'
-  | 'updateTag' | 'getTagRun' | 'saveTagRun'
+  | 'updateTag' | 'deleteActivityTag' | 'getTagRun' | 'saveTagRun'
   | 'countMessagesAfter'
 >;
 

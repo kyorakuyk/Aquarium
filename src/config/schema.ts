@@ -176,6 +176,32 @@ const sleepSchema = z.object({
   goodnight: true,
 });
 
+const profileScheduleSchema = z.object({
+  minimumMessages: z.number().int().positive().default(50),
+  nightOwlRatio: z.number().min(0).max(1).default(0.4),
+  weekendActiveRatio: z.number().positive().default(1.5),
+  morningRatio: z.number().min(0).max(1).default(0.03),
+  morningMinimumMessages: z.number().int().positive().default(100),
+}).strict().default({
+  minimumMessages: 50,
+  nightOwlRatio: 0.4,
+  weekendActiveRatio: 1.5,
+  morningRatio: 0.03,
+  morningMinimumMessages: 100,
+});
+
+const profileSchema = z.object({
+  schedule: profileScheduleSchema,
+}).strict().default({
+  schedule: {
+    minimumMessages: 50,
+    nightOwlRatio: 0.4,
+    weekendActiveRatio: 1.5,
+    morningRatio: 0.03,
+    morningMinimumMessages: 100,
+  },
+});
+
 export const AquariumConfigSchema = z.object({
   owner: z.number().int().nonnegative(),
   accounts: z.array(z.object({
@@ -193,6 +219,7 @@ export const AquariumConfigSchema = z.object({
   mood: moodSchema,
   affinity: affinitySchema,
   sleep: sleepSchema,
+  profile: profileSchema,
   defaults: sessionSettingsSchema,
   sessions: z.record(z.string(), sessionOverrideSchema),
   debug: debugSchema,

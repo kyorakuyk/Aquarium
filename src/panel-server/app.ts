@@ -36,6 +36,8 @@ import type { TagClassificationService } from '../core/impressions/classify-tags
 import type { StickerService } from '../core/stickers/service.ts';
 import { registerStickerRoutes } from './sticker-routes.ts';
 import { registerTagClassificationRoutes } from './tag-classification-routes.ts';
+import { registerActivityRoutes } from './activity-routes.ts';
+import type { ProfileActivityService } from '../core/activity/service.ts';
 
 export interface PanelServerOptions {
   password: string;
@@ -53,6 +55,7 @@ export interface PanelServerOptions {
   sleepWakeState?: SleepWakeState;
   historyImports?: HistoryImportService;
   tagClassificationService?: TagClassificationService;
+  profileActivity?: ProfileActivityService;
   stickerServices?: () => StickerService[];
   envPath?: string;
   env?: NodeJS.ProcessEnv;
@@ -253,6 +256,16 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     now,
   });
   registerTagClassificationRoutes(app, options.tagClassificationService);
+  if (options.profileActivity) {
+    registerActivityRoutes(app, {
+      getConfig: options.getConfig,
+      saveConfig: options.saveConfig,
+      repository: options.repository,
+      profileActivity: options.profileActivity,
+      now,
+      serializeConfigWrite,
+    });
+  }
   registerPrivacyRoutes(app, {
     getConfig: options.getConfig,
     repository: options.repository,

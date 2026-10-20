@@ -77,6 +77,7 @@ export interface TagRepositoryQueries {
   countLockedMiscTags(): number;
   senderNameFor(sessionId: string, senderId: number): string | undefined;
   updateTag(id: number, update: TagUpdate): void;
+  deleteActivityTag(id: number): void;
   getTagRun(account: number, sessionId: string): TagRunRecord | undefined;
   saveTagRun(run: TagRunRecord): void;
   countMessagesAfter(sessionId: string, time: number): number;
@@ -306,6 +307,11 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
       });
       database.prepare(`UPDATE tags SET ${assignments.join(', ')} WHERE id = ?`)
         .run(...values as Array<string | number | null>, id);
+    },
+
+    deleteActivityTag(id) {
+      if (!Number.isSafeInteger(id) || id <= 0) return;
+      database.prepare("DELETE FROM tags WHERE id = ? AND origin = 'stats' AND category = 'schedule'").run(id);
     },
 
     getTagRun(account, sessionId) {
