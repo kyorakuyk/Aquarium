@@ -1,0 +1,255 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { openDatabase } from '../src/store/db.ts';
+import { createRepository } from '../src/store/repository.ts';
+import { createTagSubjectRepository } from '../src/store/tag-subject-repo.ts';
+import { createTagClassificationRepository } from '../src/store/tag-classification-repo.ts';
+import {
+  buildClassifyTagsMessages,
+  createTagClassificationService,
+  parseClassifyTagsResponse,
+} from '../src/core/impressions/classify-tags.ts';
+import { promptTemplateStore } from '../src/core/prompt-templates.ts';
+import { makeConfig } from './pipeline-test-helpers.ts';
+import type { TagRecord } from '../src/store/tag-repo.ts';
+
+const account = 7;
+const key = '7:group:8';
+const at = 1_800_000_000_000;
+
+function insertTag(
+  repository: ReturnType<typeof createRepository>,
+  overrides: Partial<TagRecord> = {},
+): number {
+  const tag: TagRecord = {
+    account,
+    sessionId: key,
+    userId: 42,
+    text: '旧标签',
+    norm: '旧标签',
+    category: 'misc',
+    subject: null,
+    polarity: null,
+    origin: 'inferred',
+    locked: false,
+    status: 'candidate',
+    source: 'auto',
+    samples: 1,
+    evidence: [],
+    firstSeen: at - 1_000,
+    lastSeen: at - 1_000,
+    supersededBy: null,
+    updatedAt: at - 1_000,
+    ...overrides,
+  };
+  return repository.insertTag(tag);
+}
+
+function responseFor(
+  messages: Parameters<NonNullable<Parameters<typeof createTagClassificationService>[0]['callModel']>>[1],
+  classify: (id: number, index: number) => Record<string, unknown>,
+) {
+  const userText = String(messages.find((message) => message.role === 'user')?.content ?? '');
+  const batch = JSON.parse(userText.trim().split('\n').at(-1) ?? '[]') as Array<{ id: number }>;
+  return {
+    text: JSON.stringify({ items: batch.map(({ id }, index) => classify(id, index)) }),
+    provider: 'fake',
+    model: 'fake-model',
+    usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+  };
+}
+
+function configWithBudget(dailyCny: number) {
+  const config = makeConfig();
+  return { ...config, budget: { ...config.budget, dailyCny, warnRatio: 0.8 } };
+}
+
+test('分类提示只携带未锁定 misc 标签，解析器拒绝 misc 和 schedule', () => {
+  const locked = {
+    id: 1,
+    account,
+    sessionId: key,
+    userId: 42,
+    text: '锁定文本不可发送',
+    norm: '锁定文本不可发送',
+    category: 'misc' as const,
+    subject: null,
+    polarity: null,
+    origin: 'inferred' as const,
+    locked: true,
+    status: 'candidate' as const,
+    source: 'auto' as const,
+    samples: 1,
+    evidence: [],
+    firstSeen: at,
+    lastSeen: at,
+    supersededBy: null,
+    updatedAt: at,
+  };
+  const visible = { ...locked, id: 2, text: '守望先锋', norm: '守望先锋', locked: false };
+  const messages = buildClassifyTagsMessages([locked, visible], 'member', promptTemplateStore.get().classifyTags);
+  const prompt = messages.map((message) => String(message.content)).join('\n');
+  assert.ok(prompt.includes('守望先锋'));
+  assert.ok(prompt.includes('"norm":"守望先锋"'));
+  assert.ok(!prompt.includes('锁定文本不可发送'));
+
+  assert.equal(parseClassifyTagsResponse(JSON.stringify({
+    items: [{ id: 2, category: 'schedule', subject: null, polarity: null, mergeInto: null }],
+  })), undefined);
+  assert.equal(parseClassifyTagsResponse(JSON.stringify({
+    items: [{ id: 2, category: 'misc', subject: null, polarity: null, mergeInto: null }],
+  })), undefined);
+});
+
+test('分类按 50 条分批、同义标签合并并持久化完成标记', async () => {
+  const database = openDatabase(':memory:');
+  try {
+    const baseRepository = createRepository(database);
+    const subjects = createTagSubjectRepository(database);
+    const classificationRepository = createTagClassificationRepository(database);
+    subjects.saveTagSubject({ account, category: 'fandom', name: '守望先锋', aliases: ['OW'] });
+    const targetId = insertTag(baseRepository, {
+      text: '守望先锋玩家', norm: '守望先锋玩家', category: 'misc', samples: 3,
+      evidence: [{ messageId: 'target-evidence', time: at - 2_000, quote: '玩守望先锋' }],
+    });
+    const sourceId = insertTag(baseRepository, {
+      text: '喜欢OW', norm: '喜欢ow', source: 'manual', origin: 'manual', status: 'confirmed', samples: 2,
+      evidence: [{ messageId: 'source-evidence', time: at - 1_000, quote: '喜欢OW' }],
+    });
+    const config = configWithBudget(1);
+    const service = createTagClassificationService({
+      repository: baseRepository,
+      classificationRepository,
+      getConfig: () => config,
+      getTemplate: () => promptTemplateStore.get().classifyTags,
+      now: () => at,
+      callModel: async (_slot, messages) => responseFor(messages, (id) => ({
+        id,
+        category: 'fandom',
+        subject: 'OW',
+        polarity: 'like',
+        mergeInto: id === sourceId ? targetId : null,
+      })),
+    });
+
+    assert.equal(service.startManual(), true);
+    await service.idle();
+
+    const target = baseRepository.tagById(targetId);
+    const source = baseRepository.tagById(sourceId);
+    assert.equal(service.status().state, 'completed');
+    assert.equal(service.status().merged, 1);
+    assert.equal(target?.category, 'fandom');
+    assert.equal(target?.subject, '守望先锋');
+    assert.equal(target?.samples, 5);
+    assert.deepEqual(target?.evidence.map(({ messageId }) => messageId), ['target-evidence', 'source-evidence']);
+    assert.equal(target?.source, 'manual');
+    assert.equal(target?.status, 'confirmed');
+    assert.equal(source?.status, 'superseded');
+    assert.equal(source?.supersededBy, targetId);
+    assert.equal(classificationRepository.isLegacyMiscClassificationComplete(), true);
+  } finally {
+    database.close();
+  }
+});
+
+test('旧的 inferred identity 即使曾 confirmed，整理后也回到 candidate', async () => {
+  const database = openDatabase(':memory:');
+  try {
+    const repository = createRepository(database);
+    const classifications = createTagClassificationRepository(database);
+    const id = insertTag(repository, {
+      text: 'INTJ', norm: 'intj', origin: 'inferred', source: 'auto', status: 'confirmed',
+    });
+    const service = createTagClassificationService({
+      repository,
+      classificationRepository: classifications,
+      getConfig: () => configWithBudget(1),
+      getTemplate: () => promptTemplateStore.get().classifyTags,
+      now: () => at,
+      callModel: async (_slot, messages) => responseFor(messages, (tagId) => ({
+        id: tagId, category: 'identity', subject: null, polarity: null, mergeInto: null,
+      })),
+    });
+
+    service.startManual();
+    await service.idle();
+    assert.equal(repository.tagById(id)?.category, 'identity');
+    assert.equal(repository.tagById(id)?.status, 'candidate');
+  } finally {
+    database.close();
+  }
+});
+
+test('预算超限后保留未完成状态，后续启动续跑且锁定 misc 标签跳过', async () => {
+  const database = openDatabase(':memory:');
+  try {
+    const baseRepository = createRepository(database);
+    const classificationRepository = createTagClassificationRepository(database);
+    for (let index = 0; index < 51; index += 1) {
+      insertTag(baseRepository, { text: `标签${index}`, norm: `标签${index}` });
+    }
+    insertTag(baseRepository, { text: '锁定misc', norm: '锁定misc', locked: true });
+    const config = configWithBudget(1);
+    let spent = false;
+    const prompts: string[] = [];
+    const getCost = () => (spent ? 2 : 0);
+    const firstService = createTagClassificationService({
+      repository: { ...baseRepository, costToday: getCost },
+      classificationRepository,
+      getConfig: () => config,
+      getTemplate: () => promptTemplateStore.get().classifyTags,
+      now: () => at,
+      callModel: async (_slot, messages) => {
+        prompts.push(messages.map((message) => String(message.content)).join('\n'));
+        const result = responseFor(messages, (id) => ({
+          id, category: 'personality', subject: null, polarity: null, mergeInto: null,
+        }));
+        spent = true;
+        return result;
+      },
+    });
+
+    assert.equal(firstService.startManual(), true);
+    await firstService.idle();
+    assert.equal(firstService.status().state, 'budget');
+    assert.equal(classificationRepository.listUnlockedMiscTags().length, 1);
+    assert.equal(classificationRepository.isLegacyMiscClassificationComplete(), false);
+    assert.ok(prompts.every((prompt) => !prompt.includes('锁定misc')));
+
+    const resumedService = createTagClassificationService({
+      repository: { ...baseRepository, costToday: () => 0 },
+      classificationRepository,
+      getConfig: () => config,
+      getTemplate: () => promptTemplateStore.get().classifyTags,
+      now: () => at + 1,
+      callModel: async (_slot, messages) => responseFor(messages, (id) => ({
+        id, category: 'personality', subject: null, polarity: null, mergeInto: null,
+      })),
+    });
+    resumedService.startOnStartup();
+    await resumedService.idle();
+    assert.equal(resumedService.status().state, 'completed');
+    assert.equal(resumedService.status().lockedSkipped, 1);
+    assert.equal(classificationRepository.isLegacyMiscClassificationComplete(), true);
+
+    const calls: string[] = [];
+    const completedService = createTagClassificationService({
+      repository: baseRepository,
+      classificationRepository,
+      getConfig: () => config,
+      getTemplate: () => promptTemplateStore.get().classifyTags,
+      now: () => at + 2,
+      callModel: async (slot, messages) => {
+        calls.push(slot);
+        return responseFor(messages, (id) => ({ id, category: 'personality', subject: null, polarity: null, mergeInto: null }));
+      },
+    });
+    completedService.startOnStartup();
+    await completedService.idle();
+    assert.equal(calls.length, 0);
+    assert.equal(completedService.status().state, 'completed');
+  } finally {
+    database.close();
+  }
+});

@@ -50,6 +50,7 @@ export interface TagUpdate {
   subject?: string | null;
   polarity?: TagPolarity;
   origin?: TagOrigin;
+  source?: TagSource;
   locked?: boolean;
   status?: TagStatus;
   samples?: number;
@@ -72,6 +73,8 @@ export interface TagRepositoryQueries {
   listTagsForSubject(account: number, sessionId: string, userId: number | null): StoredTag[];
   listTagsForSession(account: number, sessionId: string): StoredTag[];
   listGroupTagsForUser(account: number, userId: number): StoredTag[];
+  listUnlockedMiscTags(): StoredTag[];
+  countLockedMiscTags(): number;
   senderNameFor(sessionId: string, senderId: number): string | undefined;
   updateTag(id: number, update: TagUpdate): void;
   getTagRun(account: number, sessionId: string): TagRunRecord | undefined;
@@ -144,6 +147,7 @@ const tagUpdateColumns: Record<keyof TagUpdate, string> = {
   subject: 'subject',
   polarity: 'polarity',
   origin: 'origin',
+  source: 'source',
   locked: 'locked',
   status: 'status',
   samples: 'samples',
@@ -179,6 +183,17 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
     FROM tags
     WHERE account = ? AND user_id = ? AND session_id LIKE ?
     ORDER BY last_seen DESC, id DESC
+  `);
+  const selectUnlockedMiscTags = database.prepare(`
+    SELECT ${TAG_COLUMNS}
+    FROM tags
+    WHERE category = 'misc' AND locked = 0 AND status != 'superseded'
+    ORDER BY account, session_id, user_id, id
+  `);
+  const selectLockedMiscTagCount = database.prepare(`
+    SELECT COUNT(*) AS total
+    FROM tags
+    WHERE category = 'misc' AND locked = 1 AND status != 'superseded'
   `);
   const selectSenderName = database.prepare(`
     SELECT sender_name
@@ -252,6 +267,16 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
     listGroupTagsForUser(account, userId) {
       const rows = selectGroupTagsForUser.all(account, userId, `${account}:group:%`) as Array<Record<string, unknown>>;
       return rows.map(tagRecord);
+    },
+
+    listUnlockedMiscTags() {
+      const rows = selectUnlockedMiscTags.all() as Array<Record<string, unknown>>;
+      return rows.map(tagRecord);
+    },
+
+    countLockedMiscTags() {
+      const row = selectLockedMiscTagCount.get() as Record<string, unknown> | undefined;
+      return numberValue(row?.total ?? 0, 'total');
     },
 
     senderNameFor(sessionId, senderId) {

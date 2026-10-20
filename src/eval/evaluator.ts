@@ -78,6 +78,7 @@ function createUnusedTemplates(): PromptTemplateSet {
     },
     sleep: { source: '', version: '', goodnight: [] },
     extractTags: { source: '', version: '', system: '', user: '{{context}}{{existing}}' },
+    classifyTags: { source: '', version: '', system: '', user: '{{scope}}{{tags}}' },
     extractPrivate: { source: '', version: '', system: '', user: '{{context}}{{existing}}' },
     privacyGate: { source: '', version: '', system: '', user: '{{context}}{{facts}}' },
     privacyMention: { source: '', version: '', system: '', user: '{{message}}{{facts}}' },

@@ -32,8 +32,10 @@ import type { ContactSnapshot, PanelAccountRuntime } from './types.ts';
 import { budgetState } from '../llm/budget.ts';
 import type { SleepWakeState } from '../core/sleep.ts';
 import type { HistoryImportService } from '../core/impressions/history-import.ts';
+import type { TagClassificationService } from '../core/impressions/classify-tags.ts';
 import type { StickerService } from '../core/stickers/service.ts';
 import { registerStickerRoutes } from './sticker-routes.ts';
+import { registerTagClassificationRoutes } from './tag-classification-routes.ts';
 
 export interface PanelServerOptions {
   password: string;
@@ -50,6 +52,7 @@ export interface PanelServerOptions {
   replayMessage?: (message: IncomingMessage) => Promise<PipelineResult | undefined>;
   sleepWakeState?: SleepWakeState;
   historyImports?: HistoryImportService;
+  tagClassificationService?: TagClassificationService;
   stickerServices?: () => StickerService[];
   envPath?: string;
   env?: NodeJS.ProcessEnv;
@@ -249,6 +252,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     historyImports: options.historyImports,
     now,
   });
+  registerTagClassificationRoutes(app, options.tagClassificationService);
   registerPrivacyRoutes(app, {
     getConfig: options.getConfig,
     repository: options.repository,

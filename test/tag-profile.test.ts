@@ -14,7 +14,7 @@ const legacyTagColumns = [
   'samples', 'evidence_json', 'first_seen', 'last_seen', 'superseded_by', 'updated_at',
 ];
 
-test('v11 到 v12 迁移保留标签并提供画像字段默认值', () => {
+test('v11 数据库升级到 v13 时保留画像字段默认值', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-tag-profile-'));
   const databasePath = path.join(root, 'aquarium.db');
   let legacy: DatabaseSync | undefined;
@@ -55,7 +55,7 @@ test('v11 到 v12 迁移保留标签并提供画像字段默认值', () => {
     const tag = upgraded.prepare('SELECT * FROM tags WHERE id = 1').get() as Record<string, unknown>;
     const subjects = upgraded.prepare("PRAGMA table_info('tag_subjects')").all() as Array<{ name: string }>;
 
-    assert.equal(version.version, 12);
+    assert.equal(version.version, 13);
     assert.deepEqual(columns.map((column) => column.name), [
       ...legacyTagColumns, 'category', 'subject', 'polarity', 'origin', 'locked',
     ]);

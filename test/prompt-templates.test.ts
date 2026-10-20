@@ -22,6 +22,7 @@ function copyPromptTemplates(): string {
   fs.copyFileSync(path.resolve('prompts/traits.md'), path.join(root, 'traits.md'));
   fs.copyFileSync(path.resolve('prompts/sleep.md'), path.join(root, 'sleep.md'));
   fs.copyFileSync(path.resolve('prompts/extract-tags.md'), path.join(root, 'extract-tags.md'));
+  fs.copyFileSync(path.resolve('prompts/classify-tags.md'), path.join(root, 'classify-tags.md'));
   fs.copyFileSync(path.resolve('prompts/extract-private.md'), path.join(root, 'extract-private.md'));
   fs.copyFileSync(path.resolve('prompts/privacy-gate.md'), path.join(root, 'privacy-gate.md'));
   fs.copyFileSync(path.resolve('prompts/privacy-mention.md'), path.join(root, 'privacy-mention.md'));
@@ -31,6 +32,9 @@ function copyPromptTemplates(): string {
 
 test('startup template load hashes raw bytes and parses the exact vision and judge prompts', () => {
   const templates = promptTemplateStore.get();
+  const classifyTags = (templates as unknown as {
+    classifyTags?: { version: string; system: string; user: string };
+  }).classifyTags;
   const replyBytes = fs.readFileSync(path.resolve('prompts/reply-system.md'));
   const judgeBytes = fs.readFileSync(path.resolve('prompts/judge.md'));
   const visionBytes = fs.readFileSync(path.resolve('prompts/vision.md'));
@@ -48,6 +52,9 @@ test('startup template load hashes raw bytes and parses the exact vision and jud
   assert.ok(templates.vision.user.includes('只输出 JSON'));
   assert.ok(templates.judge.system.includes('严格 JSON'));
   assert.ok(templates.judge.user.includes('{{context}}'));
+  assert.ok(classifyTags);
+  assert.ok(classifyTags.system.includes('锁定'));
+  assert.ok(classifyTags.user.includes('{{tags}}'));
   assert.equal(templates.traits.order.m2, '你很讲规矩，说话做事有条理，不爱乱开话题。');
   assert.equal(templates.traits.talk.p2, '你是个话痨，什么都想插一句。');
   assert.deepEqual({ humor: templates.traits.humor, openness: templates.traits.openness, imitation: templates.traits.imitation }, {

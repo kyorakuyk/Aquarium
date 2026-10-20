@@ -20,6 +20,7 @@ import { getCliRuntime } from '../llm/cli.ts';
 import { openDatabase } from '../store/db.ts';
 import { createRepository } from '../store/repository.ts';
 import { createTagSubjectRepository } from '../store/tag-subject-repo.ts';
+import { createTagClassificationRepository } from '../store/tag-classification-repo.ts';
 import { startPanelServer, type PanelAccountRuntime } from '../panel-server/server.ts';
 import { bootstrapHost, runStartupTasks } from '../host/bootstrap.ts';
 import { startPanelWhileAccountStartupRuns } from './startup-order.ts';
@@ -98,13 +99,15 @@ const moodService = createMoodService({
     logger.error(`情绪后台任务失败：${describeError(error)}`);
   },
 });
-const { impressionsService, privateFactsService, privateMentionService, privacyGateService, historyImports } = createMemoryServices({
+const { impressionsService, tagClassificationService, privateFactsService, privateMentionService, privacyGateService, historyImports } = createMemoryServices({
   repository,
   tagSubjects,
+  tagClassificationRepository: createTagClassificationRepository(database),
   getConfig: () => configWatcher.getConfig(),
   logger,
   describeError,
 });
+tagClassificationService.startOnStartup();
 let panelServer: ReturnType<typeof startPanelServer> | undefined;
 let managedHost: Host | undefined;
 let shuttingDown = false;
@@ -150,6 +153,7 @@ async function shutdown(signal: string): Promise<void> {
     logger.error(`Windows 托管关闭失败：${describeError(error)}`);
   }
   await sessionQueue.idle();
+  await tagClassificationService.idle();
   await privateFactsService.idle();
   await privateMentionService.idle();
   await cliRuntime.stopAll();
@@ -369,6 +373,7 @@ await startPanelWhileAccountStartupRuns(accountStartup, () => {
           accounts: () => panelAccounts,
           stickerServices: () => stickerServices,
           historyImports,
+          tagClassificationService,
           sleepWakeState,
           cliRuntime,
           management: () => managementControllers,

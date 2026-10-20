@@ -5,10 +5,12 @@ import { parse as parseYaml } from 'yaml';
 import { parseReplySystemTemplate, type ReplySystemTemplate } from './prompt-templates/reply-system.ts';
 import { parsePrivacyGateTemplate, type PrivacyGatePromptTemplate } from './prompt-templates/privacy-gate.ts';
 import { parsePrivacyMentionTemplate, type PrivacyMentionPromptTemplate } from './prompt-templates/privacy-mention.ts';
+import { parseClassifyTagsTemplate, type ClassifyTagsPromptTemplate } from './prompt-templates/classify-tags.ts';
 
 export type { ReplySystemTemplate } from './prompt-templates/reply-system.ts';
 export type { PrivacyGatePromptTemplate } from './prompt-templates/privacy-gate.ts';
 export type { PrivacyMentionPromptTemplate } from './prompt-templates/privacy-mention.ts';
+export type { ClassifyTagsPromptTemplate } from './prompt-templates/classify-tags.ts';
 
 export interface PromptTemplate {
   source: string;
@@ -101,6 +103,7 @@ export interface PromptTemplateSet {
   privacyGate: PrivacyGatePromptTemplate;
   privacyMention: PrivacyMentionPromptTemplate;
   personaImport: PersonaImportPromptTemplate;
+  classifyTags: ClassifyTagsPromptTemplate;
 }
 
 export interface PromptTemplateStore {
@@ -329,6 +332,12 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
   const sleep = parseSleepTemplate(readTemplate(root, 'sleep.md'));
   const extractTags = parseExtractTagsTemplate(readTemplate(root, 'extract-tags.md'));
   const extractPrivate = parseExtractPrivateTemplate(readTemplate(root, 'extract-private.md'));
+  const classifyTagsSource = readTemplate(root, 'classify-tags.md');
+  const classifyTags = parseClassifyTagsTemplate(
+    classifyTagsSource,
+    parseTemplateFields(classifyTagsSource, 'classify-tags.md'),
+    validatePlaceholders,
+  );
   const privacyGateSource = readTemplate(root, 'privacy-gate.md');
   const privacyGate = parsePrivacyGateTemplate(
     privacyGateSource,
@@ -353,6 +362,7 @@ function readPromptTemplateSet(root: string): PromptTemplateSet {
     sleep: Object.freeze({ ...sleep, goodnight: Object.freeze(sleep.goodnight) }),
     extractTags: Object.freeze(extractTags),
     extractPrivate: Object.freeze(extractPrivate),
+    classifyTags: Object.freeze(classifyTags),
     privacyGate: Object.freeze(privacyGate),
     privacyMention: Object.freeze(privacyMention),
     personaImport: Object.freeze(personaImport),

@@ -353,6 +353,17 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 13,
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS profile_migrations (
+          name TEXT PRIMARY KEY,
+          completed_at INTEGER NOT NULL
+        );
+      `);
+    },
+  },
 ];
 
 export function openDatabase(databasePath = join(process.cwd(), 'data', 'aquarium.db')): DatabaseSync {
