@@ -50,18 +50,22 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   });
 
   const contextCount = ctx.state.proactiveMode ? 8 : settings.contextMessages;
-  const context = (ctx.processOptions.replay
+  const contextRecords = ctx.processOptions.replay
     ? ctx.options.repository.recentMessagesThrough(ctx.currentSessionId, ctx.message.messageId, contextCount)
-    : ctx.options.repository.recentMessages(ctx.currentSessionId, contextCount))
-    .map((record) => ({
-      ...record,
-      plainText: messageTextWithImageCaptions(
-        record,
-        ctx.options.repository,
-        ctx.state.promptTemplates.vision.version,
-        config.slots.vision?.[0]?.model ?? 'unknown',
-      ),
-    }));
+    : ctx.contextWindow.select(
+      ctx.currentSessionId,
+      contextCount,
+      ctx.options.repository.recentMessages(ctx.currentSessionId, contextCount * 2),
+    );
+  const context = contextRecords.map((record) => ({
+    ...record,
+    plainText: messageTextWithImageCaptions(
+      record,
+      ctx.options.repository,
+      ctx.state.promptTemplates.vision.version,
+      config.slots.vision?.[0]?.model ?? 'unknown',
+    ),
+  }));
   const tagBlocks = ctx.options.impressionsService?.promptBlocks({
     session: ctx.message.session,
     sessionId: ctx.currentSessionId,

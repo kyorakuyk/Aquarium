@@ -4,6 +4,7 @@ import type { ProtocolAdapter } from '../adapters/types.ts';
 import { AquariumConfigSchema, type AquariumConfig } from '../config/schema.ts';
 import type { IncomingMessage } from '../core/shared/events.ts';
 import { createRateLimiter } from '../core/shared/rate-limit.ts';
+import { createAnchoredContextWindow } from '../core/conversation/context-window.ts';
 import { gateStep } from '../core/conversation/steps/gate.ts';
 import type { PipelineModelCall, StepContext } from '../core/conversation/steps/types.ts';
 import type { PromptTemplateSet } from '../core/prompt/templates.ts';
@@ -118,6 +119,7 @@ function createGateContext(sample: EvalSample, config: AquariumConfig): StepCont
     processOptions: {},
     currentSessionId: sample.sessionId,
     options,
+    contextWindow: createAnchoredContextWindow(),
     now,
     wait: async () => undefined,
     random: () => 0.5,

@@ -104,6 +104,65 @@ test('pipeline 从被叫消息到模型回复、引用发送、落库和 replied
   });
 });
 
+test('普通上下文保持锚定起点，超过 1.5N 后回到 N 条', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const contextCount = 4;
+    const config = makeConfig({
+      sessions: { [sessionId(groupSession)]: { contextMessages: contextCount } },
+    });
+    const userPrompts: string[] = [];
+    let now = baseTime;
+    const pipeline = createMessagePipeline({
+      getConfig: () => config,
+      repository,
+      adapter: new FakeAdapter(),
+      getNickname: () => 'Bot',
+      personaRoot,
+      callModel: async (_slot, messages) => {
+        userPrompts.push(String(messages[1]?.content));
+        return {
+          text: '',
+          provider: 'fake',
+          model: 'fake-model',
+          usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 0, costCny: 0 },
+        };
+      },
+      now: () => now,
+      wait: async () => {},
+      random: () => 0.5,
+    });
+
+    for (let index = 1; index <= 7; index += 1) {
+      now += 60_000;
+      const result = await pipeline(makeIncoming({
+        messageId: `context-${index}`,
+        plainText: `窗口消息-${index}`,
+        mentionsSelf: true,
+        time: now,
+      }));
+      assert.equal(result.reason, 'empty_reply');
+    }
+
+    const historyLines = (prompt: string | undefined): string[] => {
+      const content = prompt ?? '';
+      const tailStart = content.indexOf('【此刻】');
+      assert.ok(tailStart >= 0);
+      const history = content.slice(0, tailStart).trimEnd();
+      return history.length === 0 ? [] : history.split('\n');
+    };
+    const atThreshold = historyLines(userPrompts[5]);
+    const afterThreshold = historyLines(userPrompts[6]);
+
+    assert.equal(atThreshold.length, 6);
+    assert.match(atThreshold[0] ?? '', /窗口消息-1/u);
+    assert.equal(afterThreshold.length, contextCount);
+    assert.doesNotMatch(afterThreshold.join('\n'), /窗口消息-1/u);
+    for (let index = 4; index <= 7; index += 1) {
+      assert.match(afterThreshold[index - 4] ?? '', new RegExp(`窗口消息-${index}`, 'u'));
+    }
+  });
+});
+
 test('pipeline 对未启用会话记录 disabled 且不调用模型', async () => {
   await withRepository(async (repository, personaRoot) => {
     const harness = createHarness(repository, makeConfig({ enabled: false }), personaRoot);

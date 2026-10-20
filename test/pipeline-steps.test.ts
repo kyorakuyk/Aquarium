@@ -10,6 +10,7 @@ import { resolveSession } from '../src/config/resolve.ts';
 import { sessionId, type IncomingMessage, type SessionKey } from '../src/core/shared/events.ts';
 import { replyDelayMs } from '../src/core/conversation/pacing.ts';
 import { createRateLimiter } from '../src/core/shared/rate-limit.ts';
+import { createAnchoredContextWindow } from '../src/core/conversation/context-window.ts';
 import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { contextStep } from '../src/core/conversation/steps/context.ts';
 import { deliverStep } from '../src/core/conversation/steps/deliver.ts';
@@ -84,6 +85,7 @@ function makeContext(
     processOptions: {},
     currentSessionId: sessionId(session),
     options: pipelineOptions,
+    contextWindow: createAnchoredContextWindow(),
     now,
     wait: async () => {},
     random: () => 0.5,
@@ -210,6 +212,21 @@ test('context step loads the persona and assembles a prompt', async (t) => {
   assert.equal(ctx.state.persona?.includes('# Bot'), true);
   assert.equal(Array.isArray(ctx.state.prompt), true);
   traceFor(ctx, 'context');
+});
+
+test('主动模式的八条提示上下文使用同一锚定窗口', async (t) => {
+  const ctx = makeContext(t);
+  const queriedCounts: number[] = [];
+  ctx.options.repository.recentMessages = (_sessionId, count) => {
+    queriedCounts.push(count);
+    return [];
+  };
+  ctx.state.config = exampleConfig;
+  ctx.state.settings = resolveSession(exampleConfig, session);
+  ctx.state.proactiveMode = 'active';
+
+  assert.deepEqual(await contextStep(ctx), { next: true });
+  assert.deepEqual(queriedCounts, [16]);
 });
 
 test('context step adds the busy mode hint and leaves it out of other modes', async (t) => {

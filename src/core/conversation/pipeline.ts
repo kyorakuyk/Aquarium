@@ -6,6 +6,7 @@ import { createIdleBackoff } from '../activity/backoff.ts';
 import { createActivityThreshold } from '../activity/threshold.ts';
 import { resolveMode } from '../activity/mode.ts';
 import { createSleepWakeState } from '../sleep/index.ts';
+import { createAnchoredContextWindow } from './context-window.ts';
 import { callSlot } from '../../llm/slots.ts';
 import { resolveSession } from '../../config/resolve.ts';
 import { sessionId, type IncomingMessage, type SessionKey } from '../shared/events.ts';
@@ -58,6 +59,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
   const random = options.random ?? Math.random;
   const modelCall = options.callModel ?? callSlot;
   const rateLimiter = createRateLimiter(now);
+  const contextWindow = createAnchoredContextWindow();
 
   async function sendSystemReply(session: SessionKey, text: string, cycleKey: string): Promise<boolean> {
     const config = pipelineOptions.getConfig();
@@ -86,6 +88,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
       processOptions: { quoteReplyTo: false },
       currentSessionId,
       options: pipelineOptions,
+      contextWindow,
       now,
       wait,
       random,
@@ -153,6 +156,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
         processOptions,
         currentSessionId,
         options: pipelineOptions,
+        contextWindow,
         now,
         wait,
         random,

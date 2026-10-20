@@ -11,6 +11,7 @@ import type { PromptBlockHash } from '../../prompt/index.ts';
 import type { ActivityBatch } from '../../activity/batcher.ts';
 import type { IdleBackoff } from '../../activity/backoff.ts';
 import type { ActivityThreshold, ProactiveMode } from '../../activity/threshold.ts';
+import type { AnchoredContextWindow } from '../context-window.ts';
 import type { MoodService } from '../../mood/service.ts';
 import type { AffinityService } from '../../affinity/service.ts';
 import type { ImpressionsService } from '../../impressions/service.ts';
@@ -142,6 +143,7 @@ export interface StepContext {
   processOptions: ProcessMessageOptions;
   currentSessionId: string;
   options: MessagePipelineOptions;
+  contextWindow: AnchoredContextWindow;
   now: () => number;
   wait: (milliseconds: number) => Promise<void>;
   random: () => number;
