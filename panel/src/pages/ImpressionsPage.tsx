@@ -17,7 +17,6 @@ import { ActivityHeatmap } from '../components/ActivityHeatmap.tsx';
 import { ImpressionTag, InlineTagAdd } from '../components/ImpressionTag.tsx';
 import { ImpressionsMemberRow } from '../components/ImpressionsMemberRow.tsx';
 import { MemberProfileCard } from '../components/MemberProfileCard.tsx';
-import { redactSensitiveText } from '../sensitive-text.ts';
 
 const PrivateFactsPanel = lazy(() => import('../components/PrivateFactsPanel.tsx').then((module) => ({ default: module.PrivateFactsPanel })));
 
@@ -312,7 +311,7 @@ export function ImpressionsPage() {
             <span className="visually-hidden">选择群</span>
             <select value={selectedId} onChange={(event) => setSelectedId(event.currentTarget.value)}>
               {groups.length === 0 && <option value="">暂无群聊</option>}
-              {groups.map((group) => <option value={group.sessionId} key={group.sessionId}>{redactSensitiveText(group.name)} · {group.memberCount ?? 0} 人</option>)}
+              {groups.map((group) => <option value={group.sessionId} key={group.sessionId}>{group.name} · {group.memberCount === undefined ? '人数未知' : `${group.memberCount} 人`}</option>)}
             </select>
           </label>
           <button

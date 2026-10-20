@@ -68,7 +68,7 @@ export function registerPrivacyRoutes(app: Hono, options: PrivacyRouteOptions): 
     const name = options.repository.latestSenderNameForAccount(account, userId) ?? String(userId);
     return context.json({
       userId,
-      name: redactSensitiveText(name),
+      name,
       facts: options.repository.listPrivateFactsForOwner(account, userId).map(privacyFactView),
     });
   });

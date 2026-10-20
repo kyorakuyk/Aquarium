@@ -11,22 +11,24 @@ export function ImpressionsMemberRow({ member, account, selected, onSelect }: {
   selected: boolean;
   onSelect: () => void;
 }) {
-  const safeName = redactSensitiveText(member.name);
-  const highlights = memberPreviewTags(member.tags)
-    .map((tag) => redactSensitiveText(tag.category === 'fandom' && tag.subject
+  const name = member.name;
+  const highlights = memberPreviewTags(member.tags).map((tag) => {
+    const displayTag = tag.category === 'fandom' && tag.subject
       ? `${tag.subject} › ${tag.text}`
-      : tag.text));
+      : tag.text;
+    return redactSensitiveText(displayTag);
+  });
   return <div className={`impressions-member-row${selected ? ' is-selected' : ''}`}>
     <button
       className="impressions-member-select"
       type="button"
       aria-pressed={selected}
-      aria-label={`查看${safeName}画像`}
+      aria-label={`查看${name}画像`}
       onClick={onSelect}
     >
-      <span className="member-avatar" aria-hidden="true">{Array.from(safeName)[0] ?? '友'}</span>
+      <span className="member-avatar" aria-hidden="true">{Array.from(name)[0] ?? '友'}</span>
       <span className="impressions-member-copy">
-        <strong>{safeName}</strong>
+        <strong>{name}</strong>
         <span className="impressions-member-tags">{highlights.length > 0 ? highlights.join(' · ') : '暂无主要标签'}</span>
       </span>
     </button>

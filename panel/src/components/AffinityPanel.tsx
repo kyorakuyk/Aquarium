@@ -131,13 +131,13 @@ export function AffinityPanel() {
         ? <p className="empty-state">还没有记录好感的群友。</p>
         : <div className="affinity-person-list">
           {sortedPeople.map((person) => {
-            const safeName = redactSensitiveText(person.name);
+            const name = person.name;
             return <article className="affinity-person-row" key={person.userId}>
               <div className="affinity-person-main">
-                <strong>{safeName}</strong>
+                <strong>{name}</strong>
                 <span className="mono muted">QQ {person.userId}</span>
                 <span>{person.value} · {LEVEL_LABELS[person.level]}</span>
-                <progress max={100} value={person.value} aria-label={`${safeName} 好感度 ${person.value}`} />
+                <progress max={100} value={person.value} aria-label={`${name} 好感度 ${person.value}`} />
                 <span className="muted">最近互动 · {formatTime(person.lastInteractionAt)}</span>
               </div>
               <form className="affinity-manual-form" onSubmit={(event) => void save(event, person.userId)}>
@@ -147,7 +147,7 @@ export function AffinityPanel() {
                   max="100"
                   step="1"
                   value={drafts[person.userId] ?? String(person.value)}
-                  aria-label={`设置${safeName}的好感度`}
+                  aria-label={`设置${name}的好感度`}
                   disabled={busyUser !== undefined}
                   onChange={(event) => setDrafts((current) => ({ ...current, [person.userId]: event.currentTarget.value }))}
                 /></label>

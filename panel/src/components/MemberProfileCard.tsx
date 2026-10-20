@@ -74,12 +74,12 @@ export function MemberProfileCard({ sessionId, member, busy, onAction, onRename,
     }
   }
 
-  const safeName = redactSensitiveText(member.name);
-  return <section className="panel-card member-profile-card" aria-label={`${safeName}的画像卡`}>
+  const name = member.name;
+  return <section className="panel-card member-profile-card" aria-label={`${name}的画像卡`}>
     <header className="member-profile-heading">
-      <span className="member-profile-avatar" aria-hidden="true">{Array.from(safeName)[0] ?? '友'}</span>
+      <span className="member-profile-avatar" aria-hidden="true">{Array.from(name)[0] ?? '友'}</span>
       <div className="member-profile-title">
-        <h2>{safeName}</h2>
+        <h2>{name}</h2>
         <span className="mono muted">QQ {member.userId}</span>
       </div>
       <span className="member-profile-affinity">{AFFINITY_LABELS[member.affinity.level]} · {member.affinity.value}</span>

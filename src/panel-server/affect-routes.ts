@@ -139,7 +139,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
   function affinityView(account: number, userId: number, at: number) {
     return {
       ...affinityService.getCurrent(account, userId, at),
-      name: redactSensitiveText(options.repository.latestSenderNameForAccount(account, userId) ?? String(userId)),
+      name: options.repository.latestSenderNameForAccount(account, userId) ?? String(userId),
     };
   }
 
@@ -259,7 +259,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     const at = now();
     const people = affinityService.listCurrent(account, at).map((person) => ({
       ...person,
-      name: redactSensitiveText(options.repository.latestSenderNameForAccount(account, person.userId) ?? String(person.userId)),
+      name: options.repository.latestSenderNameForAccount(account, person.userId) ?? String(person.userId),
     }));
     return context.json(people);
   });
@@ -291,7 +291,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     const current = affinityService.setManual({ account, userId, value: body.value, now: now() });
     return context.json({
       ...current,
-      name: redactSensitiveText(options.repository.latestSenderNameForAccount(account, userId) ?? String(userId)),
+      name: options.repository.latestSenderNameForAccount(account, userId) ?? String(userId),
     });
   });
 
@@ -307,7 +307,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
       tags.map((tag) => tag.userId).filter((userId): userId is number => userId !== null),
     )];
     const members = memberIds.map((userId) => {
-      const name = redactSensitiveText(options.repository.senderNameFor(id, userId) ?? String(userId));
+      const name = options.repository.senderNameFor(id, userId) ?? String(userId);
       const memberTags = tags.filter((tag) => tag.userId === userId);
       const memberAllowed = userId !== key.account && decide({
         info: { origin: 'group', sessionId: id, ownerId: userId },
