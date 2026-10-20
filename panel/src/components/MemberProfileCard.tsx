@@ -21,14 +21,16 @@ type Member = ImpressionsView['members'][number];
 type TagAction = (id: number, status: TagStatus) => Promise<boolean>;
 type TagRename = (id: number, text: string) => Promise<boolean>;
 type TagLock = (id: number, locked: boolean) => Promise<boolean>;
+type TagDelete = (id: number) => Promise<boolean>;
 
-export function MemberProfileCard({ sessionId, member, busy, onAction, onRename, onLock, onAdd }: {
+export function MemberProfileCard({ sessionId, member, busy, onAction, onRename, onLock, onDelete, onAdd }: {
   sessionId: string;
   member: Member;
   busy: boolean;
   onAction: TagAction;
   onRename: TagRename;
   onLock: TagLock;
+  onDelete: TagDelete;
   onAdd: MemberTagAdd;
 }) {
   const [summary, setSummary] = useState<MemberSummaryView | null>();
@@ -135,6 +137,7 @@ export function MemberProfileCard({ sessionId, member, busy, onAction, onRename,
       onAction={onAction}
       onRename={onRename}
       onLock={onLock}
+      onDelete={onDelete}
       onAdd={onAdd}
     />
     <details className="member-injected-tags">

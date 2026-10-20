@@ -312,3 +312,46 @@ test('startup 处理迁移标记的旧群标签，采用短名词并清除待整
     database.close();
   }
 });
+
+test('整理命中已否决的分类文本时删除来源标签而不复活该画像', async () => {
+  const database = openDatabase(':memory:');
+  try {
+    const repository = createRepository(database);
+    const classifications = createTagClassificationRepository(database);
+    const deletedId = insertTag(repository, {
+      userId: null,
+      text: '不聊政治',
+      norm: '不聊政治',
+      category: 'norms',
+      origin: 'manual',
+      source: 'manual',
+      status: 'confirmed',
+    });
+    assert.equal(repository.deleteTagAndCreateVeto(deletedId), true);
+    const sourceId = insertTag(repository, {
+      userId: null,
+      text: '不聊政治',
+      norm: '不聊政治',
+      category: 'misc',
+    });
+    const service = createTagClassificationService({
+      repository,
+      classificationRepository: classifications,
+      getConfig: () => configWithBudget(1),
+      getTemplate: () => promptTemplateStore.get().classifyTags,
+      now: () => at,
+      callModel: async (_slot, messages) => responseFor(messages, (id) => ({
+        id, category: 'norms', subject: null, polarity: null, mergeInto: null,
+      })),
+    });
+
+    assert.equal(service.startManual(), true);
+    await service.idle();
+
+    assert.equal(service.status().state, 'completed');
+    assert.equal(repository.tagById(sourceId), undefined);
+    assert.equal(repository.listTagVetoes(account, key).length, 1);
+  } finally {
+    database.close();
+  }
+});

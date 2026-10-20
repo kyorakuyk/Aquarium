@@ -52,7 +52,7 @@ export function isTagCategoryForScope(category: TagCategory, scope: TagScope): b
   return (scope === 'group' ? GROUP_TAG_CATEGORIES : MEMBER_TAG_CATEGORIES).has(category);
 }
 
-export type TagDropReason = 'invalid_text' | 'recent_habit' | 'schedule_by_stats' | 'quote_missing';
+export type TagDropReason = 'invalid_text' | 'recent_habit' | 'schedule_by_stats' | 'quote_missing' | 'vetoed';
 
 export type TagTextPreparation =
   | { ok: true; text: string }

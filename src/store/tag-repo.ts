@@ -70,6 +70,7 @@ export interface TagRunRecord {
 export interface TagRepositoryQueries {
   insertTag(tag: TagRecord): number;
   tagById(id: number): StoredTag | undefined;
+  deleteTag(id: number): boolean;
   listTagsForSubject(account: number, sessionId: string, userId: number | null): StoredTag[];
   listTagsForSession(account: number, sessionId: string): StoredTag[];
   listGroupTagsForUser(account: number, userId: number): StoredTag[];
@@ -167,6 +168,7 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const selectTagById = database.prepare(`SELECT ${TAG_COLUMNS} FROM tags WHERE id = ?`);
+  const deleteTagById = database.prepare('DELETE FROM tags WHERE id = ?');
   const selectTagsForSubject = database.prepare(`
     SELECT ${TAG_COLUMNS}
     FROM tags
@@ -253,6 +255,12 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
       if (!Number.isSafeInteger(id) || id <= 0) return undefined;
       const row = selectTagById.get(id) as Record<string, unknown> | undefined;
       return row ? tagRecord(row) : undefined;
+    },
+
+    deleteTag(id) {
+      if (!Number.isSafeInteger(id) || id <= 0) return false;
+      const result = deleteTagById.run(id);
+      return result.changes === 1 || result.changes === 1n;
     },
 
     listTagsForSubject(account, sessionId, userId) {

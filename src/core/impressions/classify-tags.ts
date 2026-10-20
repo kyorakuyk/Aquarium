@@ -184,6 +184,17 @@ export function createTagClassificationService(options: TagClassificationService
   function classifySingle(tagId: number, profile: TagClassificationProfile, at: number): boolean {
     const tag = options.repository.tagById(tagId);
     if (!tag || tag.locked || tag.status === 'superseded') return false;
+    const textNorm = profile.norm ?? normalizeTagText(profile.text ?? tag.text);
+    if (options.classificationRepository.isTagVetoed({
+      account: tag.account,
+      sessionId: tag.sessionId,
+      userId: tag.userId,
+      category: profile.category,
+      subject: profile.subject,
+      textNorm,
+    })) {
+      return options.classificationRepository.deleteTag(tag.id);
+    }
     options.repository.updateTag(tag.id, {
       category: profile.category,
       subject: profile.subject,

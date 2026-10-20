@@ -1,6 +1,6 @@
-# Aquarium 施工导读：从骨架到 Impressions V4 M1
+# Aquarium 施工导读：从骨架到 Impressions V4 M2
 
-> 本文是随代码一起更新的学习材料。目标不是让你记住所有 API，而是让你能回答：程序分成哪些部分、每一层负责什么、为什么选这些库，以及每个任务怎样验证。前文记录 T0–T6、阶段 B 的 R1–R9、阶段 C/D、M2-A A1–A6 和 §9.0 U1–U4；§15 补充 2026-10-20 的 V18f 图片认知和 §13 P1–P6 隐私记忆；§16 补充 2026-10-21 的 S1–S4、K1–K3 与 Impressions V4 M1。M2–M8 和 R9 尚未在本节覆盖。真实 SnowLuma/QQ、模型、Windows GUI 与用户验收仍按各自清单执行。
+> 本文是随代码一起更新的学习材料。目标不是让你记住所有 API，而是让你能回答：程序分成哪些部分、每一层负责什么、为什么选这些库，以及每个任务怎样验证。前文记录 T0–T6、阶段 B 的 R1–R9、阶段 C/D、M2-A A1–A6 和 §9.0 U1–U4；§15 补充 2026-10-20 的 V18f 图片认知和 §13 P1–P6 隐私记忆；§16 补充 2026-10-21 的 S1–S4、K1–K3 与 Impressions V4 M1–M2。M3–M8 和 R9 尚未在本节覆盖。真实 SnowLuma/QQ、模型、Windows GUI 与用户验收仍按各自清单执行。
 >
 > 自动化测试和生产构建不等于真实运行验收。夜间运行不会替代真实 SnowLuma/QQ、模型、Windows GUI 或控制台体验确认。
 
@@ -454,11 +454,11 @@ M2 不是另起一套聊天管线，而是在现有 pipeline 上增加可配置�
 
 ## 16. Impressions V4：结构整理、提示词前缀与标签分类 v2（2026-10-21）
 
-本节补充 §16 夜间任务中已完成的 S1–S4、K1–K3 和 M1。各任务的细项与停止点以 `doc/plans/PLAN.md` §16 为准；这里记录新目录的职责和关键设计，方便从当前代码继续阅读。
+本节补充 §16 夜间任务中已完成的 S1–S4、K1–K3 和 M1–M2。各任务的细项与停止点以 `doc/plans/PLAN.md` §16 为准；这里记录新目录的职责和关键设计，方便从当前代码继续阅读。
 
 ### 16.1 S1–S4：迁移与 core 的职责边界
 
-- `src/store/db.ts` 负责打开数据库并按版本顺序执行迁移；每个版本的 SQL 变更在 `src/store/migrations/v01.ts` 至 `v16.ts` 中独立审查。新增 schema 时追加迁移，不改写已发布版本；迁移测试也验证版本连续、旧数据保留和重复打开的幂等性。
+- `src/store/db.ts` 负责打开数据库并按版本顺序执行迁移；每个版本的 SQL 变更在 `src/store/migrations/v01.ts` 至 `v17.ts` 中独立审查。新增 schema 时追加迁移，不改写已发布版本；迁移测试也验证版本连续、旧数据保留和重复打开的幂等性。
 - 标签分类、适用范围、半衰期、subject 路径等纯规则位于 `src/core/impressions/tag-model.ts`，不依赖 SQLite。为避免 `store` 与 `core` 互相耦合，边界检查只给 `store` 到该纯模型模块开了一个明确白名单。
 - 出没统计归 `src/core/profiles/presence.ts`，统计作息标签的协调归 `presence-service.ts`；`src/core/conversation/`、`shared/`、`prompt/` 等目录按职责组织会话、共同类型和提示词能力。
 
@@ -476,6 +476,12 @@ M2 不是另起一套聊天管线，而是在现有 pipeline 上增加可配置�
 - 统计服务用最近 90 个本地日的消息计算群和群友最活跃的连续三小时窗口；窗口占比至少 0.35 才生成标签。群标签用“最热闹”，群友用“最活跃”；群另按某星期占比至少 0.25 生成“周 X 最热闹”。不满足条件的统计标签连续三天后删除；模型生成的作息词会作为 `schedule_by_stats` 丢弃理由进入追踪。
 - 标签正文、证据引文和提示块仍走原有敏感文本脱敏；仅名称显示路径按既定规则处理，不能把显示豁免扩展到标签内容。
 
-### 16.4 验证边界
+### 16.4 M2：删除并不再学
 
-M1 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **678/678** 项测试；`npm run panel:build` 成功（147 个模块），Vite 仍提示主 bundle 约 524 kB 超过默认 500 kB 提示线。未运行 `npm start`、真实模型、QQ、SnowLuma 或 GUI。当前只完成 M1；M2–M8 和 R9 仍待执行，R9 后按 `doc/plans/PLAN.md` §16.4 清单停下并由用户做真实体验验收。
+- migration v17 新增 `tag_vetoes`，用账号、会话、对象、分类、规范化 subject 路径和规范化文本表达一次精确否决。删除标签与写入否决在同一事务完成；重复删除同一规范化标签不会堆出重复记录。删除否决只移除规则，不会立刻复活标签。
+- `DELETE /api/tags/:id` 创建否决并硬删除标签；`GET /api/tag-vetoes?sessionId=` 只列出指定群的规则，`DELETE /api/tag-vetoes/:id` 撤销。UI 在标签 hover/focus 时显示 ×，标签详情也有“删除并不再学”；“印象数据”菜单可列出规则并撤销。
+- 自动提取的 observe/new/contradict 和分类整理在落库前都按上述完整键精确匹配；subject 的每一级先按 canonical 名称/别名归一。命中后不写入并记录 `droppedTags` 的 `vetoed` reason；不会做语义相似匹配。所有正文/路径仍保留既有敏感文本脱敏。
+
+### 16.5 验证边界
+
+M2 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **681/681** 项测试；`npm run panel:build` 成功（148 个模块），Vite 仍提示主 bundle 约 528 kB 超过默认 500 kB 提示线。新增端到端测试用假模型验证删除、精确拦截、撤销后重新学习；未运行 `npm start`、真实模型、QQ、SnowLuma 或 GUI。当前完成 M1–M2；M3–M8 和 R9 仍待执行，R9 后按 `doc/plans/PLAN.md` §16.4 清单停下并由用户做真实体验验收。

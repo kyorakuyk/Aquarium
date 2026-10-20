@@ -451,4 +451,11 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     const updated = options.repository.tagById(id);
     return context.json(tagView(updated ?? existing, now()));
   });
+
+  app.delete('/api/tags/:id', (context) => {
+    const id = Number(context.req.param('id'));
+    if (!Number.isSafeInteger(id) || id <= 0) return context.json({ error: 'Invalid tag id' }, 400);
+    if (!options.repository.deleteTagAndCreateVeto(id)) return context.json({ error: 'Tag not found' }, 404);
+    return context.body(null, 204);
+  });
 }

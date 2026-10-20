@@ -23,6 +23,7 @@ import {
 import { createPrivateFactControlsQueries } from './privacy-controls-repo.ts';
 import { createPrivateFactMentionQueries } from './privacy-mention-repo.ts';
 import { createStickerQueries, type StickerRepository } from './sticker-repo.ts';
+import type { TagVetoRepository } from './tag-veto-repo.ts';
 
 export interface MessageStorageRecord {
   sessionId: string;
@@ -144,7 +145,7 @@ export interface StoredPipelineTrace extends PipelineTraceRecord {
   id: number;
 }
 
-export interface StoreRepository extends PersonaVersionRepository, PrivacyRepository, PrivateFactMentionRepository, PrivateFactControlsRepository, StickerRepository {
+export interface StoreRepository extends PersonaVersionRepository, PrivacyRepository, PrivateFactMentionRepository, PrivateFactControlsRepository, StickerRepository, TagVetoRepository {
   saveMessage(message: MessageStorageRecord): boolean;
   updateMessageSegments(sessionId: string, messageId: string, segments: unknown[]): void;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
@@ -197,6 +198,7 @@ export interface StoreRepository extends PersonaVersionRepository, PrivacyReposi
   latestSenderNameForAccount(account: number, userId: number): string | undefined;
   insertTag(tag: TagRecord): number;
   tagById(id: number): StoredTag | undefined;
+  deleteTag(id: number): boolean;
   listTagsForSubject(account: number, sessionId: string, userId: number | null): StoredTag[];
   listTagsForSession(account: number, sessionId: string): StoredTag[];
   listGroupTagsForUser(account: number, userId: number): StoredTag[];

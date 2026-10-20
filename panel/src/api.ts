@@ -177,6 +177,15 @@ export interface TagView {
   lastSeen: number;
 }
 
+export interface TagVetoView {
+  id: number;
+  userId: number | null;
+  category: TagCategory;
+  subjectNorm: string;
+  textNorm: string;
+  createdAt: number;
+}
+
 export interface ImpressionsView {
   sessionId: string;
   groupTags: TagView[];

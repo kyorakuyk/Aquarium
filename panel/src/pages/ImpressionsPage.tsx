@@ -17,12 +17,14 @@ import { ActivityHeatmap } from '../components/ActivityHeatmap.tsx';
 import { ImpressionTag, InlineTagAdd } from '../components/ImpressionTag.tsx';
 import { ImpressionsMemberRow } from '../components/ImpressionsMemberRow.tsx';
 import { MemberProfileCard } from '../components/MemberProfileCard.tsx';
+import { TagVetoMenu } from '../components/TagVetoMenu.tsx';
 
 const PrivateFactsPanel = lazy(() => import('../components/PrivateFactsPanel.tsx').then((module) => ({ default: module.PrivateFactsPanel })));
 
 type TagAction = (id: number, status: TagStatus) => Promise<boolean>;
 type TagRename = (id: number, text: string) => Promise<boolean>;
 type TagLock = (id: number, locked: boolean) => Promise<boolean>;
+type TagDelete = (id: number) => Promise<boolean>;
 type TagAdd = (text: string) => Promise<boolean>;
 type HistoryImportTarget = 200 | 500 | 1_000 | 2_000;
 
@@ -50,13 +52,14 @@ function estimatedHistoryImportCost(target: HistoryImportTarget, models: ModelsV
   return Math.ceil(target / 80) * 6_000 * inputPrice / 1_000_000;
 }
 
-function TagCollection({ tags, label, busy, onAction, onRename, onLock, onAdd }: {
+function TagCollection({ tags, label, busy, onAction, onRename, onLock, onDelete, onAdd }: {
   tags: TagView[];
   label: string;
   busy: boolean;
   onAction: TagAction;
   onRename: TagRename;
   onLock: TagLock;
+  onDelete: TagDelete;
   onAdd: TagAdd;
 }) {
   const [showRejected, setShowRejected] = useState(false);
@@ -65,28 +68,29 @@ function TagCollection({ tags, label, busy, onAction, onRename, onLock, onAdd }:
   return (
     <div className="tag-collection">
       {active.length === 0 && <span className="muted tag-empty">还没有标签</span>}
-      {active.map((tag) => <ImpressionTag key={tag.id} tag={tag} busy={busy} onAction={onAction} onRename={onRename} onLock={onLock} />)}
+      {active.map((tag) => <ImpressionTag key={tag.id} tag={tag} busy={busy} onAction={onAction} onRename={onRename} onLock={onLock} onDelete={onDelete} />)}
       <InlineTagAdd label={label} busy={busy} onSubmit={onAdd} />
       {rejected.length > 0 && <button className="rejected-tags-toggle" type="button" aria-expanded={showRejected} onClick={() => setShowRejected((value) => !value)}>
         {showRejected ? '收起已否决' : `+${rejected.length} 已否决`}
       </button>}
-      {showRejected && rejected.map((tag) => <ImpressionTag key={tag.id} tag={tag} busy={busy} onAction={onAction} onRename={onRename} onLock={onLock} />)}
+      {showRejected && rejected.map((tag) => <ImpressionTag key={tag.id} tag={tag} busy={busy} onAction={onAction} onRename={onRename} onLock={onLock} onDelete={onDelete} />)}
     </div>
   );
 }
 
-function GroupTags({ tags, busy, onAction, onRename, onLock, onAdd }: {
+function GroupTags({ tags, busy, onAction, onRename, onLock, onDelete, onAdd }: {
   tags: TagView[];
   busy: boolean;
   onAction: TagAction;
   onRename: TagRename;
   onLock: TagLock;
+  onDelete: TagDelete;
   onAdd: TagAdd;
 }) {
   return (
     <section className="panel-card group-vibe-card">
       <h2>群的氛围</h2>
-      <TagCollection tags={tags} label="新增群标签" busy={busy} onAction={onAction} onRename={onRename} onLock={onLock} onAdd={onAdd} />
+      <TagCollection tags={tags} label="新增群标签" busy={busy} onAction={onAction} onRename={onRename} onLock={onLock} onDelete={onDelete} onAdd={onAdd} />
     </section>
   );
 }
@@ -215,6 +219,20 @@ export function ImpressionsPage() {
     }
   }
 
+  async function deleteTag(id: number): Promise<boolean> {
+    if (!selectedId || busy) return false;
+    setBusy(true);
+    try {
+      await apiRequest<void>(`/api/tags/${id}`, { method: 'DELETE' });
+      return await load(selectedId);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '删除标签失败');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function addTag(
     userId: number | null,
     text: string,
@@ -320,6 +338,7 @@ export function ImpressionsPage() {
             disabled={!selectedId}
             onClick={openHistoryDialog}
           >{historyImportActive ? '查看进度' : '拉取历史'}</button>
+          {selectedId && <TagVetoMenu sessionId={selectedId} disabled={busy} />}
         </div>}
       </div>
       {tab === 'people' && <AffinityPanel />}
@@ -336,6 +355,7 @@ export function ImpressionsPage() {
             onAction={(id, status) => runAction(id, { status })}
             onRename={(id, text) => runAction(id, { text })}
             onLock={(id, locked) => runAction(id, { locked })}
+            onDelete={deleteTag}
             onAdd={(text) => addTag(null, text)}
           />
           <ActivityHeatmap sessionId={view.sessionId} group />
@@ -365,6 +385,7 @@ export function ImpressionsPage() {
             onAction={(id, status) => runAction(id, { status })}
             onRename={(id, text) => runAction(id, { text })}
             onLock={(id, locked) => runAction(id, { locked })}
+            onDelete={deleteTag}
             onAdd={(text, category, subject, polarity) => addTag(selectedMember.userId, text, category, subject, polarity)}
           />
           : <div className="panel-card member-profile-empty">选择一位群友，查看它眼里的画像。</div>}

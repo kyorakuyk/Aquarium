@@ -24,7 +24,7 @@ import {
   applyTagObservation,
   normalizeTagText,
 } from './tags.ts';
-import { isTagCategoryForScope, prepareTagText, type TagDropReason } from './tag-model.ts';
+import { isTagCategoryForScope, prepareTagText, type TagCategory, type TagDropReason } from './tag-model.ts';
 import { buildImpressionsPromptBlocks } from './prompt-blocks.ts';
 import type { TagSubjectRepository } from '../../store/tag-subject-repo.ts';
 
@@ -158,6 +158,8 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       counters.dropped += 1;
       if (reason) counters.droppedTagReasons[reason] = (counters.droppedTagReasons[reason] ?? 0) + 1;
     };
+    const isTagVetoed = (category: TagCategory, subjectPath: string | null, textNorm: string): boolean =>
+      options.repository.isTagVetoed({ account, sessionId: sessionKey, userId, category, subject: subjectPath, textNorm });
 
     const evidenceFor = (messageId: string, evidenceUserId: number | null) => {
       const record = recordsById.get(messageId);
@@ -234,6 +236,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         counters.dropped += 1;
         continue;
       }
+      if (isTagVetoed(target.category, target.subject, target.norm)) { recordDrop('vetoed'); continue; }
       if (!observe(target, item.messageId, evidence)) counters.dropped += 1;
     }
 
@@ -257,6 +260,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         continue;
       }
       const norm = normalizeTagText(normalizedItem.text);
+      if (isTagVetoed(profile.category, profile.subject, norm)) { recordDrop('vetoed'); continue; }
       const existing = current.find((tag) => tag.norm === norm);
       if (existing && (existing.locked || incrementedTagIds.has(existing.id))) {
         recordDrop();
@@ -336,6 +340,10 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       const target = current.find((tag) => tag.id === item.id);
       if (!evidence || !profile || !target || target.locked || target.status === 'superseded') {
         recordDrop();
+        continue;
+      }
+      if (isTagVetoed(profile.category, profile.subject, normalizeTagText(normalizedItem.text))) {
+        recordDrop('vetoed');
         continue;
       }
       const outcome = applyTagContradiction(current, {

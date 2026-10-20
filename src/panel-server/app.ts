@@ -41,6 +41,7 @@ import type { ProfileActivityService } from '../core/profiles/presence-service.t
 import type { TagSubjectRepository } from '../store/tag-subject-repo.ts';
 import type { MemberSummaryRepository } from '../store/member-summary-repo.ts';
 import { registerTagSubjectRoutes } from './tag-subject-routes.ts';
+import { registerTagVetoRoutes } from './tag-veto-routes.ts';
 import { registerMemberSummaryRoutes } from './member-summary-routes.ts';
 
 export interface PanelServerOptions {
@@ -261,6 +262,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     historyImports: options.historyImports,
     now,
   });
+  registerTagVetoRoutes(app, options.repository);
   if (options.tagSubjects) {
     registerTagSubjectRoutes(app, {
       getConfig: options.getConfig,

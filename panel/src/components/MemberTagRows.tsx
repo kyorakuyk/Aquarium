@@ -19,6 +19,7 @@ export type MemberTagAdd = (
 type TagAction = (id: number, status: TagStatus) => Promise<boolean>;
 type TagRename = (id: number, text: string) => Promise<boolean>;
 type TagLock = (id: number, locked: boolean) => Promise<boolean>;
+type TagDelete = (id: number) => Promise<boolean>;
 
 const PROFILE_ROWS: ReadonlyArray<{ category: TagCategory; label: string }> = [
   { category: 'identity', label: '自我认同' },
@@ -125,7 +126,7 @@ function ProfileTagAdd({ label, category, busy, onSubmit }: {
   </form>;
 }
 
-function TagRow({ label, category, tags, sessionId, busy, onAction, onRename, onLock, onAdd }: {
+function TagRow({ label, category, tags, sessionId, busy, onAction, onRename, onLock, onDelete, onAdd }: {
   label: string;
   category: TagCategory;
   tags: TagView[];
@@ -134,6 +135,7 @@ function TagRow({ label, category, tags, sessionId, busy, onAction, onRename, on
   onAction: TagAction;
   onRename: TagRename;
   onLock: TagLock;
+  onDelete: TagDelete;
   onAdd: MemberTagAdd;
 }) {
   const [showRejected, setShowRejected] = useState(false);
@@ -156,6 +158,7 @@ function TagRow({ label, category, tags, sessionId, busy, onAction, onRename, on
         onAction={onAction}
         onRename={onRename}
         onLock={onLock}
+        onDelete={onDelete}
       />)}
       {active.length === 0 && <span className="muted profile-tag-empty">暂无</span>}
       {category === 'fandom' && <button
@@ -186,6 +189,7 @@ function TagRow({ label, category, tags, sessionId, busy, onAction, onRename, on
         onAction={onAction}
         onRename={onRename}
         onLock={onLock}
+        onDelete={onDelete}
       />)}
     </div>
     {aliasesOpen && <TagSubjectManagerDialog
@@ -196,13 +200,14 @@ function TagRow({ label, category, tags, sessionId, busy, onAction, onRename, on
   </div>;
 }
 
-export function MemberTagRows({ sessionId, tags, busy, onAction, onRename, onLock, onAdd }: {
+export function MemberTagRows({ sessionId, tags, busy, onAction, onRename, onLock, onDelete, onAdd }: {
   sessionId: string;
   tags: TagView[];
   busy: boolean;
   onAction: TagAction;
   onRename: TagRename;
   onLock: TagLock;
+  onDelete: TagDelete;
   onAdd: MemberTagAdd;
 }) {
   const scheduleTags = tags.filter((tag) => tag.category === 'schedule');
@@ -216,6 +221,7 @@ export function MemberTagRows({ sessionId, tags, busy, onAction, onRename, onLoc
       onAction={onAction}
       onRename={onRename}
       onLock={onLock}
+      onDelete={onDelete}
       onAdd={onAdd}
     />
     {PROFILE_ROWS.map(({ category, label }) => <TagRow
@@ -228,6 +234,7 @@ export function MemberTagRows({ sessionId, tags, busy, onAction, onRename, onLoc
       onAction={onAction}
       onRename={onRename}
       onLock={onLock}
+      onDelete={onDelete}
       onAdd={onAdd}
     />)}
   </div>;

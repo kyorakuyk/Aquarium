@@ -39,6 +39,7 @@ export function ImpressionTag({
   onAction,
   onRename,
   onLock,
+  onDelete,
 }: {
   tag: TagView;
   displayText?: string;
@@ -46,6 +47,7 @@ export function ImpressionTag({
   onAction: (id: number, status: TagStatus) => Promise<boolean>;
   onRename: (id: number, text: string) => Promise<boolean>;
   onLock?: (id: number, locked: boolean) => Promise<boolean>;
+  onDelete?: (id: number) => Promise<boolean>;
 }) {
   const safeTagText = redactSensitiveText(tag.text);
   const subjectDisplay = tag.subject?.replaceAll('/', ' › ');
@@ -91,6 +93,10 @@ export function ImpressionTag({
 
   async function changeLock(): Promise<void> {
     if (onLock) await onLock(tag.id, !tag.locked);
+  }
+
+  async function deleteAndVeto(): Promise<void> {
+    if (onDelete && await onDelete(tag.id)) closePopover();
   }
 
   async function rename(event: FormEvent<HTMLFormElement>) {
@@ -159,6 +165,7 @@ export function ImpressionTag({
           {tag.status !== 'rejected' && <button className="button button-secondary" type="button" disabled={busy} onClick={() => void changeStatus('rejected')}>否决</button>}
           {tag.status !== 'candidate' && <button className="button button-secondary" type="button" disabled={busy} onClick={() => void changeStatus('candidate')}>恢复为候选</button>}
           <button className="button button-secondary" type="button" disabled={busy} onClick={() => { setDraft(safeTagText); setSensitiveInput(false); setEditing(true); }}>改字</button>
+          {onDelete && <button className="button button-warn" type="button" disabled={busy} onClick={() => void deleteAndVeto()}>删除并不再学</button>}
         </div>}
       </div>}
       </div>
@@ -175,6 +182,14 @@ export function ImpressionTag({
           ? <path d="M8 10V7a4 4 0 0 1 8 0v3" />
           : <path d="M8 10V7a4 4 0 0 1 7.5-1.8" />}
       </svg></button>}
+      {onDelete && <button
+        className="tag-delete-toggle"
+        type="button"
+        aria-label={`删除并不再学${safeQuotedTagText}`}
+        title="删除并不再学"
+        disabled={busy}
+        onClick={() => void onDelete(tag.id)}
+      >×</button>}
     </div>
   );
 }

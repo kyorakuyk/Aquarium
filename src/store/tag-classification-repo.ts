@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { createTagQueries } from './tag-repo.ts';
 import type { StoredTag, TagEvidence } from './tag-repo.ts';
+import { createTagVetoQueries } from './tag-veto-repo.ts';
 import { createTagSubjectRepository } from './tag-subject-repo.ts';
 import {
   isTagCategoryForScope,
@@ -24,6 +25,15 @@ export interface TagClassificationRepository {
   countLockedTagsToClassify(): number;
   hasPendingReclassification(): boolean;
   markTagReclassified(id: number): void;
+  isTagVetoed(input: {
+    account: number;
+    sessionId: string;
+    userId: number | null;
+    category: TagCategoryKey;
+    subject: string | null;
+    textNorm: string;
+  }): boolean;
+  deleteTag(id: number): boolean;
   listUnlockedMiscTags(): StoredTag[];
   countLockedMiscTags(): number;
   isLegacyMiscClassificationComplete(): boolean;
@@ -60,6 +70,7 @@ function evidenceUnion(target: TagEvidence[], source: TagEvidence[]): TagEvidenc
 
 export function createTagClassificationRepository(database: DatabaseSync): TagClassificationRepository {
   const tags = createTagQueries(database);
+  const vetoes = createTagVetoQueries(database, tags);
   const subjects = createTagSubjectRepository(database);
   const selectClassifiableIds = database.prepare(`
     SELECT id FROM tags
@@ -132,6 +143,18 @@ export function createTagClassificationRepository(database: DatabaseSync): TagCl
       const sourceSubject = profile.subject === null
         ? null
         : subjects.canonicalTagSubject(source.account, profile.category, profile.subject);
+      if (vetoes.isTagVetoed({
+        account: source.account,
+        sessionId: source.sessionId,
+        userId: source.userId,
+        category: profile.category,
+        subject: sourceSubject,
+        textNorm: profile.norm ?? source.norm,
+      })) {
+        database.exec('ROLLBACK');
+        transactionOpen = false;
+        return false;
+      }
       if (target.category !== profile.category
         || target.subject !== sourceSubject
         || target.polarity !== profile.polarity) {
@@ -197,6 +220,14 @@ export function createTagClassificationRepository(database: DatabaseSync): TagCl
     markTagReclassified(id) {
       if (!Number.isSafeInteger(id) || id <= 0) return;
       clearTagReclassification.run(id);
+    },
+
+    isTagVetoed(input) {
+      return vetoes.isTagVetoed(input);
+    },
+
+    deleteTag(id) {
+      return tags.deleteTag(id);
     },
 
     listUnlockedMiscTags() {

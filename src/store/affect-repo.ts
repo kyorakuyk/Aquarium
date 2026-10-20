@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { StoreRepository } from './repository.ts';
 import { createTagQueries } from './tag-repo.ts';
+import { createTagVetoQueries } from './tag-veto-repo.ts';
 
 export type { StoredTag, TagEvidence, TagRecord, TagRunRecord, TagSource, TagStatus, TagUpdate } from './tag-repo.ts';
 
@@ -73,8 +74,9 @@ export interface StoredAffinityEvent extends AffinityEventRecord {
 export type AffectRepositoryQueries = Pick<StoreRepository,
   'getMoodState' | 'saveMoodState' | 'recordMoodEvent' | 'recentMoodEvents' | 'moodEventsSince' | 'latestMoodEventAtOrBefore'
   | 'getAffinityState' | 'listAffinityStates' | 'saveAffinityState' | 'recordAffinityEvent' | 'recentAffinityEvents' | 'affinityEventsSince' | 'latestSenderNameForAccount'
-  | 'insertTag' | 'tagById' | 'listTagsForSubject' | 'listTagsForSession' | 'listGroupTagsForUser' | 'senderNameFor'
+  | 'insertTag' | 'tagById' | 'deleteTag' | 'listTagsForSubject' | 'listTagsForSession' | 'listGroupTagsForUser' | 'senderNameFor'
   | 'updateTag' | 'deleteActivityTag' | 'getTagRun' | 'saveTagRun'
+  | 'deleteTagAndCreateVeto' | 'listTagVetoes' | 'isTagVetoed' | 'deleteTagVeto'
   | 'countMessagesAfter'
 >;
 
@@ -161,6 +163,8 @@ function affinityEventRecord(row: Record<string, unknown>): StoredAffinityEvent 
 }
 
 export function createAffectQueries(database: DatabaseSync): AffectRepositoryQueries {
+  const tags = createTagQueries(database);
+  const tagVetoes = createTagVetoQueries(database, tags);
   const selectMoodState = database.prepare(`
     SELECT account, valence, arousal, updated_at, band, band_since, last_band_change_at
     FROM mood_state
@@ -253,7 +257,8 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
   `);
 
   return {
-    ...createTagQueries(database),
+    ...tags,
+    ...tagVetoes,
     getMoodState(account) {
       const row = selectMoodState.get(account) as Record<string, unknown> | undefined;
       return row ? moodStateRecord(row) : undefined;
