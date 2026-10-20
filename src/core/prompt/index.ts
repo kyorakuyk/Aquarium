@@ -42,7 +42,7 @@ function formatTime(timestamp: number): string {
   return `${hours}:${minutes}`;
 }
 
-// 按固定顺序解析系统提示词块：顺序从变化最慢到最快，便于命中前缀缓存。
+// 按固定顺序解析提示词块；动态块在 buildPromptMessages 中放到聊天记录之后。
 function resolvePromptBlocks(options: BuildPromptOptions): RenderedPromptBlock[] {
   const ownerRule = options.ownerId === 0
     ? '当前没有主人，不要把任何人视为主人。'
@@ -56,9 +56,7 @@ function resolvePromptBlocks(options: BuildPromptOptions): RenderedPromptBlock[]
     { id: 'traits', text: options.blocks?.traits ?? '' },
     {
       id: 'rules',
-      text: template.system
-        .replaceAll('{{ownerRule}}', ownerRule)
-        .replaceAll('{{modeHint}}', options.modeHint ?? ''),
+      text: template.system.replaceAll('{{ownerRule}}', ownerRule),
     },
     { id: 'groupNote', text: groupNote },
     { id: 'groupTags', text: options.blocks?.groupTags ?? '' },
@@ -78,8 +76,17 @@ export function buildPromptMessages(
 ): OpenAI.ChatCompletionMessageParam[] {
   const blocks = resolvePromptBlocks(options);
   const template = options.replySystemTemplate ?? promptTemplateStore.get().replySystem;
-  const systemContent = blocks.filter(({ text }) => text.length > 0)
+  const systemBlockIds = new Set(['persona', 'traits', 'rules', 'groupNote', 'groupTags']);
+  const systemContent = blocks.filter(({ id, text }) => systemBlockIds.has(id) && text.length > 0)
     .map(({ text }) => text).join('\n\n');
+  const blocksById = new Map(blocks.map(({ id, text }) => [id, text]));
+  const dynamicBlocks = [
+    options.modeHint ?? '',
+    ...['mood', 'affinity', 'float', 'privateFacts', 'memberTags', 'knownFacts', 'privacyRule', 'stickers']
+      .map((id) => blocksById.get(id) ?? ''),
+  ].filter((text) => text.length > 0);
+  const request = options.request ?? template.request;
+  const dynamicTail = ['【此刻】', ...dynamicBlocks, ...(request.length > 0 ? [request] : [])].join('\n');
   const contextLines = options.context.map((message) => {
     const ownerLabel = options.ownerId !== 0 && message.senderId === options.ownerId
       ? '（主人）'
@@ -87,10 +94,9 @@ export function buildPromptMessages(
     const speaker = message.isSelf ? '你' : `${JSON.stringify(message.senderName)}${ownerLabel}`;
     return `[${formatTime(message.time)}] ${speaker}: ${message.plainText}`;
   });
-  const userContent = [
-    ...contextLines,
-    options.request ?? template.request,
-  ].join('\n');
+  const userContent = contextLines.length > 0
+    ? `${contextLines.join('\n')}\n\n${dynamicTail}`
+    : dynamicTail;
 
   return [
     { role: 'system', content: systemContent },

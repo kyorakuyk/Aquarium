@@ -217,13 +217,14 @@ test('context step adds the busy mode hint and leaves it out of other modes', as
   busy.state.config = exampleConfig;
   busy.state.settings = { ...resolveSession(exampleConfig, session), mode: 'busy' };
   assert.deepEqual(await contextStep(busy), { next: true });
-  assert.ok(String(busy.state.prompt?.[0]?.content).includes('你现在有点忙，回得简短随意。'));
+  assert.equal(String(busy.state.prompt?.[0]?.content).includes('你现在有点忙，回得简短随意。'), false);
+  assert.ok(String(busy.state.prompt?.[1]?.content).includes('你现在有点忙，回得简短随意。'));
 
   const natural = makeContext(t);
   natural.state.config = exampleConfig;
   natural.state.settings = { ...resolveSession(exampleConfig, session), mode: 'natural' };
   assert.deepEqual(await contextStep(natural), { next: true });
-  assert.equal(String(natural.state.prompt?.[0]?.content).includes('你现在有点忙，回得简短随意。'), false);
+  assert.equal(String(natural.state.prompt?.[1]?.content).includes('你现在有点忙，回得简短随意。'), false);
 });
 
 test('generate step records empty replies without continuing to delivery', async (t) => {

@@ -223,7 +223,7 @@ test('context injects the privateFacts block into a real private reply prompt', 
       wait: async () => {},
       random: () => 0.5,
       callModel: async (_slot, messages) => {
-        prompts.push(String(messages[0]?.content));
+        prompts.push(messages.map((message) => String(message.content)).join('\n'));
         return {
           text: '收到。',
           provider: 'fake',

@@ -49,7 +49,7 @@ test('buildPromptMessages 固定 system 前缀顺序并把上下文格式化成�
     messages[1]?.content,
     '[09:05] "张三（主人）": 早上好\n[09:06] "阿伟"（主人）: 请稍等\n'
       + '[09:07] 你: 你也好\n[09:08] "小鱼\\"伙伴": 引号测试\n'
-      + '请回复最后一条提到你的消息。',
+      + '\n【此刻】\n请回复最后一条提到你的消息。',
   );
   assert.equal(String(messages[0]?.content).includes(String(ownerId)), false);
   assert.equal(String(messages[1]?.content).includes(String(ownerId)), false);
@@ -68,10 +68,10 @@ test('owner 未设置时提示不把任何人当作主人', () => {
 
   assert.match(String(messages[0]?.content), /当前没有主人，不要把任何人视为主人。/);
   assert.equal(String(messages[0]?.content).includes('主人 QQ 号'), false);
-  assert.equal(messages[1]?.content, '[09:08] "昵称里有主人": 普通发言\n请回复最后一条提到你的消息。');
+  assert.equal(messages[1]?.content, '[09:08] "昵称里有主人": 普通发言\n\n【此刻】\n请回复最后一条提到你的消息。');
 });
 
-test('buildPromptMessages 插入忙碌提示并保持空提示为空', () => {
+test('buildPromptMessages 将忙碌提示放在动态尾部并保持空提示为空', () => {
   const options = {
     persona: '人设',
     ownerId: 0,
@@ -82,8 +82,9 @@ test('buildPromptMessages 插入忙碌提示并保持空提示为空', () => {
   const busy = buildPromptMessages({ ...options, modeHint: hint });
   const normal = buildPromptMessages(options);
 
-  assert.ok(String(busy[0]?.content).includes(hint));
-  assert.equal(String(normal[0]?.content).includes(hint), false);
+  assert.equal(String(busy[0]?.content).includes(hint), false);
+  assert.ok(String(busy[1]?.content).includes(hint));
+  assert.equal(String(normal[1]?.content).includes(hint), false);
 });
 
 test('模板占位符不会递归解释群聊补充说明中的大括号', () => {
@@ -122,6 +123,7 @@ test('提示词块按固定顺序渲染并跳过空块', () => {
     ownerId: 0,
     groupNote: '块-群说明',
     context: [],
+    modeHint: '块-模式提示',
     blocks: {
       traits: '块-性格底色',
       groupTags: '块-群标签',
@@ -137,11 +139,19 @@ test('提示词块按固定顺序渲染并跳过空块', () => {
   };
   const messages = buildPromptMessages(options);
   const systemContent = String(messages[0]?.content);
-  const positions = ['块-人设', '块-性格底色', '块-群说明', '块-群标签', '块-私聊记忆', '块-群友标签', '块-群里已知事实', '块-隐私规则', '块-好感', '块-浮动值', '块-表情候选']
+  const userContent = String(messages[1]?.content);
+  const systemPositions = ['块-人设', '块-性格底色', '本会话补充说明：块-群说明', '块-群标签']
     .map((text) => systemContent.indexOf(text));
+  const dynamicPositions = ['块-模式提示', '块-好感', '块-浮动值', '块-私聊记忆', '块-群友标签', '块-群里已知事实', '块-隐私规则', '块-表情候选', '请回复最后一条提到你的消息。']
+    .map((text) => userContent.indexOf(text));
 
-  assert.ok(positions.every((position) => position >= 0));
-  assert.deepEqual(positions, [...positions].sort((left, right) => left - right));
+  assert.ok(systemPositions.every((position) => position >= 0));
+  assert.deepEqual(systemPositions, [...systemPositions].sort((left, right) => left - right));
+  assert.ok(userContent.startsWith('【此刻】\n'));
+  assert.ok(dynamicPositions.every((position) => position >= 0));
+  assert.deepEqual(dynamicPositions, [...dynamicPositions].sort((left, right) => left - right));
+  assert.equal(systemContent.includes('块-私聊记忆'), false);
+  assert.equal(systemContent.includes('块-表情候选'), false);
   assert.deepEqual(
     describePromptBlocks(options).map(({ id }) => id),
     ['persona', 'traits', 'rules', 'groupNote', 'groupTags', 'privateFacts', 'memberTags', 'knownFacts', 'privacyRule', 'affinity', 'float', 'stickers'],
@@ -164,4 +174,41 @@ test('describePromptBlocks 的内容哈希稳定且为 SHA-256 前八位', () =>
     first.find(({ id }) => id === 'groupTags')?.hash,
     createHash('sha256').update('群标签块').digest('hex').slice(0, 8),
   );
+});
+
+test('相邻请求只有 mood 与 stickers 变化时，system 和聊天前缀保持稳定', () => {
+  const context = [{
+    sessionId: '1:group:2',
+    messageId: 'm-1',
+    senderId: 9,
+    senderName: '群友',
+    isSelf: false,
+    plainText: '同一条聊天记录',
+    segments: [],
+    time: new Date(2026, 9, 21, 9, 8).getTime(),
+  }];
+  const first = buildPromptMessages({
+    persona: '固定人设',
+    ownerId: 0,
+    groupNote: '固定群说明',
+    context,
+    blocks: { mood: '心情-晴朗', stickers: '候选-1' },
+  });
+  const second = buildPromptMessages({
+    persona: '固定人设',
+    ownerId: 0,
+    groupNote: '固定群说明',
+    context,
+    blocks: { mood: '心情-低落', stickers: '候选-2' },
+  });
+
+  assert.equal(first[0]?.role, 'system');
+  assert.equal(first[1]?.role, 'user');
+  assert.equal(first[0]?.content, second[0]?.content);
+  const lastChatLine = '[09:08] "群友": 同一条聊天记录';
+  const firstUser = String(first[1]?.content);
+  const secondUser = String(second[1]?.content);
+  const prefixEnd = firstUser.indexOf(lastChatLine) + lastChatLine.length;
+  assert.ok(prefixEnd >= lastChatLine.length);
+  assert.equal(firstUser.slice(0, prefixEnd), secondUser.slice(0, prefixEnd));
 });

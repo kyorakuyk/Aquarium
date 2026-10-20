@@ -535,6 +535,7 @@
 | 2026-10-21 | S2 | 03:24–03:30；模型归位；check 656/656 |
 | 2026-10-21 | S3 | 03:32–03:37；出没归位；check 656/656 |
 | 2026-10-21 | S4 | 03:38–04:17；core 归类；check 656/656 |
+| 2026-10-21 | K1 | 04:17–04:40；慢变化 system 前缀，动态块移至 user 尾部；聚焦测试 59/59；check 657/657 |
 
 ---
 
@@ -1821,7 +1822,7 @@ traits: { order: 0, morality: 0, talk: 0, mind: 0 }
 
 **背景**：DeepSeek 按“请求开头的最长相同前缀”命中缓存。现在 `buildPromptMessages` 把 mood、affinity、float、memberTags、stickers 这些**每条消息都可能变化**的块放在 system 里、聊天记录之前。只要其中一个变了，后面整段聊天记录都无法命中缓存。另外，聊天记录是“最近 N 条”的滑动窗口，每来一条新消息，窗口开头就往后挪一条，前缀也就跟着变了。
 
-- [ ] **K1 稳定前缀、动态放尾部**：`buildPromptMessages` 的输出改成：
+- [x] **K1 稳定前缀、动态放尾部**：`buildPromptMessages` 的输出改成：
   1. `system`：只放**慢变化**的块，顺序为 persona → traits → rules → groupNote → groupTags。`rules` 里不能再有任何按消息变化的内容：`{{modeHint}}` 从 `prompts/reply-system.md` 的 system 段删除，`reply-system.ts` 里对应的占位符校验一起改掉。
   2. `user`：先放聊天记录行（格式不变），然后空一行，接一段动态尾部 `【此刻】\n…`，依次是 modeHint、mood、affinity、float、privateFacts、memberTags、knownFacts、privacyRule、stickers，最后是 request。空的块跳过。
   - `describePromptBlocks` 和决策追踪里的 block id 不变，只是位置变了。试聊页显示的提示词也跟着变。

@@ -219,17 +219,14 @@ test('judge 模板热重载更新解析文本和原始文件哈希', () => {
   }
 });
 
-test('reply-system 模板必须声明 modeHint 占位符', () => {
+test('reply-system 模板不再要求 modeHint 占位符', () => {
   const root = copyPromptTemplates();
   try {
-    const store = createPromptTemplateStore(root);
-    const valid = store.get();
     const replyPath = path.join(root, 'reply-system.md');
     const source = fs.readFileSync(replyPath, 'utf8');
     fs.writeFileSync(replyPath, source.replace('{{modeHint}}', ''), 'utf8');
 
-    assert.throws(() => store.reload(), /缺少占位符 \{\{modeHint\}\}/);
-    assert.equal(store.get(), valid);
+    assert.doesNotThrow(() => createPromptTemplateStore(root));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

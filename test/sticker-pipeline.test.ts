@@ -54,7 +54,7 @@ test('未给表情机会时不注入 stickers 块，也不发送表情', async (
     const result = await harness.pipeline(makeIncoming({ messageId: 'sticker-none' }));
 
     assert.deepEqual(result, { replied: true, reason: 'replied' });
-    const prompt = String(harness.modelRequests[0]?.messages[0]?.content);
+    const prompt = harness.modelRequests[0]?.messages.map(({ content }) => String(content)).join('\n') ?? '';
     assert.doesNotMatch(prompt, /可以发表情包/u);
     assert.deepEqual(service.sent, []);
     const decision = repository.recentDecisions(1)[0];
@@ -75,7 +75,7 @@ test('给机会时注入候选，合法编号在正文之后发送并记录使�
     const result = await harness.pipeline(makeIncoming({ messageId: 'sticker-send' }));
 
     assert.deepEqual(result, { replied: true, reason: 'replied' });
-    const prompt = String(harness.modelRequests[0]?.messages[0]?.content);
+    const prompt = harness.modelRequests[0]?.messages.map(({ content }) => String(content)).join('\n') ?? '';
     assert.match(prompt, /1 摊手无奈 \/ 2 开心/u);
     assert.equal(harness.adapter.sent.length, 1);
     assert.deepEqual(harness.adapter.sent[0]?.segments, [

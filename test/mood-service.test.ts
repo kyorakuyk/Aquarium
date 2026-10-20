@@ -48,7 +48,7 @@ function createMoodHarness(
     moodService,
     affinityService,
     callModel: async (_slot, messages) => {
-      replyPrompts.push(String(messages[0]?.content));
+      replyPrompts.push(messages.map((message) => String(message.content)).join('\n'));
       return {
         text: '普通回复。',
         provider: 'fake',
