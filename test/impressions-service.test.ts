@@ -9,6 +9,7 @@ import {
   makeConfig,
   makeIncoming,
   withRepository,
+  withDefaultExtractProfiles,
 } from './pipeline-test-helpers.ts';
 
 const account = groupSession.account;
@@ -31,7 +32,7 @@ function createImpressionsHarness(
     callModel: async (_slot, messages) => {
       extractRequests.push(messages.map((message) => String(message.content)).join('\n'));
       return {
-        text: options.extractText ?? '{"group":{"observe":[],"new":[],"contradict":[]},"members":[]}',
+        text: withDefaultExtractProfiles(options.extractText ?? '{"group":{"observe":[],"new":[],"contradict":[]},"members":[]}'),
         provider: 'fake',
         model: 'fake-model',
         usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },

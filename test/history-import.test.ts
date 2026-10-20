@@ -71,7 +71,19 @@ test('history windows extract the supplied records without touching newer contex
         prompt = messages.map((message) => String(message.content)).join('\n');
         return {
           text: JSON.stringify({
-            group: { observe: [], new: [{ text: '旧窗标签', messageId: 'window-old' }], contradict: [] },
+            group: {
+              observe: [],
+              new: [{
+                text: '旧窗标签',
+                messageId: 'window-old',
+                category: 'personality',
+                subject: null,
+                polarity: null,
+                origin: 'inferred',
+                sensitive: false,
+              }],
+              contradict: [],
+            },
             members: [],
           }),
           provider: 'fake',

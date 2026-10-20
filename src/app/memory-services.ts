@@ -6,6 +6,7 @@ import { createPrivacyGateService } from '../core/privacy/group-gate.ts';
 import { createPrivacyMentionService } from '../core/privacy/mentions.ts';
 import { promptTemplateStore } from '../core/prompt-templates.ts';
 import type { StoreRepository } from '../store/repository.ts';
+import type { TagSubjectRepository } from '../store/tag-subject-repo.ts';
 
 interface ServiceLogger {
   error(message: string): void;
@@ -15,12 +16,14 @@ interface ServiceLogger {
 
 export function createMemoryServices(options: {
   repository: StoreRepository;
+  tagSubjects: TagSubjectRepository;
   getConfig: () => AquariumConfig;
   logger: ServiceLogger;
   describeError: (error: unknown) => string;
 }) {
   const impressionsService = createImpressionsService({
     repository: options.repository,
+    tagSubjects: options.tagSubjects,
     getConfig: options.getConfig,
     onError: (error) => options.logger.error(`印象提取失败：${options.describeError(error)}`),
     onExtract: (summary) => {

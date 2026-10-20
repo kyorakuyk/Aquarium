@@ -87,7 +87,10 @@ export function applyTagObservation(
     return { action: 'ignore', reason: 'duplicate' };
   }
   const samples = existing.samples + 1;
-  const status: TagStatus = existing.status === 'candidate' && samples >= 2 ? 'confirmed' : existing.status;
+  const inferredIdentity = existing.category === 'identity' && existing.origin === 'inferred';
+  const status: TagStatus = existing.status === 'candidate' && samples >= 2 && !inferredIdentity
+    ? 'confirmed'
+    : existing.status;
   return {
     action: 'observe',
     id: existing.id,

@@ -14,6 +14,8 @@ import {
   asObserveItem,
   isExternalLinkShareText,
   runExtract,
+  type ExtractContradictItem,
+  type ExtractNewItem,
   type ExtractSubjectItems,
   type ParsedExtractResponse,
 } from './extract.ts';
@@ -25,6 +27,7 @@ import {
   normalizeTagText,
   selectInjectableTags,
 } from './tags.ts';
+import type { TagSubjectRepository } from '../../store/tag-subject-repo.ts';
 
 export const EXTRACT_BATCH_TRIGGER = { messages: 60, sinceMs: 30 * 60 * 1000 } as const;
 export const EXTRACT_SLOW_TRIGGER = { messages: 10, sinceMs: 6 * 60 * 60 * 1000 } as const;
@@ -52,6 +55,7 @@ export interface ImpressionsPromptBlocks {
 
 export interface ImpressionsServiceOptions {
   repository: StoreRepository;
+  tagSubjects?: TagSubjectRepository;
   getConfig: () => AquariumConfig;
   callModel?: PipelineModelCall;
   now?: () => number;
@@ -124,6 +128,8 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     return Array.from(plainText).slice(0, 40).join('');
   }
 
+  const identityTextPattern = /^(?:[IE][NS][TF][JP]|(?:Ni|Ne|Si|Se|Ti|Te|Fi|Fe)(?: 主导| 辅助)?)$/u;
+
   function applySubject(
     subject: ExtractSubjectItems,
     current: StoredTag[],
@@ -154,7 +160,36 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       };
     };
 
-    const observe = (target: StoredTag, messageId: string, evidence: ReturnType<typeof evidenceFor>): boolean => {
+    const profileFor = (item: ExtractNewItem | ExtractContradictItem) => {
+      const record = recordsById.get(item.messageId);
+      if (!record) return undefined;
+      if (item.category === 'atmosphere' && userId !== null) return undefined;
+      if (item.category === 'identity' && (userId === null || !identityTextPattern.test(item.text))) return undefined;
+      let origin = item.origin;
+      if (item.category === 'identity' && origin === 'self_report'
+        && (record.senderId !== userId || !record.plainText.toLowerCase().includes(item.text.toLowerCase()))) {
+        origin = 'inferred';
+      }
+      return {
+        category: item.category,
+        subject: item.subject,
+        polarity: item.polarity,
+        origin,
+        locked: item.sensitive,
+      };
+    };
+
+    const evidenceForItem = (item: ExtractNewItem | ExtractContradictItem) => evidenceFor(
+      item.messageId,
+      item.category === 'identity' && item.origin === 'self_report' ? null : userId,
+    );
+
+    const observe = (
+      target: StoredTag,
+      messageId: string,
+      evidence: ReturnType<typeof evidenceFor>,
+      lockSensitive = false,
+    ): boolean => {
       if (!evidence) return false;
       const outcome = applyTagObservation(current, {
         text: target.text,
@@ -172,6 +207,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         lastSeen: outcome.lastSeen,
         evidence: outcome.evidence,
         updatedAt: at,
+        ...(lockSensitive ? { locked: true } : {}),
       };
       if (!alreadyIncremented) incrementedTagIds.add(target.id);
       options.repository.updateTag(outcome.id, update);
@@ -198,8 +234,9 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         counters.dropped += 1;
         continue;
       }
-      const evidence = evidenceFor(item.messageId, userId);
-      if (!evidence) {
+      const evidence = evidenceForItem(item);
+      const profile = profileFor(item);
+      if (!evidence || !profile) {
         counters.dropped += 1;
         continue;
       }
@@ -223,11 +260,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
           userId,
           text: outcome.text,
           norm: outcome.norm,
-          category: 'misc',
-          subject: null,
-          polarity: null,
-          origin: 'inferred',
-          locked: false,
+          ...profile,
           status: 'candidate',
           source: 'auto',
           samples: 1,
@@ -244,11 +277,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
           userId,
           text: outcome.text,
           norm: outcome.norm,
-          category: 'misc',
-          subject: null,
-          polarity: null,
-          origin: 'inferred',
-          locked: false,
+          ...profile,
           status: 'candidate',
           source: 'auto',
           samples: 1,
@@ -263,7 +292,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         counters.inserted += 1;
         newCount += 1;
       } else if (outcome.action === 'observe') {
-        if (!existing || !observe(existing, item.messageId, evidence)) {
+        if (!existing || !observe(existing, item.messageId, evidence, profile.locked)) {
           counters.dropped += 1;
           continue;
         }
@@ -280,9 +309,10 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         counters.dropped += 1;
         continue;
       }
-      const evidence = evidenceFor(item.messageId, userId);
+      const evidence = evidenceForItem(item);
+      const profile = profileFor(item);
       const target = current.find((tag) => tag.id === item.id);
-      if (!evidence || !target || target.status === 'superseded') {
+      if (!evidence || !profile || !target || target.status === 'superseded') {
         counters.dropped += 1;
         continue;
       }
@@ -303,11 +333,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         userId,
         text: outcome.text,
         norm: outcome.norm,
-        category: 'misc',
-        subject: null,
-        polarity: null,
-        origin: 'inferred',
-        locked: false,
+        ...profile,
         status: 'candidate',
         source: 'auto',
         samples: 1,
@@ -331,11 +357,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         userId,
         text: outcome.text,
         norm: outcome.norm,
-        category: 'misc',
-        subject: null,
-        polarity: null,
-        origin: 'inferred',
-        locked: false,
+        ...profile,
         status: 'candidate',
         source: 'auto',
         samples: 1,
@@ -396,7 +418,11 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
 
     const result = await runExtract(
       records,
-      { group: groupTags, members: memberTags },
+      {
+        group: groupTags,
+        members: memberTags,
+        subjects: options.tagSubjects?.listTagSubjects(account, 'fandom') ?? [],
+      },
       template,
       async (slot, messages) => {
         const response = await callModel(slot, messages, {

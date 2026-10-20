@@ -19,6 +19,7 @@ import { createSleepGoodnightScheduler } from '../core/sleep/goodnight.ts';
 import { getCliRuntime } from '../llm/cli.ts';
 import { openDatabase } from '../store/db.ts';
 import { createRepository } from '../store/repository.ts';
+import { createTagSubjectRepository } from '../store/tag-subject-repo.ts';
 import { startPanelServer, type PanelAccountRuntime } from '../panel-server/server.ts';
 import { bootstrapHost, runStartupTasks } from '../host/bootstrap.ts';
 import { startPanelWhileAccountStartupRuns } from './startup-order.ts';
@@ -40,6 +41,7 @@ const configPath = path.join(process.cwd(), 'data', 'config.yaml');
 const initialConfig = loadConfig({ configPath });
 const database = openDatabase();
 const repository = createRepository(database);
+const tagSubjects = createTagSubjectRepository(database);
 const configWatcher = watchConfig({ initialConfig, configPath });
 const cliRuntime = getCliRuntime();
 cliRuntime.sync(initialConfig.providers);
@@ -98,6 +100,7 @@ const moodService = createMoodService({
 });
 const { impressionsService, privateFactsService, privateMentionService, privacyGateService, historyImports } = createMemoryServices({
   repository,
+  tagSubjects,
   getConfig: () => configWatcher.getConfig(),
   logger,
   describeError,
