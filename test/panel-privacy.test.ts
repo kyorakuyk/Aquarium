@@ -28,6 +28,16 @@ function jsonHeaders(): HeadersInit {
 
 test('privacy GET is authenticated, owner-scoped, and redacts sensitive text and evidence', async () => {
   await withPanel(async ({ app, repository }) => {
+    repository.saveMessage({
+      sessionId: `${account}:private:42`,
+      messageId: 'privacy-name',
+      senderId: 42,
+      senderName: 'PrivateFriend123',
+      isSelf: false,
+      plainText: 'hello',
+      segments: [],
+      time: now,
+    });
     const id = repository.insertPrivateFact(fact({
       text: `最近准备考研 abcdefghi`,
       keywords: ['考研', 'abcdefgh'],
@@ -39,9 +49,11 @@ test('privacy GET is authenticated, owner-scoped, and redacts sensitive text and
     assert.equal(response.status, 200);
     const body = await response.json() as {
       userId: number;
+      name: string;
       facts: Array<{ id: number; text: string; textRedacted: boolean; keywords: string[]; level: string; levelSource: string; evidence: Array<{ quote: string }> }>;
     };
     assert.equal(body.userId, 42);
+    assert.equal(body.name, 'PrivateFriend123');
     assert.equal(body.facts.length, 1);
     assert.equal(body.facts[0]?.id, id);
     assert.equal(body.facts[0]?.textRedacted, true);

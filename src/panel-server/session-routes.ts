@@ -119,7 +119,7 @@ export function registerSessionRoutes(app: Hono, options: SessionRouteOptions): 
         && runtimes.some((runtime) => runtime.adapter.account === key.account)
         && !rows.has(configuredId)
       ) {
-        rows.set(configuredId, { key, name: configuredId, degraded: degradedByAccount.get(key.account) ?? true });
+        rows.set(configuredId, { key, name: `${key.kind === 'group' ? '群' : '私聊'} ${key.peer}（未获取名称）`, degraded: degradedByAccount.get(key.account) ?? true });
       }
     }
     const result = [...rows.entries()].map(([id, row]) => {

@@ -84,6 +84,11 @@ test('private prompt facts obey scope policy and append same-person group tags l
       userId,
       text,
       norm: text,
+      category: 'schedule',
+      subject: null,
+      polarity: null,
+      origin: 'manual',
+      locked: false,
       status: 'confirmed',
       source: 'manual',
       samples: 1,
@@ -169,9 +174,34 @@ test('context injects the privateFacts block into a real private reply prompt', 
       userId: ownerId,
       text: '夜猫子',
       norm: '夜猫子',
+      category: 'schedule',
+      subject: null,
+      polarity: null,
+      origin: 'manual',
+      locked: false,
       status: 'confirmed',
       source: 'manual',
       samples: 1,
+      evidence: [],
+      firstSeen: now,
+      lastSeen: now,
+      supersededBy: null,
+      updatedAt: now,
+    });
+    repository.insertTag({
+      account: groupSession.account,
+      sessionId: `${groupSession.account}:group:1001`,
+      userId: ownerId,
+      text: 'INTP',
+      norm: 'intp',
+      category: 'identity',
+      subject: null,
+      polarity: null,
+      origin: 'inferred',
+      locked: false,
+      status: 'confirmed',
+      source: 'auto',
+      samples: 2,
       evidence: [],
       firstSeen: now,
       lastSeen: now,
@@ -212,7 +242,8 @@ test('context injects the privateFacts block into a real private reply prompt', 
     }));
 
     assert.equal(result.replied, true);
-    assert.ok(prompts[0]?.includes('你和"小明"私聊时了解到：喜欢清晨散步；夜猫子'));
+    assert.ok(prompts[0]?.includes(`你和"小明"私聊时了解到：喜欢清晨散步；（推测，仅供参考，别据此下结论）INTP；作息：夜猫子`));
+    assert.ok(prompts[0]?.includes('（推测，仅供参考，别据此下结论）INTP'));
     const detail = repository.recentDecisions(1)[0]?.detail as {
       promptBlocks?: Array<{ id: string }>;
     };

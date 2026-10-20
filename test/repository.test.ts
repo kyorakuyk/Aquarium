@@ -342,6 +342,11 @@ test('标签与提取进度读写往返一致', () => {
       userId: null,
       text: '爱聊游戏',
       norm: '爱聊游戏',
+      category: 'atmosphere',
+      subject: null,
+      polarity: null,
+      origin: 'inferred',
+      locked: false,
       status: 'candidate',
       source: 'auto',
       samples: 1,
@@ -357,6 +362,11 @@ test('标签与提取进度读写往返一致', () => {
       userId: 42,
       text: '夜猫子',
       norm: '夜猫子',
+      category: 'identity',
+      subject: null,
+      polarity: null,
+      origin: 'self_report',
+      locked: true,
       status: 'confirmed',
       source: 'auto',
       samples: 3,
@@ -371,10 +381,15 @@ test('标签与提取进度读写往返一致', () => {
     assert.equal(groupTags.length, 1);
     assert.equal(groupTags[0]?.id, groupTagId);
     assert.equal(groupTags[0]?.userId, null);
+    assert.equal(groupTags[0]?.category, 'atmosphere');
+    assert.equal(groupTags[0]?.locked, false);
     assert.deepEqual(groupTags[0]?.evidence, [{ messageId: 'm1', time: 1_000, quote: '今晚开黑吗' }]);
     const memberTags = repository.listTagsForSubject(account, groupSession, 42);
     assert.equal(memberTags.length, 1);
     assert.equal(memberTags[0]?.id, memberTagId);
+    assert.equal(memberTags[0]?.category, 'identity');
+    assert.equal(memberTags[0]?.origin, 'self_report');
+    assert.equal(memberTags[0]?.locked, true);
     assert.equal(memberTags[0]?.samples, 3);
 
     repository.updateTag(groupTagId, {

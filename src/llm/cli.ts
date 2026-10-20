@@ -19,7 +19,7 @@ export interface CliRuntimeStatus {
 }
 
 export interface CliRuntime {
-  call(id: string, provider: CliProviderConfig, input: string): Promise<string>;
+  call(id: string, provider: CliProviderConfig, input: string, timeoutMs?: number): Promise<string>;
   status(id: string): CliRuntimeStatus;
   restart(id: string, provider: CliProviderConfig): void;
   sync(providers: Record<string, ProviderConfig>): void;
@@ -118,7 +118,7 @@ class PrewarmSlot {
     child.stdin.on('error', () => { /* 空闲进程退出时忽略 EPIPE。 */ });
   }
 
-  async call(input: string): Promise<string> {
+  async call(input: string, timeoutMs = this.provider.timeoutSec * 1_000): Promise<string> {
     if (this.stopped) throw new Error('CLI 预热已停止');
     let child = this.child;
     if (child) {
@@ -143,7 +143,7 @@ class PrewarmSlot {
     this.state = 'busy';
     if (!this.child && this.restartTimer === undefined) this.start();
     try {
-      const text = await runCliChild(child, input, this.provider.timeoutSec * 1_000);
+      const text = await runCliChild(child, input, timeoutMs);
       this.served += 1;
       this.backoffMs = this.options.restartBaseMs;
       return text;
@@ -313,14 +313,15 @@ class Runtime implements CliRuntime {
     next.start();
   }
 
-  async call(id: string, provider: CliProviderConfig, input: string): Promise<string> {
-    if (!provider.prewarm) {
+  async call(id: string, provider: CliProviderConfig, input: string, timeoutMs?: number): Promise<string> {
+    const effectiveProvider = this.providers.get(id) ?? provider;
+    if (!effectiveProvider.prewarm) {
       const child = spawnCliChild(this.options.spawnProcess, provider);
       const children = this.activeChildren.get(id) ?? new Set<ChildProcessWithoutNullStreams>();
       children.add(child);
       this.activeChildren.set(id, children);
       try {
-        const text = await runCliChild(child, input, provider.timeoutSec * 1_000);
+        const text = await runCliChild(child, input, timeoutMs ?? effectiveProvider.timeoutSec * 1_000);
         this.servedCounts.set(id, (this.servedCounts.get(id) ?? 0) + 1);
         return text;
       } finally {
@@ -336,7 +337,7 @@ class Runtime implements CliRuntime {
       this.slots.set(id, slot);
       slot.start();
     }
-    const text = await slot.call(input);
+    const text = await slot.call(input, timeoutMs ?? effectiveProvider.timeoutSec * 1_000);
     this.servedCounts.set(id, (this.servedCounts.get(id) ?? 0) + 1);
     return text;
   }

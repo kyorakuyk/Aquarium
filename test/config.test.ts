@@ -22,6 +22,16 @@ test('config.example.yaml 符合配置 schema 并默认关闭所有会话', () =
   assert.equal(result.data.debug.enabled, false);
   assert.equal(result.data.debug.retainDays, 7);
   assert.equal(result.data.accounts.length, 1);
+  assert.deepEqual(
+    (result.data as unknown as { profile?: { schedule?: unknown } }).profile?.schedule,
+    {
+      minimumMessages: 50,
+      nightOwlRatio: 0.4,
+      weekendActiveRatio: 1.5,
+      morningRatio: 0.03,
+      morningMinimumMessages: 100,
+    },
+  );
 });
 
 test('send.dedupeWindowMs 默认 8000，且 0 表示关闭', () => {

@@ -63,6 +63,39 @@ export function makeIncoming(options: {
   };
 }
 
+export function withDefaultExtractProfiles(text: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return text;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return text;
+  const defaults = {
+    category: 'personality',
+    subject: null,
+    polarity: null,
+    origin: 'inferred',
+    sensitive: false,
+  };
+  const apply = (value: unknown) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+    const subject = value as Record<string, unknown>;
+    for (const field of ['new', 'contradict']) {
+      if (!Array.isArray(subject[field])) continue;
+      subject[field] = subject[field].map((item: unknown) => (
+        item && typeof item === 'object' && !Array.isArray(item)
+          ? { ...defaults, ...(item as Record<string, unknown>) }
+          : item
+      ));
+    }
+  };
+  const response = parsed as Record<string, unknown>;
+  apply(response.group);
+  if (Array.isArray(response.members)) response.members.forEach(apply);
+  return JSON.stringify(response);
+}
+
 export class FakeAdapter implements ProtocolAdapter {
   readonly account = groupSession.account;
   readonly sent: Array<{ session: SessionKey; segments: Segment[] }> = [];

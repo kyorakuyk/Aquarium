@@ -14,7 +14,7 @@ test('Windows host forwards successful QQ injection to the adapter retry hook', 
   const injectedUins: number[] = [];
   const requests: string[] = [];
   const logs: string[] = [];
-  const processInfo = { pid: 123, name: 'QQ.exe', path: '', injected: false, connected: false, loggedIn: false, uin: '0', status: 'available', error: '', method: '' };
+  const processInfo = { pid: 123, name: 'QQ.exe', path: '', injected: false, connected: false, loggedIn: true, uin: '10001', status: 'available', error: '', method: '' };
   const host = createWindowsHost({
     accounts: [{ uin: 10001, snowlumaDir }],
     settings: { startSnowLuma: false, scanIntervalSec: 5 },
@@ -29,9 +29,6 @@ test('Windows host forwards successful QQ injection to the adapter retry hook', 
         return new Response(JSON.stringify({ success: true, token: '[REDACTED]', mustChangePassword: false }));
       }
       if (url.pathname === '/api/processes') return new Response(JSON.stringify({ list: [processInfo] }));
-      if (url.pathname === '/api/processes/123/probe-login') {
-        return new Response(JSON.stringify({ info: { port: 4301, uin: '10001', identityKnown: true } }));
-      }
       if (url.pathname === '/api/processes/123/load') {
         return new Response(JSON.stringify({ success: true, process: { ...processInfo, injected: true, uin: '10001', status: 'loaded' } }));
       }

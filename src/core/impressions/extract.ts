@@ -1,6 +1,8 @@
 import type OpenAI from 'openai';
 import type { StoredTag } from '../../store/affect-repo.ts';
 import type { MessageStorageRecord } from '../../store/repository.ts';
+import { isTagCategoryKey, isTagPolarity, normalizeTagSubject, type TagCategoryKey, type TagPolarity } from '../../store/tag-profile.ts';
+import type { TagSubjectRecord } from '../../store/tag-subject-repo.ts';
 import type { ExtractTagsPromptTemplate } from '../prompt-templates.ts';
 
 export interface ExtractObserveItem {
@@ -11,12 +13,15 @@ export interface ExtractObserveItem {
 export interface ExtractNewItem {
   text: string;
   messageId: string;
+  category: TagCategoryKey;
+  subject: string | null;
+  polarity: TagPolarity;
+  origin: 'self_report' | 'inferred';
+  sensitive: boolean;
 }
 
-export interface ExtractContradictItem {
+export interface ExtractContradictItem extends ExtractNewItem {
   id: number;
-  text: string;
-  messageId: string;
 }
 
 export interface ExtractSubjectItems {
@@ -36,7 +41,8 @@ export interface ParsedExtractResponse {
 
 export type ExtractResult =
   | { ok: true; parsed: ParsedExtractResponse }
-  | { ok: false; reason: 'extract_parse_error' | 'extract_error' };
+  | { ok: false; reason: 'extract_parse_error' }
+  | { ok: false; reason: 'extract_error'; error: unknown };
 
 export type ExtractSlotCall = (
   slot: 'extract',
@@ -46,6 +52,7 @@ export type ExtractSlotCall = (
 export interface ExistingTagsInput {
   group: StoredTag[];
   members: Array<{ userId: number; tags: StoredTag[] }>;
+  subjects?: TagSubjectRecord[];
 }
 
 function formatTime(timestamp: number): string {
@@ -57,13 +64,19 @@ function formatTime(timestamp: number): string {
 
 function formatExistingTags(existing: ExistingTagsInput): string {
   const lines: string[] = [];
-  if (existing.group.length > 0) {
-    lines.push(`群标签：${existing.group.map((tag) => `#${tag.id} ${tag.text}（${tag.status}）`).join('；')}`);
+  const groupTags = existing.group.filter((tag) => !tag.locked);
+  if (groupTags.length > 0) {
+    lines.push(`群标签：${groupTags.map((tag) => `#${tag.id} ${tag.text}（${tag.status}）`).join('；')}`);
   }
   for (const member of existing.members) {
-    if (member.tags.length === 0) continue;
-    lines.push(`群友 ${member.userId} 的标签：${member.tags.map((tag) => `#${tag.id} ${tag.text}（${tag.status}）`).join('；')}`);
+    const tags = member.tags.filter((tag) => !tag.locked);
+    if (tags.length === 0) continue;
+    lines.push(`群友 ${member.userId} 的标签：${tags.map((tag) => `#${tag.id} ${tag.text}（${tag.status}）`).join('；')}`);
   }
+  const subjects = existing.subjects ?? [];
+  lines.push(`可复用的 fandom tag_subjects（规范名；别名）：${subjects.length > 0
+    ? subjects.map((subject) => `${subject.name}${subject.aliases.length > 0 ? `（${subject.aliases.join('、')}）` : ''}`).join('；')
+    : '（暂无）'}`);
   return lines.length > 0 ? lines.join('\n') : '（暂无）';
 }
 
@@ -135,6 +148,29 @@ export function parseExtractResponse(text: string): ParsedExtractResponse | unde
   return { group, members };
 }
 
+function tagProfile(record: Record<string, unknown>): Omit<ExtractNewItem, 'text' | 'messageId'> | undefined {
+  const category = record.category;
+  const subject = record.subject;
+  const polarity = record.polarity;
+  const origin = record.origin;
+  const sensitive = record.sensitive;
+  if (!isTagCategoryKey(category)) return undefined;
+  if (category === 'schedule') return undefined;
+  if (subject !== null && typeof subject !== 'string') return undefined;
+  if (typeof subject === 'string' && !normalizeTagSubject(subject)) return undefined;
+  if (polarity !== null && !isTagPolarity(polarity)) return undefined;
+  if (category !== 'fandom' && (subject !== null || polarity !== null)) return undefined;
+  if (origin !== 'self_report' && origin !== 'inferred') return undefined;
+  if (typeof sensitive !== 'boolean') return undefined;
+  return {
+    category,
+    subject,
+    polarity,
+    origin,
+    sensitive,
+  };
+}
+
 export function asObserveItem(raw: unknown): ExtractObserveItem | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
   const record = raw as Record<string, unknown>;
@@ -148,7 +184,9 @@ export function asNewItem(raw: unknown): ExtractNewItem | undefined {
   const record = raw as Record<string, unknown>;
   if (typeof record.text !== 'string') return undefined;
   if (typeof record.messageId !== 'string' || record.messageId.length === 0) return undefined;
-  return { text: record.text, messageId: record.messageId };
+  const profile = tagProfile(record);
+  if (!profile) return undefined;
+  return { text: record.text, messageId: record.messageId, ...profile };
 }
 
 export function asContradictItem(raw: unknown): ExtractContradictItem | undefined {
@@ -157,7 +195,9 @@ export function asContradictItem(raw: unknown): ExtractContradictItem | undefine
   if (typeof record.id !== 'number' || !Number.isSafeInteger(record.id)) return undefined;
   if (typeof record.text !== 'string') return undefined;
   if (typeof record.messageId !== 'string' || record.messageId.length === 0) return undefined;
-  return { id: record.id, text: record.text, messageId: record.messageId };
+  const profile = tagProfile(record);
+  if (!profile) return undefined;
+  return { id: record.id, text: record.text, messageId: record.messageId, ...profile };
 }
 
 export async function runExtract(
@@ -170,8 +210,8 @@ export async function runExtract(
   let response: { text: string };
   try {
     response = await callModel('extract', messages);
-  } catch {
-    return { ok: false, reason: 'extract_error' };
+  } catch (error) {
+    return { ok: false, reason: 'extract_error', error };
   }
 
   const parsed = parseExtractResponse(response.text);

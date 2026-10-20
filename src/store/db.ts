@@ -320,6 +320,80 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 12,
+    up(database) {
+      const tags = database.prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tags'",
+      ).get();
+      if (tags) {
+        const columns = new Set((database.prepare("PRAGMA table_info('tags')").all() as Array<{ name: string }>)
+          .map(({ name }) => name));
+        const additions = [
+          ['category', "TEXT NOT NULL DEFAULT 'misc'"],
+          ['subject', 'TEXT'],
+          ['polarity', 'TEXT'],
+          ['origin', "TEXT NOT NULL DEFAULT 'inferred'"],
+          ['locked', 'INTEGER NOT NULL DEFAULT 0 CHECK (locked IN (0, 1))'],
+        ] as const;
+        for (const [name, definition] of additions) {
+          if (!columns.has(name)) database.exec(`ALTER TABLE tags ADD COLUMN ${name} ${definition}`);
+        }
+      }
+
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS tag_subjects (
+          id INTEGER PRIMARY KEY,
+          account INTEGER NOT NULL,
+          category TEXT NOT NULL,
+          name TEXT NOT NULL,
+          aliases_json TEXT NOT NULL DEFAULT '[]',
+          UNIQUE (account, category, name)
+        );
+      `);
+    },
+  },
+  {
+    version: 13,
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS profile_migrations (
+          name TEXT PRIMARY KEY,
+          completed_at INTEGER NOT NULL
+        );
+      `);
+    },
+  },
+  {
+    version: 14,
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS activity_suggestion_dismissals (
+          session_id TEXT NOT NULL,
+          window_key TEXT NOT NULL,
+          dismissed_at INTEGER NOT NULL,
+          PRIMARY KEY (session_id, window_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_activity_suggestion_dismissals_time
+          ON activity_suggestion_dismissals (dismissed_at);
+      `);
+    },
+  },
+  {
+    version: 15,
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS member_summaries (
+          account INTEGER NOT NULL,
+          user_id INTEGER NOT NULL,
+          text TEXT NOT NULL,
+          manual INTEGER NOT NULL DEFAULT 0 CHECK (manual IN (0, 1)),
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY (account, user_id)
+        );
+      `);
+    },
+  },
 ];
 
 export function openDatabase(databasePath = join(process.cwd(), 'data', 'aquarium.db')): DatabaseSync {

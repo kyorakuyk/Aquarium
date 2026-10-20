@@ -154,7 +154,7 @@ test('talkOffset 可从全局默认继承、按群覆盖并恢复继承', async 
 test('会话 API 返回最近消息时间，并优先排列启用且最近活跃的会话', async () => {
   await withPanel(async ({ app, repository, adapter }) => {
     const groups = [
-      { groupId: groupSession.peer, name: '较旧群', memberCount: 4 },
+      { groupId: groupSession.peer, name: 'Minecraft', memberCount: 4 },
       { groupId: 234567, name: '较新群', memberCount: 5 },
       { groupId: 345678, name: '停用但活跃群', memberCount: 6 },
       { groupId: 456789, name: 'A无消息群', memberCount: 7 },
@@ -190,10 +190,12 @@ test('会话 API 返回最近消息时间，并优先排列启用且最近活跃
     const sessions = await response.json() as Array<{
       sessionId: string;
       kind: 'group' | 'private';
+      name: string;
       enabled: boolean;
       lastMessageAt: number | null;
     }>;
     const listedGroups = sessions.filter((session) => session.kind === 'group');
+    assert.equal(listedGroups.find((session) => session.sessionId === ids[0])?.name, 'Minecraft');
     assert.deepEqual(listedGroups.map(({ sessionId: id, enabled, lastMessageAt }) => ({ id, enabled, lastMessageAt })), [
       { id: ids[1], enabled: true, lastMessageAt: 500 },
       { id: ids[0], enabled: true, lastMessageAt: 300 },

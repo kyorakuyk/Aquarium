@@ -1,8 +1,7 @@
-import { SnowLumaWebUIError, type SnowLumaLoginInfo, type SnowLumaProcessInfo } from './snowluma-webui.ts';
+import { SnowLumaWebUIError, type SnowLumaProcessInfo } from './snowluma-webui.ts';
 
 interface QqWatcherClient {
   listProcesses(): Promise<SnowLumaProcessInfo[]>;
-  probeLogin(pid: number): Promise<SnowLumaLoginInfo | null>;
   load(pid: number): Promise<{ success: boolean }>;
 }
 
@@ -25,12 +24,21 @@ interface PidDisposition {
   uin?: number;
 }
 
+function processUin(process: SnowLumaProcessInfo): string | undefined {
+  const value = process.loggedIn === true ? process.uin : undefined;
+  const rawUin = value ?? process.account?.uin;
+  if (rawUin === undefined || rawUin === null) return undefined;
+  const uin = String(rawUin);
+  return uin.length > 0 && uin !== '0' ? uin : undefined;
+}
+
 export function createQqWatcher(options: QqWatcherOptions) {
   if (!Number.isSafeInteger(options.scanIntervalSec) || options.scanIntervalSec <= 0) {
     throw new TypeError('QQ watcher scan interval must be a positive integer');
   }
   const targetUins = new Set(options.targetUins.filter((uin) => Number.isSafeInteger(uin) && uin > 0));
   const dispositions = new Map<number, PidDisposition>();
+  const unknownWarned = new Set<number>();
   const setTimer = options.setInterval ?? globalThis.setInterval;
   const clearTimer = options.clearInterval ?? globalThis.clearInterval;
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -39,6 +47,14 @@ export function createQqWatcher(options: QqWatcherOptions) {
   let startInFlight: Promise<void> | undefined;
   let startRequested = false;
   let stopRequested = false;
+
+  function notifyInjected(uin: number): void {
+    try {
+      options.onInjected?.(uin);
+    } catch {
+      options.log?.('QQ watcher 注入成功回调失败。');
+    }
+  }
 
   async function scanInternal(): Promise<void> {
     if (stopRequested) return;
@@ -59,29 +75,38 @@ export function createQqWatcher(options: QqWatcherOptions) {
     for (const pid of dispositions.keys()) {
       if (!present.has(pid)) dispositions.delete(pid);
     }
+    for (const pid of unknownWarned) {
+      if (!present.has(pid)) unknownWarned.delete(pid);
+    }
 
     for (const process of processes) {
       if (stopRequested) return;
       if (!Number.isSafeInteger(process.pid) || process.pid <= 0 || dispositions.has(process.pid)) continue;
-      let info: SnowLumaLoginInfo | null;
-      try {
-        info = await client.probeLogin(process.pid);
-      } catch (error) {
-        options.debug?.(`PID ${process.pid} 探测结果：身份未知`);
-        if (reportFatalAuthError(error)) return;
-        options.log?.(`QQ 目标进程 PID ${process.pid} 身份探测失败；下一轮将重试。`);
+      if (process.status === 'online') {
+        const onlineUin = processUin(process);
+        const matchedOnlineUin = onlineUin === undefined
+          ? undefined
+          : [...targetUins].find((targetUin) => String(targetUin) === onlineUin);
+        if (matchedOnlineUin !== undefined) {
+          unknownWarned.delete(process.pid);
+          dispositions.set(process.pid, { kind: 'injected', uin: matchedOnlineUin });
+          options.debug?.(`PID ${process.pid} 状态为 online，已视为目标账号在线。`);
+          notifyInjected(matchedOnlineUin);
+        }
         continue;
       }
-      if (stopRequested) return;
-      if (!info) {
-        options.debug?.(`PID ${process.pid} 探测结果：null`);
+      const uin = processUin(process);
+      if (uin === undefined) {
+        if (unknownWarned.has(process.pid)) {
+          options.debug?.(`QQ 目标进程 PID ${process.pid} 身份仍未知；下一轮继续重试。`);
+        } else {
+          unknownWarned.add(process.pid);
+          options.log?.(`QQ 目标进程 PID ${process.pid} 身份未知；下一轮将重试。`);
+        }
         continue;
       }
-      if (!info.identityKnown) {
-        options.debug?.(`PID ${process.pid} 探测结果：身份未知`);
-        continue;
-      }
-      const matchedUin = [...targetUins].find((uin) => String(uin) === info.uin);
+      unknownWarned.delete(process.pid);
+      const matchedUin = [...targetUins].find((targetUin) => String(targetUin) === uin);
       if (matchedUin === undefined) {
         options.debug?.(`PID ${process.pid} 探测结果：其他账号`);
         dispositions.set(process.pid, { kind: 'ignored' });
@@ -93,11 +118,7 @@ export function createQqWatcher(options: QqWatcherOptions) {
         if (stopRequested) return;
         if (result.success) {
           dispositions.set(process.pid, { kind: 'injected', uin: matchedUin });
-          try {
-            options.onInjected?.(matchedUin);
-          } catch {
-            options.log?.('QQ watcher 注入成功回调失败。');
-          }
+          notifyInjected(matchedUin);
         } else {
           options.log?.(`QQ 目标进程 PID ${process.pid} 加载失败；下一轮将重试。`);
         }
@@ -172,6 +193,7 @@ export function createQqWatcher(options: QqWatcherOptions) {
 
   function reset(): void {
     dispositions.clear();
+    unknownWarned.clear();
   }
 
   function injectedUins(): Set<number> {

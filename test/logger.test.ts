@@ -5,9 +5,74 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { createConsoleSink } from '../src/core/logger.ts';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const loggerUrl = pathToFileURL(path.join(repoRoot, 'src', 'core', 'logger.ts')).href;
+
+function fakeOutput(isTTY: boolean, columns?: number): NodeJS.WriteStream & { output: string } {
+  const stream = {
+    isTTY,
+    columns,
+    output: '',
+    write(chunk: string | Uint8Array) {
+      this.output += String(chunk);
+      return true;
+    },
+  };
+  return stream as unknown as NodeJS.WriteStream & { output: string };
+}
+
+function logEntry(time: string, level: 'INFO' | 'WARN', source: string, body: string) {
+  return { time, level, source, body };
+}
+
+test('TTY console sink rewrites consecutive identical entries with latest time and count', () => {
+  const stream = fakeOutput(true, 120);
+  const sink = createConsoleSink(stream);
+
+  sink.write(logEntry('10:00:00', 'INFO', 'app', 'same'));
+  sink.write(logEntry('10:00:02', 'INFO', 'app', 'same'));
+  sink.write(logEntry('10:00:03', 'INFO', 'app', 'same'));
+
+  assert.equal(stream.output,
+    '[10:00:00] [INFO] [app] same'
+    + '\r\x1b[2K[10:00:02] [INFO] [app] same（×2，自 10:00:00）'
+    + '\r\x1b[2K[10:00:03] [INFO] [app] same（×3，自 10:00:00）');
+});
+
+test('不同日志先结束上一行并正常写出新行', () => {
+  const stream = fakeOutput(true, 120);
+  const sink = createConsoleSink(stream);
+
+  sink.write(logEntry('10:00:00', 'INFO', 'app', 'same'));
+  sink.write(logEntry('10:00:01', 'WARN', 'app', 'different'));
+
+  assert.equal(stream.output, '[10:00:00] [INFO] [app] same\n[10:00:01] [WARN] [app] different');
+});
+
+test('非 TTY 输出逐行直写，不合并重复日志', () => {
+  const stream = fakeOutput(false, 120);
+  const sink = createConsoleSink(stream);
+
+  sink.write(logEntry('10:00:00', 'INFO', 'app', 'same'));
+  sink.write(logEntry('10:00:01', 'INFO', 'app', 'same'));
+
+  assert.equal(stream.output, '[10:00:00] [INFO] [app] same\n[10:00:01] [INFO] [app] same\n');
+});
+
+test('TTY 窗口宽度限制重写行并按全角字符两格截断', () => {
+  const stream = fakeOutput(true, 28);
+  const sink = createConsoleSink(stream);
+
+  sink.write(logEntry('1', 'INFO', 'x', '你好abcdefghijk'));
+  sink.write(logEntry('2', 'INFO', 'x', '你好abcdefghijk'));
+
+  const rewritten = stream.output.split('\r\x1b[2K')[1];
+  assert.ok(rewritten);
+  assert.match(rewritten, /…$/u);
+  assert.ok([...rewritten].reduce((width, character) => width + (/^[\u1100-\u11ff\u2e80-\ua4cf\uac00-\ud7af\uf900-\ufaff\ufe10-\ufe6f\uff00-\uff60\uffe0-\uffe6]$/u.test(character) ? 2 : 1), 0) <= 28);
+});
 
 test('logger 输出统一格式并追加写入每日文件', (t) => {
   const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-logger-'));

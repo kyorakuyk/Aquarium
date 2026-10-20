@@ -3,12 +3,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import yaml from 'yaml';
-import { AquariumConfigSchema } from '../src/config/schema.ts';
+import { AquariumConfigSchema, type AquariumConfig } from '../src/config/schema.ts';
 import { callSlot } from '../src/llm/slots.ts';
 
 const config = AquariumConfigSchema.parse(yaml.parse(
   fs.readFileSync(path.resolve('config.example.yaml'), 'utf8'),
 ));
+const baseConfig = config;
+
+function configWith(patch: Partial<AquariumConfig>): AquariumConfig {
+  return AquariumConfigSchema.parse({ ...baseConfig, ...patch });
+}
 
 function clientFor(
   create: (
@@ -138,6 +143,80 @@ test('callSlot 默认使用 30 秒超时且超时后切换模型', async () => {
   assert.ok(requestOptions.every((options) => options?.maxRetries === 0));
   assert.equal(result.text, '已切换');
   assert.deepEqual(usageRecords.map((record) => record.ok), [false, true]);
+});
+
+test('extract 槽位默认 90 秒，reply 默认 30 秒，且槽位项可覆盖超时', async () => {
+  const configured = AquariumConfigSchema.parse({
+    ...config,
+    slots: {
+      ...config.slots,
+      extract: [
+        { provider: 'deepseek', model: 'deepseek-flash' },
+        { provider: 'deepseek', model: 'deepseek-v4-pro', timeoutSec: 45 },
+      ],
+    },
+  });
+  const requestTimeouts: number[] = [];
+  const client = clientFor(async ({ model }, options) => {
+    requestTimeouts.push(options?.timeout ?? 0);
+    if (model === 'deepseek-flash') {
+      throw Object.assign(new Error('timeout'), { name: 'APIConnectionTimeoutError' });
+    }
+    return { choices: [{ message: { content: 'ok' } }], usage: null };
+  });
+
+  await callSlot('extract', [{ role: 'user', content: 'fixture' }], {
+    config: configured, account: null, costToday: () => 0,
+    getClient: () => client, recordUsage: () => {},
+  });
+
+  assert.deepEqual(requestTimeouts, [90_000, 45_000]);
+
+  const cliTimeouts: number[] = [];
+  const cliConfig = AquariumConfigSchema.parse({
+    ...config,
+    providers: {
+      ...config.providers,
+      fakecli: { kind: 'cli', command: process.execPath, args: ['-e', 'process.stdin.resume();process.stdin.on("end",()=>process.stdout.write("ok"));'], timeoutSec: 30 },
+    },
+    slots: {
+      ...config.slots,
+      extract: [{ provider: 'fakecli', model: 'cli-model', timeoutSec: 1 }],
+    },
+  });
+  await callSlot('extract', [{ role: 'user', content: 'fixture' }], {
+    config: cliConfig,
+    account: null,
+    costToday: () => 0,
+    recordUsage: () => {},
+    cliRuntime: {
+      call: async (_id, _provider, _input, timeoutMs) => {
+        cliTimeouts.push(timeoutMs ?? 0);
+        return 'ok';
+      },
+      status: () => ({ state: 'stopped', pid: null, served: 0 }),
+      restart: () => {},
+      sync: () => {},
+      stopAll: async () => {},
+    },
+  });
+  assert.deepEqual(cliTimeouts, [1_000]);
+
+  let replyTimeout: number | undefined;
+  await callSlot('reply', [{ role: 'user', content: 'hello' }], {
+    config: configWith({ slots: { ...baseConfig.slots, reply: [{ provider: 'deepseek', model: 'deepseek-flash' }] } }),
+    account: null,
+    costToday: () => 0,
+    timeoutMs: undefined,
+    recordUsage: () => {},
+    getClient: () => ({
+      chat: { completions: { create: async (_request: unknown, options?: { timeout?: number }) => {
+        replyTimeout = options?.timeout;
+        return { choices: [{ message: { content: 'ok' } }], usage: null };
+      } } },
+    }) as never,
+  });
+  assert.equal(replyTimeout, 30_000);
 });
 
 test('callSlot 对 408、429 和网络错误继续尝试降级项', async () => {

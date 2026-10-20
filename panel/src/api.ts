@@ -149,6 +149,9 @@ export interface SleepView {
 }
 
 export type TagStatus = 'candidate' | 'confirmed' | 'rejected' | 'superseded';
+export type TagCategory = 'identity' | 'personality' | 'fandom' | 'speech' | 'social' | 'recent' | 'dislike' | 'schedule' | 'atmosphere' | 'misc';
+export type TagOrigin = 'self_report' | 'inferred' | 'stats' | 'manual';
+export type TagPolarity = 'like' | 'dislike' | null;
 
 export interface TagEvidenceView {
   messageId: string;
@@ -159,6 +162,12 @@ export interface TagEvidenceView {
 export interface TagView {
   id: number;
   text: string;
+  category: TagCategory;
+  subject: string | null;
+  polarity: TagPolarity;
+  origin: TagOrigin;
+  locked: boolean;
+  fadeAt: number | null;
   status: TagStatus;
   source: 'auto' | 'manual';
   samples: number;
@@ -171,8 +180,61 @@ export interface TagView {
 export interface ImpressionsView {
   sessionId: string;
   groupTags: TagView[];
-  members: Array<{ userId: number; name: string; affinity: AffinityView; tags: TagView[] }>;
+  members: Array<{
+    userId: number;
+    name: string;
+    affinity: AffinityView;
+    tags: TagView[];
+    memberTagsAllowed: boolean;
+    memberTagsText: string | null;
+  }>;
 }
+
+export interface MemberSummaryView {
+  account: number;
+  userId: number;
+  text: string;
+  manual: boolean;
+  updatedAt: number;
+}
+
+export interface TagSubjectView {
+  id: number;
+  account: number;
+  category: TagCategory;
+  name: string;
+  aliases: string[];
+}
+
+export type ActivityView = 'hour' | 'week' | 'month' | 'year';
+
+export interface ActivitySummaryView {
+  total: number;
+  avgChars: number;
+  imageRatio: number;
+}
+
+export interface ActivitySuggestionView {
+  from: string;
+  to: string;
+  windowKey: string;
+  ratio: number;
+}
+
+export interface ActivityDistributionView {
+  view: 'hour' | 'week';
+  buckets: number[];
+  summary: ActivitySummaryView;
+  suggestion?: ActivitySuggestionView | null;
+}
+
+export interface ActivityCalendarView {
+  view: 'month' | 'year';
+  buckets: Array<{ date: string; count: number }>;
+  summary: ActivitySummaryView;
+}
+
+export type ActivityResponseView = ActivityDistributionView | ActivityCalendarView;
 
 export type PrivacyFactLevel = 'L0' | 'L1' | 'L2';
 
@@ -209,6 +271,9 @@ export interface HistoryImportJobView {
   inserted: number;
   windowsDone: number;
   windowsTotal: number;
+  windowsFailed: number;
+  failureReason?: 'timeout' | 'network' | 'http' | 'other';
+  failureHttpStatus?: number;
   tagsInserted: number;
   tagsObserved: number;
   costCny: number;
@@ -363,6 +428,7 @@ export interface ModelSlotEntryView {
   model: string;
   temperature?: number;
   maxTokens?: number;
+  timeoutSec?: number;
   reasoning: ModelReasoning;
 }
 

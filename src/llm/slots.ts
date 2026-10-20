@@ -171,7 +171,6 @@ export async function callSlot(
       }
     }
   }
-  const timeoutMs = options.timeoutMs ?? 30_000;
   let lastError: unknown;
 
   for (let index = 0; index < chain.length; index += 1) {
@@ -183,6 +182,9 @@ export async function callSlot(
     if (provider.kind === 'api' && !price) {
       throw new Error(`模型 ${entry.model} 缺少价格配置，拒绝发送请求`);
     }
+    const timeoutMs = entry.timeoutSec !== undefined
+      ? entry.timeoutSec * 1_000
+      : options.timeoutMs ?? (slot === 'extract' ? 90_000 : 30_000);
     const sentParams: SlotRequestParams = provider.kind === 'api' ? {
       ...(entry.temperature !== undefined ? { temperature: entry.temperature } : {}),
       ...(entry.maxTokens !== undefined ? { maxTokens: entry.maxTokens } : {}),
@@ -211,6 +213,7 @@ export async function callSlot(
           entry.provider,
           provider,
           buildCliInput(messages),
+          timeoutMs,
         );
       } else {
         const client = options.getClient

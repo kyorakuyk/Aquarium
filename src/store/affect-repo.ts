@@ -1,12 +1,13 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { StoreRepository } from './repository.ts';
+import { createTagQueries } from './tag-repo.ts';
+
+export type { StoredTag, TagEvidence, TagRecord, TagRunRecord, TagSource, TagStatus, TagUpdate } from './tag-repo.ts';
 
 export type MoodBand = 'low' | 'annoyed' | 'calm' | 'happy' | 'excited';
 export type MoodEventSource = 'appraise' | 'rule' | 'band';
 export type AffinityLevel = 'cold' | 'cool' | 'neutral' | 'warm' | 'close';
 export type AffinityEventSource = 'appraise' | 'called' | 'manual' | 'band';
-export type TagStatus = 'candidate' | 'confirmed' | 'rejected' | 'superseded';
-export type TagSource = 'auto' | 'manual';
 
 export interface MoodStateRecord {
   account: number;
@@ -69,55 +70,11 @@ export interface StoredAffinityEvent extends AffinityEventRecord {
   id: number;
 }
 
-export interface TagEvidence {
-  messageId: string;
-  time: number;
-  quote: string;
-}
-
-export interface TagRecord {
-  account: number;
-  sessionId: string;
-  userId: number | null;
-  text: string;
-  norm: string;
-  status: TagStatus;
-  source: TagSource;
-  samples: number;
-  evidence: TagEvidence[];
-  firstSeen: number;
-  lastSeen: number;
-  supersededBy: number | null;
-  updatedAt: number;
-}
-
-export interface StoredTag extends TagRecord {
-  id: number;
-}
-
-export interface TagUpdate {
-  text?: string;
-  norm?: string;
-  status?: TagStatus;
-  samples?: number;
-  evidence?: TagEvidence[];
-  lastSeen?: number;
-  supersededBy?: number | null;
-  updatedAt?: number;
-}
-
-export interface TagRunRecord {
-  account: number;
-  sessionId: string;
-  lastRunAt: number | null;
-  lastMessageTime: number | null;
-}
-
 export type AffectRepositoryQueries = Pick<StoreRepository,
   'getMoodState' | 'saveMoodState' | 'recordMoodEvent' | 'recentMoodEvents' | 'moodEventsSince' | 'latestMoodEventAtOrBefore'
   | 'getAffinityState' | 'listAffinityStates' | 'saveAffinityState' | 'recordAffinityEvent' | 'recentAffinityEvents' | 'affinityEventsSince' | 'latestSenderNameForAccount'
   | 'insertTag' | 'tagById' | 'listTagsForSubject' | 'listTagsForSession' | 'listGroupTagsForUser' | 'senderNameFor'
-  | 'updateTag' | 'getTagRun' | 'saveTagRun'
+  | 'updateTag' | 'deleteActivityTag' | 'getTagRun' | 'saveTagRun'
   | 'countMessagesAfter'
 >;
 
@@ -202,36 +159,6 @@ function affinityEventRecord(row: Record<string, unknown>): StoredAffinityEvent 
     levelAfter: nullableString(row.level_after, 'level_after') as AffinityLevel | null,
   };
 }
-
-function tagRecord(row: Record<string, unknown>): StoredTag {
-  return {
-    id: numberValue(row.id, 'id'),
-    account: numberValue(row.account, 'account'),
-    sessionId: stringValue(row.session_id, 'session_id'),
-    userId: nullableNumber(row.user_id, 'user_id'),
-    text: stringValue(row.text, 'text'),
-    norm: stringValue(row.norm, 'norm'),
-    status: stringValue(row.status, 'status') as TagStatus,
-    source: stringValue(row.source, 'source') as TagSource,
-    samples: numberValue(row.samples, 'samples'),
-    evidence: JSON.parse(stringValue(row.evidence_json, 'evidence_json')) as TagEvidence[],
-    firstSeen: numberValue(row.first_seen, 'first_seen'),
-    lastSeen: numberValue(row.last_seen, 'last_seen'),
-    supersededBy: nullableNumber(row.superseded_by, 'superseded_by'),
-    updatedAt: numberValue(row.updated_at, 'updated_at'),
-  };
-}
-
-const tagColumns: Record<keyof TagUpdate, string> = {
-  text: 'text',
-  norm: 'norm',
-  status: 'status',
-  samples: 'samples',
-  evidence: 'evidence_json',
-  lastSeen: 'last_seen',
-  supersededBy: 'superseded_by',
-  updatedAt: 'updated_at',
-};
 
 export function createAffectQueries(database: DatabaseSync): AffectRepositoryQueries {
   const selectMoodState = database.prepare(`
@@ -324,60 +251,9 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
     ORDER BY time DESC, id DESC
     LIMIT 1
   `);
-  const insertTag = database.prepare(`
-    INSERT INTO tags
-      (account, session_id, user_id, text, norm, status, source, samples, evidence_json, first_seen, last_seen, superseded_by, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const selectTagById = database.prepare(`
-    SELECT id, account, session_id, user_id, text, norm, status, source, samples, evidence_json, first_seen, last_seen, superseded_by, updated_at
-    FROM tags
-    WHERE id = ?
-  `);
-  const selectTagsForSubject = database.prepare(`
-    SELECT id, account, session_id, user_id, text, norm, status, source, samples, evidence_json, first_seen, last_seen, superseded_by, updated_at
-    FROM tags
-    WHERE account = ? AND session_id = ? AND user_id IS ?
-    ORDER BY last_seen DESC, id DESC
-  `);
-  const selectTagsForSession = database.prepare(`
-    SELECT id, account, session_id, user_id, text, norm, status, source, samples, evidence_json, first_seen, last_seen, superseded_by, updated_at
-    FROM tags
-    WHERE account = ? AND session_id = ?
-    ORDER BY last_seen DESC, id DESC
-  `);
-  const selectGroupTagsForUser = database.prepare(`
-    SELECT id, account, session_id, user_id, text, norm, status, source, samples, evidence_json, first_seen, last_seen, superseded_by, updated_at
-    FROM tags
-    WHERE account = ? AND user_id = ? AND session_id LIKE ?
-    ORDER BY last_seen DESC, id DESC
-  `);
-  const selectSenderName = database.prepare(`
-    SELECT sender_name
-    FROM messages
-    WHERE session_id = ? AND sender_id = ?
-    ORDER BY time DESC, id DESC
-    LIMIT 1
-  `);
-  const selectTagRun = database.prepare(`
-    SELECT account, session_id, last_run_at, last_message_time
-    FROM tag_runs
-    WHERE account = ? AND session_id = ?
-  `);
-  const upsertTagRun = database.prepare(`
-    INSERT INTO tag_runs (account, session_id, last_run_at, last_message_time)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(account, session_id) DO UPDATE SET
-      last_run_at = excluded.last_run_at,
-      last_message_time = excluded.last_message_time
-  `);
-  const selectMessageCountAfter = database.prepare(`
-    SELECT COUNT(*) AS total
-    FROM messages
-    WHERE session_id = ? AND time > ?
-  `);
 
   return {
+    ...createTagQueries(database),
     getMoodState(account) {
       const row = selectMoodState.get(account) as Record<string, unknown> | undefined;
       return row ? moodStateRecord(row) : undefined;
@@ -493,81 +369,5 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
       return row ? stringValue(row.sender_name, 'sender_name') : undefined;
     },
 
-    insertTag(tag) {
-      const result = insertTag.run(
-        tag.account,
-        tag.sessionId,
-        tag.userId,
-        tag.text,
-        tag.norm,
-        tag.status,
-        tag.source,
-        tag.samples,
-        JSON.stringify(tag.evidence),
-        tag.firstSeen,
-        tag.lastSeen,
-        tag.supersededBy,
-        tag.updatedAt,
-      );
-      return numberValue(result.lastInsertRowid, 'lastInsertRowid');
-    },
-
-    tagById(id) {
-      if (!Number.isSafeInteger(id) || id <= 0) return undefined;
-      const row = selectTagById.get(id) as Record<string, unknown> | undefined;
-      return row ? tagRecord(row) : undefined;
-    },
-
-    listTagsForSubject(account, sessionId, userId) {
-      const rows = selectTagsForSubject.all(account, sessionId, userId) as Array<Record<string, unknown>>;
-      return rows.map(tagRecord);
-    },
-
-    listTagsForSession(account, sessionId) {
-      const rows = selectTagsForSession.all(account, sessionId) as Array<Record<string, unknown>>;
-      return rows.map(tagRecord);
-    },
-
-    listGroupTagsForUser(account, userId) {
-      const rows = selectGroupTagsForUser.all(account, userId, `${account}:group:%`) as Array<Record<string, unknown>>;
-      return rows.map(tagRecord);
-    },
-
-    senderNameFor(sessionId, senderId) {
-      const row = selectSenderName.get(sessionId, senderId) as Record<string, unknown> | undefined;
-      return row ? stringValue(row.sender_name, 'sender_name') : undefined;
-    },
-
-    updateTag(id, update) {
-      if (!Number.isSafeInteger(id) || id <= 0) return;
-      const entries = (Object.entries(update) as Array<[keyof TagUpdate, TagUpdate[keyof TagUpdate]]>)
-        .filter(([, value]) => value !== undefined);
-      if (entries.length === 0) return;
-      const assignments = entries.map(([field]) => `${tagColumns[field]} = ?`);
-      const values = entries.map(([field, value]) => (field === 'evidence' ? JSON.stringify(value) : value));
-      database.prepare(`UPDATE tags SET ${assignments.join(', ')} WHERE id = ?`)
-        .run(...values as Array<string | number | null>, id);
-    },
-
-    getTagRun(account, sessionId) {
-      const row = selectTagRun.get(account, sessionId) as Record<string, unknown> | undefined;
-      if (!row) return undefined;
-      return {
-        account: numberValue(row.account, 'account'),
-        sessionId: stringValue(row.session_id, 'session_id'),
-        lastRunAt: nullableNumber(row.last_run_at, 'last_run_at'),
-        lastMessageTime: nullableNumber(row.last_message_time, 'last_message_time'),
-      };
-    },
-
-    saveTagRun(run) {
-      upsertTagRun.run(run.account, run.sessionId, run.lastRunAt, run.lastMessageTime);
-    },
-
-    countMessagesAfter(sessionId, time) {
-      if (!Number.isFinite(time)) throw new RangeError('查询时间必须是有限数字');
-      const row = selectMessageCountAfter.get(sessionId, time) as Record<string, unknown> | undefined;
-      return numberValue(row?.total ?? 0, 'total');
-    },
   };
 }

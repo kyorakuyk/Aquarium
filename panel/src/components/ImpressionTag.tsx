@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TagStatus, TagView } from '../api.ts';
 import { containsSensitiveText, redactSensitiveText } from '../sensitive-text.ts';
+import { memberIdentityInjectionLabel } from '../impressions-model.ts';
 
 const STATUS_LABELS: Record<TagStatus, string> = {
   candidate: '候选',
   confirmed: '已确认',
   rejected: '已否决',
   superseded: '被推翻',
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  identity: '自我认同', personality: '性格', fandom: '成分', speech: '说话风格', social: '社交方式',
+  recent: '近况', dislike: '雷点', schedule: '作息', atmosphere: '群氛围', misc: '其他',
 };
 
 function formatTime(value: number): string {
@@ -23,16 +29,23 @@ function tagClass(tag: TagView): string {
 
 export function ImpressionTag({
   tag,
+  displayText,
   busy,
   onAction,
   onRename,
+  onLock,
 }: {
   tag: TagView;
+  displayText?: string;
   busy: boolean;
   onAction: (id: number, status: TagStatus) => Promise<boolean>;
   onRename: (id: number, text: string) => Promise<boolean>;
+  onLock?: (id: number, locked: boolean) => Promise<boolean>;
 }) {
   const safeTagText = redactSensitiveText(tag.text);
+  const safeDisplayText = redactSensitiveText(displayText ?? tag.text);
+  const safeSubject = tag.subject === null ? null : redactSensitiveText(tag.subject);
+  const identityInjectionLabel = memberIdentityInjectionLabel(tag);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(safeTagText);
@@ -63,6 +76,10 @@ export function ImpressionTag({
     if (await onAction(tag.id, status)) setOpen(false);
   }
 
+  async function changeLock(): Promise<void> {
+    if (onLock) await onLock(tag.id, !tag.locked);
+  }
+
   async function rename(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = draft.trim();
@@ -80,7 +97,8 @@ export function ImpressionTag({
   }
 
   return (
-    <div className="tag-popover-anchor" ref={root}>
+    <div className="tag-chip-set">
+      <div className="tag-popover-anchor" ref={root}>
       <button
         className={`tag-chip ${tagClass(tag)}`}
         type="button"
@@ -89,8 +107,9 @@ export function ImpressionTag({
         aria-expanded={open}
         onClick={() => { setDraft(safeTagText); setSensitiveInput(false); setEditing(false); setOpen((value) => !value); }}
       >
-        <span>{safeTagText}</span>
+        <span>{safeDisplayText}</span>
         {tag.status === 'candidate' && <span className="tag-samples mono">{tag.samples}/2</span>}
+        {tag.locked && <span className="tag-lock-indicator" aria-hidden="true">锁</span>}
       </button>
       {open && <div className="tag-popover" role="dialog" aria-label={`${safeTagText}标签详情`}>
         <div className="tag-popover-heading">
@@ -111,6 +130,9 @@ export function ImpressionTag({
         <div className="tag-popover-meta">
           <span className={`status-pill ${tagClass(tag)}`}>{STATUS_LABELS[tag.status]}</span>
           {tag.source === 'manual' && <span className="muted">手动</span>}
+          <span className="muted">{CATEGORY_LABELS[tag.category]}{safeSubject ? ` · ${safeSubject}` : ''}</span>
+          {tag.polarity && <span className="muted">{tag.polarity === 'like' ? '喜欢' : '不喜欢'}</span>}
+          {identityInjectionLabel && <span className="muted">{identityInjectionLabel}</span>}
           <span className="mono muted">观察 {tag.samples} 次 · 激活 {tag.activation.toFixed(2)}</span>
         </div>
         <ul className="tag-popover-evidence">
@@ -126,6 +148,20 @@ export function ImpressionTag({
           <button className="button button-secondary" type="button" disabled={busy} onClick={() => { setDraft(safeTagText); setSensitiveInput(false); setEditing(true); }}>改字</button>
         </div>}
       </div>}
+      </div>
+      {onLock && <button
+        className={`tag-lock-toggle${tag.locked ? ' is-locked' : ''}`}
+        type="button"
+        aria-label={`${tag.locked ? '解锁' : '加锁'}「${safeTagText}」`}
+        title={tag.locked ? '解锁标签' : '锁定标签；不进入提示词'}
+        disabled={busy}
+        onClick={() => void changeLock()}
+      ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <rect x="5" y="10" width="14" height="11" rx="2" />
+        {tag.locked
+          ? <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+          : <path d="M8 10V7a4 4 0 0 1 7.5-1.8" />}
+      </svg></button>}
     </div>
   );
 }

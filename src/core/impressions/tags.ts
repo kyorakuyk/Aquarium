@@ -1,4 +1,5 @@
 import type { StoredTag, TagEvidence, TagStatus } from '../../store/affect-repo.ts';
+import { TAG_CATEGORY_HALF_LIFE_MS } from '../../store/tag-profile.ts';
 
 export const EVIDENCE_MAX = 5;
 
@@ -9,7 +10,7 @@ export const GROUP_TAG_HALF_LIFE_MS = 14 * 24 * 60 * 60 * 1000;
 export const ACTIVATION_MIN = 0.25;
 
 export const GROUP_TAGS_LIMIT = { max: 6, maxChars: 120 } as const;
-export const MEMBER_TAGS_LIMIT = { max: 5, maxChars: 80 } as const;
+export const MEMBER_TAGS_LIMIT = { max: 5, maxChars: 160 } as const;
 
 export interface TagSelectionLimit {
   max: number;
@@ -46,18 +47,23 @@ export function normalizeTagText(text: string): string {
   return text.replace(/[\s\p{P}]/gu, '').toLowerCase();
 }
 
-export function tagHalfLifeMs(tag: Pick<StoredTag, 'userId' | 'samples'>): number {
-  const base = tag.userId === null ? GROUP_TAG_HALF_LIFE_MS : MEMBER_TAG_HALF_LIFE_MS;
+export function tagHalfLifeMs(tag: Pick<StoredTag, 'category' | 'userId' | 'samples'>): number | null {
+  const base = tag.category === 'misc'
+    ? tag.userId === null ? GROUP_TAG_HALF_LIFE_MS : MEMBER_TAG_HALF_LIFE_MS
+    : TAG_CATEGORY_HALF_LIFE_MS[tag.category];
+  if (base === null) return null;
   return tag.samples >= 4 ? base * 3 : base;
 }
 
 // 激活度 = 2^(−(now − last_seen) / 半衰期)；manual 标签恒为 1。
 export function tagActivation(
-  tag: Pick<StoredTag, 'source' | 'userId' | 'samples' | 'lastSeen'>,
+  tag: Pick<StoredTag, 'source' | 'category' | 'userId' | 'samples' | 'lastSeen'>,
   now: number,
 ): number {
   if (tag.source === 'manual') return 1;
-  return 2 ** (-(now - tag.lastSeen) / tagHalfLifeMs(tag));
+  const halfLife = tagHalfLifeMs(tag);
+  if (halfLife === null) return 1;
+  return 2 ** (-(now - tag.lastSeen) / halfLife);
 }
 
 function evidenceOf(input: TagCandidateInput): TagEvidence {
@@ -81,7 +87,10 @@ export function applyTagObservation(
     return { action: 'ignore', reason: 'duplicate' };
   }
   const samples = existing.samples + 1;
-  const status: TagStatus = existing.status === 'candidate' && samples >= 2 ? 'confirmed' : existing.status;
+  const inferredIdentity = existing.category === 'identity' && existing.origin === 'inferred';
+  const status: TagStatus = existing.status === 'candidate' && samples >= 2 && !inferredIdentity
+    ? 'confirmed'
+    : existing.status;
   return {
     action: 'observe',
     id: existing.id,
@@ -116,7 +125,8 @@ export function selectInjectableTags(
   limit: TagSelectionLimit,
 ): { tags: StoredTag[]; dropped: number } {
   const eligible = tags
-    .filter((tag) => tag.status === 'confirmed' && tagActivation(tag, now) >= ACTIVATION_MIN)
+    .filter((tag) => !tag.locked && tag.category !== 'misc'
+      && tag.status === 'confirmed' && tagActivation(tag, now) >= ACTIVATION_MIN)
     .sort((left, right) => {
       if (left.source !== right.source) return left.source === 'manual' ? -1 : 1;
       if (left.samples !== right.samples) return right.samples - left.samples;

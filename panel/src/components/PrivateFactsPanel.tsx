@@ -163,7 +163,7 @@ export function PrivateFactsPanel({ sessions, loadingFriends }: { sessions: Sess
     setLoadingFacts(true);
     setFacts([]);
     setError('');
-    setDisplayName(redactSensitiveText(selected.session.name));
+    setDisplayName(selected.session.name);
     void apiRequest<PrivacyFactsView>(`/api/privacy/${selected.userId}?${query}`).then((result) => {
       if (!active) return;
       setFacts(result.facts);
@@ -227,7 +227,7 @@ export function PrivateFactsPanel({ sessions, loadingFriends }: { sessions: Sess
                 key={friend.session.sessionId}
                 onClick={() => setSelectedId(friend.session.sessionId)}
               >
-                <span>{redactSensitiveText(friend.session.name)}</span>
+                <span>{friend.session.name}</span>
                 <span className="mono muted">{friend.userId} · 账号 {friend.account}</span>
               </button>
             ))}

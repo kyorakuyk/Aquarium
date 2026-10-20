@@ -12,6 +12,7 @@ export interface SlotDialogRow {
   model: string;
   temperature: string;
   maxTokens: string;
+  timeoutSec: string;
   reasoning: ModelReasoning;
 }
 
@@ -208,6 +209,18 @@ export function SlotDialogRowCard({
             />}
           </InlineModelParamCell>
         </div>
+        <label className="slot-timeout-field">
+          <span>超时（秒）</span>
+          <input
+            aria-label={`${definition.title}第 ${index + 1} 项超时（秒）`}
+            type="number"
+            min={1}
+            max={3600}
+            value={row.timeoutSec}
+            disabled={disabled}
+            onChange={(event) => onChange({ timeoutSec: event.currentTarget.value })}
+          />
+        </label>
       </div>
     </li>
   );

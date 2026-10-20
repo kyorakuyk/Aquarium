@@ -32,8 +32,16 @@ import type { ContactSnapshot, PanelAccountRuntime } from './types.ts';
 import { budgetState } from '../llm/budget.ts';
 import type { SleepWakeState } from '../core/sleep.ts';
 import type { HistoryImportService } from '../core/impressions/history-import.ts';
+import type { TagClassificationService } from '../core/impressions/classify-tags.ts';
 import type { StickerService } from '../core/stickers/service.ts';
 import { registerStickerRoutes } from './sticker-routes.ts';
+import { registerTagClassificationRoutes } from './tag-classification-routes.ts';
+import { registerActivityRoutes } from './activity-routes.ts';
+import type { ProfileActivityService } from '../core/activity/service.ts';
+import type { TagSubjectRepository } from '../store/tag-subject-repo.ts';
+import type { MemberSummaryRepository } from '../store/member-summary-repo.ts';
+import { registerTagSubjectRoutes } from './tag-subject-routes.ts';
+import { registerMemberSummaryRoutes } from './member-summary-routes.ts';
 
 export interface PanelServerOptions {
   password: string;
@@ -50,6 +58,10 @@ export interface PanelServerOptions {
   replayMessage?: (message: IncomingMessage) => Promise<PipelineResult | undefined>;
   sleepWakeState?: SleepWakeState;
   historyImports?: HistoryImportService;
+  tagClassificationService?: TagClassificationService;
+  profileActivity?: ProfileActivityService;
+  tagSubjects?: TagSubjectRepository;
+  memberSummaryRepository?: MemberSummaryRepository;
   stickerServices?: () => StickerService[];
   envPath?: string;
   env?: NodeJS.ProcessEnv;
@@ -249,6 +261,31 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     historyImports: options.historyImports,
     now,
   });
+  if (options.tagSubjects) {
+    registerTagSubjectRoutes(app, {
+      getConfig: options.getConfig,
+      tagSubjects: options.tagSubjects,
+    });
+  }
+  if (options.memberSummaryRepository) {
+    registerMemberSummaryRoutes(app, {
+      getConfig: options.getConfig,
+      repository: options.repository,
+      summaries: options.memberSummaryRepository,
+      now,
+    });
+  }
+  registerTagClassificationRoutes(app, options.tagClassificationService);
+  if (options.profileActivity) {
+    registerActivityRoutes(app, {
+      getConfig: options.getConfig,
+      saveConfig: options.saveConfig,
+      repository: options.repository,
+      profileActivity: options.profileActivity,
+      now,
+      serializeConfigWrite,
+    });
+  }
   registerPrivacyRoutes(app, {
     getConfig: options.getConfig,
     repository: options.repository,

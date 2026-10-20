@@ -1,0 +1,91 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+  activityCalendarCells,
+  activityLevel,
+  memberIdentityInjectionLabel,
+  memberIdentityMbti,
+  memberPreviewTags,
+  recentTagFadeLabel,
+} from '../panel/src/impressions-model.ts';
+
+const day = 24 * 60 * 60 * 1_000;
+
+function identityTag(text: string, samples: number, origin = 'self_report') {
+  return {
+    id: samples + text.length,
+    text,
+    category: 'identity',
+    subject: null,
+    polarity: null,
+    origin,
+    locked: false,
+    status: 'confirmed',
+    source: 'auto',
+    samples,
+    activation: 1,
+    evidence: [],
+    firstSeen: 0,
+    lastSeen: 0,
+    fadeAt: null,
+  };
+}
+
+test('activity heat levels use five bins relative to that person’s maximum', () => {
+  assert.deepEqual([0, 1, 2, 4, 6, 8, 10].map((value) => activityLevel(value, 10)), [0, 0, 1, 2, 3, 4, 4]);
+  assert.equal(activityLevel(8, 0), 0);
+});
+
+test('calendar cells preserve local weekday and week columns', () => {
+  const cells = activityCalendarCells([
+    { date: '2026-06-08', count: 1 },
+    { date: '2026-06-09', count: 2 },
+    { date: '2026-06-14', count: 3 },
+    { date: '2026-06-15', count: 4 },
+  ]);
+
+  assert.equal(cells.length, 4);
+  assert.deepEqual(cells.map(({ date, week, weekday }) => [date, week, weekday]), [
+    ['2026-06-08', 0, (new Date(2026, 5, 8).getDay() + 6) % 7],
+    ['2026-06-09', 0, (new Date(2026, 5, 9).getDay() + 6) % 7],
+    ['2026-06-14', 0, (new Date(2026, 5, 14).getDay() + 6) % 7],
+    ['2026-06-15', 1, (new Date(2026, 5, 15).getDay() + 6) % 7],
+  ]);
+});
+
+test('identity summary marks disagreement with ? and exposes per-letter counts', () => {
+  const result = memberIdentityMbti([
+    identityTag('INTJ', 3),
+    identityTag('INFJ', 2),
+    identityTag('ENTP', 8, 'inferred'),
+  ]);
+
+  assert.equal(result?.text, 'IN?J');
+  assert.match(result?.title ?? '', /T 3 次/);
+  assert.match(result?.title ?? '', /F 2 次/);
+});
+
+test('inferred identity label distinguishes unconfirmed from manual confirmation', () => {
+  assert.equal(memberIdentityInjectionLabel({ category: 'identity', origin: 'inferred', status: 'candidate' }), '推测 · 未注入');
+  assert.equal(memberIdentityInjectionLabel({ category: 'identity', origin: 'inferred', status: 'confirmed' }), '推测 · 已手动确认');
+  assert.equal(memberIdentityInjectionLabel({ category: 'identity', origin: 'self_report', status: 'confirmed' }), undefined);
+});
+
+test('member preview excludes locked, candidate, inferred identity and misc tags', () => {
+  const tags = [
+    { id: 1, text: '幽默', category: 'personality', origin: 'inferred', locked: false, status: 'confirmed', activation: 1, samples: 3, lastSeen: 3 },
+    { id: 2, text: '不喜欢外号', category: 'dislike', origin: 'inferred', locked: false, status: 'confirmed', activation: 1, samples: 2, lastSeen: 2 },
+    { id: 3, text: '锁定', category: 'personality', origin: 'inferred', locked: true, status: 'confirmed', activation: 1, samples: 4, lastSeen: 5 },
+    { id: 4, text: '观察中', category: 'recent', origin: 'inferred', locked: false, status: 'candidate', activation: 1, samples: 1, lastSeen: 5 },
+    { id: 5, text: 'INTP', category: 'identity', origin: 'inferred', locked: false, status: 'confirmed', activation: 1, samples: 4, lastSeen: 5 },
+    { id: 6, text: '旧标签', category: 'misc', origin: 'manual', locked: false, status: 'confirmed', activation: 1, samples: 2, lastSeen: 5 },
+  ];
+
+  assert.deepEqual(memberPreviewTags(tags).map(({ text }) => text), ['不喜欢外号', '幽默']);
+});
+
+test('recent-tag fade label follows the supplied local fade timestamp', () => {
+  assert.equal(recentTagFadeLabel({ source: 'auto', fadeAt: 6 * day + 1 }, 0), '7 天后淡出');
+  assert.equal(recentTagFadeLabel({ source: 'auto', fadeAt: 0 }, 0), '已淡出');
+  assert.equal(recentTagFadeLabel({ source: 'manual', fadeAt: 6 * day }, 0), undefined);
+});

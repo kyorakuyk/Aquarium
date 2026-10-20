@@ -7,17 +7,22 @@ import {
   type ImpressionsView,
   type ModelsView,
   type SessionView,
+  type TagCategory,
+  type TagPolarity,
   type TagStatus,
   type TagView,
 } from '../api.ts';
-import { AffinityPanel, MemberAffinity } from '../components/AffinityPanel.tsx';
+import { AffinityPanel } from '../components/AffinityPanel.tsx';
+import { ActivityHeatmap } from '../components/ActivityHeatmap.tsx';
 import { ImpressionTag, InlineTagAdd } from '../components/ImpressionTag.tsx';
-import { redactSensitiveText } from '../sensitive-text.ts';
+import { ImpressionsMemberRow } from '../components/ImpressionsMemberRow.tsx';
+import { MemberProfileCard } from '../components/MemberProfileCard.tsx';
 
 const PrivateFactsPanel = lazy(() => import('../components/PrivateFactsPanel.tsx').then((module) => ({ default: module.PrivateFactsPanel })));
 
 type TagAction = (id: number, status: TagStatus) => Promise<boolean>;
 type TagRename = (id: number, text: string) => Promise<boolean>;
+type TagLock = (id: number, locked: boolean) => Promise<boolean>;
 type TagAdd = (text: string) => Promise<boolean>;
 type HistoryImportTarget = 200 | 500 | 1_000 | 2_000;
 
@@ -25,6 +30,14 @@ const HISTORY_IMPORT_TARGETS: HistoryImportTarget[] = [200, 500, 1_000, 2_000];
 
 function isHistoryImportTerminal(job: HistoryImportJobView | undefined): boolean {
   return job !== undefined && ['done', 'cancelled', 'error'].includes(job.phase);
+}
+
+function historyFailureLabel(job: HistoryImportJobView): string {
+  const { failureReason: reason, failureHttpStatus } = job;
+  if (reason === 'timeout') return '模型超时';
+  if (reason === 'network') return '网络错误';
+  if (reason === 'http') return `HTTP ${failureHttpStatus ?? '错误'}`;
+  return '其他错误';
 }
 
 function estimatedHistoryImportCost(target: HistoryImportTarget, models: ModelsView | undefined): number | undefined {
@@ -37,12 +50,13 @@ function estimatedHistoryImportCost(target: HistoryImportTarget, models: ModelsV
   return Math.ceil(target / 80) * 6_000 * inputPrice / 1_000_000;
 }
 
-function TagCollection({ tags, label, busy, onAction, onRename, onAdd }: {
+function TagCollection({ tags, label, busy, onAction, onRename, onLock, onAdd }: {
   tags: TagView[];
   label: string;
   busy: boolean;
   onAction: TagAction;
   onRename: TagRename;
+  onLock: TagLock;
   onAdd: TagAdd;
 }) {
   const [showRejected, setShowRejected] = useState(false);
@@ -51,48 +65,28 @@ function TagCollection({ tags, label, busy, onAction, onRename, onAdd }: {
   return (
     <div className="tag-collection">
       {active.length === 0 && <span className="muted tag-empty">还没有标签</span>}
-      {active.map((tag) => <ImpressionTag key={tag.id} tag={tag} busy={busy} onAction={onAction} onRename={onRename} />)}
+      {active.map((tag) => <ImpressionTag key={tag.id} tag={tag} busy={busy} onAction={onAction} onRename={onRename} onLock={onLock} />)}
       <InlineTagAdd label={label} busy={busy} onSubmit={onAdd} />
       {rejected.length > 0 && <button className="rejected-tags-toggle" type="button" aria-expanded={showRejected} onClick={() => setShowRejected((value) => !value)}>
         {showRejected ? '收起已否决' : `+${rejected.length} 已否决`}
       </button>}
-      {showRejected && rejected.map((tag) => <ImpressionTag key={tag.id} tag={tag} busy={busy} onAction={onAction} onRename={onRename} />)}
+      {showRejected && rejected.map((tag) => <ImpressionTag key={tag.id} tag={tag} busy={busy} onAction={onAction} onRename={onRename} onLock={onLock} />)}
     </div>
   );
 }
 
-function MemberRow({ member, account, busy, onAction, onRename, onAdd }: {
-  member: ImpressionsView['members'][number];
-  account: number;
-  busy: boolean;
-  onAction: TagAction;
-  onRename: TagRename;
-  onAdd: TagAdd;
-}) {
-  const safeName = redactSensitiveText(member.name);
-  return (
-    <article className="member-row">
-      <div className="member-identity">
-        <span className="member-avatar" aria-hidden="true">{Array.from(safeName)[0] ?? '友'}</span>
-        <span><strong>{safeName}</strong><span className="mono muted">{member.userId}</span></span>
-      </div>
-      <MemberAffinity affinity={member.affinity} account={account} />
-      <TagCollection tags={member.tags} label={`给${safeName}新增标签`} busy={busy} onAction={onAction} onRename={onRename} onAdd={onAdd} />
-    </article>
-  );
-}
-
-function GroupTags({ tags, busy, onAction, onRename, onAdd }: {
+function GroupTags({ tags, busy, onAction, onRename, onLock, onAdd }: {
   tags: TagView[];
   busy: boolean;
   onAction: TagAction;
   onRename: TagRename;
+  onLock: TagLock;
   onAdd: TagAdd;
 }) {
   return (
     <section className="panel-card group-vibe-card">
       <h2>群的氛围</h2>
-      <TagCollection tags={tags} label="新增群标签" busy={busy} onAction={onAction} onRename={onRename} onAdd={onAdd} />
+      <TagCollection tags={tags} label="新增群标签" busy={busy} onAction={onAction} onRename={onRename} onLock={onLock} onAdd={onAdd} />
     </section>
   );
 }
@@ -104,6 +98,7 @@ export function ImpressionsPage() {
   const [selectedId, setSelectedId] = useState('');
   const [tab, setTab] = useState<'groups' | 'people' | 'privacy'>('groups');
   const [view, setView] = useState<ImpressionsView>();
+  const [selectedUserId, setSelectedUserId] = useState<number>();
   const [models, setModels] = useState<ModelsView>();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -152,6 +147,16 @@ export function ImpressionsPage() {
   }, [selectedId, load]);
 
   useEffect(() => {
+    if (!view) {
+      setSelectedUserId(undefined);
+      return;
+    }
+    setSelectedUserId((current) => view.members.some((member) => member.userId === current)
+      ? current
+      : view.members[0]?.userId);
+  }, [view]);
+
+  useEffect(() => {
     const dialog = historyDialogRef.current;
     if (!dialog) return;
     if (historyDialogOpen && !dialog.open) dialog.showModal();
@@ -196,7 +201,7 @@ export function ImpressionsPage() {
     };
   }, [historyJobId, load, selectedId]);
 
-  async function runAction(id: number, body: { text?: string; status?: TagStatus }): Promise<boolean> {
+  async function runAction(id: number, body: { text?: string; status?: TagStatus; locked?: boolean }): Promise<boolean> {
     if (!selectedId || busy) return false;
     setBusy(true);
     try {
@@ -210,11 +215,23 @@ export function ImpressionsPage() {
     }
   }
 
-  async function addTag(userId: number | null, text: string): Promise<boolean> {
+  async function addTag(
+    userId: number | null,
+    text: string,
+    category: TagCategory = 'misc',
+    subject: string | null = null,
+    polarity: TagPolarity = null,
+  ): Promise<boolean> {
     if (!selectedId || busy) return false;
     setBusy(true);
     try {
-      await post('/api/tags', { sessionId: selectedId, userId, text });
+      await post('/api/tags', {
+        sessionId: selectedId,
+        userId,
+        text,
+        category,
+        ...(category === 'fandom' ? { subject, polarity } : {}),
+      });
       return await load(selectedId);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '新增失败');
@@ -227,6 +244,7 @@ export function ImpressionsPage() {
   const historyImportActive = historyStarting || Boolean(historyJobId && !isHistoryImportTerminal(historyJob));
   const estimatedCost = estimatedHistoryImportCost(historyTarget, models);
   const historyGroup = groups.find((group) => group.sessionId === (historyJob?.sessionId ?? selectedId));
+  const selectedMember = view?.members.find((member) => member.userId === selectedUserId);
 
   function openHistoryDialog(): void {
     if (historyImportActive) {
@@ -279,21 +297,21 @@ export function ImpressionsPage() {
     <div className="page">
       <header className="page-header">
         <h1>印象</h1>
-        <p className="page-description">群聊印象、所有人标签与私聊记忆分开管理；跨场景使用受隐私等级控制。</p>
+        <p className="page-description">它对群友的了解，也是你了解朋友的一本册子。</p>
       </header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
       <div className="impressions-controls">
         <div className="page-tabs" role="tablist" aria-label="印象视图">
           <button className={tab === 'groups' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'groups'} onClick={() => setTab('groups')}>群聊</button>
-          <button className={tab === 'people' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'people'} onClick={() => setTab('people')}>所有人</button>
           <button className={tab === 'privacy' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'privacy'} onClick={() => setTab('privacy')}>私聊</button>
+          <button className={tab === 'people' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'people'} onClick={() => setTab('people')}>所有人</button>
         </div>
         {tab === 'groups' && <div className="impressions-group-tools">
           <label className="impressions-group-select">
             <span className="visually-hidden">选择群</span>
             <select value={selectedId} onChange={(event) => setSelectedId(event.currentTarget.value)}>
               {groups.length === 0 && <option value="">暂无群聊</option>}
-              {groups.map((group) => <option value={group.sessionId} key={group.sessionId}>{redactSensitiveText(group.name)} · {group.memberCount ?? 0} 人</option>)}
+              {groups.map((group) => <option value={group.sessionId} key={group.sessionId}>{group.name} · {group.memberCount === undefined ? '人数未知' : `${group.memberCount} 人`}</option>)}
             </select>
           </label>
           <button
@@ -310,16 +328,17 @@ export function ImpressionsPage() {
       </Suspense>}
       {tab === 'groups' && <>
       {!view && <div className="empty-state">选择一个群，查看它攒下的标签。</div>}
-      {view && (
-        <>
+      {view && <div className="impressions-workspace">
+        <aside className="impressions-sidebar">
           <GroupTags
             tags={view.groupTags}
             busy={busy}
             onAction={(id, status) => runAction(id, { status })}
             onRename={(id, text) => runAction(id, { text })}
+            onLock={(id, locked) => runAction(id, { locked })}
             onAdd={(text) => addTag(null, text)}
           />
-
+          <ActivityHeatmap sessionId={view.sessionId} group />
           <section className="panel-card member-list-section">
             <div className="section-heading">
               <div><h2>群友</h2></div>
@@ -327,19 +346,29 @@ export function ImpressionsPage() {
             </div>
             {view.members.length === 0 && <p className="muted">还没有群友标签；群里聊得多一些就会出现。</p>}
             <div className="member-list">
-              {view.members.map((member) => <MemberRow
+              {view.members.map((member) => <ImpressionsMemberRow
                 key={member.userId}
                 member={member}
                 account={Number(view.sessionId.split(':', 1)[0])}
-                busy={busy}
-                onAction={(id, status) => runAction(id, { status })}
-                onRename={(id, text) => runAction(id, { text })}
-                onAdd={(text) => addTag(member.userId, text)}
+                selected={member.userId === selectedUserId}
+                onSelect={() => setSelectedUserId(member.userId)}
               />)}
             </div>
           </section>
-        </>
-      )}
+        </aside>
+        {selectedMember
+          ? <MemberProfileCard
+            key={`${view.sessionId}:${selectedMember.userId}`}
+            sessionId={view.sessionId}
+            member={selectedMember}
+            busy={busy}
+            onAction={(id, status) => runAction(id, { status })}
+            onRename={(id, text) => runAction(id, { text })}
+            onLock={(id, locked) => runAction(id, { locked })}
+            onAdd={(text, category, subject, polarity) => addTag(selectedMember.userId, text, category, subject, polarity)}
+          />
+          : <div className="panel-card member-profile-empty">选择一位群友，查看它眼里的画像。</div>}
+      </div>}
       </>}
       <dialog
         className="history-import-dialog"
@@ -376,17 +405,22 @@ export function ImpressionsPage() {
           {historyJob.cancelRequested ? '；取消将在当前页完成后生效。' : '。'}
         </p>}
         {historyJob?.phase === 'extracting' && <p className="history-import-status" aria-live="polite">
-          正在整理 第 {Math.min(historyJob.windowsDone + 1, historyJob.windowsTotal)} / {historyJob.windowsTotal} 段
+          正在整理 第 {Math.min(historyJob.windowsDone + historyJob.windowsFailed + 1, historyJob.windowsTotal)} / {historyJob.windowsTotal} 段
           {historyJob.cancelRequested ? '；取消将在当前段完成后生效。' : '。'}
         </p>}
         {historyJob?.phase === 'done' && <p className="history-import-status" role="status">
           完成：新增 {historyJob.inserted} 条消息，新增标签 {historyJob.tagsInserted} 个，确认 {historyJob.tagsObserved} 次观察，花费 ¥{historyJob.costCny.toFixed(2)}。
+          {historyJob.windowsFailed > 0 && ` 提取失败：${historyFailureLabel(historyJob)}（${historyJob.windowsFailed} 个窗口跳过）`}
         </p>}
         {historyJob?.phase === 'cancelled' && <p className="history-import-status" role="status">
           已取消：已获取 {historyJob.fetched} 条，新增 {historyJob.inserted} 条消息；花费 ¥{historyJob.costCny.toFixed(2)}。
+          {historyJob.windowsFailed > 0 && ` 提取失败：${historyFailureLabel(historyJob)}（${historyJob.windowsFailed} 个窗口跳过）`}
         </p>}
         {historyJob?.phase === 'error' && <p className="history-import-status is-error" role="alert">
-          导入停止：{historyJob.error ?? '未知错误'}；已获取 {historyJob.fetched} 条，新增 {historyJob.inserted} 条消息。
+          导入停止：{historyJob.error ?? '未知错误'}
+          {historyJob.windowsFailed > 0 && !historyJob.error?.startsWith('提取失败：')
+            && `；提取失败：${historyFailureLabel(historyJob)}（${historyJob.windowsFailed} 个窗口跳过）`}
+          ；已获取 {historyJob.fetched} 条，新增 {historyJob.inserted} 条消息。
         </p>}
         {historyError && <p className="history-import-error" role="alert">{historyError}</p>}
         <div className="history-import-footer">

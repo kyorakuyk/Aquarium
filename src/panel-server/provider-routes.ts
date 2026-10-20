@@ -293,7 +293,13 @@ export function registerProviderRoutes(app: Hono, options: ProviderRouteOptions)
       if (unknownProvider) return context.json({ error: 'Unknown provider', provider: unknownProvider.provider }, 400);
       const next = AquariumConfigSchema.safeParse({
         ...config,
-        slots: { ...config.slots, [slot]: chain.chain },
+        slots: {
+          ...config.slots,
+          [slot]: chain.chain.map((entry) => ({
+            ...entry,
+            timeoutSec: entry.timeoutSec ?? (slot === 'extract' ? 90 : 30),
+          })),
+        },
       });
       if (!next.success) return context.json({ error: 'Invalid slot chain' }, 400);
       await options.saveConfig(next.data);

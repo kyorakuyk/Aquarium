@@ -67,7 +67,7 @@ test('心情 API 返回衰减后的值、档位与最近事件', async () => {
   });
 });
 
-test('印象 API 返回群标签、成员名与全部状态标签', async () => {
+test('印象 API 返回群友名与全部状态标签', async () => {
   await withPanel(async ({ app, repository }) => {
     const key = sessionId(groupSession);
     repository.insertTag({
@@ -76,6 +76,11 @@ test('印象 API 返回群标签、成员名与全部状态标签', async () => 
       userId: null,
       text: '爱聊游戏',
       norm: '爱聊游戏',
+      category: 'misc',
+      subject: null,
+      polarity: null,
+      origin: 'inferred',
+      locked: false,
       status: 'confirmed',
       source: 'auto',
       samples: 3,
@@ -89,8 +94,13 @@ test('印象 API 返回群标签、成员名与全部状态标签', async () => 
       account,
       sessionId: key,
       userId: 42,
-      text: '夜猫子',
-      norm: '夜猫子',
+      text: 'NightOwlLabel123',
+      norm: 'nightowllabel123',
+      category: 'misc',
+      subject: null,
+      polarity: null,
+      origin: 'inferred',
+      locked: false,
       status: 'candidate',
       source: 'auto',
       samples: 1,
@@ -106,9 +116,34 @@ test('印象 API 返回群标签、成员名与全部状态标签', async () => 
       userId: 42,
       text: '爱加班',
       norm: '爱加班',
+      category: 'misc',
+      subject: null,
+      polarity: null,
+      origin: 'inferred',
+      locked: false,
       status: 'rejected',
       source: 'auto',
       samples: 2,
+      evidence: [],
+      firstSeen: now,
+      lastSeen: now,
+      supersededBy: null,
+      updatedAt: now,
+    });
+    repository.insertTag({
+      account,
+      sessionId: key,
+      userId: 42,
+      text: 'NightOwlLabel123',
+      norm: 'nightowllabel123',
+      category: 'personality',
+      subject: null,
+      polarity: null,
+      origin: 'inferred',
+      locked: false,
+      status: 'confirmed',
+      source: 'auto',
+      samples: 3,
       evidence: [],
       firstSeen: now,
       lastSeen: now,
@@ -119,7 +154,7 @@ test('印象 API 返回群标签、成员名与全部状态标签', async () => 
       sessionId: key,
       messageId: 'name-1',
       senderId: 42,
-      senderName: '小明',
+      senderName: '12345678',
       isSelf: false,
       plainText: '晚上好',
       segments: [],
@@ -140,30 +175,35 @@ test('印象 API 返回群标签、成员名与全部状态标签', async () => 
     assert.equal(body.groupTags[0]?.evidence.length, 1);
     assert.equal(body.members.length, 1);
     assert.equal(body.members[0]?.userId, 42);
-    assert.equal(body.members[0]?.name, '小明');
+    assert.equal(body.members[0]?.name, '12345678');
     assert.deepEqual(
       body.members[0]?.tags.map((tag) => [tag.text, tag.status]),
-      [['爱加班', 'rejected'], ['夜猫子', 'candidate']],
+      [['[敏感内容已隐藏]', 'confirmed'], ['爱加班', 'rejected'], ['[敏感内容已隐藏]', 'candidate']],
     );
 
     assert.equal((await app.request('/api/impressions/not-a-session', { headers: authHeaders() })).status, 400);
   });
 });
 
-test('印象 API 在标签名与证据引文中隐藏凭据样式文本', async () => {
+test('印象 API 原样返回群友名但继续脱敏标签正文与证据引文', async () => {
   await withPanel(async ({ app, repository }) => {
     const key = sessionId(groupSession);
-    const fakeCredential = 'K9m4R2p8T1v6';
+    const fakeCredential = ['K9m4R2p8', 'T1v6'].join('');
     repository.insertTag({
       account,
       sessionId: key,
       userId: null,
-      text: fakeCredential,
-      norm: fakeCredential,
+      text: 'AReallyLongEnglishLabel',
+      norm: 'areallylongenglishlabel',
+      category: 'misc',
+      subject: fakeCredential,
+      polarity: null,
+      origin: 'inferred',
+      locked: false,
       status: 'confirmed',
       source: 'auto',
       samples: 1,
-      evidence: [{ messageId: 'private-evidence', time: now, quote: `token=${fakeCredential}` }],
+      evidence: [{ messageId: 'private-evidence', time: now, quote: `token=${fakeCredential}; AReallyLongEnglishLabel` }],
       firstSeen: now,
       lastSeen: now,
       supersededBy: null,
@@ -174,7 +214,9 @@ test('印象 API 在标签名与证据引文中隐藏凭据样式文本', async 
     assert.equal(response.status, 200);
     const body = await response.text();
     assert.equal(body.includes(fakeCredential), false);
-    assert.equal(body.split('[敏感内容已隐藏]').length - 1, 2);
+    assert.equal(body.includes('AReallyLongEnglishLabel'), false);
+    assert.match(body, /\[敏感内容已隐藏\]/);
+    assert.equal(body.split('[敏感内容已隐藏]').length - 1, 4);
   });
 });
 
@@ -187,10 +229,22 @@ test('标签 API：手动新增、改文字与改状态', async () => {
       body: JSON.stringify({ sessionId: key, userId: null, text: ' 爱聊“游戏”！ ' }),
     });
     assert.equal(createResponse.status, 200);
-    const created = await createResponse.json() as { id: number; text: string; status: string; source: string; samples: number };
+    const created = await createResponse.json() as {
+      id: number;
+      text: string;
+      status: string;
+      source: string;
+      samples: number;
+      category: string;
+      origin: string;
+      locked: boolean;
+    };
     assert.equal(created.source, 'manual');
     assert.equal(created.status, 'confirmed');
     assert.equal(created.text, ' 爱聊“游戏”！ ');
+    assert.equal(created.category, 'misc');
+    assert.equal(created.origin, 'manual');
+    assert.equal(created.locked, false);
     const stored = repository.tagById(created.id);
     assert.equal(stored?.norm, '爱聊游戏');
     assert.equal(stored?.userId, null);
@@ -273,7 +327,7 @@ test('好感 API 按全局用户读取回落值与事件，并手动设置档位
       });
     };
     saveName('affinity-name-old', '旧名字', now - 1_000, 'group');
-    saveName('affinity-name-new', '最新名字', now - 500, 'private');
+    saveName('affinity-name-new', 'MemberName123', now - 500, 'private');
 
     const listResponse = await app.request('/api/affinity', { headers: authHeaders() });
     assert.equal(listResponse.status, 200);
@@ -284,7 +338,7 @@ test('好感 API 按全局用户读取回落值与事件，并手动设置档位
       level: string;
       lastInteractionAt: number | null;
     }>;
-    assert.deepEqual(people, [{ userId: 42, name: '最新名字', value: 70, level: 'warm', lastInteractionAt }]);
+    assert.deepEqual(people, [{ userId: 42, name: 'MemberName123', value: 70, level: 'warm', lastInteractionAt }]);
 
     const detailResponse = await app.request('/api/affinity/42', { headers: authHeaders() });
     assert.equal(detailResponse.status, 200);

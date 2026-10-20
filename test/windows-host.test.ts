@@ -45,8 +45,8 @@ test('host 在目标 PID 注入后等待适配器在线；退出只停止 SnowLu
     path: '',
     injected: false,
     connected: false,
-    loggedIn: false,
-    uin: '0',
+    loggedIn: true,
+    uin: '10001',
     status: 'available',
     error: '',
     method: '',
@@ -70,9 +70,6 @@ test('host 在目标 PID 注入后等待适配器在线；退出只停止 SnowLu
         return new Response(JSON.stringify({ success: true, token: 'unit-test-session', mustChangePassword: false }));
       }
       if (url.pathname === '/api/processes') return new Response(JSON.stringify({ list: [processInfo] }));
-      if (url.pathname === '/api/processes/123/probe-login') {
-        return new Response(JSON.stringify({ info: { port: 4301, uin: '10001', identityKnown: true } }));
-      }
       if (url.pathname === '/api/processes/123/load') {
         return new Response(JSON.stringify({ success: true, process: { ...processInfo, injected: true, status: 'loaded' } }));
       }
@@ -146,8 +143,8 @@ test('WebUI 在一次 401 重登录后仍拒绝请求时将 host 状态置为 er
     path: '',
     injected: false,
     connected: false,
-    loggedIn: false,
-    uin: '0',
+    loggedIn: true,
+    uin: '10001',
     status: 'available',
     error: '',
     method: '',
@@ -173,9 +170,6 @@ test('WebUI 在一次 401 重登录后仍拒绝请求时将 host 状态置为 er
         processListCount += 1;
         if (processListCount > 1) return new Response(JSON.stringify({ status: 'failed' }), { status: 401 });
         return new Response(JSON.stringify({ list: [processInfo] }));
-      }
-      if (url.pathname === '/api/processes/123/probe-login') {
-        return new Response(JSON.stringify({ info: { port: 4301, uin: '10001', identityKnown: true } }));
       }
       if (url.pathname === '/api/processes/123/load') {
         return new Response(JSON.stringify({ success: true, process: { ...processInfo, injected: true, status: 'loaded' } }));

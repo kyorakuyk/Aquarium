@@ -5,14 +5,18 @@ import { parseSessionId } from '../core/sessions.ts';
 import { bandOf, decayValue, nextBand } from '../core/mood/core.ts';
 import { buildMoodSeriesPoints, distanceToNextBand } from '../core/mood/series.ts';
 import { sleepEnergy, sleepPlan, type SleepWakeState } from '../core/sleep.ts';
-import { normalizeTagText, tagActivation } from '../core/impressions/tags.ts';
+import { normalizeTagText, tagActivation, tagHalfLifeMs } from '../core/impressions/tags.ts';
 import { TAG_TEXT_MAX, TAG_TEXT_MIN } from '../core/impressions/service.ts';
+import { buildMemberTagPrompt } from '../core/impressions/member-tags.ts';
+import { decide } from '../core/privacy/policy.ts';
+import { promptTemplateStore } from '../core/prompt-templates.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
 import { createAffinityService } from '../core/affinity/service.ts';
 import type { MoodBand, StoredMoodEvent, StoredTag } from '../store/affect-repo.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import type { PanelAccountRuntime } from './types.ts';
 import type { HistoryImportService } from '../core/impressions/history-import.ts';
+import { TAG_CATEGORY_KEYS } from '../store/tag-profile.ts';
 
 export interface AffectRouteOptions {
   getConfig: () => AquariumConfig;
@@ -27,11 +31,15 @@ const manualTagSchema = z.object({
   sessionId: z.string().min(1),
   userId: z.number().int().positive().nullable(),
   text: z.string(),
+  category: z.enum([...TAG_CATEGORY_KEYS, 'misc']).optional(),
+  subject: z.string().optional(),
+  polarity: z.enum(['like', 'dislike']).nullable().optional(),
 }).strict();
 
 const tagPatchSchema = z.object({
   text: z.string().optional(),
   status: z.enum(['confirmed', 'rejected', 'candidate']).optional(),
+  locked: z.boolean().optional(),
 }).strict();
 
 const affinityPatchSchema = z.object({ value: z.number().int().min(0).max(100) }).strict();
@@ -52,6 +60,14 @@ function tagView(tag: StoredTag, at: number) {
   return {
     id: tag.id,
     text: redactSensitiveText(tag.text),
+    category: tag.category,
+    subject: tag.subject === null ? null : redactSensitiveText(tag.subject),
+    polarity: tag.polarity,
+    origin: tag.origin,
+    locked: tag.locked,
+    fadeAt: tag.category === 'recent' && tag.source === 'auto'
+      ? tag.lastSeen + (tagHalfLifeMs(tag) ?? 0) * 2
+      : null,
     status: tag.status,
     source: tag.source,
     samples: tag.samples,
@@ -123,7 +139,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
   function affinityView(account: number, userId: number, at: number) {
     return {
       ...affinityService.getCurrent(account, userId, at),
-      name: redactSensitiveText(options.repository.latestSenderNameForAccount(account, userId) ?? String(userId)),
+      name: options.repository.latestSenderNameForAccount(account, userId) ?? String(userId),
     };
   }
 
@@ -243,7 +259,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     const at = now();
     const people = affinityService.listCurrent(account, at).map((person) => ({
       ...person,
-      name: redactSensitiveText(options.repository.latestSenderNameForAccount(account, person.userId) ?? String(person.userId)),
+      name: options.repository.latestSenderNameForAccount(account, person.userId) ?? String(person.userId),
     }));
     return context.json(people);
   });
@@ -275,7 +291,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     const current = affinityService.setManual({ account, userId, value: body.value, now: now() });
     return context.json({
       ...current,
-      name: redactSensitiveText(options.repository.latestSenderNameForAccount(account, userId) ?? String(userId)),
+      name: options.repository.latestSenderNameForAccount(account, userId) ?? String(userId),
     });
   });
 
@@ -291,12 +307,28 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
       tags.map((tag) => tag.userId).filter((userId): userId is number => userId !== null),
     )];
     const members = memberIds.map((userId) => {
-      const name = redactSensitiveText(options.repository.senderNameFor(id, userId) ?? String(userId));
+      const name = options.repository.senderNameFor(id, userId) ?? String(userId);
+      const memberTags = tags.filter((tag) => tag.userId === userId);
+      const memberAllowed = userId !== key.account && decide({
+        info: { origin: 'group', sessionId: id, ownerId: userId },
+        target: { kind: 'group', sessionId: id },
+        purpose: 'prompt',
+      }) === 'allow';
+      const memberPrompt = memberAllowed
+        ? buildMemberTagPrompt(memberTags, at)
+        : { text: '', dropped: 0 };
+      const memberTagsText = memberPrompt.text
+        ? promptTemplateStore.get().replySystem.memberTags
+          .replaceAll('{{name}}', JSON.stringify(name))
+          .replaceAll('{{tags}}', memberPrompt.text)
+        : null;
       return {
         userId,
         name,
         affinity: affinityService.getCurrent(key.account, userId, at),
-        tags: tags.filter((tag) => tag.userId === userId).map((tag) => tagView(tag, at)),
+        tags: memberTags.map((tag) => tagView(tag, at)),
+        memberTagsAllowed: memberAllowed,
+        memberTagsText: memberTagsText === null ? null : redactSensitiveText(memberTagsText),
       };
     });
     return context.json({ sessionId: id, groupTags, members });
@@ -342,6 +374,18 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     if (textLength(body.text) < TAG_TEXT_MIN || textLength(body.text) > TAG_TEXT_MAX) {
       return context.json({ error: 'Invalid tag text' }, 400);
     }
+    const category = body.category ?? 'misc';
+    const subject = body.subject?.trim() ?? '';
+    const hasFandomFields = body.subject !== undefined || body.polarity !== undefined;
+    if ((category === 'fandom' && !subject)
+      || (category !== 'fandom' && hasFandomFields)
+      || textLength(subject) > 40) {
+      return context.json({ error: 'Invalid tag subject or polarity' }, 400);
+    }
+    if (redactSensitiveText(body.text) !== body.text
+      || (subject && redactSensitiveText(subject) !== subject)) {
+      return context.json({ error: 'Tag contains sensitive text' }, 400);
+    }
 
     const at = now();
     const id = options.repository.insertTag({
@@ -350,6 +394,11 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
       userId: body.userId,
       text: body.text,
       norm: normalizeTagText(body.text),
+      category,
+      subject: category === 'fandom' ? subject : null,
+      polarity: category === 'fandom' ? body.polarity ?? null : null,
+      origin: 'manual',
+      locked: false,
       status: 'confirmed',
       source: 'manual',
       samples: 1,
@@ -370,12 +419,15 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     let rawBody: unknown;
     try { rawBody = await context.req.json(); } catch { return context.json({ error: 'Invalid JSON' }, 400); }
     const patch = parseJsonBody(rawBody, tagPatchSchema);
-    if (!patch || (patch.text === undefined && patch.status === undefined)) {
+    if (!patch || (patch.text === undefined && patch.status === undefined && patch.locked === undefined)) {
       return context.json({ error: 'Invalid tag patch' }, 400);
     }
     if (patch.text !== undefined
       && (textLength(patch.text) < TAG_TEXT_MIN || textLength(patch.text) > TAG_TEXT_MAX)) {
       return context.json({ error: 'Invalid tag text' }, 400);
+    }
+    if (patch.text !== undefined && redactSensitiveText(patch.text) !== patch.text) {
+      return context.json({ error: 'Tag contains sensitive text' }, 400);
     }
     const existing = options.repository.tagById(id);
     if (!existing) return context.json({ error: 'Tag not found' }, 404);
@@ -383,6 +435,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     options.repository.updateTag(id, {
       ...(patch.text === undefined ? {} : { text: patch.text, norm: normalizeTagText(patch.text) }),
       ...(patch.status === undefined ? {} : { status: patch.status }),
+      ...(patch.locked === undefined ? {} : { locked: patch.locked }),
       updatedAt: now(),
     });
     const updated = options.repository.tagById(id);

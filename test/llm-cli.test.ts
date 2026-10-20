@@ -99,18 +99,31 @@ test('CLI failures fall back to the next provider and record the failed attempt'
   ]);
 });
 
-test('CLI timeout is a failure and never hangs the caller', async () => {
+test('slot timeout overrides the CLI provider timeout', async () => {
   const started = Date.now();
-  await assert.rejects(
-    callSlot('reply', [{ role: 'user', content: '你好' }], {
-      config: cliConfig('process.stdin.resume();setInterval(()=>{},1000);', { timeoutSec: 1 }),
-      account: null,
-      costToday: () => 0,
-      recordUsage: () => {},
-    }),
-    /CLI 调用超时/u,
-  );
-  assert.ok(Date.now() - started < 5_000);
+  const config = AquariumConfigSchema.parse({
+    ...cliConfig('process.stdin.resume();setInterval(()=>{},1000);', { timeoutSec: 30, prewarm: true }),
+    slots: {
+      ...baseConfig.slots,
+      reply: [{ provider: 'fakecli', model: 'cli-model', timeoutSec: 1 }],
+    },
+  });
+  const runtime = createCliRuntime();
+  try {
+    await assert.rejects(
+      callSlot('reply', [{ role: 'user', content: '你好' }], {
+        config,
+        account: null,
+        costToday: () => 0,
+        recordUsage: () => {},
+        cliRuntime: runtime,
+      }),
+      /CLI 调用超时/u,
+    );
+    assert.ok(Date.now() - started < 5_000);
+  } finally {
+    await runtime.stopAll();
+  }
 });
 
 test('CLI timeout escalates to a hard kill when graceful termination is ignored', async () => {

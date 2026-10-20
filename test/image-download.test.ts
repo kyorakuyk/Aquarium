@@ -95,7 +95,7 @@ test('已有图片 data URL 不发起下载', async () => {
   assert.equal(fetchCount, 0);
 });
 
-test('下载超时会由 abort signal 中止', async () => {
+test('下载超时会由普通计时器 abort signal 并中止响应 body 读取', async () => {
   const fetcher = (_url: string, init?: RequestInit): Promise<Response> => new Promise((_, reject) => {
     const signal = init?.signal;
     if (!signal) return reject(new Error('missing abort signal'));
@@ -103,6 +103,23 @@ test('下载超时会由 abort signal 中止', async () => {
   });
 
   await assert.rejects(downloadImageAsDataUrl(imageUrl, fetcher, 5), /timeout|abort/iu);
+
+  let bodySignal: AbortSignal | undefined;
+  const bodyFetcher = async (_url: string, init?: RequestInit): Promise<Response> => {
+    bodySignal = init?.signal as AbortSignal | undefined;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        bodySignal?.addEventListener('abort', () => controller.error(bodySignal?.reason), { once: true });
+      },
+    });
+    return new Response(body, {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    });
+  };
+
+  await assert.rejects(downloadImageAsDataUrl(imageUrl, bodyFetcher, 5), /timeout|abort/iu);
+  assert.equal(bodySignal?.aborted, true);
 });
 
 test('非 2xx 响应与不支持的 content-type 均被拒绝', async () => {
