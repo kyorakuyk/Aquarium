@@ -38,6 +38,10 @@ import { registerStickerRoutes } from './sticker-routes.ts';
 import { registerTagClassificationRoutes } from './tag-classification-routes.ts';
 import { registerActivityRoutes } from './activity-routes.ts';
 import type { ProfileActivityService } from '../core/activity/service.ts';
+import type { TagSubjectRepository } from '../store/tag-subject-repo.ts';
+import type { MemberSummaryRepository } from '../store/member-summary-repo.ts';
+import { registerTagSubjectRoutes } from './tag-subject-routes.ts';
+import { registerMemberSummaryRoutes } from './member-summary-routes.ts';
 
 export interface PanelServerOptions {
   password: string;
@@ -56,6 +60,8 @@ export interface PanelServerOptions {
   historyImports?: HistoryImportService;
   tagClassificationService?: TagClassificationService;
   profileActivity?: ProfileActivityService;
+  tagSubjects?: TagSubjectRepository;
+  memberSummaryRepository?: MemberSummaryRepository;
   stickerServices?: () => StickerService[];
   envPath?: string;
   env?: NodeJS.ProcessEnv;
@@ -255,6 +261,20 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     historyImports: options.historyImports,
     now,
   });
+  if (options.tagSubjects) {
+    registerTagSubjectRoutes(app, {
+      getConfig: options.getConfig,
+      tagSubjects: options.tagSubjects,
+    });
+  }
+  if (options.memberSummaryRepository) {
+    registerMemberSummaryRoutes(app, {
+      getConfig: options.getConfig,
+      repository: options.repository,
+      summaries: options.memberSummaryRepository,
+      now,
+    });
+  }
   registerTagClassificationRoutes(app, options.tagClassificationService);
   if (options.profileActivity) {
     registerActivityRoutes(app, {

@@ -13,6 +13,8 @@ import type { ExtractTagsPromptTemplate } from '../src/core/prompt-templates.ts'
 import { createPanelApp, type PanelServerOptions } from '../src/panel-server/app.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
+import { createTagSubjectRepository } from '../src/store/tag-subject-repo.ts';
+import { createMemberSummaryRepository } from '../src/store/member-summary-repo.ts';
 import type { SlotCallOptions, SlotResult } from '../src/llm/slots.ts';
 import type { CliRuntime } from '../src/llm/cli.ts';
 
@@ -103,6 +105,8 @@ export async function withPanel<T>(
   fs.writeFileSync(path.join(root, 'personas', 'default.md'), '# Aquarium\n默认人设。', 'utf8');
   const database = openDatabase(path.join(root, 'aquarium.db'));
   const repository = createRepository(database, () => new Date(now));
+  const tagSubjects = createTagSubjectRepository(database);
+  const memberSummaryRepository = createMemberSummaryRepository(database);
   let config = AquariumConfigSchema.parse({
     ...exampleConfig,
     owner: ownerId,
@@ -152,6 +156,8 @@ export async function withPanel<T>(
     getConfig: () => config,
     saveConfig: (next) => { config = next; savedConfig = next; },
     repository,
+    tagSubjects,
+    memberSummaryRepository,
     accounts: () => [{ adapter, getStatus: () => adapter.status, getNickname: () => adapter.nickname }],
     historyImports,
     sleepWakeState,

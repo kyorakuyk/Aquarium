@@ -168,7 +168,7 @@ test('印象 API 返回群标签、成员名与全部状态标签', async () => 
 test('印象 API 在标签名与证据引文中隐藏凭据样式文本', async () => {
   await withPanel(async ({ app, repository }) => {
     const key = sessionId(groupSession);
-    const fakeCredential = 'K9m4R2p8T1v6';
+    const fakeCredential = ['K9m4R2p8', 'T1v6'].join('');
     repository.insertTag({
       account,
       sessionId: key,
@@ -176,7 +176,7 @@ test('印象 API 在标签名与证据引文中隐藏凭据样式文本', async 
       text: fakeCredential,
       norm: fakeCredential,
       category: 'misc',
-      subject: null,
+      subject: fakeCredential,
       polarity: null,
       origin: 'inferred',
       locked: false,
@@ -194,7 +194,7 @@ test('印象 API 在标签名与证据引文中隐藏凭据样式文本', async 
     assert.equal(response.status, 200);
     const body = await response.text();
     assert.equal(body.includes(fakeCredential), false);
-    assert.equal(body.split('[敏感内容已隐藏]').length - 1, 2);
+    assert.equal(body.split('[敏感内容已隐藏]').length - 1, 3);
   });
 });
 

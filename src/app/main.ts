@@ -392,6 +392,8 @@ await startPanelWhileAccountStartupRuns(accountStartup, () => {
           historyImports,
           tagClassificationService,
           profileActivity: profileActivityService,
+          tagSubjects,
+          memberSummaryRepository,
           sleepWakeState,
           cliRuntime,
           management: () => managementControllers,
