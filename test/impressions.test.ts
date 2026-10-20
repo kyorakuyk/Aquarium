@@ -24,6 +24,11 @@ function tag(overrides: Partial<StoredTag> = {}): StoredTag {
     userId: 42,
     text: '爱聊游戏',
     norm: '爱聊游戏',
+    category: 'misc',
+    subject: null,
+    polarity: null,
+    origin: 'inferred',
+    locked: false,
     status: 'candidate',
     source: 'auto',
     samples: 1,
@@ -115,7 +120,7 @@ test('推翻只针对 auto 标签：manual 目标丢弃，缺失 id 忽略', () 
   assert.equal(outcome.supersedes, 3);
   assert.equal(outcome.norm, '其实不聊游戏');
 
-  const manual = tag({ id: 4, source: 'manual' });
+  const manual = tag({ id: 4, source: 'manual', origin: 'manual' });
   assert.deepEqual(
     applyTagContradiction([manual], { id: 4, text: '推翻', messageId: 'm5', time: 5_000, quote: '' }),
     { action: 'ignore', reason: 'manual_target' },
@@ -137,8 +142,23 @@ test('激活度按半衰期与 samples 计算，manual 恒为 1', () => {
   const group = tag({ userId: null, samples: 1, lastSeen: now - GROUP_TAG_HALF_LIFE_MS });
   assert.ok(Math.abs(tagActivation(group, now) - 0.5) < 1e-12);
 
-  const manual = tag({ source: 'manual', lastSeen: now - 365 * dayMs });
+  const manual = tag({ source: 'manual', origin: 'manual', lastSeen: now - 365 * dayMs });
   assert.equal(tagActivation(manual, now), 1);
+});
+
+test('画像类别决定半衰期；schedule 不衰减', () => {
+  const now = 200 * dayMs;
+  const identity = tag({ category: 'identity', lastSeen: now - 180 * dayMs });
+  const recent = tag({ category: 'recent', lastSeen: now - 3 * dayMs });
+  const dislike = tag({ category: 'dislike', lastSeen: now - 60 * dayMs });
+  const atmosphere = tag({ category: 'atmosphere', userId: null, lastSeen: now - 14 * dayMs });
+  const schedule = tag({ category: 'schedule', lastSeen: now - 365 * dayMs });
+
+  assert.equal(tagActivation(identity, now), 0.5);
+  assert.equal(tagActivation(recent, now), 0.5);
+  assert.equal(tagActivation(dislike, now), 0.5);
+  assert.equal(tagActivation(atmosphere, now), 0.5);
+  assert.equal(tagActivation(schedule, now), 1);
 });
 
 test('注入选择只取已确认且激活度达标的标签，按 manual、samples、last_seen 排序', () => {
@@ -147,7 +167,7 @@ test('注入选择只取已确认且激活度达标的标签，按 manual、samp
     tag({ id: 1, status: 'candidate', samples: 5, lastSeen: now }),
     tag({ id: 2, status: 'confirmed', samples: 2, lastSeen: now - 65 * dayMs }),
     tag({ id: 3, status: 'confirmed', samples: 2, lastSeen: now }),
-    tag({ id: 4, status: 'confirmed', source: 'manual', samples: 1, lastSeen: now - 10 * dayMs }),
+    tag({ id: 4, status: 'confirmed', source: 'manual', origin: 'manual', samples: 1, lastSeen: now - 10 * dayMs }),
     tag({ id: 5, status: 'confirmed', samples: 3, lastSeen: now - dayMs }),
   ];
 

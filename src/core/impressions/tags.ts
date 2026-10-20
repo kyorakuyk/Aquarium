@@ -1,4 +1,5 @@
 import type { StoredTag, TagEvidence, TagStatus } from '../../store/affect-repo.ts';
+import { TAG_CATEGORY_HALF_LIFE_MS } from '../../store/tag-profile.ts';
 
 export const EVIDENCE_MAX = 5;
 
@@ -46,18 +47,23 @@ export function normalizeTagText(text: string): string {
   return text.replace(/[\s\p{P}]/gu, '').toLowerCase();
 }
 
-export function tagHalfLifeMs(tag: Pick<StoredTag, 'userId' | 'samples'>): number {
-  const base = tag.userId === null ? GROUP_TAG_HALF_LIFE_MS : MEMBER_TAG_HALF_LIFE_MS;
+export function tagHalfLifeMs(tag: Pick<StoredTag, 'category' | 'userId' | 'samples'>): number | null {
+  const base = tag.category === 'misc'
+    ? tag.userId === null ? GROUP_TAG_HALF_LIFE_MS : MEMBER_TAG_HALF_LIFE_MS
+    : TAG_CATEGORY_HALF_LIFE_MS[tag.category];
+  if (base === null) return null;
   return tag.samples >= 4 ? base * 3 : base;
 }
 
 // 激活度 = 2^(−(now − last_seen) / 半衰期)；manual 标签恒为 1。
 export function tagActivation(
-  tag: Pick<StoredTag, 'source' | 'userId' | 'samples' | 'lastSeen'>,
+  tag: Pick<StoredTag, 'source' | 'category' | 'userId' | 'samples' | 'lastSeen'>,
   now: number,
 ): number {
   if (tag.source === 'manual') return 1;
-  return 2 ** (-(now - tag.lastSeen) / tagHalfLifeMs(tag));
+  const halfLife = tagHalfLifeMs(tag);
+  if (halfLife === null) return 1;
+  return 2 ** (-(now - tag.lastSeen) / halfLife);
 }
 
 function evidenceOf(input: TagCandidateInput): TagEvidence {

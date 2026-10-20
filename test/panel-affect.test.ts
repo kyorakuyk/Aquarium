@@ -76,6 +76,11 @@ test('印象 API 返回群标签、成员名与全部状态标签', async () => 
       userId: null,
       text: '爱聊游戏',
       norm: '爱聊游戏',
+      category: 'misc',
+      subject: null,
+      polarity: null,
+      origin: 'inferred',
+      locked: false,
       status: 'confirmed',
       source: 'auto',
       samples: 3,
@@ -91,6 +96,11 @@ test('印象 API 返回群标签、成员名与全部状态标签', async () => 
       userId: 42,
       text: '夜猫子',
       norm: '夜猫子',
+      category: 'misc',
+      subject: null,
+      polarity: null,
+      origin: 'inferred',
+      locked: false,
       status: 'candidate',
       source: 'auto',
       samples: 1,
@@ -106,6 +116,11 @@ test('印象 API 返回群标签、成员名与全部状态标签', async () => 
       userId: 42,
       text: '爱加班',
       norm: '爱加班',
+      category: 'misc',
+      subject: null,
+      polarity: null,
+      origin: 'inferred',
+      locked: false,
       status: 'rejected',
       source: 'auto',
       samples: 2,
@@ -160,6 +175,11 @@ test('印象 API 在标签名与证据引文中隐藏凭据样式文本', async 
       userId: null,
       text: fakeCredential,
       norm: fakeCredential,
+      category: 'misc',
+      subject: null,
+      polarity: null,
+      origin: 'inferred',
+      locked: false,
       status: 'confirmed',
       source: 'auto',
       samples: 1,
@@ -187,10 +207,22 @@ test('标签 API：手动新增、改文字与改状态', async () => {
       body: JSON.stringify({ sessionId: key, userId: null, text: ' 爱聊“游戏”！ ' }),
     });
     assert.equal(createResponse.status, 200);
-    const created = await createResponse.json() as { id: number; text: string; status: string; source: string; samples: number };
+    const created = await createResponse.json() as {
+      id: number;
+      text: string;
+      status: string;
+      source: string;
+      samples: number;
+      category: string;
+      origin: string;
+      locked: boolean;
+    };
     assert.equal(created.source, 'manual');
     assert.equal(created.status, 'confirmed');
     assert.equal(created.text, ' 爱聊“游戏”！ ');
+    assert.equal(created.category, 'misc');
+    assert.equal(created.origin, 'manual');
+    assert.equal(created.locked, false);
     const stored = repository.tagById(created.id);
     assert.equal(stored?.norm, '爱聊游戏');
     assert.equal(stored?.userId, null);
