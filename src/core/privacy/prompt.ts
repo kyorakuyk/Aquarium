@@ -1,6 +1,7 @@
 import type { StoredTag } from '../../store/affect-repo.ts';
 import type { PrivateFactRecord } from '../../store/privacy-repo.ts';
 import { selectInjectableTags } from '../impressions/tags.ts';
+import { formatMemberTags } from '../impressions/member-tags.ts';
 import { sessionId, type SessionKey } from '../events.ts';
 import type { ReplySystemTemplate } from '../prompt-templates.ts';
 import { decide } from './policy.ts';
@@ -56,11 +57,18 @@ export function buildPrivateFactsBlock(input: {
 
   const remainingCount = privateFactLimit.max - selectedFacts.length;
   const remainingCharacters = Math.max(0, privateFactLimit.maxChars - characters - (selectedFacts.length > 0 ? 1 : 0));
-  const selectedTags = selectInjectableTags(groupTags, input.now, {
+  const tagCandidates = selectInjectableTags(groupTags, input.now, {
     max: remainingCount,
     maxChars: remainingCharacters,
   }).tags;
-  const factsText = [...selectedFacts, ...selectedTags.map((tag) => tag.text)].join('；');
+  const selectedTags: StoredTag[] = [];
+  for (const tag of tagCandidates) {
+    const formattedTags = formatMemberTags([...selectedTags, tag]);
+    const combined = [...selectedFacts, formattedTags].join('；');
+    if (textLength(combined) <= privateFactLimit.maxChars) selectedTags.push(tag);
+  }
+  const formattedTags = selectedTags.length > 0 ? formatMemberTags(selectedTags) : undefined;
+  const factsText = [...selectedFacts, ...(formattedTags ? [formattedTags] : [])].join('；');
   if (factsText.length === 0) return undefined;
 
   return input.template.privateFacts
