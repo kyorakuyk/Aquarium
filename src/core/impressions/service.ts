@@ -5,7 +5,6 @@ import { callSlot } from '../../llm/slots.ts';
 import type { StoredTag } from '../../store/affect-repo.ts';
 import type { MessageStorageRecord, StoreRepository } from '../../store/repository.ts';
 import { sessionId, type SessionKey } from '../shared/events.ts';
-import { decide } from '../privacy/policy.ts';
 import type { ExtractTagsPromptTemplate, ReplySystemTemplate } from '../prompt/templates.ts';
 import type { PipelineModelCall } from '../conversation/steps/types.ts';
 import { classifyExtractFailure, extractFailureLabel, type ExtractFailureType } from './extract-error.ts';
@@ -23,11 +22,10 @@ import {
 import {
   applyTagContradiction,
   applyTagObservation,
-  GROUP_TAGS_LIMIT,
   normalizeTagText,
-  selectInjectableTags,
 } from './tags.ts';
-import { buildMemberTagPrompt } from './member-tags.ts';
+import { isTagCategoryForScope, prepareTagText, type TagDropReason } from './tag-model.ts';
+import { buildImpressionsPromptBlocks } from './prompt-blocks.ts';
 import type { TagSubjectRepository } from '../../store/tag-subject-repo.ts';
 
 export const EXTRACT_BATCH_TRIGGER = { messages: 60, sinceMs: 30 * 60 * 1000 } as const;
@@ -45,6 +43,7 @@ export interface ExtractSummary {
   observed: number;
   superseded: number;
   dropped: number;
+  droppedTagReasons: Partial<Record<TagDropReason, number>>;
   costCny: number;
   failureReason?: ExtractFailureType;
   failureHttpStatus?: number;
@@ -86,10 +85,6 @@ export interface ImpressionsService {
     template: ReplySystemTemplate;
   }): ImpressionsPromptBlocks;
   idle(): Promise<void>;
-}
-
-function textLength(text: string): number {
-  return Array.from(text).length;
 }
 
 export function createImpressionsService(options: ImpressionsServiceOptions): ImpressionsService {
@@ -149,10 +144,20 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       externalLinkShare: boolean;
     }>,
     at: number,
-    counters: { inserted: number; observed: number; superseded: number; dropped: number },
+    counters: {
+      inserted: number;
+      observed: number;
+      superseded: number;
+      dropped: number;
+      droppedTagReasons: Partial<Record<TagDropReason, number>>;
+    },
   ): void {
     let newCount = 0;
     const incrementedTagIds = new Set<number>();
+    const recordDrop = (reason?: TagDropReason) => {
+      counters.dropped += 1;
+      if (reason) counters.droppedTagReasons[reason] = (counters.droppedTagReasons[reason] ?? 0) + 1;
+    };
 
     const evidenceFor = (messageId: string, evidenceUserId: number | null) => {
       const record = recordsById.get(messageId);
@@ -168,8 +173,8 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     const profileFor = (item: ExtractNewItem | ExtractContradictItem) => {
       const record = recordsById.get(item.messageId);
       if (!record) return undefined;
-      if (item.category === 'atmosphere' && userId !== null) return undefined;
-      if (item.category === 'identity' && (userId === null || !identityTextPattern.test(item.text))) return undefined;
+      if (!isTagCategoryForScope(item.category, userId === null ? 'group' : 'member')) return undefined;
+      if (item.category === 'identity' && !identityTextPattern.test(item.text)) return undefined;
       let origin = item.origin;
       if (item.category === 'identity' && origin === 'self_report'
         && (record.senderId !== userId || !record.plainText.toLowerCase().includes(item.text.toLowerCase()))) {
@@ -234,25 +239,31 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
 
     for (const raw of subject.new) {
       const item = asNewItem(raw);
-      if (!item || newCount >= MAX_NEW_PER_SUBJECT
-        || textLength(item.text) < TAG_TEXT_MIN || textLength(item.text) > TAG_TEXT_MAX) {
-        counters.dropped += 1;
+      if (!item || newCount >= MAX_NEW_PER_SUBJECT) {
+        recordDrop();
         continue;
       }
-      const evidence = evidenceForItem(item);
-      const profile = profileFor(item);
+      const sourceRecord = recordsById.get(item.messageId);
+      const preparedText = prepareTagText(item.category, item.text, sourceRecord ? [sourceRecord.plainText] : []);
+      if (!preparedText.ok) {
+        recordDrop(preparedText.reason);
+        continue;
+      }
+      const normalizedItem = { ...item, text: preparedText.text };
+      const evidence = evidenceForItem(normalizedItem);
+      const profile = profileFor(normalizedItem);
       if (!evidence || !profile) {
-        counters.dropped += 1;
+        recordDrop();
         continue;
       }
-      const norm = normalizeTagText(item.text);
+      const norm = normalizeTagText(normalizedItem.text);
       const existing = current.find((tag) => tag.norm === norm);
       if (existing && (existing.locked || incrementedTagIds.has(existing.id))) {
-        counters.dropped += 1;
+        recordDrop();
         continue;
       }
       const outcome = applyTagObservation(current, {
-        text: item.text,
+        text: normalizedItem.text,
         norm,
         messageId: item.messageId,
         time: evidence.time,
@@ -297,39 +308,45 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         counters.inserted += 1;
         newCount += 1;
       } else if (outcome.action === 'observe') {
-        if (!existing || !observe(existing, item.messageId, evidence, profile.locked)) {
-          counters.dropped += 1;
+        if (!existing || !observe(existing, normalizedItem.messageId, evidence, profile.locked)) {
+          recordDrop();
           continue;
         }
         newCount += 1;
       } else {
-        counters.dropped += 1;
+        recordDrop();
       }
     }
 
     for (const raw of subject.contradict) {
       const item = asContradictItem(raw);
-      if (!item || newCount >= MAX_NEW_PER_SUBJECT
-        || textLength(item.text) < TAG_TEXT_MIN || textLength(item.text) > TAG_TEXT_MAX) {
-        counters.dropped += 1;
+      if (!item || newCount >= MAX_NEW_PER_SUBJECT) {
+        recordDrop();
         continue;
       }
-      const evidence = evidenceForItem(item);
-      const profile = profileFor(item);
+      const sourceRecord = recordsById.get(item.messageId);
+      const preparedText = prepareTagText(item.category, item.text, sourceRecord ? [sourceRecord.plainText] : []);
+      if (!preparedText.ok) {
+        recordDrop(preparedText.reason);
+        continue;
+      }
+      const normalizedItem = { ...item, text: preparedText.text };
+      const evidence = evidenceForItem(normalizedItem);
+      const profile = profileFor(normalizedItem);
       const target = current.find((tag) => tag.id === item.id);
       if (!evidence || !profile || !target || target.locked || target.status === 'superseded') {
-        counters.dropped += 1;
+        recordDrop();
         continue;
       }
       const outcome = applyTagContradiction(current, {
-        id: item.id,
-        text: item.text,
-        messageId: item.messageId,
+        id: normalizedItem.id,
+        text: normalizedItem.text,
+        messageId: normalizedItem.messageId,
         time: evidence.time,
         quote: evidence.quote,
       });
       if (outcome.action !== 'insert') {
-        counters.dropped += 1;
+        recordDrop();
         continue;
       }
       const id = options.repository.insertTag({
@@ -390,7 +407,13 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     const account = session.account;
     let attemptedProvider = config.slots.extract?.[0]?.provider ?? 'unknown';
     let attemptedModel = config.slots.extract?.[0]?.model ?? 'unknown';
-    const counters = { inserted: 0, observed: 0, superseded: 0, dropped: 0 };
+    const counters = {
+      inserted: 0,
+      observed: 0,
+      superseded: 0,
+      dropped: 0,
+      droppedTagReasons: {} as Partial<Record<TagDropReason, number>>,
+    };
     let costCny = 0;
     let failureReason: ExtractFailureType | undefined;
     let failureHttpStatus: number | undefined;
@@ -440,7 +463,12 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       {
         group: groupTags,
         members: memberTags,
-        subjects: options.tagSubjects?.listTagSubjects(account, 'fandom') ?? [],
+        subjects: options.tagSubjects
+          ? [
+            ...options.tagSubjects.listTagSubjects(account, 'topic'),
+            ...options.tagSubjects.listTagSubjects(account, 'fandom'),
+          ]
+          : [],
       },
       template,
       async (slot, messages) => {
@@ -549,46 +577,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     },
 
     promptBlocks(input) {
-      if (input.session.kind !== 'group') return { droppedTags: 0 };
-      const account = input.session.account;
-      const at = input.now;
-      const target = { kind: 'group' as const, sessionId: sessionId(input.session) };
-      const groupAllowed = decide({
-        info: { origin: 'group', sessionId: input.sessionId, ownerId: null },
-        target,
-        purpose: 'prompt',
-      }) === 'allow';
-      const groupSelection = groupAllowed
-        ? selectInjectableTags(
-          options.repository.listTagsForSubject(account, input.sessionId, null),
-          at,
-          GROUP_TAGS_LIMIT,
-        )
-        : { tags: [] as StoredTag[], dropped: 0 };
-      const memberAllowed = input.senderId !== account && decide({
-        info: { origin: 'group', sessionId: input.sessionId, ownerId: input.senderId },
-        target,
-        purpose: 'prompt',
-      }) === 'allow';
-      const memberSelection = !memberAllowed
-        ? { text: '', dropped: 0 }
-        : buildMemberTagPrompt(
-          options.repository.listTagsForSubject(account, input.sessionId, input.senderId),
-          at,
-        );
-      const blocks: ImpressionsPromptBlocks = {
-        droppedTags: groupSelection.dropped + memberSelection.dropped,
-      };
-      if (groupSelection.tags.length > 0) {
-        blocks.groupTags = input.template.groupTags
-          .replaceAll('{{tags}}', groupSelection.tags.map((tag) => tag.text).join('、'));
-      }
-      if (memberSelection.text.length > 0) {
-        blocks.memberTags = input.template.memberTags
-          .replaceAll('{{name}}', JSON.stringify(input.senderName))
-          .replaceAll('{{tags}}', memberSelection.text);
-      }
-      return blocks;
+      return buildImpressionsPromptBlocks(options.repository, input);
     },
 
     async idle() {

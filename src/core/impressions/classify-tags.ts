@@ -6,9 +6,16 @@ import type { PipelineModelCall } from '../conversation/steps/types.ts';
 import type { ClassifyTagsPromptTemplate } from '../prompt/templates.ts';
 import type { StoreRepository } from '../../store/repository.ts';
 import type { StoredTag } from '../../store/tag-repo.ts';
-import { isTagCategoryKey, isTagPolarity, normalizeTagSubject } from './tag-model.ts';
+import {
+  isTagCategoryForScope,
+  isTagCategoryKey,
+  isTagPolarity,
+  normalizeTagSubjectPath,
+  prepareTagText,
+} from './tag-model.ts';
 import type { TagCategoryKey, TagPolarity } from './tag-model.ts';
 import type { TagClassificationProfile, TagClassificationRepository } from '../../store/tag-classification-repo.ts';
+import { normalizeTagText } from './tags.ts';
 
 export const TAG_CLASSIFICATION_BATCH_SIZE = 50;
 
@@ -16,6 +23,7 @@ type ClassifiableTagCategory = Exclude<TagCategoryKey, 'schedule'>;
 
 export interface ClassifyTagsItem {
   id: number;
+  text: string;
   category: ClassifiableTagCategory;
   subject: string | null;
   polarity: TagPolarity;
@@ -56,9 +64,15 @@ export function buildClassifyTagsMessages(
   template: ClassifyTagsPromptTemplate,
 ): OpenAI.ChatCompletionMessageParam[] {
   const visible = tags
-    .filter((tag) => tag.category === 'misc' && !tag.locked && tag.status !== 'superseded')
+    .filter((tag) => tag.category !== 'schedule' && !tag.locked && tag.status !== 'superseded')
     .slice(0, TAG_CLASSIFICATION_BATCH_SIZE)
-    .map(({ id, text, norm, status }) => ({ id, text, norm, status }));
+    .map(({ id, text, norm, status, evidence }) => ({
+      id,
+      text,
+      norm,
+      status,
+      evidence: evidence.map(({ quote }) => quote),
+    }));
   const user = template.user
     .replaceAll('{{scope}}', scope)
     .replaceAll('{{tags}}', JSON.stringify(visible));
@@ -83,20 +97,24 @@ export function parseClassifyTagsResponse(text: string): ClassifyTagsItem[] | un
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
     const record = raw as Record<string, unknown>;
     const category = record.category;
+    const text = record.text;
     const subject = record.subject;
     const polarity = record.polarity;
     const mergeInto = record.mergeInto;
     if (!Number.isSafeInteger(record.id) || (record.id as number) <= 0
+      || typeof text !== 'string' || text.trim().length === 0
       || !isTagCategoryKey(category) || category === 'schedule'
       || (subject !== null && typeof subject !== 'string')
-      || (typeof subject === 'string' && !normalizeTagSubject(subject))
+      || (typeof subject === 'string' && !normalizeTagSubjectPath(subject))
       || (polarity !== null && !isTagPolarity(polarity))
-      || (category !== 'fandom' && (subject !== null || polarity !== null))
+      || (category !== 'topic' && category !== 'fandom' && (subject !== null || polarity !== null))
+      || (category === 'topic' && polarity !== null)
       || (mergeInto !== null && (!Number.isSafeInteger(mergeInto) || (mergeInto as number) <= 0))) {
       return undefined;
     }
     result.push({
       id: record.id as number,
+      text,
       category: category as ClassifiableTagCategory,
       subject: subject as string | null,
       polarity: polarity as TagPolarity,
@@ -109,12 +127,20 @@ export function parseClassifyTagsResponse(text: string): ClassifyTagsItem[] | un
 const identityTextPattern = /^(?:[IE][NS][TF][JP]|(?:Ni|Ne|Si|Se|Ti|Te|Fi|Fe)(?: 主导| 辅助)?)$/u;
 
 function profileForTag(item: ClassifyTagsItem, tag: StoredTag, scope: 'group' | 'member'): TagClassificationProfile | undefined {
-  if (item.category === 'atmosphere' && scope !== 'group') return undefined;
-  if (item.category === 'identity' && !identityTextPattern.test(tag.text)) return undefined;
+  if (!isTagCategoryForScope(item.category, scope)) return undefined;
+  const preparedText = prepareTagText(item.category, item.text, tag.evidence.map(({ quote }) => quote));
+  if (!preparedText.ok) return undefined;
+  if (item.category === 'identity' && !identityTextPattern.test(preparedText.text)) return undefined;
+  if (item.category !== 'topic' && item.category !== 'fandom' && item.subject !== null) return undefined;
+  if (item.category === 'topic' && item.polarity !== null) return undefined;
+  if (item.category === 'fandom' && item.polarity !== null && !isTagPolarity(item.polarity)) return undefined;
+  if (item.category !== 'fandom' && item.polarity !== null) return undefined;
   return {
     category: item.category,
     subject: item.subject,
     polarity: item.polarity,
+    text: preparedText.text,
+    norm: normalizeTagText(preparedText.text),
   };
 }
 
@@ -141,7 +167,7 @@ export function createTagClassificationService(options: TagClassificationService
   };
   let pending: Promise<void> | undefined;
 
-  const remainingCount = () => options.classificationRepository.listUnlockedMiscTags().length;
+  const remainingCount = () => options.classificationRepository.listTagsToClassify().length;
 
   function updateStatus(patch: Partial<TagClassificationStatus>): void {
     current = { ...current, ...patch };
@@ -157,28 +183,31 @@ export function createTagClassificationService(options: TagClassificationService
 
   function classifySingle(tagId: number, profile: TagClassificationProfile, at: number): boolean {
     const tag = options.repository.tagById(tagId);
-    if (!tag || tag.category !== 'misc' || tag.locked || tag.status === 'superseded') return false;
+    if (!tag || tag.locked || tag.status === 'superseded') return false;
     options.repository.updateTag(tag.id, {
       category: profile.category,
       subject: profile.subject,
       polarity: profile.polarity,
+      ...(profile.text !== undefined ? { text: profile.text } : {}),
+      ...(profile.norm !== undefined ? { norm: profile.norm } : {}),
       ...(profile.category === 'identity' && tag.origin === 'inferred'
         && tag.source === 'auto' && tag.status === 'confirmed'
         ? { status: 'candidate' as const }
         : {}),
       updatedAt: at,
     });
+    options.classificationRepository.markTagReclassified(tag.id);
     return true;
   }
 
   async function classifyRemaining(): Promise<void> {
-    const initial = options.classificationRepository.listUnlockedMiscTags();
+    const initial = options.classificationRepository.listTagsToClassify();
     updateStatus({
       state: 'running',
       total: initial.length,
       processed: 0,
       merged: 0,
-      lockedSkipped: options.classificationRepository.countLockedMiscTags(),
+      lockedSkipped: options.classificationRepository.countLockedTagsToClassify(),
       remaining: initial.length,
       startedAt: now(),
       completedAt: null,
@@ -260,7 +289,7 @@ export function createTagClassificationService(options: TagClassificationService
         for (const item of mergeSources) {
           const profile = profiles.get(item.id);
           if (!profile || item.mergeInto === null) continue;
-          const merged = options.classificationRepository.mergeMiscTag({
+          const merged = options.classificationRepository.mergeClassifiedTag({
             sourceId: item.id,
             targetId: item.mergeInto,
             profile,
@@ -293,10 +322,11 @@ export function createTagClassificationService(options: TagClassificationService
 
   function start(force: boolean): boolean {
     if (pending) return false;
-    if (!force && options.classificationRepository.isLegacyMiscClassificationComplete()) {
+    if (!force && options.classificationRepository.isLegacyMiscClassificationComplete()
+      && !options.classificationRepository.hasPendingReclassification()) {
       updateStatus({
         state: 'completed',
-        lockedSkipped: options.classificationRepository.countLockedMiscTags(),
+        lockedSkipped: options.classificationRepository.countLockedTagsToClassify(),
         remaining: remainingCount(),
         completedAt: now(),
       });

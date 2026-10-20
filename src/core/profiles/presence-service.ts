@@ -36,6 +36,8 @@ interface ActivityMetrics {
   weekendToWeekdayRatio: number;
   morningRatio: number;
   weekendToWeekdaySnapshot: number | null;
+  peakWindow: ActivitySuggestion | null;
+  weekdayShares: number[];
 }
 
 interface LocalDayCounts {
@@ -68,6 +70,7 @@ function localDayCounts(now: number, dayCount: number): LocalDayCounts {
 function metricsFor(
   messages: readonly MessageStorageRecord[],
   days: LocalDayCounts,
+  at: number,
 ): ActivityMetrics {
   let nightMessages = 0;
   let morningMessages = 0;
@@ -87,12 +90,16 @@ function metricsFor(
   const weekendToWeekdayRatio = weekdayDaily === 0
     ? weekendDaily > 0 ? Number.POSITIVE_INFINITY : 0
     : weekendDaily / weekdayDaily;
+  const hourly = buildActivityResponse(messages, at, 'hour');
+  const weekly = buildActivityResponse(messages, at, 'week');
   return {
     total,
     nightOwlRatio: total === 0 ? 0 : nightMessages / total,
     weekendToWeekdayRatio,
     morningRatio: total === 0 ? 0 : morningMessages / total,
     weekendToWeekdaySnapshot: Number.isFinite(weekendToWeekdayRatio) ? weekendToWeekdayRatio : null,
+    peakWindow: buildActivitySuggestion(hourly.buckets, 0.35),
+    weekdayShares: weekly.buckets,
   };
 }
 
@@ -106,7 +113,7 @@ function qualifies(metrics: ActivityMetrics, config: AquariumConfig, label: type
 }
 
 function snapshotEvidence(
-  label: typeof SCHEDULE_LABELS[number],
+  label: string,
   metrics: ActivityMetrics,
   at: number,
   matches: boolean,
@@ -121,6 +128,12 @@ function snapshotEvidence(
       nightOwlRatio: metrics.nightOwlRatio,
       weekendToWeekdayRatio: metrics.weekendToWeekdaySnapshot,
       morningRatio: metrics.morningRatio,
+      peakWindow: metrics.peakWindow ? {
+        from: metrics.peakWindow.from,
+        to: metrics.peakWindow.to,
+        ratio: metrics.peakWindow.ratio,
+      } : null,
+      weekdayShares: metrics.weekdayShares,
       matches,
     }),
   }];
@@ -129,8 +142,8 @@ function snapshotEvidence(
 function activityTag(
   account: number,
   sessionId: string,
-  userId: number,
-  label: typeof SCHEDULE_LABELS[number],
+  userId: number | null,
+  label: string,
   metrics: ActivityMetrics,
   at: number,
 ): TagRecord {
@@ -193,21 +206,46 @@ export function createProfileActivityService(options: ProfileActivityServiceOpti
       }
 
       const activityTags = options.repository.listTagsForSession(key.account, sessionId)
-        .filter((tag) => tag.origin === 'stats' && tag.category === 'schedule' && tag.userId !== null);
-      const userIds = new Set<number>([
+        .filter((tag) => tag.origin === 'stats' && tag.category === 'schedule');
+      const subjectIds = new Set<number | null>([
+        null,
         ...byUser.keys(),
-        ...activityTags.map((tag) => tag.userId as number),
+        ...activityTags.map((tag) => tag.userId),
       ]);
-      for (const userId of userIds) {
-        const userMessages = byUser.get(userId) ?? [];
-        const metrics = metricsFor(userMessages, days);
-        const userTags = activityTags.filter((tag) => tag.userId === userId);
-        for (const label of SCHEDULE_LABELS) {
-          const existing = userTags.find((tag) => tag.text === label);
+      for (const userId of subjectIds) {
+        const subjectMessages = userId === null ? messages : byUser.get(userId) ?? [];
+        const metrics = metricsFor(subjectMessages, days, at);
+        const subjectTags = activityTags.filter((tag) => tag.userId === userId);
+        const expectedLabels = new Set<string>();
+        if (userId === null) {
+          if (metrics.peakWindow) {
+            expectedLabels.add(`「${metrics.peakWindow.from}–${metrics.peakWindow.to} 点最热闹」`);
+          }
+          if (metrics.total > 0) {
+            const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
+            metrics.weekdayShares.forEach((share, index) => {
+              if (share >= 0.25) expectedLabels.add(`周${weekdays[index]}最热闹`);
+            });
+          }
+        } else {
+          for (const label of SCHEDULE_LABELS) {
+            if (qualifies(metrics, config, label)) expectedLabels.add(label);
+          }
+          if (metrics.total >= config.profile.schedule.minimumMessages && metrics.peakWindow) {
+            expectedLabels.add(`「${metrics.peakWindow.from}–${metrics.peakWindow.to} 点最活跃」`);
+          }
+        }
+
+        const labelsToRecompute = new Set([
+          ...expectedLabels,
+          ...subjectTags.map((tag) => tag.text),
+        ]);
+        for (const label of labelsToRecompute) {
+          const existing = subjectTags.find((tag) => tag.text === label);
           if (existing?.status === 'rejected' || existing?.status === 'superseded') continue;
           const day = localDateKey(at);
           if (existing && localDateKey(existing.updatedAt) === day) continue;
-          const matches = qualifies(metrics, config, label);
+          const matches = expectedLabels.has(label);
           const evidence = snapshotEvidence(label, metrics, at, matches);
           if (matches) {
             if (!existing) {

@@ -11,8 +11,9 @@ const STATUS_LABELS: Record<TagStatus, string> = {
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
+  positioning: '定位', topic: '话题', atmosphere: '群氛围', meme: '群梗', norms: '规矩',
   identity: '自我认同', personality: '性格', fandom: '成分', speech: '说话风格', social: '社交方式',
-  recent: '近况', dislike: '雷点', schedule: '作息', atmosphere: '群氛围', misc: '其他',
+  catchphrase: '口头禅', recent: '近况', dislike: '雷点', schedule: '作息', misc: '其他',
 };
 
 function formatTime(value: number): string {
@@ -25,6 +26,10 @@ function tagClass(tag: TagView): string {
   if (tag.status === 'candidate') return 'tag-candidate';
   if (tag.status === 'confirmed') return 'tag-confirmed';
   return 'tag-superseded';
+}
+
+function quotedText(value: string): string {
+  return value.startsWith('「') && value.endsWith('」') ? value : `「${value}」`;
 }
 
 export function ImpressionTag({
@@ -43,8 +48,16 @@ export function ImpressionTag({
   onLock?: (id: number, locked: boolean) => Promise<boolean>;
 }) {
   const safeTagText = redactSensitiveText(tag.text);
-  const safeDisplayText = redactSensitiveText(displayText ?? tag.text);
-  const safeSubject = tag.subject === null ? null : redactSensitiveText(tag.subject);
+  const subjectDisplay = tag.subject?.replaceAll('/', ' › ');
+  const fallbackDisplay = subjectDisplay && (tag.category === 'topic' || tag.category === 'fandom')
+    ? `${subjectDisplay} › ${tag.text}`
+    : tag.text;
+  const rawDisplayText = displayText ?? fallbackDisplay;
+  const quotedTag = tag.category === 'meme' || tag.category === 'catchphrase';
+  const safeDisplayText = redactSensitiveText(quotedTag ? quotedText(rawDisplayText) : rawDisplayText);
+  const safePopoverTagText = quotedTag ? quotedText(safeTagText) : safeTagText;
+  const safeQuotedTagText = quotedText(safeTagText);
+  const safeSubject = tag.subject === null ? null : redactSensitiveText(tag.subject.replaceAll('/', ' › '));
   const identityInjectionLabel = memberIdentityInjectionLabel(tag);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -111,7 +124,7 @@ export function ImpressionTag({
         {tag.status === 'candidate' && <span className="tag-samples mono">{tag.samples}/2</span>}
         {tag.locked && <span className="tag-lock-indicator" aria-hidden="true">锁</span>}
       </button>
-      {open && <div className="tag-popover" role="dialog" aria-label={`${safeTagText}标签详情`}>
+      {open && <div className="tag-popover" role="dialog" aria-label={`${safePopoverTagText}标签详情`}>
         <div className="tag-popover-heading">
           {editing
             ? <form className="tag-rename-form" onSubmit={(event) => void rename(event)}>
@@ -124,7 +137,7 @@ export function ImpressionTag({
               <button className="text-button" type="button" disabled={busy} onClick={() => { setEditing(false); setDraft(safeTagText); setSensitiveInput(false); }}>取消</button>
               {sensitiveInput && <span className="tag-sensitive-hint" role="status">疑似敏感凭据已清除，未发送。</span>}
             </form>
-            : <strong>{safeTagText}</strong>}
+            : <strong>{safePopoverTagText}</strong>}
           <button className="tag-popover-close" type="button" aria-label="关闭标签详情" onClick={closePopover}>×</button>
         </div>
         <div className="tag-popover-meta">
@@ -152,7 +165,7 @@ export function ImpressionTag({
       {onLock && <button
         className={`tag-lock-toggle${tag.locked ? ' is-locked' : ''}`}
         type="button"
-        aria-label={`${tag.locked ? '解锁' : '加锁'}「${safeTagText}」`}
+        aria-label={`${tag.locked ? '解锁' : '加锁'}${safeQuotedTagText}`}
         title={tag.locked ? '解锁标签' : '锁定标签；不进入提示词'}
         disabled={busy}
         onClick={() => void changeLock()}

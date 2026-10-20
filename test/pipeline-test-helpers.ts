@@ -71,28 +71,28 @@ export function withDefaultExtractProfiles(text: string): string {
     return text;
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return text;
-  const defaults = {
-    category: 'personality',
-    subject: null,
-    polarity: null,
-    origin: 'inferred',
-    sensitive: false,
-  };
-  const apply = (value: unknown) => {
+  const apply = (value: unknown, category: string) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return;
     const subject = value as Record<string, unknown>;
     for (const field of ['new', 'contradict']) {
       if (!Array.isArray(subject[field])) continue;
       subject[field] = subject[field].map((item: unknown) => (
         item && typeof item === 'object' && !Array.isArray(item)
-          ? { ...defaults, ...(item as Record<string, unknown>) }
+          ? {
+            category,
+            subject: null,
+            polarity: null,
+            origin: 'inferred',
+            sensitive: false,
+            ...(item as Record<string, unknown>),
+          }
           : item
       ));
     }
   };
   const response = parsed as Record<string, unknown>;
-  apply(response.group);
-  if (Array.isArray(response.members)) response.members.forEach(apply);
+  apply(response.group, 'atmosphere');
+  if (Array.isArray(response.members)) response.members.forEach((member) => apply(member, 'personality'));
   return JSON.stringify(response);
 }
 

@@ -1,7 +1,13 @@
 import type OpenAI from 'openai';
 import type { StoredTag } from '../../store/affect-repo.ts';
 import type { MessageStorageRecord } from '../../store/repository.ts';
-import { isTagCategoryKey, isTagPolarity, normalizeTagSubject, type TagCategoryKey, type TagPolarity } from './tag-model.ts';
+import {
+  isTagCategoryKey,
+  isTagPolarity,
+  normalizeTagSubjectPath,
+  type TagCategoryKey,
+  type TagPolarity,
+} from './tag-model.ts';
 import type { TagSubjectRecord } from '../../store/tag-subject-repo.ts';
 import type { ExtractTagsPromptTemplate } from '../prompt/templates.ts';
 
@@ -74,9 +80,13 @@ function formatExistingTags(existing: ExistingTagsInput): string {
     lines.push(`群友 ${member.userId} 的标签：${tags.map((tag) => `#${tag.id} ${tag.text}（${tag.status}）`).join('；')}`);
   }
   const subjects = existing.subjects ?? [];
-  lines.push(`可复用的 fandom tag_subjects（规范名；别名）：${subjects.length > 0
-    ? subjects.map((subject) => `${subject.name}${subject.aliases.length > 0 ? `（${subject.aliases.join('、')}）` : ''}`).join('；')
-    : '（暂无）'}`);
+  const subjectGroups = (['topic', 'fandom'] as const).flatMap((category) => {
+    const categorySubjects = subjects.filter((subject) => subject.category === category);
+    return categorySubjects.length === 0 ? [] : [`${category}：${categorySubjects
+      .map((subject) => `${subject.name}${subject.aliases.length > 0 ? `（${subject.aliases.join('、')}）` : ''}`)
+      .join('；')}`];
+  });
+  lines.push(`可复用的 topic/fandom tag_subjects（规范名；别名）：${subjectGroups.join('；') || '（暂无）'}`);
   return lines.length > 0 ? lines.join('\n') : '（暂无）';
 }
 
@@ -157,9 +167,11 @@ function tagProfile(record: Record<string, unknown>): Omit<ExtractNewItem, 'text
   if (!isTagCategoryKey(category)) return undefined;
   if (category === 'schedule') return undefined;
   if (subject !== null && typeof subject !== 'string') return undefined;
-  if (typeof subject === 'string' && !normalizeTagSubject(subject)) return undefined;
+  const supportsSubject = category === 'topic' || category === 'fandom';
+  if (typeof subject === 'string' && (!supportsSubject || !normalizeTagSubjectPath(subject))) return undefined;
   if (polarity !== null && !isTagPolarity(polarity)) return undefined;
-  if (category !== 'fandom' && (subject !== null || polarity !== null)) return undefined;
+  if (!supportsSubject && (subject !== null || polarity !== null)) return undefined;
+  if (category === 'topic' && polarity !== null) return undefined;
   if (origin !== 'self_report' && origin !== 'inferred') return undefined;
   if (typeof sensitive !== 'boolean') return undefined;
   return {

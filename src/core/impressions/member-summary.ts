@@ -5,6 +5,7 @@ import type { MemberSummaryPromptTemplate } from '../prompt/templates/member-sum
 import type { PipelineModelCall } from '../conversation/steps/types.ts';
 import type { MemberSummaryRecord, MemberSummaryRepository, MemberSummaryWrite } from '../../store/member-summary-repo.ts';
 import type { StoreRepository } from '../../store/repository.ts';
+import { isTagCategoryForScope } from './tag-model.ts';
 import { formatMemberTags } from './member-tags.ts';
 
 const SUMMARY_TAG_CHANGE_TRIGGER = 3;
@@ -59,8 +60,8 @@ export function createMemberSummaryService(options: MemberSummaryServiceOptions)
       const tags = options.repository.listGroupTagsForUser(account, userId)
         .filter((tag) => tag.status === 'confirmed'
           && !tag.locked
-          && tag.category !== 'misc'
-          && tag.category !== 'atmosphere');
+          && isTagCategoryForScope(tag.category, 'member')
+          && tag.category !== 'misc');
       const changedCount = previous
         ? tags.filter((tag) => tag.updatedAt > previous.updatedAt).length
         : tags.length;

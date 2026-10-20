@@ -16,7 +16,11 @@ import type { MoodBand, StoredMoodEvent, StoredTag } from '../store/affect-repo.
 import type { StoreRepository } from '../store/repository.ts';
 import type { PanelAccountRuntime } from './types.ts';
 import type { HistoryImportService } from '../core/impressions/history-import.ts';
-import { TAG_CATEGORY_KEYS } from '../core/impressions/tag-model.ts';
+import {
+  isTagCategoryForScope,
+  normalizeTagSubjectPath,
+  TAG_CATEGORY_KEYS,
+} from '../core/impressions/tag-model.ts';
 
 export interface AffectRouteOptions {
   getConfig: () => AquariumConfig;
@@ -32,7 +36,7 @@ const manualTagSchema = z.object({
   userId: z.number().int().positive().nullable(),
   text: z.string(),
   category: z.enum([...TAG_CATEGORY_KEYS, 'misc']).optional(),
-  subject: z.string().optional(),
+  subject: z.string().nullable().optional(),
   polarity: z.enum(['like', 'dislike']).nullable().optional(),
 }).strict();
 
@@ -375,10 +379,16 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
       return context.json({ error: 'Invalid tag text' }, 400);
     }
     const category = body.category ?? 'misc';
+    const scope = body.userId === null ? 'group' : 'member';
     const subject = body.subject?.trim() ?? '';
-    const hasFandomFields = body.subject !== undefined || body.polarity !== undefined;
-    if ((category === 'fandom' && !subject)
-      || (category !== 'fandom' && hasFandomFields)
+    const hasSubjectField = body.subject !== undefined && body.subject !== null;
+    const hasPolarityField = body.polarity !== undefined && body.polarity !== null;
+    const subjectCategory = category === 'topic' || category === 'fandom';
+    if (!isTagCategoryForScope(category, scope)
+      || (!subjectCategory && (hasSubjectField || hasPolarityField))
+      || (hasSubjectField && !subject)
+      || (subject && !normalizeTagSubjectPath(subject))
+      || (category === 'topic' && body.polarity !== undefined && body.polarity !== null)
       || textLength(subject) > 40) {
       return context.json({ error: 'Invalid tag subject or polarity' }, 400);
     }
@@ -395,7 +405,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
       text: body.text,
       norm: normalizeTagText(body.text),
       category,
-      subject: category === 'fandom' ? subject : null,
+      subject: subjectCategory && subject ? subject : null,
       polarity: category === 'fandom' ? body.polarity ?? null : null,
       origin: 'manual',
       locked: false,

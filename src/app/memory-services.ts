@@ -42,8 +42,12 @@ export function createMemoryServices(options: {
     onWarn: (message) => options.logger.warn(message),
     onMemberSummaryCheck: memberSummaryService.maybeGenerate,
     onExtract: (summary) => {
+      const dropReasons = Object.entries(summary.droppedTagReasons)
+        .filter(([, count]) => count > 0)
+        .map(([reason, count]) => `${reason}:${count}`)
+        .join(',');
       options.logger.info(
-        `印象提取 ${summary.sessionId}：${summary.status}，新增 ${summary.inserted}、观察 ${summary.observed}、推翻 ${summary.superseded}、丢弃 ${summary.dropped}。`,
+        `印象提取 ${summary.sessionId}：${summary.status}，新增 ${summary.inserted}、观察 ${summary.observed}、推翻 ${summary.superseded}、丢弃 ${summary.dropped}${dropReasons ? `（${dropReasons}）` : ''}。`,
       );
     },
   });

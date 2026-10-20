@@ -61,6 +61,14 @@ test('单个 confirmed self_report identity 写成自称格式', () => {
   );
 });
 
+test('多级成分按路径显示，口头禅原话加引号', () => {
+  assert.equal(formatMemberTags([
+    tag({ id: 1, category: 'fandom', text: 'CS2', subject: '游戏/FPS' }),
+    tag({ id: 2, category: 'speech', text: '短句' }),
+    tag({ id: 3, category: 'catchphrase', text: '好好好' }),
+  ]), '成分：游戏 › FPS（CS2）；说话风格：短句、口头禅：「好好好」');
+});
+
 test('成员提示筛除 locked、misc 与未确认的 inferred identity', () => {
   const result = buildMemberTagPrompt([
     tag({ id: 1, category: 'personality', text: '私人标签', locked: true }),

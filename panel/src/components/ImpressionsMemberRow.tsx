@@ -13,9 +13,13 @@ export function ImpressionsMemberRow({ member, account, selected, onSelect }: {
 }) {
   const name = member.name;
   const highlights = memberPreviewTags(member.tags).map((tag) => {
-    const displayTag = tag.category === 'fandom' && tag.subject
-      ? `${tag.subject} › ${tag.text}`
+    const subjectDisplay = tag.subject?.replaceAll('/', ' › ');
+    const baseText = tag.category === 'fandom' && subjectDisplay
+      ? `${subjectDisplay} › ${tag.text}`
       : tag.text;
+    const displayTag = tag.category === 'catchphrase'
+      ? baseText.startsWith('「') && baseText.endsWith('」') ? baseText : `「${baseText}」`
+      : baseText;
     return redactSensitiveText(displayTag);
   });
   return <div className={`impressions-member-row${selected ? ' is-selected' : ''}`}>

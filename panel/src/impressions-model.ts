@@ -42,7 +42,7 @@ export function activityLevel(value: number, maximum: number): 0 | 1 | 2 | 3 | 4
 }
 
 export function memberPreviewTags(tags: readonly MemberPreviewTag[], limit = 3): MemberPreviewTag[] {
-  const order = ['dislike', 'personality', 'fandom', 'identity', 'recent', 'schedule', 'speech', 'social'];
+  const order = ['dislike', 'personality', 'fandom', 'identity', 'recent', 'schedule', 'speech', 'catchphrase', 'social'];
   return tags.filter((tag) => tag.status === 'confirmed'
       && !tag.locked
       && tag.activation >= 0.25

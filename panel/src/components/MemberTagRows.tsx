@@ -25,6 +25,7 @@ const PROFILE_ROWS: ReadonlyArray<{ category: TagCategory; label: string }> = [
   { category: 'personality', label: '性格' },
   { category: 'fandom', label: '成分' },
   { category: 'speech', label: '说话风格' },
+  { category: 'catchphrase', label: '口头禅' },
   { category: 'social', label: '社交方式' },
   { category: 'recent', label: '近况' },
   { category: 'dislike', label: '雷点' },
@@ -33,7 +34,7 @@ const PROFILE_ROWS: ReadonlyArray<{ category: TagCategory; label: string }> = [
 
 function displayText(tag: TagView): string {
   const base = tag.category === 'fandom' && tag.subject
-    ? `${tag.subject} › ${tag.text}${tag.polarity === 'dislike' ? ' · 不喜欢' : ''}`
+    ? `${tag.subject.replaceAll('/', ' › ')} › ${tag.text}${tag.polarity === 'dislike' ? ' · 不喜欢' : ''}`
     : tag.text;
   const badges = [
     memberIdentityInjectionLabel(tag) ?? '',
@@ -60,14 +61,14 @@ function ProfileTagAdd({ label, category, busy, onSubmit }: {
     event.preventDefault();
     const cleanText = text.trim();
     const cleanSubject = subject.trim();
-    if (!cleanText || (category === 'fandom' && !cleanSubject)) return;
+    if (!cleanText) return;
     if (containsSensitiveText(`${cleanText} ${cleanSubject}`)) {
       setText('');
       setSubject('');
       setSensitiveInput(true);
       return;
     }
-    if (await onSubmit(cleanText, category, category === 'fandom' ? cleanSubject : null, polarity || null)) {
+    if (await onSubmit(cleanText, category, category === 'fandom' && cleanSubject ? cleanSubject : null, polarity || null)) {
       setText('');
       setSubject('');
       setPolarity('');
@@ -118,7 +119,7 @@ function ProfileTagAdd({ label, category, busy, onSubmit }: {
         <option value="dislike">不喜欢</option>
       </select>
     </>}
-    <button className="button button-primary" type="submit" disabled={busy || !text.trim() || (category === 'fandom' && !subject.trim()) || sensitiveInput}>添加</button>
+    <button className="button button-primary" type="submit" disabled={busy || !text.trim() || sensitiveInput}>添加</button>
     <button className="text-button" type="button" disabled={busy} onClick={() => { setOpen(false); setText(''); setSubject(''); setPolarity(''); setSensitiveInput(false); }}>取消</button>
     {sensitiveInput && <span className="tag-sensitive-hint" role="status">疑似敏感凭据已清除，未发送。</span>}
   </form>;

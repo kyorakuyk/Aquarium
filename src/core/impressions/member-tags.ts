@@ -17,6 +17,7 @@ function memberGroup(category: TagCategory): MemberGroup | undefined {
     case 'recent':
     case 'schedule':
       return category;
+    case 'catchphrase':
     case 'speech':
     case 'social':
       return 'communication';
@@ -32,7 +33,9 @@ function compareTags(left: StoredTag, right: StoredTag): number {
     - MEMBER_GROUP_ORDER.indexOf(rightGroup ?? 'communication');
   if (groupOrder !== 0) return groupOrder;
   if (leftGroup === 'communication' && left.category !== right.category) {
-    return left.category === 'speech' ? -1 : 1;
+    const communicationOrder = { speech: 0, catchphrase: 1, social: 2 } as const;
+    return communicationOrder[left.category as keyof typeof communicationOrder]
+      - communicationOrder[right.category as keyof typeof communicationOrder];
   }
   if (left.source !== right.source) return left.source === 'manual' ? -1 : 1;
   if (left.samples !== right.samples) return right.samples - left.samples;
@@ -49,8 +52,16 @@ function uniqueTexts(tags: readonly StoredTag[]): string[] {
   });
 }
 
-function labeledGroup(label: string, tags: readonly StoredTag[]): string | undefined {
-  return tags.length === 0 ? undefined : `${label}：${tags.map((tag) => tag.text).join('、')}`;
+function quotedTagText(text: string): string {
+  return text.startsWith('「') && text.endsWith('」') ? text : `「${text}」`;
+}
+
+function labeledGroup(
+  label: string,
+  tags: readonly StoredTag[],
+  formatText: (tag: StoredTag) => string = (tag) => tag.text,
+): string | undefined {
+  return tags.length === 0 ? undefined : `${label}：${tags.map(formatText).join('、')}`;
 }
 
 function fandomText(tags: readonly StoredTag[]): string {
@@ -74,7 +85,7 @@ function fandomText(tags: readonly StoredTag[]): string {
       ...(dislikes.length > 0 ? [`不喜欢${dislikes.join('/')}`] : []),
     ];
     const content = parts.join('，');
-    return subject ? `${subject}（${content}）` : content;
+    return subject ? `${subject.replaceAll('/', ' › ')}（${content}）` : content;
   }).filter(Boolean).join('、');
 }
 
@@ -110,6 +121,7 @@ export function formatMemberTags(tags: readonly StoredTag[]): string {
     (() => {
       const communication = [
         labeledGroup('说话风格', ordered.filter((tag) => tag.category === 'speech')),
+        labeledGroup('口头禅', ordered.filter((tag) => tag.category === 'catchphrase'), ({ text }) => quotedTagText(text)),
         labeledGroup('社交方式', ordered.filter((tag) => tag.category === 'social')),
       ].filter((group): group is string => group !== undefined);
       return communication.length > 0 ? communication.join('、') : undefined;
@@ -124,6 +136,7 @@ export function buildMemberTagPrompt(
 ): { text: string; dropped: number } {
   const eligible = tags
     .filter((tag) => !tag.locked
+      && memberGroup(tag.category) !== undefined
       && tag.category !== 'misc'
       && tag.category !== 'atmosphere'
       && tag.status === 'confirmed'

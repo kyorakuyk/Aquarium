@@ -2,25 +2,50 @@ import type { DatabaseSync } from 'node:sqlite';
 import { createTagQueries } from './tag-repo.ts';
 import type { StoredTag, TagEvidence } from './tag-repo.ts';
 import { createTagSubjectRepository } from './tag-subject-repo.ts';
-import type { TagCategoryKey, TagPolarity } from '../core/impressions/tag-model.ts';
+import {
+  isTagCategoryForScope,
+  isTagCategoryKey,
+  isTagPolarity,
+  normalizeTagSubjectPath,
+  type TagCategoryKey,
+  type TagPolarity,
+} from '../core/impressions/tag-model.ts';
 
 export interface TagClassificationProfile {
   category: TagCategoryKey;
   subject: string | null;
   polarity: TagPolarity;
+  text?: string;
+  norm?: string;
 }
 
 export interface TagClassificationRepository {
+  listTagsToClassify(): StoredTag[];
+  countLockedTagsToClassify(): number;
+  hasPendingReclassification(): boolean;
+  markTagReclassified(id: number): void;
   listUnlockedMiscTags(): StoredTag[];
   countLockedMiscTags(): number;
   isLegacyMiscClassificationComplete(): boolean;
   markLegacyMiscClassificationComplete(completedAt: number): void;
+  mergeClassifiedTag(input: {
+    sourceId: number;
+    targetId: number;
+    profile: TagClassificationProfile;
+    at: number;
+  }): boolean;
   mergeMiscTag(input: {
     sourceId: number;
     targetId: number;
     profile: TagClassificationProfile;
     at: number;
   }): boolean;
+}
+
+function numberValue(value: unknown, field: string): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'bigint') return Number(value);
+  throw new Error(`数据库字段 ${field} 不是数字`);
 }
 
 function evidenceUnion(target: TagEvidence[], source: TagEvidence[]): TagEvidence[] {
@@ -36,6 +61,28 @@ function evidenceUnion(target: TagEvidence[], source: TagEvidence[]): TagEvidenc
 export function createTagClassificationRepository(database: DatabaseSync): TagClassificationRepository {
   const tags = createTagQueries(database);
   const subjects = createTagSubjectRepository(database);
+  const selectClassifiableIds = database.prepare(`
+    SELECT id FROM tags
+    WHERE (category = 'misc' OR needs_reclassification = 1)
+      AND locked = 0 AND status != 'superseded'
+    ORDER BY account, session_id, user_id, id
+  `);
+  const selectLockedClassifiableCount = database.prepare(`
+    SELECT COUNT(*) AS total FROM tags
+    WHERE (category = 'misc' OR needs_reclassification = 1)
+      AND locked = 1 AND status != 'superseded'
+  `);
+  const selectPendingReclassification = database.prepare(`
+    SELECT 1 FROM tags
+    WHERE needs_reclassification = 1 AND locked = 0 AND status != 'superseded'
+    LIMIT 1
+  `);
+  const selectTagReclassification = database.prepare(
+    'SELECT needs_reclassification FROM tags WHERE id = ?',
+  );
+  const clearTagReclassification = database.prepare(
+    'UPDATE tags SET needs_reclassification = 0 WHERE id = ?',
+  );
   const selectLegacyMarker = database.prepare(
     "SELECT 1 FROM profile_migrations WHERE name = 'legacy-misc-tags'",
   );
@@ -44,7 +91,114 @@ export function createTagClassificationRepository(database: DatabaseSync): TagCl
     VALUES ('legacy-misc-tags', ?)
     ON CONFLICT(name) DO UPDATE SET completed_at = excluded.completed_at
   `);
+
+  function mergeClassifiedTag({ sourceId, targetId, profile, at }: {
+    sourceId: number;
+    targetId: number;
+    profile: TagClassificationProfile;
+    at: number;
+  }): boolean {
+    if (!Number.isSafeInteger(sourceId) || sourceId <= 0
+      || !Number.isSafeInteger(targetId) || targetId <= 0
+      || sourceId === targetId || !Number.isSafeInteger(at) || at < 0
+      || !isTagCategoryKey(profile.category) || profile.category === 'schedule'
+      || (profile.subject !== null && (profile.category !== 'fandom' && profile.category !== 'topic'
+        || !normalizeTagSubjectPath(profile.subject)))
+      || (profile.category !== 'fandom' && profile.polarity !== null)
+      || (profile.polarity !== null && !isTagPolarity(profile.polarity))) {
+      return false;
+    }
+
+    database.exec('BEGIN IMMEDIATE');
+    let transactionOpen = true;
+    try {
+      const source = tags.tagById(sourceId);
+      const target = tags.tagById(targetId);
+      const sourceNeedsReclassification = selectTagReclassification.get(sourceId) as { needs_reclassification: number } | undefined;
+      if (!source || !target || (source.category !== 'misc' && sourceNeedsReclassification?.needs_reclassification !== 1)
+        || source.locked || source.status === 'rejected' || source.status === 'superseded'
+        || target.locked || target.status === 'rejected' || target.status === 'superseded'
+        || target.category === 'misc'
+        || source.norm === target.norm
+        || source.account !== target.account
+        || source.sessionId !== target.sessionId
+        || source.userId !== target.userId
+        || !isTagCategoryForScope(profile.category, source.userId === null ? 'group' : 'member')) {
+        database.exec('ROLLBACK');
+        transactionOpen = false;
+        return false;
+      }
+
+      const sourceSubject = profile.subject === null
+        ? null
+        : subjects.canonicalTagSubject(source.account, profile.category, profile.subject);
+      if (target.category !== profile.category
+        || target.subject !== sourceSubject
+        || target.polarity !== profile.polarity) {
+        database.exec('ROLLBACK');
+        transactionOpen = false;
+        return false;
+      }
+      const samples = target.samples + source.samples;
+      if (!Number.isSafeInteger(samples)) {
+        database.exec('ROLLBACK');
+        transactionOpen = false;
+        return false;
+      }
+      const preserveManual = target.source === 'manual' || source.source === 'manual'
+        || target.origin === 'manual' || source.origin === 'manual';
+      tags.updateTag(target.id, {
+        samples,
+        evidence: evidenceUnion(target.evidence, source.evidence),
+        lastSeen: Math.max(target.lastSeen, source.lastSeen),
+        status: target.status === 'confirmed' || source.status === 'confirmed' ? 'confirmed' : target.status,
+        ...(preserveManual ? { source: 'manual' as const, origin: 'manual' as const } : {}),
+        updatedAt: at,
+      });
+      tags.updateTag(source.id, {
+        text: profile.text ?? source.text,
+        norm: profile.norm ?? source.norm,
+        category: profile.category,
+        subject: sourceSubject,
+        polarity: profile.polarity,
+        status: 'superseded',
+        supersededBy: target.id,
+        updatedAt: at,
+      });
+      clearTagReclassification.run(source.id);
+      clearTagReclassification.run(target.id);
+      database.exec('COMMIT');
+      transactionOpen = false;
+      return true;
+    } catch (error) {
+      if (transactionOpen) database.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
   return {
+    listTagsToClassify() {
+      const rows = selectClassifiableIds.all() as Array<{ id: number | bigint }>;
+      return rows.flatMap(({ id }) => {
+        const tag = tags.tagById(Number(id));
+        return tag ? [tag] : [];
+      });
+    },
+
+    countLockedTagsToClassify() {
+      const row = selectLockedClassifiableCount.get() as Record<string, unknown> | undefined;
+      return numberValue(row?.total ?? 0, 'total');
+    },
+
+    hasPendingReclassification() {
+      return selectPendingReclassification.get() !== undefined;
+    },
+
+    markTagReclassified(id) {
+      if (!Number.isSafeInteger(id) || id <= 0) return;
+      clearTagReclassification.run(id);
+    },
+
     listUnlockedMiscTags() {
       return tags.listUnlockedMiscTags();
     },
@@ -64,74 +218,12 @@ export function createTagClassificationRepository(database: DatabaseSync): TagCl
       saveLegacyMarker.run(completedAt);
     },
 
-    mergeMiscTag({ sourceId, targetId, profile, at }) {
-      if (!Number.isSafeInteger(sourceId) || sourceId <= 0
-        || !Number.isSafeInteger(targetId) || targetId <= 0
-        || sourceId === targetId || !Number.isSafeInteger(at) || at < 0) {
-        return false;
-      }
-      if (profile.category !== 'fandom' && (profile.subject !== null || profile.polarity !== null)) return false;
-      if (profile.subject !== null && profile.subject.trim().length === 0) return false;
+    mergeClassifiedTag(input) {
+      return mergeClassifiedTag(input);
+    },
 
-      database.exec('BEGIN IMMEDIATE');
-      let transactionOpen = true;
-      try {
-        const source = tags.tagById(sourceId);
-        const target = tags.tagById(targetId);
-        if (!source || !target || source.category !== 'misc' || source.locked
-          || source.status === 'rejected' || source.status === 'superseded'
-          || target.locked || target.status === 'rejected' || target.status === 'superseded'
-          || target.category === 'misc'
-          || source.norm === target.norm
-          || source.account !== target.account
-          || source.sessionId !== target.sessionId
-          || source.userId !== target.userId) {
-          database.exec('ROLLBACK');
-          transactionOpen = false;
-          return false;
-        }
-
-        const sourceSubject = profile.subject === null
-          ? null
-          : subjects.canonicalTagSubject(source.account, profile.category, profile.subject);
-        if (target.category !== profile.category
-          || target.subject !== sourceSubject
-          || target.polarity !== profile.polarity) {
-          database.exec('ROLLBACK');
-          transactionOpen = false;
-          return false;
-        }
-        const samples = target.samples + source.samples;
-        if (!Number.isSafeInteger(samples)) {
-          database.exec('ROLLBACK');
-          transactionOpen = false;
-          return false;
-        }
-        const preserveManual = target.source === 'manual' || source.source === 'manual'
-          || target.origin === 'manual' || source.origin === 'manual';
-        tags.updateTag(target.id, {
-          samples,
-          evidence: evidenceUnion(target.evidence, source.evidence),
-          lastSeen: Math.max(target.lastSeen, source.lastSeen),
-          status: target.status === 'confirmed' || source.status === 'confirmed' ? 'confirmed' : target.status,
-          ...(preserveManual ? { source: 'manual' as const, origin: 'manual' as const } : {}),
-          updatedAt: at,
-        });
-        tags.updateTag(source.id, {
-          category: profile.category,
-          subject: sourceSubject,
-          polarity: profile.polarity,
-          status: 'superseded',
-          supersededBy: target.id,
-          updatedAt: at,
-        });
-        database.exec('COMMIT');
-        transactionOpen = false;
-        return true;
-      } catch (error) {
-        if (transactionOpen) database.exec('ROLLBACK');
-        throw error;
-      }
+    mergeMiscTag(input) {
+      return mergeClassifiedTag(input);
     },
   };
 }

@@ -149,7 +149,7 @@ export interface SleepView {
 }
 
 export type TagStatus = 'candidate' | 'confirmed' | 'rejected' | 'superseded';
-export type TagCategory = 'identity' | 'personality' | 'fandom' | 'speech' | 'social' | 'recent' | 'dislike' | 'schedule' | 'atmosphere' | 'misc';
+export type TagCategory = 'positioning' | 'topic' | 'atmosphere' | 'meme' | 'norms' | 'identity' | 'personality' | 'fandom' | 'speech' | 'catchphrase' | 'social' | 'recent' | 'dislike' | 'schedule' | 'misc';
 export type TagOrigin = 'self_report' | 'inferred' | 'stats' | 'manual';
 export type TagPolarity = 'like' | 'dislike' | null;
 

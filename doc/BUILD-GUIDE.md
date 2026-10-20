@@ -1,6 +1,6 @@
-# Aquarium 从骨架到 M3-A：初学者施工导读
+# Aquarium 施工导读：从骨架到 Impressions V4 M1
 
-> 本文是随代码一起更新的学习材料。目标不是让你记住所有 API，而是让你能回答：程序分成哪些部分、每一层负责什么、为什么选这些库，以及每个任务怎样验证。前文记录 T0–T6、阶段 B 的 R1–R9、阶段 C/D、M2-A A1–A6 和 §9.0 U1–U4；§15 补充 2026-10-20 的 V18f 图片认知和 §13 P1–P6 隐私记忆实现及自动化验证。真实 SnowLuma/QQ、模型、Windows GUI 与 U1–U4 控制台体验仍按各自清单由用户确认。
+> 本文是随代码一起更新的学习材料。目标不是让你记住所有 API，而是让你能回答：程序分成哪些部分、每一层负责什么、为什么选这些库，以及每个任务怎样验证。前文记录 T0–T6、阶段 B 的 R1–R9、阶段 C/D、M2-A A1–A6 和 §9.0 U1–U4；§15 补充 2026-10-20 的 V18f 图片认知和 §13 P1–P6 隐私记忆；§16 补充 2026-10-21 的 S1–S4、K1–K3 与 Impressions V4 M1。M2–M8 和 R9 尚未在本节覆盖。真实 SnowLuma/QQ、模型、Windows GUI 与用户验收仍按各自清单执行。
 >
 > 自动化测试和生产构建不等于真实运行验收。夜间运行不会替代真实 SnowLuma/QQ、模型、Windows GUI 或控制台体验确认。
 
@@ -15,9 +15,9 @@ SnowLuma / OneBot WebSocket
             ↓
  src/adapters/onebot（把 OneBot 翻译成 Aquarium 接口）
             ↓
- src/core/events.ts（Aquarium 自己的消息词汇）
+ src/core/shared/events.ts（Aquarium 自己的消息词汇）
             ↓
- src/core/pipeline.ts（判断是否回复、如何回复）
+ src/core/conversation/pipeline.ts（判断是否回复、如何回复）
             ↓
  ProtocolAdapter.send（把 Aquarium 消息再翻译回 OneBot）
 ```
@@ -99,7 +99,7 @@ T0 的自动测试在 `os.tmpdir()` 下创建临时的假 SDK 目录，验证补
 
 ### 5.1 为什么要有自己的事件类型
 
-SnowLuma 的事件类型属于外部 SDK；如果核心代码到处使用它，换掉 SDK 就会牵动全项目。因此 `src/core/events.ts` 定义 Aquarium 自己的数据结构：
+SnowLuma 的事件类型属于外部 SDK；如果核心代码到处使用它，换掉 SDK 就会牵动全项目。因此 `src/core/shared/events.ts` 定义 Aquarium 自己的数据结构：
 
 - `SessionKey`：`account + kind + peer`，唯一描述“哪个账号、群聊还是私聊、对端是谁”；
 - `Segment`：文本、@、图片、回复、表情或未知内容；
@@ -188,10 +188,10 @@ SQLite 测试使用 `os.tmpdir()` 下 `aquarium-store-*` 的**文件数据库**�
 T6 把前面做好的配置、OneBot 适配器、SQLite 和模型槽位串成一条消息管线。新增代码按职责拆开，不让一个大文件同时懂 QQ 协议、数据库、提示词和回复排版：
 
 1. `src/app/main.ts` 是装配入口：读取配置、开数据库、启动配置 watcher、为每个账号建立 OneBot adapter、连接并把消息交给 pipeline。收到一条消息时，pipeline 通过 getter 取**当前**配置，所以启用开关、昵称、人设、提示词补充和模型槽位的热重载对下一条消息生效。运行时改账号列表或 SnowLuma 路径不会自动重连，入口会提醒重启。
-2. `src/core/pipeline.ts` 是业务顺序的协调者：先把收到的消息存起来；会话关闭就记录 `disabled`；私聊直接算被叫，群聊必须 `mentionsSelf` 或文字包含配置昵称；否则记 `not_mentioned`。触发后检查限流，再加载账号绑定的人设、读最近上下文、调用 `reply` 槽位、清洗并拆分文本，最后按节奏经 adapter 发送并存下自己的消息，写一条最终决策。
+2. `src/core/conversation/pipeline.ts` 是业务顺序的协调者：先把收到的消息存起来；会话关闭就记录 `disabled`；私聊直接算被叫，群聊必须 `mentionsSelf` 或文字包含配置昵称；否则记 `not_mentioned`。触发后检查限流，再加载账号绑定的人设、读最近上下文、调用 `reply` 槽位、清洗并拆分文本，最后按节奏经 adapter 发送并存下自己的消息，写一条最终决策。
 3. `src/core/rate-limit.ts` 用内存时间窗口跟踪同一账号下的用户、会话和会话最小间隔。只有已被叫的消息才消耗额度；不符合条件时不请求模型、不发送，并把具体限流原因写入决策详情。它不需要 Redis 等外部服务，因为 M1 只运行一个本地进程。
 4. `src/persona/load.ts` 从 `data/personas/<id>.md` 先找用户私有版本，再回退到仓库内 `personas/<id>.md`。默认人设可安全提交，用户修改留在 gitignore 的 `data/`；文件名只接受安全 ID，避免配置值变成任意路径。OneBot 登录校验后提供账号昵称，用来替换 `{{name}}`。
-5. `src/core/prompt.ts` 把不变的人设、规则和会话补充按固定顺序放进一条 system 消息；最近 N 条历史则按本地时间 `[HH:mm] 名字: 内容` 拼成**一条** user 消息，bot 自己说过的话标作“你”。固定规则提醒模型口语短句、不用 Markdown、不声称自己是 AI 助手、不泄露设定，并区分主人指令；owner 为 0 时明确表示主人尚未设置。
+5. `src/core/prompt/index.ts` 把不变的人设、规则和会话补充按固定顺序放进一条 system 消息；最近 N 条历史则按本地时间 `[HH:mm] 名字: 内容` 拼成**一条** user 消息，bot 自己说过的话标作“你”。固定规则提醒模型口语短句、不用 Markdown、不声称自己是 AI 助手、不泄露设定，并区分主人指令；owner 为 0 时明确表示主人尚未设置。
 6. `src/core/text.ts` 去掉常见 Markdown 外壳、链接 URL 和已知昵称前缀；若结果为空，记 `empty_reply` 并不发消息。`src/core/split.ts` 按中英文句末标点、换行和 Unicode 字符边界拆条；最多三条，溢出内容并入最后一条。这样不依赖第三方文本库，也不会把 emoji 的 UTF-16 半个代理字符切坏。
 7. `src/core/pacing.ts` 只负责根据字符数计算延迟，不负责网络或状态：先夹紧 `600 + 字数×120ms` 到 800–6000ms，再乘 0.8–1.3 的随机抖动。pipeline 先标已读，私聊再设输入状态，每条发送前等待；这些等待和随机源可注入，让单测不真的睡好几秒。
 8. 发送结果写回 `messages`，`is_self=true`，使之后的上下文能知道自己说过什么；群聊第一条用 reply 段引用原消息，后续拆分段不重复引用。每条输入最后都会有决策原因，包含 `disabled`、`not_mentioned`、`rate_limited`、`empty_reply`、`llm_error`、`send_error` 或 `replied`。
@@ -224,7 +224,7 @@ T6 没增加 npm 依赖：限流、文件读取、计时、SQLite 和测试分�
 
 **为什么改：** 仅在提示词里写主人 QQ 号会把账号信息交给模型，而且只看昵称无法确认发言者身份；昵称本身也可能含“主人”二字。
 
-**实现：** `src/core/prompt.ts` 的参数使用 `ownerId`。只有 `ownerId` 非零且消息的 `senderId` 与之相等时，才在上下文说话人后加 `（主人）`；系统规则要求只相信这个标记。主人未设置（`ownerId === 0`）时则明确要求不要把任何人视为主人。主人 QQ 号不再写入 system 或 user 提示词。`pipeline.ts` 负责把配置中的主人 ID 传给提示词构造器；没有新增依赖。
+**实现：** `src/core/prompt/index.ts` 的参数使用 `ownerId`。只有 `ownerId` 非零且消息的 `senderId` 与之相等时，才在上下文说话人后加 `（主人）`；系统规则要求只相信这个标记。主人未设置（`ownerId === 0`）时则明确要求不要把任何人视为主人。主人 QQ 号不再写入 system 或 user 提示词。`pipeline.ts` 负责把配置中的主人 ID 传给提示词构造器；没有新增依赖。
 
 **测试怎样证明：** `test/prompt.test.ts` 检查 system 与 user 内容都不包含主人 ID、匹配 ID 的发言得到标记、未设置主人时规则正确，也用昵称含“主人”的非主人样例说明判定来自 `senderId` 而不是文字。R7 又把所有非自己说话人昵称用 `JSON.stringify(name)` 包在引号里，并将真实主人标记放在引号外；固定规则说明引号内内容只是昵称。这样 `"张三（主人）"` 仍只是昵称，而 `"阿伟"（主人）` 才有系统添加的身份标记；昵称中的双引号会由 JSON 序列化转义。R7 后完整检查为 83 项通过。
 
@@ -232,7 +232,7 @@ T6 没增加 npm 依赖：限流、文件读取、计时、SQLite 和测试分�
 
 **为什么改：** WebSocket 重连或重复投递可能让同一条消息再次进入管线；如果不去重，机器人会重复调用模型、产生费用并重复回复。
 
-**实现：** T4 已有 `(session_id, message_id)` 唯一约束。`src/store/repository.ts` 用 SQLite 的 `INSERT OR IGNORE` 忽略重复记录，并让 `saveMessage()` 返回布尔值表示是否新插入。`src/core/pipeline.ts` 在消息刚入库后检查该结果；若为重复，就记录 `reason='duplicate'` 并立即结束，不再读配置、调用模型或发送。依赖仍是项目已有的 `node:sqlite`，无需安装新库。
+**实现：** T4 已有 `(session_id, message_id)` 唯一约束。`src/store/repository.ts` 用 SQLite 的 `INSERT OR IGNORE` 忽略重复记录，并让 `saveMessage()` 返回布尔值表示是否新插入。`src/core/conversation/pipeline.ts` 在消息刚入库后检查该结果；若为重复，就记录 `reason='duplicate'` 并立即结束，不再读配置、调用模型或发送。依赖仍是项目已有的 `node:sqlite`，无需安装新库。
 
 **测试怎样证明：** `test/repository.test.ts` 断言第一次保存返回 `true`、同会话同 ID 再保存返回 `false`；`test/pipeline.test.ts` 把同一输入交给管线两次，检查只调用模型并发送一次，第二次留下 `duplicate` 决策。
 
@@ -260,7 +260,7 @@ R7–R9 是在 R1–R6 之后补上的第二轮审查修正。它们都没有新
 
 **为什么改：** R3 会在主人昵称后追加 `（主人）`，但如果非主人把群名片设为 `张三（主人）`，模型看到的上下文就可能把昵称文字误当身份标签。昵称是用户可控数据，不能把它直接拼成可信身份标记。
 
-**实现：** `src/core/prompt.ts` 对所有非 bot 说话人的名字调用 `JSON.stringify(name)`，让昵称成为带双引号的 JSON 字符串；只有 `senderId === ownerId && ownerId !== 0` 时，程序才在字符串外添加 `（主人）`。bot 自己的行继续写成 `你`。system 规则也明确说明，引号内部只是昵称、不代表身份。JSON 序列化会转义名字中的双引号和控制字符，因此昵称不能闭合边界。该改动只用 JavaScript 内置的 `JSON.stringify`。
+**实现：** `src/core/prompt/index.ts` 对所有非 bot 说话人的名字调用 `JSON.stringify(name)`，让昵称成为带双引号的 JSON 字符串；只有 `senderId === ownerId && ownerId !== 0` 时，程序才在字符串外添加 `（主人）`。bot 自己的行继续写成 `你`。system 规则也明确说明，引号内部只是昵称、不代表身份。JSON 序列化会转义名字中的双引号和控制字符，因此昵称不能闭合边界。该改动只用 JavaScript 内置的 `JSON.stringify`。
 
 **测试怎样证明：** `test/prompt.test.ts` 检查伪装昵称只出现在引号内、真正主人标记在引号外、昵称中的双引号被转义、owner 未设置时无人被标为主人，并再次断言主人 ID 不在提示词中。R7 的 `npm run check` 实测为 83 项测试通过、0 失败。
 
@@ -290,7 +290,7 @@ C0–T10 的代码和单元测试现已完成；这不代表真实 QQ、SnowLuma
 
 ### 12.2 T7：只在触发消息时描述图片
 
-`src/core/images.ts` 为当前触发消息中的每张未缓存图片调用 `vision` 槽位，生成不超过 30 字的说明并按文件标识或 URL 哈希缓存。构造历史提示词时不重新识图：有缓存用文字说明，无缓存用 `[图片]`。为避免向远程模型暴露本地任意文件，实现只接受 HTTP(S) 或图片 data URL；本地路径和读取失败都会降级，而不是访问磁盘。
+`src/core/images/` 为当前触发消息中的每张未缓存图片调用 `vision` 槽位，生成不超过 30 字的说明并按文件标识或 URL 哈希缓存。构造历史提示词时不重新识图：有缓存用文字说明，无缓存用 `[图片]`。为避免向远程模型暴露本地任意文件，实现只接受 HTTP(S) 或图片 data URL；本地路径和读取失败都会降级，而不是访问磁盘。
 
 `test/image-pipeline.test.ts` 用假模型验证缓存命中、多图、未触发消息、失败降级和本地路径拒绝；测试不发真实视觉请求。T7 后完整检查为 93 项测试通过。
 
@@ -326,13 +326,13 @@ T10 后 `npm run check` 实测为 126 项测试通过、依赖边界检查通过
 
 ### 12.7 R10：让决策记录能直接读懂
 
-`GET /api/decisions` 为每条记录解析群名、好友备注/昵称；联系人查询失败或会话已不存在时退回 `sessionId`。仓储按 `(session_id, message_id)` 精确查找原消息，只返回前 60 个 Unicode 字符，未找到返回 `null`。`costCny` 只接受 `detail.costCny` 中的有限数字，否则是 `null`；`src/core/pipeline.ts` 在 `replied` 决策中记录本次 reply 槽位真实成本，因此零成本仍显示为 `¥0.0000`，缺失成本显示 `—`。
+`GET /api/decisions` 为每条记录解析群名、好友备注/昵称；联系人查询失败或会话已不存在时退回 `sessionId`。仓储按 `(session_id, message_id)` 精确查找原消息，只返回前 60 个 Unicode 字符，未找到返回 `null`。`costCny` 只接受 `detail.costCny` 中的有限数字，否则是 `null`；`src/core/conversation/pipeline.ts` 在 `replied` 决策中记录本次 reply 槽位真实成本，因此零成本仍显示为 `¥0.0000`，缺失成本显示 `—`。
 
 `panel/src/labels.ts` 将已知 reason 映射为中文与正向/中性/警示样式；`command_ignored` 单独显示“指令已忽略”，其他 `command_*` 显示“管理指令”，未识别原因保留原值。总览和决策列表 UI 不再显示专门列出的原始会话/消息 ID；若联系人信息缺失，`sessionName` 会按设计回退为 `sessionId`。API 仍保留这两个 ID 供调试追踪使用。测试覆盖群名、好友备注优先、联系人查询失败回退、复合键不跨会话匹配、缺原消息/非法费用、Unicode 60 字截断、replied 成本写入及前端标签/语气。R10 后 `npm run check` 通过 129 项测试，`npm run panel:build` 成功。
 
 ### 12.8 R11：把图片取回后再送视觉槽位
 
-`src/core/images.ts` 通过 `downloadImageAsDataUrl` 下载 HTTP(S) 图片，默认 fetch 使用 10 秒 `AbortSignal.timeout`；只接受 `image/jpeg`、`image/png`、`image/gif`、`image/webp`，并同时检查 `Content-Length` 与流式实际字节数，最大 5 MiB。成功后构造 `data:<mime>;base64,...` 交给 vision；原本已是图片 data URL 的输入保持不变。
+`src/core/images/` 通过 `downloadImageAsDataUrl` 下载 HTTP(S) 图片，默认 fetch 使用 10 秒 `AbortSignal.timeout`；只接受 `image/jpeg`、`image/png`、`image/gif`、`image/webp`，并同时检查 `Content-Length` 与流式实际字节数，最大 5 MiB。成功后构造 `data:<mime>;base64,...` 交给 vision；原本已是图片 data URL 的输入保持不变。
 
 下载函数经 `MessagePipelineOptions.downloadImage` 注入，单测使用假的 `Response`/fetcher，不访问网络。超时、非 2xx、MIME 不支持、内容超限或下载异常都由现有图片错误路径记录，并让 vision 收不到原始链接、回复上下文只显示 `[图片]`。缓存命中在下载前短路。U2 还需用户确认真实 OneBot 图片 URL 可由本机下载，且配置的 vision 服务接受对应 data URL。R11 后 `npm run check` 通过 136 项测试，`npm run panel:build` 成功。
 
@@ -395,7 +395,7 @@ M2 不是另起一套聊天管线，而是在现有 pipeline 上增加可配置�
 | `active` | 回复 | 更积极地判断 |
 | `busy` | 回复较慢、较简短 | 更少主动回复 |
 
-被叫消息和私聊仍沿用正式消息路径；未被叫的群消息才进入主动判断。主控位置在 `src/app/activity-routing.ts`、`src/core/steps/gate.ts`，分离的策略模块位于 `src/core/activity/`。
+被叫消息和私聊仍沿用正式消息路径；未被叫的群消息才进入主动判断。主控位置在 `src/app/activity-routing.ts`、`src/core/conversation/steps/gate.ts`，分离的策略模块位于 `src/core/activity/`。
 
 ### 14.2 主动判断不是一次模型调用
 
@@ -451,3 +451,31 @@ M2 不是另起一套聊天管线，而是在现有 pipeline 上增加可配置�
 `npm run check` 运行 TypeScript、依赖边界检查和 `node:test`；隐私测试使用假模型、假适配器与临时 SQLite，覆盖策略、提取/注入、群聊守门/出口、主人提及、API CRUD、软删除及回避期内的真实 router+pipeline 批处理。R7 最终实测 `npm run check` 为 583/583；P6 的 `npm run panel:build` 成功，Vite 仍提示主 bundle 501.79 kB 略超默认 500 kB 阈值，私聊面板为独立 7.57 kB 动态 chunk。
 
 这些门只证明离线代码路径；本轮未运行 `npm start`、真实 QQ/SnowLuma、模型或 GUI。私聊提取、群聊回避和等级变化的真实体验仍按 `doc/plans/PLAN.md` §13.8 由用户确认；面板没有做 GUI 视觉验收。
+
+## 16. Impressions V4：结构整理、提示词前缀与标签分类 v2（2026-10-21）
+
+本节补充 §16 夜间任务中已完成的 S1–S4、K1–K3 和 M1。各任务的细项与停止点以 `doc/plans/PLAN.md` §16 为准；这里记录新目录的职责和关键设计，方便从当前代码继续阅读。
+
+### 16.1 S1–S4：迁移与 core 的职责边界
+
+- `src/store/db.ts` 负责打开数据库并按版本顺序执行迁移；每个版本的 SQL 变更在 `src/store/migrations/v01.ts` 至 `v16.ts` 中独立审查。新增 schema 时追加迁移，不改写已发布版本；迁移测试也验证版本连续、旧数据保留和重复打开的幂等性。
+- 标签分类、适用范围、半衰期、subject 路径等纯规则位于 `src/core/impressions/tag-model.ts`，不依赖 SQLite。为避免 `store` 与 `core` 互相耦合，边界检查只给 `store` 到该纯模型模块开了一个明确白名单。
+- 出没统计归 `src/core/profiles/presence.ts`，统计作息标签的协调归 `presence-service.ts`；`src/core/conversation/`、`shared/`、`prompt/` 等目录按职责组织会话、共同类型和提示词能力。
+
+### 16.2 K1–K3：让可缓存前缀和上下文稳定
+
+- system 消息保留慢变化的固定说明，随请求变化的 mode、心情、好感、私聊事实、画像标签、贴图候选和当前请求放进 user 消息尾部。提示词块 ID 与追踪结构保持不变，避免为了缓存重排而丢失可观测性。
+- `src/core/conversation/context-window.ts` 为每个会话记住窗口起点：窗口未超过 `ceil(1.5N)` 时追加新消息；超出后回到最近 N 条；锚点被删或不在最近 2N 条时重新锚定。主动模式仍用 8 条窗口，历史 replay 仍按 messageId 截取。
+- judge、extract、摘要、分类和隐私判断等多用途模板，把固定说明放在变化输入之前。对应测试比较不同输入的固定提示词前缀；这里调整的是顺序，不是规则措辞。
+
+### 16.3 M1：标签分类 v2 与可验证写法
+
+- `tag-model.ts` 是类别白名单、scope、半衰期及文本规则的唯一纯逻辑来源；API 和提取入口都执行 scope 校验。`schedule` 不能由模型写入，只由统计服务或主人手动创建。
+- `topic`、`fandom` 用最多两级的 `subject` 路径加末级 `text` 表示主题；路径的每一级分别按 `tag_subjects` 的 canonical 名称与 aliases 归一。面板展示成 `游戏 › FPS › CS2`。群梗与口头禅必须是证据里的原话，长度上限 12，显示时加「」；其他标签去掉指定的喜好/习惯前缀，限制短名词，并拒绝被判定为作息的文本。
+- migration v16 为旧群标签增加 `needs_reclassification`，保留旧分类并标记可重新整理的行；后台复用已有分类流程，逐批处理、合并同义项并清除已完成标记。迁移先检测 tags 表和回填所需字段；只有结构具备 `user_id`、`category`、`locked`、`status` 时才回填并建索引，避免把字段不全的历史库误当作可重分类。正式 schema v15 满足这些条件，会标记未锁定且未 superseded 的旧群标签。
+- 统计服务用最近 90 个本地日的消息计算群和群友最活跃的连续三小时窗口；窗口占比至少 0.35 才生成标签。群标签用“最热闹”，群友用“最活跃”；群另按某星期占比至少 0.25 生成“周 X 最热闹”。不满足条件的统计标签连续三天后删除；模型生成的作息词会作为 `schedule_by_stats` 丢弃理由进入追踪。
+- 标签正文、证据引文和提示块仍走原有敏感文本脱敏；仅名称显示路径按既定规则处理，不能把显示豁免扩展到标签内容。
+
+### 16.4 验证边界
+
+M1 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **678/678** 项测试；`npm run panel:build` 成功（147 个模块），Vite 仍提示主 bundle 约 524 kB 超过默认 500 kB 提示线。未运行 `npm start`、真实模型、QQ、SnowLuma 或 GUI。当前只完成 M1；M2–M8 和 R9 仍待执行，R9 后按 `doc/plans/PLAN.md` §16.4 清单停下并由用户做真实体验验收。

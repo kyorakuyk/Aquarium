@@ -156,3 +156,53 @@ test('stats 按周末日均与早间占比生成作息标签', async () => {
     database.close();
   }
 });
+
+test('群和群友按本地最活跃三小时生成标签，群级星期标签按占比生成', async () => {
+  const database = openDatabase(':memory:');
+  try {
+    const repository = createRepository(database);
+    const suggestionRepository = createActivitySuggestionRepository(database);
+    const config = makeConfig();
+    const at = new Date(2026, 5, 1, 4, 0, 0, 0).getTime();
+    const start = new Date(at);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - 89);
+    let messageIndex = 0;
+    for (let dayIndex = 0; dayIndex < 90; dayIndex += 1) {
+      const day = new Date(start);
+      day.setDate(day.getDate() + dayIndex);
+      const count = day.getDay() === 1 ? 3 : day.getDay() === 2 ? 2 : 0;
+      for (let index = 0; index < count; index += 1) {
+        const messageTime = new Date(day);
+        messageTime.setHours(20 + index, 0, 0, 0);
+        if (messageTime.getTime() <= at) {
+          saveMessage(repository, messageTime.getTime(), `peak-${messageIndex}`);
+          messageIndex += 1;
+        }
+      }
+    }
+    assert.ok(messageIndex >= 50);
+    const service = createProfileActivityService({
+      repository,
+      suggestionRepository,
+      getConfig: () => config,
+      now: () => at,
+    });
+
+    await service.recomputeSchedules(at);
+
+    const tags = repository.listTagsForSession(account, sessionId);
+    const groupTags = tags.filter((tag) => tag.userId === null && tag.origin === 'stats');
+    const memberTags = tags.filter((tag) => tag.userId === 42 && tag.origin === 'stats');
+    assert.ok(
+      groupTags.some((tag) => tag.text === '「20:00–23:00 点最热闹」' && tag.category === 'schedule'),
+      JSON.stringify(groupTags.map(({ text, userId }) => ({ text, userId }))),
+    );
+    assert.ok(groupTags.some((tag) => tag.text === '周一最热闹'));
+    assert.ok(groupTags.some((tag) => tag.text === '周二最热闹'));
+    assert.ok(memberTags.some((tag) => tag.text === '「20:00–23:00 点最活跃」'));
+    assert.equal(groupTags.some((tag) => tag.text === '夜猫子' || tag.text === '早上不在线'), false);
+  } finally {
+    database.close();
+  }
+});

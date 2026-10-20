@@ -3,9 +3,9 @@ import { TAG_CATEGORY_HALF_LIFE_MS } from './tag-model.ts';
 
 export const EVIDENCE_MAX = 5;
 
-// 淡忘半衰期：群友 30 天、群 14 天；samples ≥ 4 时乘 3；manual 恒为 1。
+// misc 半衰期 30 天；samples ≥ 4 时乘 3；manual 恒为 1。
 export const MEMBER_TAG_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000;
-export const GROUP_TAG_HALF_LIFE_MS = 14 * 24 * 60 * 60 * 1000;
+export const GROUP_TAG_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const ACTIVATION_MIN = 0.25;
 

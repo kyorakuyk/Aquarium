@@ -113,7 +113,7 @@ test('假模型下完成一次提取：观察转正、新标签、成员标签�
           new: [{ text: '氛围轻松', messageId: 'msg-4' }],
           contradict: [],
         },
-        members: [{ userId: 42, observe: [], new: [{ text: '夜猫子', messageId: 'msg-3' }], contradict: [] }],
+        members: [{ userId: 42, observe: [], new: [{ text: '热情开朗', messageId: 'msg-3' }], contradict: [] }],
       }),
     });
 
@@ -140,7 +140,7 @@ test('假模型下完成一次提取：观察转正、新标签、成员标签�
     assert.equal(groupTags.find((tag) => tag.text === '氛围轻松')?.status, 'candidate');
     assert.equal(groupTags.find((tag) => tag.text === '氛围轻松')?.samples, 1);
     const memberTags = repository.listTagsForSubject(account, key, 42);
-    assert.equal(memberTags[0]?.text, '夜猫子');
+    assert.equal(memberTags[0]?.text, '热情开朗');
     assert.equal(memberTags[0]?.status, 'candidate');
 
     const run = repository.getTagRun(account, key);
@@ -371,8 +371,8 @@ test('同一轮同标签 samples 最多加一且重复 observe 证据均保留',
       account,
       sessionId: key,
       userId: null,
-      text: '爱聊游戏',
-      norm: '爱聊游戏',
+      text: '聊游戏',
+      norm: '聊游戏',
       category: 'misc',
       subject: null,
       polarity: null,
@@ -391,8 +391,8 @@ test('同一轮同标签 samples 最多加一且重复 observe 证据均保留',
       account,
       sessionId: key,
       userId: null,
-      text: '爱看电影',
-      norm: '爱看电影',
+      text: '看电影',
+      norm: '看电影',
       category: 'misc',
       subject: null,
       polarity: null,

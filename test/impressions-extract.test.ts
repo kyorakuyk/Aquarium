@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildExtractMessages, asContradictItem, asNewItem, runExtract } from '../src/core/impressions/extract.ts';
 import { promptTemplateStore } from '../src/core/prompt/templates.ts';
+import { isTagCategoryForScope, prepareTagText } from '../src/core/impressions/tag-model.ts';
 
 const profile = {
   category: 'identity',
@@ -18,6 +19,14 @@ test('new 与 contradict 条目要求合法画像字段', () => {
   assert.equal(asNewItem({ text: '夜猫子', messageId: 'm1', ...profile, category: 'schedule' }), undefined);
   assert.equal(asNewItem({ text: 'INTJ', messageId: 'm1', ...profile, sensitive: 1 }), undefined);
   assert.equal(asNewItem({ text: 'INTJ', messageId: 'm1' }), undefined);
+  assert.deepEqual(asNewItem({
+    text: 'CS2', messageId: 'm1', ...profile, category: 'topic', subject: '游戏/FPS',
+  }), {
+    text: 'CS2', messageId: 'm1', ...profile, category: 'topic', subject: '游戏/FPS',
+  });
+  assert.equal(asNewItem({
+    text: 'CS2', messageId: 'm1', ...profile, category: 'topic', subject: '游戏/FPS/CS2',
+  }), undefined);
 
   const contradicted = asContradictItem({
     id: 4,
@@ -41,6 +50,40 @@ test('new 与 contradict 条目要求合法画像字段', () => {
   });
 });
 
+test('标签写法校验去前缀、拒绝近况习惯和作息词，并要求梗语为证据原话', () => {
+  assert.deepEqual(prepareTagText('personality', '喜欢游戏', []), { ok: true, text: '游戏' });
+  assert.deepEqual(prepareTagText('personality', '爱   ', []), { ok: false, reason: 'invalid_text' });
+  assert.deepEqual(prepareTagText('recent', '经常搬家', []), { ok: false, reason: 'recent_habit' });
+  assert.deepEqual(prepareTagText('personality', '熬夜玩家', []), {
+    ok: false,
+    reason: 'schedule_by_stats',
+  });
+  assert.deepEqual(prepareTagText('meme', '今晚不聊政治', ['大家都说今晚不聊政治']), {
+    ok: true,
+    text: '今晚不聊政治',
+  });
+  assert.deepEqual(prepareTagText('meme', '0123456789ab', ['引文：0123456789ab']), {
+    ok: true,
+    text: '0123456789ab',
+  });
+  assert.deepEqual(prepareTagText('catchphrase', '0123456789abc', ['引文：0123456789abc']), {
+    ok: false,
+    reason: 'invalid_text',
+  });
+  assert.deepEqual(prepareTagText('catchphrase', '今天记得早点回家', []), {
+    ok: false,
+    reason: 'quote_missing',
+  });
+  assert.deepEqual(prepareTagText('personality', '123456789', []), {
+    ok: false,
+    reason: 'invalid_text',
+  });
+  assert.equal(isTagCategoryForScope('positioning', 'group'), true);
+  assert.equal(isTagCategoryForScope('positioning', 'member'), false);
+  assert.equal(isTagCategoryForScope('catchphrase', 'member'), true);
+  assert.equal(isTagCategoryForScope('catchphrase', 'group'), false);
+});
+
 test('runExtract returns model errors for the caller instead of discarding them', async () => {
   const error = Object.assign(new Error('synthetic timeout'), { name: 'APIConnectionTimeoutError' });
   const result = await runExtract([], { group: [], members: [] }, promptTemplateStore.get().extractTags, async () => {
@@ -52,7 +95,8 @@ test('runExtract returns model errors for the caller instead of discarding them'
 test('提取上下文包含现有 tag_subjects canonical names 与 aliases', () => {
   const template = promptTemplateStore.get().extractTags;
   assert.ok(template.system.includes('schedule 只由本地统计或主人手动生成'));
-  assert.ok(template.system.includes('atmosphere 只能作为 group 标签'));
+  assert.ok(template.system.includes('group 可用 positioning、topic、atmosphere、meme、norms、recent'));
+  assert.ok(template.system.includes('member 可用 identity、personality、fandom、speech、catchphrase'));
   const messages = buildExtractMessages([{
     sessionId: '7:group:8',
     messageId: 'm1',

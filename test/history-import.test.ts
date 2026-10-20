@@ -77,7 +77,7 @@ test('history windows extract the supplied records without touching newer contex
               new: [{
                 text: '旧窗标签',
                 messageId: 'window-old',
-                category: 'personality',
+                category: 'topic',
                 subject: null,
                 polarity: null,
                 origin: 'inferred',

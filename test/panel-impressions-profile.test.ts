@@ -3,6 +3,7 @@ import test from 'node:test';
 import { sessionId } from '../src/core/shared/events.ts';
 import { buildMemberTagPrompt } from '../src/core/impressions/member-tags.ts';
 import { promptTemplateStore } from '../src/core/prompt/templates.ts';
+import { createTagSubjectRepository } from '../src/store/tag-subject-repo.ts';
 import { account, authHeaders, groupSession, now, withPanel } from './panel-test-helpers.ts';
 
 function jsonHeaders(): HeadersInit {
@@ -127,5 +128,45 @@ test('标签 API 接受成分层级，并可加锁与解锁', async () => {
     assert.equal(unlock.status, 200);
     assert.equal((await unlock.json() as { locked: boolean }).locked, false);
     assert.equal(repository.tagById(created.id)?.locked, false);
+  });
+});
+
+test('标签 API 按 v2 scope 校验，并逐级归一 topic subject 别名', async () => {
+  await withPanel(async ({ app, database, repository }) => {
+    const key = sessionId(groupSession);
+    const subjects = createTagSubjectRepository(database);
+    subjects.saveTagSubject({ account, category: 'topic', name: '游戏', aliases: ['玩法'] });
+    subjects.saveTagSubject({ account, category: 'topic', name: '射击', aliases: ['FPS'] });
+
+    const groupTopic = await app.request('/api/tags', {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        sessionId: key,
+        userId: null,
+        text: 'CS2',
+        category: 'topic',
+        subject: '玩法/FPS',
+      }),
+    });
+    assert.equal(groupTopic.status, 200, await groupTopic.clone().text());
+    const created = await groupTopic.json() as { id: number; subject: string | null };
+    assert.equal(created.subject, '游戏/射击');
+    assert.equal(repository.tagById(created.id)?.subject, '游戏/射击');
+
+    const oneLevelFandom = await app.request('/api/tags', {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ sessionId: key, userId: 42, text: 'CS2', category: 'fandom', subject: null, polarity: null }),
+    });
+    assert.equal(oneLevelFandom.status, 200);
+    assert.equal((await oneLevelFandom.json() as { subject: string | null }).subject, null);
+
+    const invalidMemberPositioning = await app.request('/api/tags', {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ sessionId: key, userId: 42, text: '交友', category: 'positioning' }),
+    });
+    assert.equal(invalidMemberPositioning.status, 400);
   });
 });

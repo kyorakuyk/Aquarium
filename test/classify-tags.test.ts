@@ -50,9 +50,9 @@ function responseFor(
   classify: (id: number, index: number) => Record<string, unknown>,
 ) {
   const userText = String(messages.find((message) => message.role === 'user')?.content ?? '');
-  const batch = JSON.parse(userText.trim().split('\n').at(-1) ?? '[]') as Array<{ id: number }>;
+  const batch = JSON.parse(userText.trim().split('\n').at(-1) ?? '[]') as Array<{ id: number; text: string }>;
   return {
-    text: JSON.stringify({ items: batch.map(({ id }, index) => classify(id, index)) }),
+    text: JSON.stringify({ items: batch.map(({ id, text }, index) => ({ id, text, ...classify(id, index) })) }),
     provider: 'fake',
     model: 'fake-model',
     usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
@@ -261,6 +261,53 @@ test('预算超限后保留未完成状态，后续启动续跑且锁定 misc �
     await completedService.idle();
     assert.equal(calls.length, 0);
     assert.equal(completedService.status().state, 'completed');
+  } finally {
+    database.close();
+  }
+});
+
+test('startup 处理迁移标记的旧群标签，采用短名词并清除待整理标记', async () => {
+  const database = openDatabase(':memory:');
+  try {
+    const repository = createRepository(database);
+    const classifications = createTagClassificationRepository(database);
+    const id = insertTag(repository, {
+      userId: null,
+      text: '爱游戏',
+      norm: '爱游戏',
+      category: 'atmosphere',
+      evidence: [{ messageId: 'old-group-tag', time: at - 1_000, quote: '大家爱游戏' }],
+    });
+    database.prepare('UPDATE tags SET needs_reclassification = 1 WHERE id = ?').run(id);
+    classifications.markLegacyMiscClassificationComplete(at);
+    const service = createTagClassificationService({
+      repository,
+      classificationRepository: classifications,
+      getConfig: () => configWithBudget(1),
+      getTemplate: () => promptTemplateStore.get().classifyTags,
+      now: () => at,
+      callModel: async (_slot, messages) => responseFor(messages, (tagId) => ({
+        id: tagId,
+        text: '游戏',
+        category: 'positioning',
+        subject: null,
+        polarity: null,
+        mergeInto: null,
+      })),
+    });
+
+    service.startOnStartup();
+    await service.idle();
+
+    const tag = repository.tagById(id);
+    const marker = database.prepare('SELECT needs_reclassification FROM tags WHERE id = ?').get(id) as {
+      needs_reclassification: number;
+    };
+    assert.equal(service.status().state, 'completed');
+    assert.equal(tag?.category, 'positioning');
+    assert.equal(tag?.text, '游戏');
+    assert.equal(tag?.norm, '游戏');
+    assert.equal(marker.needs_reclassification, 0);
   } finally {
     database.close();
   }
