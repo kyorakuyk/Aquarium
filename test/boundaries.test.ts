@@ -67,3 +67,19 @@ test('只豁免既有 T0 ping spike 的 SDK 导入', (t) => {
   assert.equal(result.status, 1, output || result.error?.message);
   assert.match(output, /src\/spike\/another\.ts.*@snowluma\/sdk/);
 });
+
+test('store 只允许依赖 core 的 tag-model 模块', (t) => {
+  const allowedRoot = createFixture(t);
+  writeSource(allowedRoot, 'src/store/tag-repo.ts', "import { isTagCategory } from '../core/impressions/tag-model.ts';\n");
+  writeSource(allowedRoot, 'src/core/impressions/tag-model.ts', 'export function isTagCategory(): void {}\n');
+  const allowed = runChecker(allowedRoot);
+  assert.equal(allowed.status, 0, allowed.stderr || allowed.stdout || allowed.error?.message);
+
+  const forbiddenRoot = createFixture(t);
+  writeSource(forbiddenRoot, 'src/store/tag-repo.ts', "import { tagActivation } from '../core/impressions/tags.ts';\n");
+  writeSource(forbiddenRoot, 'src/core/impressions/tags.ts', 'export function tagActivation(): void {}\n');
+  const forbidden = runChecker(forbiddenRoot);
+  const output = `${forbidden.stdout}\n${forbidden.stderr}`;
+  assert.equal(forbidden.status, 1, output || forbidden.error?.message);
+  assert.match(output, /store\/tag-repo\.ts.*core\/impressions\/tags\.ts/);
+});

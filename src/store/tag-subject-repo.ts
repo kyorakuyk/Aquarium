@@ -4,7 +4,7 @@ import {
   isTagCategory,
   normalizeTagSubject,
   type TagCategory,
-} from './tag-profile.ts';
+} from '../core/impressions/tag-model.ts';
 
 export interface TagSubjectRecord {
   id: number;

@@ -6,8 +6,8 @@ import type { PipelineModelCall } from '../steps/types.ts';
 import type { ClassifyTagsPromptTemplate } from '../prompt-templates.ts';
 import type { StoreRepository } from '../../store/repository.ts';
 import type { StoredTag } from '../../store/tag-repo.ts';
-import { isTagCategoryKey, isTagPolarity, normalizeTagSubject } from '../../store/tag-profile.ts';
-import type { TagCategoryKey, TagPolarity } from '../../store/tag-profile.ts';
+import { isTagCategoryKey, isTagPolarity, normalizeTagSubject } from './tag-model.ts';
+import type { TagCategoryKey, TagPolarity } from './tag-model.ts';
 import type { TagClassificationProfile, TagClassificationRepository } from '../../store/tag-classification-repo.ts';
 
 export const TAG_CLASSIFICATION_BATCH_SIZE = 50;

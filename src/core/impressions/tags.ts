@@ -1,5 +1,5 @@
 import type { StoredTag, TagEvidence, TagStatus } from '../../store/affect-repo.ts';
-import { TAG_CATEGORY_HALF_LIFE_MS } from '../../store/tag-profile.ts';
+import { TAG_CATEGORY_HALF_LIFE_MS } from './tag-model.ts';
 
 export const EVIDENCE_MAX = 5;
 

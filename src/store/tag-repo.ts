@@ -6,7 +6,7 @@ import {
   type TagCategory,
   type TagOrigin,
   type TagPolarity,
-} from './tag-profile.ts';
+} from '../core/impressions/tag-model.ts';
 import { createTagSubjectRepository } from './tag-subject-repo.ts';
 
 export type TagStatus = 'candidate' | 'confirmed' | 'rejected' | 'superseded';

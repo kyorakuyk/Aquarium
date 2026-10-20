@@ -1,5 +1,5 @@
 import type { StoredTag } from '../../store/affect-repo.ts';
-import type { TagCategory } from '../../store/tag-profile.ts';
+import type { TagCategory } from './tag-model.ts';
 import { ACTIVATION_MIN, MEMBER_TAGS_LIMIT, tagActivation } from './tags.ts';
 
 type MemberGroup = 'dislike' | 'personality' | 'fandom' | 'identity' | 'recent' | 'schedule' | 'communication';

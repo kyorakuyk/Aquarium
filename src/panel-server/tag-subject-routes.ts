@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { AquariumConfig } from '../config/schema.ts';
 import { parseSessionId } from '../core/sessions.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
-import { isTagCategory, type TagCategory } from '../store/tag-profile.ts';
+import { isTagCategory, type TagCategory } from '../core/impressions/tag-model.ts';
 import type { TagSubjectRecord, TagSubjectRepository } from '../store/tag-subject-repo.ts';
 
 const subjectWriteSchema = z.object({

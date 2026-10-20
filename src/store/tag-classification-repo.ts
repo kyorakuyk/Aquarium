@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { createTagQueries } from './tag-repo.ts';
 import type { StoredTag, TagEvidence } from './tag-repo.ts';
 import { createTagSubjectRepository } from './tag-subject-repo.ts';
-import type { TagCategoryKey, TagPolarity } from './tag-profile.ts';
+import type { TagCategoryKey, TagPolarity } from '../core/impressions/tag-model.ts';
 
 export interface TagClassificationProfile {
   category: TagCategoryKey;

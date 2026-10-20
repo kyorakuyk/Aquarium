@@ -16,7 +16,7 @@ import type { MoodBand, StoredMoodEvent, StoredTag } from '../store/affect-repo.
 import type { StoreRepository } from '../store/repository.ts';
 import type { PanelAccountRuntime } from './types.ts';
 import type { HistoryImportService } from '../core/impressions/history-import.ts';
-import { TAG_CATEGORY_KEYS } from '../store/tag-profile.ts';
+import { TAG_CATEGORY_KEYS } from '../core/impressions/tag-model.ts';
 
 export interface AffectRouteOptions {
   getConfig: () => AquariumConfig;

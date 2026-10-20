@@ -141,6 +141,7 @@ function checkImport(file, relativeFile, specifier) {
   const issues = [];
   const normalizedFile = relativeFile.split(path.sep).join('/');
   const fromCore = isWithin(normalizedFile, 'core');
+  const fromStore = isWithin(normalizedFile, 'store');
   const fromOnebot = isWithin(normalizedFile, 'adapters/onebot');
   const source = sourceTarget(file, specifier);
   const sdkImport = specifier === '@snowluma/sdk' || specifier.startsWith('@snowluma/sdk/');
@@ -168,6 +169,10 @@ function checkImport(file, relativeFile, specifier) {
         issues.push('core 只能依赖自身、adapters/types、config、llm、store 与 persona');
       }
     }
+  }
+
+  if (fromStore && source && isWithin(source, 'core') && source !== 'core/impressions/tag-model.ts') {
+    issues.push('store 只能依赖 core/impressions/tag-model.ts');
   }
 
   if (isWithin(normalizedFile, 'host') && source && isWithin(source, 'core')) {

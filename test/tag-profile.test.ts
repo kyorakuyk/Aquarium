@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
 import { createTagSubjectRepository } from '../src/store/tag-subject-repo.ts';
-import { canonicalizeTagSubject, normalizeTagSubject } from '../src/store/tag-profile.ts';
+import { canonicalizeTagSubject, normalizeTagSubject } from '../src/core/impressions/tag-model.ts';
 
 const legacyTagColumns = [
   'id', 'account', 'session_id', 'user_id', 'text', 'norm', 'status', 'source',
