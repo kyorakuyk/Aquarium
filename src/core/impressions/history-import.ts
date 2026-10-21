@@ -112,9 +112,11 @@ export function createHistoryImportService(options: HistoryImportServiceOptions)
 
   function preparePreview(job: HistoryImportJob, runtime: HistoryImportRuntime): void {
     const times = [...runtime.imported.values()];
-    const allRecords = times.length === 0
-      ? []
-      : options.repository.messagesInRange(job.sessionId, Math.min(...times), Math.max(...times));
+    const allRecords = job.mode === 'full'
+      ? options.repository.messagesInRange(job.sessionId, Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
+      : times.length === 0
+        ? []
+        : options.repository.messagesInRange(job.sessionId, Math.min(...times), Math.max(...times));
     const tagRun = options.repository.getTagRun(runtime.session.account, job.sessionId);
     const waterline = tagRun?.lastMessageTime ?? null;
     runtime.previewWaterline = waterline;
@@ -178,7 +180,10 @@ export function createHistoryImportService(options: HistoryImportServiceOptions)
         }
         job.fetched = runtime.imported.size;
         if (newMessages.length > 0) beforeMessageId = newMessages[0]?.messageId;
-        if (job.cancelRequested || containsStoredMessage || newMessages.length < 2 || job.fetched >= runtime.target) break;
+        if (job.cancelRequested
+          || (job.mode === 'incremental' && containsStoredMessage)
+          || newMessages.length < 2
+          || job.fetched >= runtime.target) break;
         await wait(PAGE_DELAY_MS);
       }
 

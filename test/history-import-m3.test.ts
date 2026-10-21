@@ -45,8 +45,10 @@ function saveMessage(repository: StoreRepository, input: IncomingMessage): void 
 
 class PagedAdapter extends FakeAdapter {
   historyPages: IncomingMessage[][] = [];
+  historyCalls = 0;
 
   override async history(_session: SessionKey, _request: number | HistoryOptions): Promise<IncomingMessage[]> {
+    this.historyCalls += 1;
     return this.historyPages.shift() ?? [];
   }
 }
@@ -199,6 +201,77 @@ test('full mode reprocesses the fetched range even when every message is at or b
     assert.equal(imports.get(started.id)?.phase, 'done');
     assert.equal(calls.count, 1);
     assert.equal(repository.getTagRun(groupSession.account, sessionKey)?.lastMessageTime, newest.time);
+  });
+});
+
+test('full mode continues after a stored first page and previews all local session messages', async () => {
+  await withRepository(async (repository) => {
+    const config = makeConfig({ nicknames: [] });
+    const messages = Array.from({ length: 60 }, (_, index) => message(index));
+    const localOnly = Array.from({ length: 30 }, (_, index) => message(index - 30));
+    const sessionKey = sessionId(groupSession);
+    for (const stored of localOnly) saveMessage(repository, stored);
+    for (const stored of messages.slice(30)) saveMessage(repository, stored);
+    for (const [index, costCny] of [0.01, 0.02, 0.03].entries()) {
+      repository.recordUsage({
+        time: index + 1,
+        account: groupSession.account,
+        slot: 'extract',
+        provider: 'fixture',
+        model: 'fixture-model',
+        inputTokens: 1,
+        cachedTokens: 0,
+        outputTokens: 1,
+        costCny,
+        latencyMs: 1,
+        ok: true,
+      });
+    }
+
+    const adapter = new PagedAdapter();
+    adapter.historyPages = [messages.slice(30), messages.slice(0, 30), []];
+    const prompts: string[] = [];
+    const impressions = createImpressionsService({
+      repository,
+      getConfig: () => config,
+      callModel: async (_slot, messagesForPrompt) => {
+        prompts.push(messagesForPrompt.map(({ content }) => String(content)).join('\n'));
+        return {
+          text: '{"group":{"observe":[],"new":[],"contradict":[]},"members":[]}',
+          provider: 'fixture',
+          model: 'fixture-model',
+          usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+        };
+      },
+    });
+    const imports = createHistoryImportService({
+      repository,
+      getConfig: () => config,
+      impressionsService: impressions,
+      getTemplate: () => template,
+      wait: async () => {},
+    });
+
+    const started = imports.start({ session: groupSession, target: 200, adapter, mode: 'full' });
+    assert.ok(started);
+    await imports.idle();
+
+    assert.equal(adapter.historyCalls, 3);
+    assert.equal(imports.get(started.id)?.fetched, 60);
+    assert.equal(imports.get(started.id)?.newMessages, 90);
+    assert.equal(imports.get(started.id)?.windowsTotal, 2);
+    assert.equal(imports.get(started.id)?.estimatedCostCny, 0.04);
+    assert.equal(imports.get(started.id)?.phase, 'awaiting_confirmation');
+    assert.ok(imports.confirm(started.id));
+    await imports.idle();
+
+    assert.equal(imports.get(started.id)?.phase, 'done');
+    assert.equal(imports.get(started.id)?.windowsDone, 2);
+    const prompt = prompts.join('\n');
+    assert.ok(prompt.includes('#m3--30'));
+    assert.ok(prompt.includes('#m3-000'));
+    assert.ok(prompt.includes('#m3-059'));
+    assert.equal(repository.getTagRun(groupSession.account, sessionKey)?.lastMessageTime, messages[59]?.time);
   });
 });
 

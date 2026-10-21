@@ -383,7 +383,7 @@ export function ImpressionsPage() {
           {historyJob.cancelRequested ? '；取消将在当前页完成后生效。' : '。'}
         </p>}
         {historyJob?.phase === 'awaiting_confirmation' && <p className="history-import-status" role="status">
-          新消息 {historyJob.newMessages.toLocaleString('zh-CN')} 条，预计花费 <strong>{historyJob.estimatedCostCny === undefined ? '—' : `¥${historyJob.estimatedCostCny.toFixed(2)}`}</strong>。
+          {historyJob.mode === 'full' ? '待整理' : '新消息'} {historyJob.newMessages.toLocaleString('zh-CN')} 条，预计花费 <strong>{historyJob.estimatedCostCny === undefined ? '—' : `¥${historyJob.estimatedCostCny.toFixed(2)}`}</strong>。
           {historyJob.previewChanged ? '整理水位已变化，预估已更新，请再次确认。' : '确认后才会开始提取。'}
         </p>}
         {historyJob?.phase === 'extracting' && <p className="history-import-status" aria-live="polite">
