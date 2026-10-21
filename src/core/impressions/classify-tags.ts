@@ -66,10 +66,11 @@ export function buildClassifyTagsMessages(
   const visible = tags
     .filter((tag) => tag.category !== 'schedule' && !tag.locked && tag.status !== 'superseded')
     .slice(0, TAG_CLASSIFICATION_BATCH_SIZE)
-    .map(({ id, text, norm, status, evidence }) => ({
+    .map(({ id, text, norm, category, status, evidence }) => ({
       id,
       text,
       norm,
+      category,
       status,
       evidence: evidence.filter((item) => item.kind !== 'signature').map(({ quote }) => quote),
     }));
@@ -156,6 +157,12 @@ function sameOutputSet(items: ClassifyTagsItem[], tags: StoredTag[]): boolean {
     && expected.size === actual.size && [...actual].every((id) => expected.has(id));
 }
 
+function quotedSpeechPhrase(text: string): string | undefined {
+  const match = /^(?:「([^「」]+)」|“([^“”]+)”)$/u.exec(text.trim());
+  const phrase = match?.[1] ?? match?.[2];
+  return phrase?.trim() || undefined;
+}
+
 export function createTagClassificationService(options: TagClassificationServiceOptions): TagClassificationService {
   const now = options.now ?? Date.now;
   const callModel = options.callModel ?? callSlot;
@@ -230,6 +237,32 @@ export function createTagClassificationService(options: TagClassificationService
 
     const scopes = new Map<string, { scope: 'group' | 'member'; tags: StoredTag[] }>();
     for (const tag of initial) {
+      const phrase = tag.category === 'speech' && (tag.status === 'candidate' || tag.status === 'confirmed')
+        ? quotedSpeechPhrase(tag.text)
+        : undefined;
+      if (phrase !== undefined) {
+        const evidenceTexts = tag.evidence
+          .filter((evidence) => evidence.kind !== 'signature')
+          .map(({ quote }) => quote);
+        const prepared = prepareTagText('catchphrase', phrase, evidenceTexts);
+        if (prepared.ok) {
+          const profile: TagClassificationProfile = {
+            category: 'catchphrase',
+            subject: null,
+            polarity: null,
+            text: prepared.text,
+            norm: normalizeTagText(prepared.text),
+          };
+          if (classifySingle(tag.id, profile, now())) {
+            current = { ...current, processed: current.processed + 1 };
+          }
+        } else {
+          options.repository.updateTag(tag.id, { status: 'rejected', updatedAt: now() });
+          options.classificationRepository.markTagReclassified(tag.id);
+          current = { ...current, processed: current.processed + 1 };
+        }
+        continue;
+      }
       const scope = tag.userId === null ? 'group' : 'member';
       const key = JSON.stringify([tag.account, tag.sessionId, tag.userId]);
       const group = scopes.get(key) ?? { scope, tags: [] };

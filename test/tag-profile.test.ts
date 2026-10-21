@@ -20,7 +20,7 @@ const legacyTagColumns = [
   'samples', 'evidence_json', 'first_seen', 'last_seen', 'superseded_by', 'updated_at',
 ];
 
-test('v11 数据库升级到 v19 时保留画像字段默认值并标记旧群标签', () => {
+test('v11 数据库升级到 v20 时保留画像字段默认值并标记旧群标签', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-tag-profile-'));
   const databasePath = path.join(root, 'aquarium.db');
   let legacy: DatabaseSync | undefined;
@@ -62,7 +62,7 @@ test('v11 数据库升级到 v19 时保留画像字段默认值并标记旧群�
     const tag = upgraded.prepare('SELECT * FROM tags WHERE id = 1').get() as Record<string, unknown>;
     const subjects = upgraded.prepare("PRAGMA table_info('tag_subjects')").all() as Array<{ name: string }>;
 
-    assert.equal(version.version, 19);
+    assert.equal(version.version, 20);
     assert.deepEqual(columns.map((column) => column.name), [
       ...legacyTagColumns, 'category', 'subject', 'polarity', 'origin', 'locked', 'needs_reclassification',
     ]);

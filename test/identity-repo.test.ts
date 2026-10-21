@@ -39,13 +39,13 @@ function tag(input: {
   };
 }
 
-test('v19 creates account kinds and directed, lockable relationships', () => {
+test('v19 identity tables remain available in schema v20', () => {
   const database = openDatabase(':memory:');
   try {
     const version = database.prepare('SELECT version FROM schema_version WHERE id = 1').get() as { version: number };
     const kinds = database.prepare("PRAGMA table_info('account_kinds')").all() as Array<{ name: string }>;
     const relations = database.prepare("PRAGMA table_info('relations')").all() as Array<{ name: string }>;
-    assert.equal(version.version, 19);
+    assert.equal(version.version, 20);
     assert.deepEqual(kinds.map(({ name }) => name), ['account', 'user_id', 'kind', 'created_at']);
     assert.deepEqual(relations.map(({ name }) => name), [
       'id', 'account', 'a_user_id', 'b_user_id', 'type', 'label', 'locked', 'created_at',

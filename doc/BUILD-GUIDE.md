@@ -1,6 +1,6 @@
-# Aquarium 施工导读：从骨架到 Impressions V4 M5
+# Aquarium 施工导读：从骨架到 Impressions V4 M6
 
-> 本文是随代码一起更新的学习材料。目标不是让你记住所有 API，而是让你能回答：程序分成哪些部分、每一层负责什么、为什么选这些库，以及每个任务怎样验证。前文记录 T0–T6、阶段 B 的 R1–R9、阶段 C/D、M2-A A1–A6 和 §9.0 U1–U4；§15 补充 2026-10-20 的 V18f 图片认知和 §13 P1–P6 隐私记忆；§16 补充 2026-10-21 的 S1–S4、K1–K3 与 Impressions V4 M1–M5。M6–M8 和 R9 尚未在本节覆盖。真实 SnowLuma/QQ、模型、Windows GUI 与用户验收仍按各自清单执行。
+> 本文是随代码一起更新的学习材料。目标不是让你记住所有 API，而是让你能回答：程序分成哪些部分、每一层负责什么、为什么选这些库，以及每个任务怎样验证。前文记录 T0–T6、阶段 B 的 R1–R9、阶段 C/D、M2-A A1–A6 和 §9.0 U1–U4；§15 补充 2026-10-20 的 V18f 图片认知和 §13 P1–P6 隐私记忆；§16 补充 2026-10-21 的 S1–S4、K1–K3 与 Impressions V4 M1–M6。M7–M8 和 R9 尚未在本节覆盖。真实 SnowLuma/QQ、模型、Windows GUI 与用户验收仍按各自清单执行。
 >
 > 自动化测试和生产构建不等于真实运行验收。夜间运行不会替代真实 SnowLuma/QQ、模型、Windows GUI 或控制台体验确认。
 
@@ -454,11 +454,11 @@ M2 不是另起一套聊天管线，而是在现有 pipeline 上增加可配置�
 
 ## 16. Impressions V4：结构整理、提示词前缀与标签分类 v2（2026-10-21）
 
-本节补充 §16 夜间任务中已完成的 S1–S4、K1–K3 和 M1–M5。各任务的细项与停止点以 `doc/plans/PLAN.md` §16 为准；这里记录新目录的职责和关键设计，方便从当前代码继续阅读。
+本节补充 §16 夜间任务中已完成的 S1–S4、K1–K3 和 M1–M6。各任务的细项与停止点以 `doc/plans/PLAN.md` §16 为准；这里记录新目录的职责和关键设计，方便从当前代码继续阅读。
 
 ### 16.1 S1–S4：迁移与 core 的职责边界
 
-- `src/store/db.ts` 负责打开数据库并按版本顺序执行迁移；每个版本的 SQL 变更在 `src/store/migrations/v01.ts` 至 `v19.ts` 中独立审查。新增 schema 时追加迁移，不改写已发布版本；迁移测试也验证版本连续、旧数据保留和重复打开的幂等性。
+- `src/store/db.ts` 负责打开数据库并按版本顺序执行迁移；每个版本的 SQL 变更在 `src/store/migrations/v01.ts` 至 `v20.ts` 中独立审查。新增 schema 时追加迁移，不改写已发布版本；迁移测试也验证版本连续、旧数据保留和重复打开的幂等性。
 - `StoreRepository` 的接口与存储 DTO 位于 `src/store/repository-types.ts`，由 `src/store/repository.ts` 继续 re-export；实现文件聚焦查询组合和读写逻辑，避免契约堆叠继续扩大。
 - 标签分类、适用范围、半衰期、subject 路径等纯规则位于 `src/core/impressions/tag-model.ts`，不依赖 SQLite。为避免 `store` 与 `core` 互相耦合，边界检查只给 `store` 到该纯模型模块开了一个明确白名单。
 - 出没统计归 `src/core/profiles/presence.ts`，统计作息标签的协调归 `presence-service.ts`；`src/core/conversation/`、`shared/`、`prompt/` 等目录按职责组织会话、共同类型和提示词能力。
@@ -509,4 +509,12 @@ M3 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **69
 - `src/core/profiles/account-identity.ts` 把映射放在读取/提示层：消息仍按原始 `sender_id` 落库；组装聊天上下文、历史印象提取、好感度和出没统计时才查找当前主号。名称优先采用当前/历史发言名，名称缺失或只是数字 ID 时再从按群缓存的群名片、昵称回退。好感事件、memberTags 和作息汇总统一使用主号 ID。
 - bot gate 在消息持久化之后跳过回复并记录 `from_bot`；应用路由还会绕过先于 pipeline 的管理命令短路，让 bot 发来的管理样式消息也进入该 gate。memberTags 中 bot 的姓名以 JSON 引号包裹并加“（bot）”，不能用名称伪造身份标记。
 - 关系只由人手动建立，`prompts/extract-tags.md` 明确禁止模型输出或推测人际关系。`relationPromptLines` 从双方视角生成未锁定关系；锁定后立即不注入，并将提示限制为最多 5 行、180 个 Unicode 字符。身份 API 限定到当前账号和群，写后 read-back；“身份与关系”面板支持手动 kind、QQ 机器人建议、搜索本群成员/好友、直接输入 QQ 号、建立关系、锁定/恢复注入和解除链接。自定义关系名称仍经过敏感文本检查。
-- M5 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **717/717** 项测试；`npm run panel:build` 成功（**152** 个模块），当前主 bundle 为 **544.77 kB**，仍高于默认 500 kB 提示线。定向测试覆盖 bot gate 与管理命令旁路、小号消息和活动/好感映射、建链时标签与证据合并、解除后不回拆、双向关系及锁定不注入、手工 kind 和面板 API read-back。未启动真实 QQ、模型、服务或 GUI；M6–M8、R9 及真实体验验收仍待完成。
+- M5 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **717/717** 项测试；`npm run panel:build` 成功（**152** 个模块），当前主 bundle 为 **544.77 kB**，仍高于默认 500 kB 提示线。定向测试覆盖 bot gate 与管理命令旁路、小号消息和活动/好感映射、建链时标签与证据合并、解除后不回拆、双向关系及锁定不注入、手工 kind 和面板 API read-back。未启动真实 QQ、模型、服务或 GUI；R9 后用户执行 §16.4 体验清单。
+
+### 16.9 M6：口头禅与群梗
+
+- M1 已建立 `catchphrase`（成员）与 `meme`（群）的分类、scope、长度上限和证据校验：文本最多 12 个 Unicode 字符，必须是证据原文的子串；`prepareTagText` 用 `quote_missing` 拒绝证据中找不到的原话，正常提取不会把它写入画像。
+- migration v20 为未锁定、非终态成员 `speech` 标签中被一对 `「」` 或 `“”` 完整包住的旧文本设置 `needs_reclassification`。迁移先确认 `tags` 表和必需列存在，重复打开安全；普通说话风格、锁定标签、已 superseded 标签不被标记。
+- 整理器输入现在包含原始 `category`，因此旧 `speech` 与普通待分类文本可以区分。对于迁移标记的引号说话风格，代码先去掉外层引号并按证据校验：命中证据时直接改成 `catchphrase`，不需要模型猜类别；证据缺失或文本不合法时标为 `rejected`，同时清除重分类标记，避免无证据原话反复进入提示词。其余类别仍沿用现有批次分类器和 M1 校验。
+- 提示词也明确规定：引号包住的旧 `speech` 原话应归到 `catchphrase`，只在证据含有原话时允许输出。成员提示把口头禅排在说话风格之后，格式为 `口头禅「要饭」「饿死了」`；群梗在 `groupTags` 中也以中文引号显示。`test/impressions-writing.test.ts` 从真实 prompt-block builder 验证群梗和多条口头禅格式；`test/classify-tags.test.ts` 验证带证据迁移、缺证据拒绝及不调用模型；`test/store-migrations.test.ts` 验证 v20 的旧标签筛选。
+- M6 没有新增 npm 依赖。收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **720/720** 项测试；未改动 panel，因此本任务未单独重跑 `npm run panel:build`。没有启动真实模型、QQ、SnowLuma、服务或 GUI；M7、M8、R9 与真实体验验收仍待完成。

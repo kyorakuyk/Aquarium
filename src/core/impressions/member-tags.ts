@@ -148,7 +148,12 @@ export function formatMemberTags(tags: readonly StoredTag[]): string {
     (() => {
       const communication = [
         labeledGroup('说话风格', ordered.filter((tag) => tag.category === 'speech')),
-        labeledGroup('口头禅', ordered.filter((tag) => tag.category === 'catchphrase'), ({ text }) => quotedTagText(text)),
+        (() => {
+          const catchphrases = ordered.filter((tag) => tag.category === 'catchphrase');
+          return catchphrases.length > 0
+            ? `口头禅${catchphrases.map(({ text }) => quotedTagText(text)).join('')}`
+            : undefined;
+        })(),
         labeledGroup('社交方式', ordered.filter((tag) => tag.category === 'social')),
       ].filter((group): group is string => group !== undefined);
       return communication.length > 0 ? communication.join('、') : undefined;

@@ -113,6 +113,102 @@ test('分类用途的固定说明先于 scope 和标签数据', () => {
   assert.notEqual(group[1]?.content, member[1]?.content);
 });
 
+test('分类输入保留原标签类别，供口头禅迁移规则读取', () => {
+  const speech = {
+    id: 3,
+    account,
+    sessionId: key,
+    userId: 42,
+    text: '「要饭」',
+    norm: '「要饭」',
+    category: 'speech' as const,
+    subject: null,
+    polarity: null,
+    origin: 'inferred' as const,
+    locked: false,
+    status: 'confirmed' as const,
+    source: 'auto' as const,
+    samples: 1,
+    evidence: [{ messageId: 'speech-quote', time: at, quote: '我又说「要饭」了' }],
+    firstSeen: at,
+    lastSeen: at,
+    supersededBy: null,
+    updatedAt: at,
+  };
+  const messages = buildClassifyTagsMessages([speech], 'member', promptTemplateStore.get().classifyTags);
+
+  assert.ok(String(messages[1]?.content).includes('"category":"speech"'));
+  assert.ok(promptTemplateStore.get().classifyTags.system.includes('speech 且 text 被「」或“”包住'));
+});
+
+test('整理引号说话风格时迁移有证据的口头禅并丢弃无证据原话', async () => {
+  const database = openDatabase(':memory:');
+  try {
+    const repository = createRepository(database);
+    const classifications = createTagClassificationRepository(database);
+    const supportedId = insertTag(repository, {
+      userId: 42,
+      text: '「要饭」',
+      norm: '「要饭」',
+      category: 'speech',
+      status: 'confirmed',
+      evidence: [{ messageId: 'supported-quote', time: at, quote: '我又说「要饭」了' }],
+    });
+    const unsupportedId = insertTag(repository, {
+      userId: 42,
+      text: '“哈哈”',
+      norm: '“哈哈”',
+      category: 'speech',
+      status: 'confirmed',
+      evidence: [{ messageId: 'unsupported-quote', time: at, quote: '今天心情不错' }],
+    });
+    const supportedCurlyId = insertTag(repository, {
+      userId: 42,
+      text: '“开心”',
+      norm: '“开心”',
+      category: 'speech',
+      status: 'confirmed',
+      evidence: [{ messageId: 'supported-curly-quote', time: at, quote: '她说“开心”' }],
+    });
+    database.prepare('UPDATE tags SET needs_reclassification = 1 WHERE id IN (?, ?, ?)')
+      .run(supportedId, unsupportedId, supportedCurlyId);
+    let modelCalls = 0;
+    const service = createTagClassificationService({
+      repository,
+      classificationRepository: classifications,
+      getConfig: () => configWithBudget(1),
+      getTemplate: () => promptTemplateStore.get().classifyTags,
+      now: () => at,
+      callModel: async (_slot, messages) => {
+        modelCalls += 1;
+        return responseFor(messages, (id) => ({
+          id,
+          category: 'speech',
+          subject: null,
+          polarity: null,
+          mergeInto: null,
+        }));
+      },
+    });
+
+    assert.equal(service.startManual(), true);
+    await service.idle();
+
+    assert.equal(service.status().state, 'completed');
+    assert.equal(modelCalls, 0);
+    assert.equal(repository.tagById(supportedId)?.category, 'catchphrase');
+    assert.equal(repository.tagById(supportedId)?.text, '要饭');
+    assert.equal(repository.tagById(supportedCurlyId)?.category, 'catchphrase');
+    assert.equal(repository.tagById(supportedCurlyId)?.text, '开心');
+    assert.equal(repository.tagById(unsupportedId)?.status, 'rejected');
+    const markers = database.prepare('SELECT needs_reclassification FROM tags ORDER BY id')
+      .all() as Array<{ needs_reclassification: number }>;
+    assert.deepEqual(markers.map(({ needs_reclassification }) => needs_reclassification), [0, 0, 0]);
+  } finally {
+    database.close();
+  }
+});
+
 test('分类按 50 条分批、同义标签合并并持久化完成标记', async () => {
   const database = openDatabase(':memory:');
   try {

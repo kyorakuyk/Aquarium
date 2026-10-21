@@ -102,6 +102,28 @@ test('群梗注入提示块时用中文引号标示原话', async () => {
       supersededBy: null,
       updatedAt: now,
     });
+    for (const [userId, text] of [[42, '要饭'], [42, '饿死了']] as const) {
+      repository.insertTag({
+        account: groupSession.account,
+        sessionId: key,
+        userId,
+        text,
+        norm: text,
+        category: 'catchphrase',
+        subject: null,
+        polarity: null,
+        origin: 'inferred',
+        locked: false,
+        status: 'confirmed',
+        source: 'auto',
+        samples: 2,
+        evidence: [],
+        firstSeen: now,
+        lastSeen: now,
+        supersededBy: null,
+        updatedAt: now,
+      });
+    }
     const service = createImpressionsService({
       repository,
       getConfig: () => makeConfig(),
@@ -118,5 +140,6 @@ test('群梗注入提示块时用中文引号标示原话', async () => {
     });
 
     assert.ok(blocks.groupTags?.includes('「今晚不聊政治」'));
+    assert.ok(blocks.memberTags?.includes('口头禅「要饭」「饿死了」'));
   });
 });
