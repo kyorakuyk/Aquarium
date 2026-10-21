@@ -9,6 +9,7 @@ import type {
   ContactGroup,
   CustomFaceActions,
   HistoryOptions,
+  QqProfileActions,
   ProtocolAdapter,
 } from '../types.ts';
 import {
@@ -17,6 +18,7 @@ import {
   toOneBotSegments,
 } from './convert.ts';
 import { createOneBotCustomFaceActions } from './custom-face-actions.ts';
+import { createOneBotQqProfileActions } from './qq-profile-actions.ts';
 import {
   createClient,
   isHistoryMessage,
@@ -75,6 +77,7 @@ interface OneBotAdapterRuntimeOptions {
 export class OneBotAdapter implements ProtocolAdapter {
   readonly account: number;
   readonly customFaces: CustomFaceActions;
+  private readonly qqProfiles: QqProfileActions;
   nickname = '';
 
   private client: OneBotClient;
@@ -137,6 +140,10 @@ export class OneBotAdapter implements ProtocolAdapter {
     };
     this.client = this.clientFactory(this.clientOptions);
     this.customFaces = createOneBotCustomFaceActions(
+      () => this.client,
+      (action, run) => this.withActionTimeout(action, run),
+    );
+    this.qqProfiles = createOneBotQqProfileActions(
       () => this.client,
       (action, run) => this.withActionTimeout(action, run),
     );
@@ -427,6 +434,13 @@ export class OneBotAdapter implements ProtocolAdapter {
       // 日志故障不应让消息发送失败。
     }
   }
+
+  getGroupInfo(groupId: number) { return this.qqProfiles.getGroupInfo(groupId); }
+  getGroupMembers(groupId: number) { return this.qqProfiles.getGroupMembers(groupId); }
+  getGroupHonors(groupId: number) { return this.qqProfiles.getGroupHonors(groupId); }
+  getStrangerInfo(userId: number) { return this.qqProfiles.getStrangerInfo(userId); }
+  getGroupNoticeLatest(groupId: number) { return this.qqProfiles.getGroupNoticeLatest(groupId); }
+  getEssenceCount(groupId: number) { return this.qqProfiles.getEssenceCount(groupId); }
 
   async listGroups(): Promise<ContactGroup[]> {
     this.assertOnline();

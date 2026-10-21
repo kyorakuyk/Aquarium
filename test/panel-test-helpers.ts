@@ -70,6 +70,12 @@ export class FakeAdapter implements ProtocolAdapter {
   async markRead(): Promise<void> {}
   async setTyping(): Promise<void> {}
   async recall(messageId: string): Promise<void> { this.recalled.push(messageId); }
+  async getGroupInfo(): Promise<undefined> { return undefined; }
+  async getGroupMembers(): Promise<undefined> { return undefined; }
+  async getGroupHonors(): Promise<undefined> { return undefined; }
+  async getStrangerInfo(): Promise<undefined> { return undefined; }
+  async getGroupNoticeLatest(): Promise<undefined> { return undefined; }
+  async getEssenceCount(): Promise<undefined> { return undefined; }
 }
 
 export async function withPanel<T>(

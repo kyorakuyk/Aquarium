@@ -38,7 +38,55 @@ export interface CustomFaceActions {
   }): Promise<{ messageId: string }>;
 }
 
-export interface ProtocolAdapter {
+export type QqSex = 'male' | 'female' | 'unknown';
+export type QqGroupRole = 'owner' | 'admin' | 'member';
+export type QqGroupHonorKind = 'dragon_king' | 'performer' | 'legend' | 'emotion' | 'strong_newbie';
+
+export interface QqGroupInfo {
+  groupName?: string;
+  memberCount?: number;
+  maxMemberCount?: number;
+  groupCreateTime?: number;
+  groupLevel?: number;
+  groupDescription?: string;
+}
+
+export interface QqGroupMember {
+  userId: number;
+  nickname?: string;
+  card?: string;
+  role?: QqGroupRole;
+  title?: string;
+  joinTime?: number;
+  lastSentTime?: number;
+  level?: string;
+  sex?: QqSex;
+  age?: number;
+  isRobot?: boolean;
+}
+
+export interface QqGroupHonorHolder {
+  kind: QqGroupHonorKind;
+  userId?: number;
+  nickname?: string;
+}
+
+export interface QqStrangerInfo {
+  longNick?: string;
+  qage?: number;
+  regTime?: number;
+}
+
+export interface QqProfileActions {
+  getGroupInfo(groupId: number): Promise<QqGroupInfo | undefined>;
+  getGroupMembers(groupId: number): Promise<QqGroupMember[] | undefined>;
+  getGroupHonors(groupId: number): Promise<QqGroupHonorHolder[] | undefined>;
+  getStrangerInfo(userId: number): Promise<QqStrangerInfo | undefined>;
+  getGroupNoticeLatest(groupId: number): Promise<string | undefined>;
+  getEssenceCount(groupId: number): Promise<number | undefined>;
+}
+
+export interface ProtocolAdapter extends QqProfileActions {
   readonly account: number;
   connect(): Promise<void>;
   close(): void;

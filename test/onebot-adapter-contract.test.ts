@@ -21,6 +21,12 @@ test('离线时所有公开 OneBot 动作立即 fail fast', async (t) => {
   await assert.rejects(adapter.markRead(session), /not online/u);
   await assert.rejects(adapter.setTyping(session), /not online/u);
   await assert.rejects(adapter.recall('1'), /not online/u);
+  await assert.rejects(adapter.getGroupInfo(session.peer), /not online/u);
+  await assert.rejects(adapter.getGroupMembers(session.peer), /not online/u);
+  await assert.rejects(adapter.getGroupHonors(session.peer), /not online/u);
+  await assert.rejects(adapter.getStrangerInfo(42), /not online/u);
+  await assert.rejects(adapter.getGroupNoticeLatest(session.peer), /not online/u);
+  await assert.rejects(adapter.getEssenceCount(session.peer), /not online/u);
   assert.equal(fake.state.connectCalls, 0);
 });
 
