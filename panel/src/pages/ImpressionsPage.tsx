@@ -15,6 +15,7 @@ import { AffinityPanel } from '../components/AffinityPanel.tsx';
 import { ImpressionsDataMenu } from '../components/ImpressionsDataMenu.tsx';
 import { ImpressionsDetail } from '../components/ImpressionsDetail.tsx';
 import { ImpressionsSidebar } from '../components/ImpressionsSidebar.tsx';
+import { parseAppHash, serializeAppHash } from '../hash-navigation.ts';
 import { buildIdentityTargets } from '../identity-targets.ts';
 import { shouldRefreshHistoryImport } from '../impressions-refresh-model.ts';
 import { useImpressionsBackgroundRefresh } from '../use-impressions-background-refresh.ts';
@@ -37,14 +38,27 @@ function historyFailureLabel(job: HistoryImportJobView): string {
   return '其他错误';
 }
 
+function currentImpressionsRoute() {
+  const route = parseAppHash(window.location.hash);
+  return route?.page === 'impressions' ? route : undefined;
+}
+
+function writeImpressionsHash(sessionId: string, userId: number | undefined, replace: boolean): void {
+  const hash = serializeAppHash({ page: 'impressions', sessionId, ...(userId === undefined ? {} : { userId }) });
+  if (window.location.hash === hash) return;
+  if (replace) window.history.replaceState(window.history.state, '', hash);
+  else window.history.pushState(window.history.state, '', hash);
+}
+
 export function ImpressionsPage() {
   const [groups, setGroups] = useState<SessionView[]>([]);
   const [privateSessions, setPrivateSessions] = useState<SessionView[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState('');
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
+  const [selectedId, setSelectedId] = useState(() => currentImpressionsRoute()?.sessionId ?? '');
   const [tab, setTab] = useState<'groups' | 'people' | 'privacy'>('groups');
   const [view, setView] = useState<ImpressionsView>();
-  const [selectedUserId, setSelectedUserId] = useState<number>();
+  const [selectedUserId, setSelectedUserId] = useState<number | undefined>(() => currentImpressionsRoute()?.userId);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
@@ -66,12 +80,47 @@ export function ImpressionsPage() {
   useEffect(() => {
     void apiRequest<SessionView[]>('/api/sessions').then((rows) => {
       const groupRows = rows.filter((row) => row.kind === 'group');
+      const route = currentImpressionsRoute();
+      const requestedId = route?.sessionId ?? '';
+      const hasRequestedGroup = groupRows.some((group) => group.sessionId === requestedId);
+      const nextId = hasRequestedGroup ? requestedId : groupRows[0]?.sessionId ?? '';
       setGroups(groupRows);
       setPrivateSessions(rows.filter((row) => row.kind === 'private'));
-      setSelectedId((current) => current || groupRows[0]?.sessionId || '');
+      setSessionsLoaded(true);
+      setSelectedId(nextId);
+      if (route) {
+        const nextUserId = hasRequestedGroup ? route.userId : undefined;
+        setSelectedUserId(nextUserId);
+        writeImpressionsHash(nextId, nextUserId, true);
+      } else {
+        setSelectedUserId(undefined);
+      }
     }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : '读取会话失败'))
       .finally(() => setSessionsLoading(false));
   }, []);
+
+  useEffect(() => {
+    const restoreSelection = (): void => {
+      const route = currentImpressionsRoute();
+      if (!route) return;
+      setSelectedId(route.sessionId ?? '');
+      setSelectedUserId(route.userId);
+    };
+    window.addEventListener('hashchange', restoreSelection);
+    window.addEventListener('popstate', restoreSelection);
+    return () => {
+      window.removeEventListener('hashchange', restoreSelection);
+      window.removeEventListener('popstate', restoreSelection);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!sessionsLoaded || groups.some((group) => group.sessionId === selectedId)) return;
+    const fallbackId = groups[0]?.sessionId ?? '';
+    setSelectedId(fallbackId);
+    setSelectedUserId(undefined);
+    writeImpressionsHash(fallbackId, undefined, true);
+  }, [groups, selectedId, sessionsLoaded]);
 
   const load = useCallback(async (sessionId: string): Promise<boolean> => {
     const startedAt = Date.now();
@@ -100,17 +149,12 @@ export function ImpressionsPage() {
     else setView(undefined);
   }, [selectedId, load]);
 
-  useEffect(() => setSelectedUserId(undefined), [selectedId]);
-
   useEffect(() => {
-    if (!view) {
-      setSelectedUserId(undefined);
-      return;
-    }
-    setSelectedUserId((current) => current !== undefined && view.members.some((member) => member.userId === current)
-      ? current
-      : undefined);
-  }, [view]);
+    if (!view || view.sessionId !== selectedId || selectedUserId === undefined
+      || view.members.some((member) => member.userId === selectedUserId)) return;
+    setSelectedUserId(undefined);
+    writeImpressionsHash(selectedId, undefined, true);
+  }, [selectedId, selectedUserId, view]);
 
   useEffect(() => {
     const dialog = historyDialogRef.current;
@@ -218,6 +262,17 @@ export function ImpressionsPage() {
     : view?.sessionId === selectedId ? view.lastMessageTime : null;
   const selectedMember = selectedView?.members.find((member) => member.userId === selectedUserId);
 
+  function selectGroup(sessionId: string): void {
+    setSelectedId(sessionId);
+    setSelectedUserId(undefined);
+    writeImpressionsHash(sessionId, undefined, false);
+  }
+
+  function selectMember(userId: number | undefined): void {
+    setSelectedUserId(userId);
+    if (selectedId) writeImpressionsHash(selectedId, userId, false);
+  }
+
   function openHistoryDialog(): void {
     if (historyImportActive) {
       setHistoryDialogOpen(true);
@@ -309,7 +364,7 @@ export function ImpressionsPage() {
         {tab === 'groups' && <div className="impressions-group-tools">
           <label className="impressions-group-select">
             <span className="visually-hidden">选择群</span>
-            <select value={selectedId} onChange={(event) => setSelectedId(event.currentTarget.value)}>
+            <select value={selectedId} onChange={(event) => selectGroup(event.currentTarget.value)}>
               {groups.length === 0 && <option value="">暂无群聊</option>}
               {groups.map((group) => <option value={group.sessionId} key={group.sessionId}>{group.name} · {group.memberCount === undefined ? '人数未知' : `${group.memberCount} 人`}</option>)}
             </select>
@@ -329,6 +384,7 @@ export function ImpressionsPage() {
             disabled={busy || historyImportActive || !selectedGroup?.name || !selectedView}
             onChanged={async () => {
               setSelectedUserId(undefined);
+              writeImpressionsHash(selectedId, undefined, true);
               return load(selectedId);
             }}
           />}
@@ -345,8 +401,8 @@ export function ImpressionsPage() {
           group={selectedGroup}
           view={selectedView}
           selectedUserId={selectedUserId}
-          onSelectGroup={() => setSelectedUserId(undefined)}
-          onSelectMember={setSelectedUserId}
+          onSelectGroup={() => selectMember(undefined)}
+          onSelectMember={selectMember}
         />
         <ImpressionsDetail
           sessionId={selectedView.sessionId}
