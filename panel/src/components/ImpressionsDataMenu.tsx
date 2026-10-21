@@ -232,7 +232,7 @@ export function ImpressionsDataMenu({ sessionId, groupName, groupTagCount, membe
 
   return <>
     <details className="impressions-data-menu" ref={menuRef}>
-      <summary className="button button-secondary">印象数据</summary>
+      <summary className="button button-secondary">数据管理</summary>
       <div className="impressions-data-menu-items" role="menu">
         <button className="text-button" type="button" role="menuitem" disabled={disabled || busy || !sessionId} onClick={openExport}>导出这个群…</button>
         <button className="text-button" type="button" role="menuitem" disabled={disabled || busy || !sessionId} onClick={openImport}>导入…</button>

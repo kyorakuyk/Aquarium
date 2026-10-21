@@ -539,4 +539,6 @@ M3 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **69
 - F3 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **747/747** 项测试；`npm run panel:build` 成功（**162** 个模块），主 bundle **566.34 kB**，高于默认 500 kB 提示线。面板事件流、当前群状态只读、历史导入终态刷新条件均有离线测试；未启动 `npm start`、真实 QQ、模型或 GUI，V4 实机复测仍由用户执行。
 - V4 验收 F4：应用页面由 `#/overview` 等 hash 路由恢复；页面切换写入浏览器历史，未知路径回到总览。印象页把 `sessionId` / `userId` 放入 hash query，群/成员操作可前进后退；初始化选择使用 replace 清理失效成员，刷新后先校验群列表再恢复有效成员。
 - F4 收尾实测：hash 解析/序列化定向测试 **2/2**；`npm run check` 通过 **749/749** 项，`npm run panel:build` 成功（**163** 个模块），主 bundle **568.66 kB**，仍高于默认 500 kB 提示线。未启动 GUI，刷新与浏览器前进/后退的实机验收仍待用户执行。
+- V4 验收 F5：印象页菜单按钮和已否决标签对话框标题统一为「数据管理」；主菜单将「已否决的标签…」交由子组件打开，子组件不渲染第二个菜单入口（`renderMenu={false}`），当前页面只有一个菜单按钮。导入、导出和初始化结果提示保留「印象数据」措辞。
+- F5 收尾实测：`npm run check` 通过 **749/749** 项，`npm run panel:build` 成功（**163** 个模块），主 bundle **568.66 kB**；`git diff --check` 通过。未启动 GUI，菜单视觉验收仍待用户执行。
 - M8 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **739/739** 项测试；`npm run panel:build` 成功（**158** 个模块），主 bundle **562.23 kB**，仍高于默认 500 kB 提示线；`git diff --check` 通过。未运行 GUI、`npm start`、真实模型、QQ 或 SnowLuma；静态参照页已检查。R9 独立审查已通过，§16.4 用户真实体验验收仍待执行。

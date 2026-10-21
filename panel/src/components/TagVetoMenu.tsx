@@ -79,7 +79,7 @@ export function TagVetoMenu({ sessionId, disabled, openRequest = 0, renderMenu =
 
   return <>
     {renderMenu && <details className="impressions-data-menu">
-      <summary className="button button-secondary">印象数据</summary>
+      <summary className="button button-secondary">数据管理</summary>
       <div className="impressions-data-menu-items" role="menu">
         <button className="text-button" type="button" role="menuitem" disabled={disabled} onClick={() => setDialogOpen(true)}>
           已否决的标签…
@@ -95,7 +95,7 @@ export function TagVetoMenu({ sessionId, disabled, openRequest = 0, renderMenu =
     >
       <header className="tag-vetoes-heading">
         <div>
-          <span className="eyebrow">印象数据</span>
+          <span className="eyebrow">数据管理</span>
           <h2 id="tag-vetoes-title">已否决的标签</h2>
         </div>
         <button className="button button-secondary" type="button" onClick={() => setDialogOpen(false)}>关闭</button>
