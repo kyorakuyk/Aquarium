@@ -1,6 +1,14 @@
 import type { OneBotClient } from './client.ts';
 
 const HEALTH_CHECK_TIMEOUT_MS = 1_000;
+export const ADAPTER_ACTION_TIMEOUT_MS = 10_000;
+export const SEND_ACTION_TIMEOUT_MS = 60_000;
+
+export function timeoutForAction(action: string): number {
+  return action.startsWith('send_') || action === 'add_custom_face' || action.startsWith('upload_')
+    ? SEND_ACTION_TIMEOUT_MS
+    : ADAPTER_ACTION_TIMEOUT_MS;
+}
 
 export class AdapterTimeoutError extends Error {
   constructor(action: string, timeoutMs: number) {
@@ -80,6 +88,10 @@ export function createOneBotActionTimeoutController(options: {
   getClient: () => OneBotClient;
   isOnline: () => boolean;
   isAccountVerified: () => boolean;
+  getLastPacketAt: (client: OneBotClient) => number | undefined;
+  getHeartbeatIntervalMs: () => number;
+  now: () => number;
+  onHealthStatus: (status: { online: boolean; good: boolean }) => void;
   setTimer: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   clearTimer: typeof globalThis.clearTimeout;
   retireClient: (client: OneBotClient) => void;
@@ -93,14 +105,18 @@ export function createOneBotActionTimeoutController(options: {
       if (client !== options.getClient() || !options.isOnline() || !options.isAccountVerified() || !client.isConnected) {
         return false;
       }
+      const lastPacketAt = options.getLastPacketAt(client);
+      if (lastPacketAt === undefined
+        || options.now() - lastPacketAt <= options.getHeartbeatIntervalMs() * 2) {
+        return true;
+      }
       try {
         const status = await client.getStatus({ timeoutMs: HEALTH_CHECK_TIMEOUT_MS });
-        return client === options.getClient()
-          && options.isOnline()
-          && options.isAccountVerified()
-          && client.isConnected
-          && status.online
-          && status.good;
+        if (client !== options.getClient() || !options.isOnline() || !options.isAccountVerified() || !client.isConnected) {
+          return false;
+        }
+        options.onHealthStatus({ online: status.online, good: status.good });
+        return true;
       } catch {
         return false;
       }

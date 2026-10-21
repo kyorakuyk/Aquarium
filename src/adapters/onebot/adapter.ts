@@ -12,13 +12,21 @@ import type {
   QqProfileActions,
   ProtocolAdapter,
 } from '../types.ts';
-import { createOneBotActionTimeoutController, type ActionTimeoutController } from './action-timeout.ts';
+import {
+  ADAPTER_ACTION_TIMEOUT_MS,
+  SEND_ACTION_TIMEOUT_MS,
+  createOneBotActionTimeoutController,
+  timeoutForAction,
+  type ActionTimeoutController,
+} from './action-timeout.ts';
+import { AccountMismatchError, AdapterOfflineError } from './adapter-errors.ts';
 import {
   convertIncomingMessage,
   shouldDispatchMessage,
   toOneBotSegments,
 } from './convert.ts';
 import { createOneBotCustomFaceActions } from './custom-face-actions.ts';
+import { OneBotConnectionHealth } from './connection-health.ts';
 import { createOneBotQqProfileActions } from './qq-profile-actions.ts';
 import {
   createClient,
@@ -39,26 +47,9 @@ interface TextSendRecord {
 
 const INITIAL_RETRY_DELAY_MS = 2_000;
 const MAX_RETRY_DELAY_MS = 30_000;
-const ADAPTER_ACTION_TIMEOUT_MS = 10_000;
-const SEND_ACTION_TIMEOUT_MS = 60_000;
 const QUICK_RECONNECT_WINDOW_MS = 30_000;
 const QUICK_RETRY_DELAY_MS = 1_000;
 const QUICK_CONNECT_TIMEOUT_MS = 3_000;
-
-function timeoutForAction(action: string): number {
-  return action.startsWith('send_') || action === 'add_custom_face' || action.startsWith('upload_')
-    ? SEND_ACTION_TIMEOUT_MS
-    : ADAPTER_ACTION_TIMEOUT_MS;
-}
-
-class AccountMismatchError extends Error {}
-
-class AdapterOfflineError extends Error {
-  constructor(account: number) {
-    super(`OneBot adapter ${account} is not online`);
-    this.name = 'AdapterOfflineError';
-  }
-}
 
 interface OneBotAdapterRuntimeOptions {
   now?: () => number;
@@ -92,6 +83,7 @@ export class OneBotAdapter implements ProtocolAdapter {
   private readonly setRetryTimer: NonNullable<OneBotAdapterRuntimeOptions['setRetryTimer']>;
   private readonly clearRetryTimer: typeof globalThis.clearTimeout;
   private readonly actionTimeoutController: ActionTimeoutController<OneBotClient>;
+  private readonly connectionHealth: OneBotConnectionHealth;
   private status: AdapterStatus = 'offline';
   private connectionInFlight: Promise<void> | undefined;
   private retryAttemptInFlight: Promise<void> | undefined;
@@ -126,6 +118,11 @@ export class OneBotAdapter implements ProtocolAdapter {
     this.setRetryTimer = runtimeOptions.setRetryTimer
       ?? ((callback, delayMs) => globalThis.setTimeout(callback, delayMs));
     this.clearRetryTimer = runtimeOptions.clearRetryTimer ?? globalThis.clearTimeout;
+    this.connectionHealth = new OneBotConnectionHealth({
+      account: this.account,
+      now: this.now,
+      onDebug: this.onDebug,
+    });
     const ws = readWsServer(options.snowlumaDir, options.account);
     this.clientOptions = {
       url: `ws://${ws.host}:${ws.port}${ws.path}`,
@@ -147,6 +144,10 @@ export class OneBotAdapter implements ProtocolAdapter {
       getClient: () => this.client,
       isOnline: () => this.status === 'online',
       isAccountVerified: () => this.accountVerified,
+      getLastPacketAt: (client) => client === this.client ? this.connectionHealth.lastPacketAt : undefined,
+      getHeartbeatIntervalMs: () => this.connectionHealth.intervalMs,
+      now: this.now,
+      onHealthStatus: (health) => this.connectionHealth.recordStatus(health),
       setTimer: this.setActionTimer,
       clearTimer: this.clearActionTimer,
       retireClient: (client) => {
@@ -170,10 +171,15 @@ export class OneBotAdapter implements ProtocolAdapter {
     this.clientUnsubscribers = [
       client.on('open', () => {
         if (client !== this.client) return;
+        this.connectionHealth.opened();
         this.setStatus('connecting');
+      }),
+      client.onEvent((event) => {
+        if (client === this.client) this.connectionHealth.recordPacket(event);
       }),
       client.on('close', () => {
         if (client !== this.client) return;
+        this.connectionHealth.reset();
         this.accountVerified = false;
         this.connectionGeneration += 1;
         this.nickname = '';
@@ -182,6 +188,7 @@ export class OneBotAdapter implements ProtocolAdapter {
       }),
       client.on('error', (error) => {
         if (client !== this.client) return;
+        this.connectionHealth.reset();
         this.accountVerified = false;
         this.setStatus('offline');
         if (this.started && !this.retryAttemptInFlight) this.scheduleRetry();
@@ -197,9 +204,14 @@ export class OneBotAdapter implements ProtocolAdapter {
     ];
   }
 
+  getConnectionHint(): string | undefined {
+    return this.connectionHealth.hint;
+  }
+
   private replaceClient(): void {
     const previous = this.client;
     this.accountVerified = false;
+    this.connectionHealth.reset();
     const replacement = this.clientFactory(this.clientOptions);
     this.clientRequiresReplacement = false;
     if (replacement === previous) return;

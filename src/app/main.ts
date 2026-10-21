@@ -289,6 +289,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     adapter,
     getStatus: () => currentStatus,
     getNickname: () => adapter.nickname || String(adapter.account),
+    getConnectionHint: () => adapter.getConnectionHint(),
   });
   const management = createManagementCommands({
     getConfig: () => configWatcher.getConfig(),

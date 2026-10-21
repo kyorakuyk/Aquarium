@@ -40,6 +40,7 @@ export class FakeAdapter implements ProtocolAdapter {
   historyCalls: Array<{ session: SessionKey; request: number | HistoryOptions }> = [];
   historyError = false;
   historyGate?: Promise<IncomingMessage[]>;
+  connectionHint: string | undefined;
 
   async connect(): Promise<void> {}
   close(): void {}
@@ -167,7 +168,12 @@ export async function withPanel<T>(
     repository,
     tagSubjects,
     memberSummaryRepository,
-    accounts: () => [{ adapter, getStatus: () => adapter.status, getNickname: () => adapter.nickname }],
+    accounts: () => [{
+      adapter,
+      getStatus: () => adapter.status,
+      getNickname: () => adapter.nickname,
+      getConnectionHint: () => adapter.connectionHint,
+    }],
     historyImports,
     impressionsService,
     sleepWakeState,

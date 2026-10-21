@@ -366,6 +366,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
           persona: accountConfig?.persona ?? 'default',
           snowlumaConfigured: Boolean(accountConfig?.snowlumaDir),
           connectionStatus: currentStatus,
+          connectionHint: runtime.getConnectionHint?.() ?? null,
           degraded: !snapshot || snapshot.degraded || currentStatus !== 'online',
           todayReplyCount: options.repository.replyCountTodayForAccount(runtime.adapter.account),
           lastReplyAt: lastReply?.time ?? null,

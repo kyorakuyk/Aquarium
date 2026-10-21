@@ -4,6 +4,7 @@ export interface PanelAccountRuntime {
   adapter: ProtocolAdapter;
   getStatus: () => AdapterStatus;
   getNickname: () => string;
+  getConnectionHint?: () => string | undefined;
 }
 
 export interface ContactSnapshot {

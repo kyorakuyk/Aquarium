@@ -330,7 +330,7 @@ test('get_login_info 超时会替换仍保持连接的 SDK client', async (t) =>
   adapter.close();
 });
 
-test('公开动作超时会让仍连接的 socket 离线并替换 client', async (t) => {
+test('超过两倍默认心跳间隔后兜底探测失败才替换 client', async (t) => {
   const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
   const first = createFakeClient();
   const second = createFakeClient();
@@ -338,6 +338,7 @@ test('公开动作超时会让仍连接的 socket 离线并替换 client', async
   const retryTimers = createTimerQueue();
   const actionTimers = createTimerQueue();
   const statuses: string[] = [];
+  let now = 1_700_000_000_000;
   let factoryCalls = 0;
   const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => {
     factoryCalls += 1;
@@ -349,12 +350,14 @@ test('公开动作超时会让仍连接的 socket 离线并替换 client', async
     clearRetryTimer: retryTimers.clear,
     setActionTimer: actionTimers.set,
     clearActionTimer: actionTimers.clear,
+    now: () => now,
   });
   adapter.onStatus((status) => statuses.push(status));
   t.after(() => adapter.close());
 
   adapter.start();
   await new Promise<void>((resolve) => setImmediate(resolve));
+  now += 60_001;
   first.state.hangGroupSend = true;
   first.state.failStatus = true;
   const sending = adapter.send(
@@ -362,8 +365,6 @@ test('公开动作超时会让仍连接的 socket 离线并替换 client', async
     [{ type: 'text', text: 'hello' }],
   );
   await new Promise<void>((resolve) => setImmediate(resolve));
-  assert.equal(first.state.connected, true);
-  assert.deepEqual([...actionTimers.pending.values()].map((timer) => timer.delay), [60_000]);
   actionTimers.runNext();
   await assert.rejects(sending, /send_message timed out after 60000ms/u);
 
@@ -378,12 +379,63 @@ test('公开动作超时会让仍连接的 socket 离线并替换 client', async
   adapter.close();
 });
 
-test('历史拉取超时但 get_status 探测成功时保持在线', async (t) => {
+test('近期任意事件包刷新心跳静默窗口，good=false 时动作超时只失败', async (t) => {
   const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
   const fake = createFakeClient();
   const retryTimers = createTimerQueue();
   const actionTimers = createTimerQueue();
   const statuses: string[] = [];
+  let now = 1_700_000_000_000;
+  const debugMessages: string[] = [];
+  const adapter = new OneBotAdapter({
+    account,
+    snowlumaDir: root,
+    onDebug: (message) => debugMessages.push(message),
+  }, () => fake.client, {
+    setRetryTimer: retryTimers.set,
+    clearRetryTimer: retryTimers.clear,
+    setActionTimer: actionTimers.set,
+    clearActionTimer: actionTimers.clear,
+    now: () => now,
+  });
+  adapter.onStatus((status) => statuses.push(status));
+  t.after(() => adapter.close());
+
+  adapter.start();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  fake.emitEvent({
+    post_type: 'meta_event',
+    meta_event_type: 'heartbeat',
+    status: { online: true, good: false },
+    interval: 10_000,
+  });
+  now += 15_000;
+  fake.emitEvent({ post_type: 'notice', notice_type: 'group_upload' });
+  now += 15_000;
+  fake.state.hangGroupHistory = true;
+  const history = adapter.history({ account, kind: 'group', peer: 123456 }, 1);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
+  actionTimers.runNext();
+  await assert.rejects(history, /get_message_history timed out after 10000ms/u);
+
+  assert.equal(statuses.at(-1), 'online');
+  assert.equal(fake.state.getStatusCalls, 0);
+  assert.equal(fake.state.closeCalls, 0);
+  assert.equal(retryTimers.pending.size, 0);
+  assert.ok(debugMessages.some((message) => message.includes('good=false')));
+  const healthHint = (adapter as unknown as { getConnectionHint?: () => string | undefined })
+    .getConnectionHint?.();
+  assert.match(healthHint ?? '', /good=false/u);
+});
+
+test('超过两倍默认心跳间隔后 get_status 成功时保持连接', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  const retryTimers = createTimerQueue();
+  const actionTimers = createTimerQueue();
+  const statuses: string[] = [];
+  let now = 1_700_000_000_000;
   let factoryCalls = 0;
   const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => {
     factoryCalls += 1;
@@ -393,17 +445,18 @@ test('历史拉取超时但 get_status 探测成功时保持在线', async (t) =
     clearRetryTimer: retryTimers.clear,
     setActionTimer: actionTimers.set,
     clearActionTimer: actionTimers.clear,
+    now: () => now,
   });
   adapter.onStatus((status) => statuses.push(status));
   t.after(() => adapter.close());
 
   adapter.start();
   await new Promise<void>((resolve) => setImmediate(resolve));
+  now += 60_001;
   fake.state.hangGroupHistory = true;
   const history = adapter.history({ account, kind: 'group', peer: 123456 }, 1);
   await new Promise<void>((resolve) => setImmediate(resolve));
 
-  assert.deepEqual([...actionTimers.pending.values()].map((timer) => timer.delay), [10_000]);
   assert.equal(actionTimers.runNext(), 10_000);
   await assert.rejects(history, /get_message_history timed out after 10000ms/u);
 

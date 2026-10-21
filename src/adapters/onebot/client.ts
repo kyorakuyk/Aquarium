@@ -5,6 +5,7 @@ import type {
   JsonObject,
   OneBotMessageEvent,
   RequestOptions,
+  SnowLumaEvent,
   StatusInfo,
   SnowLumaWebSocketClientOptions,
 } from '@snowluma/sdk';
@@ -13,6 +14,7 @@ export interface OneBotClient {
   readonly isConnected: boolean;
   on(event: 'open', listener: () => void): () => void;
   on(event: 'close' | 'error', listener: (...args: unknown[]) => void): () => void;
+  onEvent(listener: (event: SnowLumaEvent) => void): () => void;
   onMessage(listener: (event: OneBotMessageEvent) => void): () => void;
   connect(): Promise<void>;
   getLoginInfo(): Promise<{ user_id: number; nickname: string }>;

@@ -137,6 +137,7 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
               <h3>{account.name}</h3>
               <p className="mono muted">QQ {account.account}</p>
               <p className="muted">人设：{account.persona}.md</p>
+              {account.connectionHint && <p className="notice notice-warn" role="status">{account.connectionHint}</p>}
               <div className="tank-card-stats">
                 <span>今日回复 <strong>{account.todayReplyCount}</strong></span>
                 <span>启用会话 <strong>{sessions.filter((item) => item.enabled && item.sessionId.startsWith(`${account.account}:`)).length}</strong></span>

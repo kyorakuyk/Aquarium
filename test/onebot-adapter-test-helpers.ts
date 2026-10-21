@@ -59,6 +59,7 @@ export function groupEvent(userId: number, messageId: number, time: number) {
 export function createFakeClient(loginUserId = account, failedConnections = 0, hangFirstConnection = false, hangLoginInfo = false) {
   const eventListeners = new Map<string, Set<(...args: unknown[]) => void>>();
   const messageListeners = new Set<(event: unknown) => void>();
+  const oneBotEventListeners = new Set<(event: unknown) => void>();
   const state = {
     loginUserId,
     connectCalls: 0,
@@ -73,6 +74,7 @@ export function createFakeClient(loginUserId = account, failedConnections = 0, h
     getStatusTimeouts: [] as number[],
     failStatus: false,
     hangStatus: false,
+    getStatusResult: { online: true, good: true, time: 1 },
     sentGroup: [] as unknown[],
     sentPrivate: [] as unknown[],
     markedGroup: [] as unknown[],
@@ -97,6 +99,9 @@ export function createFakeClient(loginUserId = account, failedConnections = 0, h
       state.connected = false;
       emit('close');
     },
+    emitEvent(event: unknown) {
+      for (const listener of oneBotEventListeners) listener(event);
+    },
     client: {
       on(event: string, listener: (...args: unknown[]) => void) {
         const listeners = eventListeners.get(event) ?? new Set();
@@ -107,6 +112,10 @@ export function createFakeClient(loginUserId = account, failedConnections = 0, h
       onMessage(listener: (event: unknown) => void) {
         messageListeners.add(listener);
         return () => messageListeners.delete(listener);
+      },
+      onEvent(listener: (event: unknown) => void) {
+        oneBotEventListeners.add(listener);
+        return () => oneBotEventListeners.delete(listener);
       },
       async connect() {
         state.connectCalls += 1;
@@ -131,7 +140,7 @@ export function createFakeClient(loginUserId = account, failedConnections = 0, h
         if (options?.timeoutMs !== undefined) state.getStatusTimeouts.push(options.timeoutMs);
         if (state.hangStatus) return new Promise<never>(() => {});
         if (state.failStatus) throw new Error('fixture status probe failure');
-        return { online: true, good: true, time: 1 };
+        return state.getStatusResult;
       },
       close() {
         state.closeCalls += 1;

@@ -61,14 +61,20 @@ test('状态、会话覆盖、决策调试和撤回 API 返回仓储事实', asy
   await withPanel(async ({ app, repository, adapter }) => {
     const statusResponse = await app.request('/api/status', { headers: authHeaders() });
     const status = await statusResponse.json() as {
-      accounts: Array<{ account: number; connectionStatus: string }>;
+      accounts: Array<{ account: number; connectionStatus: string; connectionHint: string | null }>;
       enabledSessionCount: number;
       budgetState: { state: string };
     };
     assert.equal(status.accounts[0]?.account, account);
     assert.equal(status.accounts[0]?.connectionStatus, 'online');
+    assert.equal(status.accounts[0]?.connectionHint, null);
     assert.equal(status.enabledSessionCount, 2);
     assert.equal(status.budgetState.state, 'ok');
+
+    adapter.connectionHint = 'SnowLuma 心跳报告 good=false；WebSocket 保持连接。';
+    const healthResponse = await app.request('/api/status', { headers: authHeaders() });
+    const healthStatus = await healthResponse.json() as typeof status;
+    assert.equal(healthStatus.accounts[0]?.connectionHint, adapter.connectionHint);
 
     const sessionsResponse = await app.request('/api/sessions', { headers: authHeaders() });
     const sessions = await sessionsResponse.json() as Array<{
