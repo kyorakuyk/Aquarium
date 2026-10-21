@@ -4,8 +4,8 @@ import {
   patch,
   post,
   type HistoryImportJobView,
+  type HistoryImportMode,
   type ImpressionsView,
-  type ModelsView,
   type SessionView,
   type TagCategory,
   type TagPolarity,
@@ -31,7 +31,7 @@ type HistoryImportTarget = 200 | 500 | 1_000 | 2_000;
 const HISTORY_IMPORT_TARGETS: HistoryImportTarget[] = [200, 500, 1_000, 2_000];
 
 function isHistoryImportTerminal(job: HistoryImportJobView | undefined): boolean {
-  return job !== undefined && ['done', 'cancelled', 'error'].includes(job.phase);
+  return job !== undefined && ['done', 'cancelled', 'expired', 'error'].includes(job.phase);
 }
 
 function historyFailureLabel(job: HistoryImportJobView): string {
@@ -40,16 +40,6 @@ function historyFailureLabel(job: HistoryImportJobView): string {
   if (reason === 'network') return '网络错误';
   if (reason === 'http') return `HTTP ${failureHttpStatus ?? '错误'}`;
   return '其他错误';
-}
-
-function estimatedHistoryImportCost(target: HistoryImportTarget, models: ModelsView | undefined): number | undefined {
-  const first = models?.slots.extract?.[0];
-  if (!first) return undefined;
-  const provider = models.providers.find((candidate) => candidate.id === first.provider);
-  if (provider?.kind === 'cli') return 0;
-  const inputPrice = models?.pricing?.[first.model]?.input;
-  if (typeof inputPrice !== 'number' || !Number.isFinite(inputPrice) || inputPrice < 0) return undefined;
-  return Math.ceil(target / 80) * 6_000 * inputPrice / 1_000_000;
 }
 
 function TagCollection({ tags, label, busy, onAction, onRename, onLock, onDelete, onAdd }: {
@@ -103,14 +93,15 @@ export function ImpressionsPage() {
   const [tab, setTab] = useState<'groups' | 'people' | 'privacy'>('groups');
   const [view, setView] = useState<ImpressionsView>();
   const [selectedUserId, setSelectedUserId] = useState<number>();
-  const [models, setModels] = useState<ModelsView>();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [historyMode, setHistoryMode] = useState<HistoryImportMode>('incremental');
   const [historyTarget, setHistoryTarget] = useState<HistoryImportTarget>(200);
   const [historyJobId, setHistoryJobId] = useState('');
   const [historyJob, setHistoryJob] = useState<HistoryImportJobView>();
   const [historyStarting, setHistoryStarting] = useState(false);
+  const [historyConfirming, setHistoryConfirming] = useState(false);
   const [historyCancelling, setHistoryCancelling] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const refreshedHistoryJobs = useRef(new Set<string>());
@@ -124,14 +115,6 @@ export function ImpressionsPage() {
       setSelectedId((current) => current || groupRows[0]?.sessionId || '');
     }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : '读取会话失败'))
       .finally(() => setSessionsLoading(false));
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    void apiRequest<ModelsView>('/api/models').then((value) => {
-      if (active) setModels(value);
-    }).catch(() => {});
-    return () => { active = false; };
   }, []);
 
   const load = useCallback(async (sessionId: string): Promise<boolean> => {
@@ -260,8 +243,10 @@ export function ImpressionsPage() {
   }
 
   const historyImportActive = historyStarting || Boolean(historyJobId && !isHistoryImportTerminal(historyJob));
-  const estimatedCost = estimatedHistoryImportCost(historyTarget, models);
   const historyGroup = groups.find((group) => group.sessionId === (historyJob?.sessionId ?? selectedId));
+  const historyWaterline = historyJob?.sessionId === selectedId
+    ? historyJob.waterlineTime
+    : view?.sessionId === selectedId ? view.lastMessageTime : null;
   const selectedMember = view?.members.find((member) => member.userId === selectedUserId);
 
   function openHistoryDialog(): void {
@@ -273,6 +258,7 @@ export function ImpressionsPage() {
       setHistoryJobId('');
       setHistoryJob(undefined);
     }
+    setHistoryMode('incremental');
     setHistoryTarget(200);
     setHistoryError('');
     setHistoryDialogOpen(true);
@@ -284,13 +270,33 @@ export function ImpressionsPage() {
     setHistoryError('');
     setHistoryJob(undefined);
     try {
-      const result = await post(`/api/impressions/${selectedId}/import`, { target: historyTarget }) as { id?: unknown };
+      const result = await post(`/api/impressions/${selectedId}/import`, {
+        target: historyTarget,
+        mode: historyMode,
+      }) as { id?: unknown };
       if (typeof result.id !== 'string') throw new Error('服务器没有返回导入任务编号');
       setHistoryJobId(result.id);
     } catch (reason) {
       setHistoryError(reason instanceof Error ? reason.message : '启动历史导入失败');
     } finally {
       setHistoryStarting(false);
+    }
+  }
+
+  async function confirmHistoryImport(): Promise<void> {
+    if (!historyJobId || historyConfirming || historyJob?.phase !== 'awaiting_confirmation') return;
+    setHistoryConfirming(true);
+    setHistoryError('');
+    try {
+      const job = await apiRequest<HistoryImportJobView>(
+        `/api/impressions/import/${encodeURIComponent(historyJobId)}/confirm`,
+        { method: 'POST' },
+      );
+      setHistoryJob(job);
+    } catch (reason) {
+      setHistoryError(reason instanceof Error ? reason.message : '确认整理失败');
+    } finally {
+      setHistoryConfirming(false);
     }
   }
 
@@ -407,16 +413,24 @@ export function ImpressionsPage() {
         </div>
         {historyGroup && !historyGroup.enabled && <p className="notice history-import-disabled-notice">这个群还没启用：会整理印象，但它不会在群里说话。</p>}
         {!historyJobId && !historyStarting && <div className="history-import-form">
+          <p className="history-import-waterline">上次整理到：<strong>{historyWaterline === null ? '尚未整理' : new Date(historyWaterline).toLocaleString('zh-CN')}</strong></p>
+          <fieldset className="history-import-modes">
+            <legend>整理模式</legend>
+            <label>
+              <input type="radio" name="history-import-mode" value="incremental" checked={historyMode === 'incremental'} onChange={() => setHistoryMode('incremental')} />
+              <span><strong>增量</strong><small>只整理水位线之后的新消息（默认）</small></span>
+            </label>
+            <label>
+              <input type="radio" name="history-import-mode" value="full" checked={historyMode === 'full'} onChange={() => setHistoryMode('full')} />
+              <span><strong>重新整理全部</strong><small>忽略水位线，整理本次拉取范围内的消息</small></span>
+            </label>
+          </fieldset>
           <label>
             <span>拉取条数</span>
             <select value={historyTarget} onChange={(event) => setHistoryTarget(Number(event.currentTarget.value) as HistoryImportTarget)}>
               {HISTORY_IMPORT_TARGETS.map((target) => <option value={target} key={target}>{target.toLocaleString('zh-CN')} 条</option>)}
             </select>
           </label>
-          <p className="history-import-estimate">
-            预计花费：<strong className="mono">{estimatedCost === undefined ? '暂无法估算' : `约 ¥${estimatedCost.toFixed(2)}`}</strong>
-          </p>
-          {estimatedCost === undefined && <p className="muted history-import-help">请先为 extract 槽位首项配置单价。</p>}
         </div>}
         {(historyStarting || (historyJobId && !historyJob)) && <p className="history-import-status" aria-live="polite">
           {historyStarting ? '正在创建导入任务…' : '正在读取导入进度…'}
@@ -424,6 +438,10 @@ export function ImpressionsPage() {
         {historyJob?.phase === 'fetching' && <p className="history-import-status" aria-live="polite">
           正在拉取 已获取 {historyJob.fetched.toLocaleString('zh-CN')} 条
           {historyJob.cancelRequested ? '；取消将在当前页完成后生效。' : '。'}
+        </p>}
+        {historyJob?.phase === 'awaiting_confirmation' && <p className="history-import-status" role="status">
+          新消息 {historyJob.newMessages.toLocaleString('zh-CN')} 条，预计花费 <strong>{historyJob.estimatedCostCny === undefined ? '—' : `¥${historyJob.estimatedCostCny.toFixed(2)}`}</strong>。
+          {historyJob.previewChanged ? '整理水位已变化，预估已更新，请再次确认。' : '确认后才会开始提取。'}
         </p>}
         {historyJob?.phase === 'extracting' && <p className="history-import-status" aria-live="polite">
           正在整理 第 {Math.min(historyJob.windowsDone + historyJob.windowsFailed + 1, historyJob.windowsTotal)} / {historyJob.windowsTotal} 段
@@ -443,12 +461,21 @@ export function ImpressionsPage() {
             && `；提取失败：${historyFailureLabel(historyJob)}（${historyJob.windowsFailed} 个窗口跳过）`}
           ；已获取 {historyJob.fetched} 条，新增 {historyJob.inserted} 条消息。
         </p>}
+        {historyJob?.phase === 'expired' && <p className="history-import-status is-error" role="alert">确认等待超时，任务已释放；已拉取的消息仍保存在本地。</p>}
         {historyError && <p className="history-import-error" role="alert">{historyError}</p>}
         <div className="history-import-footer">
           {!historyJobId && !historyStarting && <>
             <button className="button button-secondary" type="button" onClick={() => setHistoryDialogOpen(false)}>取消</button>
             <button className="button button-primary" type="button" disabled={historyImportActive} onClick={() => void startHistoryImport()}>
               {historyStarting ? '正在开始…' : '开始拉取'}
+            </button>
+          </>}
+          {historyJob?.phase === 'awaiting_confirmation' && <>
+            <button className="button button-secondary" type="button" disabled={historyCancelling} onClick={() => void cancelHistoryImport()}>
+              {historyCancelling ? '正在取消…' : '取消任务'}
+            </button>
+            <button className="button button-primary" type="button" disabled={historyConfirming} onClick={() => void confirmHistoryImport()}>
+              {historyConfirming ? '正在确认…' : '确认并开始整理'}
             </button>
           </>}
           {historyJob && ['fetching', 'extracting'].includes(historyJob.phase) && <>

@@ -1,6 +1,6 @@
-# Aquarium 施工导读：从骨架到 Impressions V4 M2
+# Aquarium 施工导读：从骨架到 Impressions V4 M3
 
-> 本文是随代码一起更新的学习材料。目标不是让你记住所有 API，而是让你能回答：程序分成哪些部分、每一层负责什么、为什么选这些库，以及每个任务怎样验证。前文记录 T0–T6、阶段 B 的 R1–R9、阶段 C/D、M2-A A1–A6 和 §9.0 U1–U4；§15 补充 2026-10-20 的 V18f 图片认知和 §13 P1–P6 隐私记忆；§16 补充 2026-10-21 的 S1–S4、K1–K3 与 Impressions V4 M1–M2。M3–M8 和 R9 尚未在本节覆盖。真实 SnowLuma/QQ、模型、Windows GUI 与用户验收仍按各自清单执行。
+> 本文是随代码一起更新的学习材料。目标不是让你记住所有 API，而是让你能回答：程序分成哪些部分、每一层负责什么、为什么选这些库，以及每个任务怎样验证。前文记录 T0–T6、阶段 B 的 R1–R9、阶段 C/D、M2-A A1–A6 和 §9.0 U1–U4；§15 补充 2026-10-20 的 V18f 图片认知和 §13 P1–P6 隐私记忆；§16 补充 2026-10-21 的 S1–S4、K1–K3 与 Impressions V4 M1–M3。M4–M8 和 R9 尚未在本节覆盖。真实 SnowLuma/QQ、模型、Windows GUI 与用户验收仍按各自清单执行。
 >
 > 自动化测试和生产构建不等于真实运行验收。夜间运行不会替代真实 SnowLuma/QQ、模型、Windows GUI 或控制台体验确认。
 
@@ -454,11 +454,12 @@ M2 不是另起一套聊天管线，而是在现有 pipeline 上增加可配置�
 
 ## 16. Impressions V4：结构整理、提示词前缀与标签分类 v2（2026-10-21）
 
-本节补充 §16 夜间任务中已完成的 S1–S4、K1–K3 和 M1–M2。各任务的细项与停止点以 `doc/plans/PLAN.md` §16 为准；这里记录新目录的职责和关键设计，方便从当前代码继续阅读。
+本节补充 §16 夜间任务中已完成的 S1–S4、K1–K3 和 M1–M3。各任务的细项与停止点以 `doc/plans/PLAN.md` §16 为准；这里记录新目录的职责和关键设计，方便从当前代码继续阅读。
 
 ### 16.1 S1–S4：迁移与 core 的职责边界
 
 - `src/store/db.ts` 负责打开数据库并按版本顺序执行迁移；每个版本的 SQL 变更在 `src/store/migrations/v01.ts` 至 `v17.ts` 中独立审查。新增 schema 时追加迁移，不改写已发布版本；迁移测试也验证版本连续、旧数据保留和重复打开的幂等性。
+- `StoreRepository` 的接口与存储 DTO 位于 `src/store/repository-types.ts`，由 `src/store/repository.ts` 继续 re-export；实现文件聚焦查询组合和读写逻辑，避免契约堆叠继续扩大。
 - 标签分类、适用范围、半衰期、subject 路径等纯规则位于 `src/core/impressions/tag-model.ts`，不依赖 SQLite。为避免 `store` 与 `core` 互相耦合，边界检查只给 `store` 到该纯模型模块开了一个明确白名单。
 - 出没统计归 `src/core/profiles/presence.ts`，统计作息标签的协调归 `presence-service.ts`；`src/core/conversation/`、`shared/`、`prompt/` 等目录按职责组织会话、共同类型和提示词能力。
 
@@ -482,6 +483,12 @@ M2 不是另起一套聊天管线，而是在现有 pipeline 上增加可配置�
 - `DELETE /api/tags/:id` 创建否决并硬删除标签；`GET /api/tag-vetoes?sessionId=` 只列出指定群的规则，`DELETE /api/tag-vetoes/:id` 撤销。UI 在标签 hover/focus 时显示 ×，标签详情也有“删除并不再学”；“印象数据”菜单可列出规则并撤销。
 - 自动提取的 observe/new/contradict 和分类整理在落库前都按上述完整键精确匹配；subject 的每一级先按 canonical 名称/别名归一。命中后不写入并记录 `droppedTags` 的 `vetoed` reason；不会做语义相似匹配。所有正文/路径仍保留既有敏感文本脱敏。
 
-### 16.5 验证边界
+### 16.5 M3：增量历史导入、确认预览与证据去重
 
-M2 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **681/681** 项测试；`npm run panel:build` 成功（148 个模块），Vite 仍提示主 bundle 约 528 kB 超过默认 500 kB 提示线。新增端到端测试用假模型验证删除、精确拦截、撤销后重新学习；未运行 `npm start`、真实模型、QQ、SnowLuma 或 GUI。当前完成 M1–M2；M3–M8 和 R9 仍待执行，R9 后按 `doc/plans/PLAN.md` §16.4 清单停下并由用户做真实体验验收。
+- 历史导入每页先识别是否含数据库已存 messageId，仍先保存同页新消息，再停止继续翻页。增量模式（默认）只提取 `time > tag_runs.lastMessageTime`；“重新整理全部”忽略水位线，处理本次拉取时间范围内的全部消息。消息按 80 条分窗；一个窗口成功或按重试策略跳过后，水位线推进到该窗口最新时间；预算在下一窗口前中止时保留上一个水位线。
+- 拉取和确认等待阶段不持有画像提取会话锁；用户确认时才取得锁。确认前显示新消息数和预估费用；预估为提取槽位最近 30 条 usage 记录的平均花费乘窗口数，没历史时显示“—”。确认期间水位线若变化，会刷新预览并要求再次确认。确认等待时各任务访问路径惰性检查 15 分钟 TTL；逾期转为 expired 并释放会话占用。已经拉取的消息仍在 messages 表。
+- 任务及待确认预览保存在进程内存中；进程重启会丢失预览状态，不会删除已经落盘的消息。日常提取与历史整理共用证据 messageId 去重：重复证据不会增加 samples、追加 evidence 或刷新 lastSeen。
+
+### 16.6 验证边界
+
+M3 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **691/691** 项测试；`npm run panel:build` 成功（148 个模块），Vite 仍提示主 bundle **529.36 kB** 超过默认 500 kB 提示线。新增测试覆盖已存 ID 停页、增量/全量水位线、逐窗口推进、重复证据、确认前不提取、预览变化重确认、15 分钟释放和最近 30 次估价；假模型离线验证。未运行 `npm start`、真实模型、QQ、SnowLuma 或 GUI。当前完成 M1–M3；M4–M8 和 R9 仍待执行，R9 后按 `doc/plans/PLAN.md` §16.4 清单停下并由用户做真实体验验收。

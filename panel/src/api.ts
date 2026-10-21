@@ -188,6 +188,7 @@ export interface TagVetoView {
 
 export interface ImpressionsView {
   sessionId: string;
+  lastMessageTime: number | null;
   groupTags: TagView[];
   members: Array<{
     userId: number;
@@ -270,14 +271,21 @@ export interface PrivacyFactsView {
   facts: PrivacyFactView[];
 }
 
-export type HistoryImportPhase = 'fetching' | 'extracting' | 'done' | 'cancelled' | 'error';
+export type HistoryImportMode = 'incremental' | 'full';
+export type HistoryImportPhase = 'fetching' | 'awaiting_confirmation' | 'extracting' | 'done' | 'cancelled' | 'expired' | 'error';
 
 export interface HistoryImportJobView {
   id: string;
   sessionId: string;
+  mode: HistoryImportMode;
   phase: HistoryImportPhase;
   fetched: number;
   inserted: number;
+  newMessages: number;
+  waterlineTime: number | null;
+  estimatedCostCny?: number;
+  confirmationExpiresAt?: number;
+  previewChanged?: boolean;
   windowsDone: number;
   windowsTotal: number;
   windowsFailed: number;

@@ -59,6 +59,14 @@ class PagedHistoryAdapter extends FakeAdapter {
   }
 }
 
+async function finishImport(imports: ReturnType<typeof createHistoryImportService>, jobId: string): Promise<void> {
+  await imports.idle();
+  if (imports.get(jobId)?.phase === 'awaiting_confirmation') {
+    assert.ok(imports.confirm(jobId));
+    await imports.idle();
+  }
+}
+
 test('history windows extract the supplied records without touching newer context or tag_runs', async () => {
   await withRepository(async (repository) => {
     const key = sessionId(groupSession);
@@ -161,7 +169,7 @@ test('history import pages idempotently and extracts 80-message windows oldest-f
 
     const started = imports.start({ session: groupSession, target: 200, adapter });
     assert.ok(started);
-    await imports.idle();
+    await finishImport(imports, started.id);
     const job = imports.get(started.id);
 
     assert.equal(job?.phase, 'done');
@@ -221,7 +229,7 @@ test('history import stops at a short page and after three consecutive page erro
     shortPage.pages = [[incomingMessage(1)]];
     const shortJob = imports.start({ session: groupSession, target: 200, adapter: shortPage });
     assert.ok(shortJob);
-    await imports.idle();
+    await finishImport(imports, shortJob.id);
     assert.equal(imports.get(shortJob.id)?.phase, 'done');
     assert.equal(imports.get(shortJob.id)?.fetched, 1);
     assert.equal(shortPage.requests.length, 1);
@@ -264,7 +272,7 @@ test('history import retries a failed extraction window once and continues when 
     });
     const started = imports.start({ session: groupSession, target: 200, adapter });
     assert.ok(started);
-    await imports.idle();
+    await finishImport(imports, started.id);
     const job = imports.get(started.id);
     assert.equal(job?.phase, 'done');
     assert.equal(job?.windowsDone, 1);
@@ -281,6 +289,7 @@ test('history import skips one failed window and continues, showing its failure 
     const messages = Array.from({ length: 100 }, (_, index) => incomingMessage(index));
     const adapter = new PagedHistoryAdapter();
     adapter.pages = [messages.slice(50), messages.slice(0, 50), []];
+    const waterlines: Array<number | null | undefined> = [];
     let calls = 0;
     const impressions = createImpressionsService({
       repository,
@@ -302,7 +311,7 @@ test('history import skips one failed window and continues, showing its failure 
 
     const started = imports.start({ session: groupSession, target: 200, adapter });
     assert.ok(started);
-    await imports.idle();
+    await finishImport(imports, started.id);
     const job = imports.get(started.id);
 
     assert.equal(job?.phase, 'done');
@@ -336,7 +345,7 @@ test('三段提取连续失败后终止并保留最后失败原因', async () =>
     });
     const started = imports.start({ session: groupSession, target: 200, adapter });
     assert.ok(started);
-    await imports.idle();
+    await finishImport(imports, started.id);
     const job = imports.get(started.id);
     assert.equal(job?.phase, 'error');
     assert.equal(job?.windowsDone, 0);
@@ -381,7 +390,7 @@ test('导入中间窗口成功会重置连续失败计数', async () => {
     });
     const started = imports.start({ session: groupSession, target: 500, adapter });
     assert.ok(started);
-    await imports.idle();
+    await finishImport(imports, started.id);
     const job = imports.get(started.id);
 
     assert.equal(job?.phase, 'done');
@@ -440,7 +449,7 @@ test('history import retains completed windows and stops before the next one whe
 
     const started = imports.start({ session: groupSession, target: 200, adapter });
     assert.ok(started);
-    await imports.idle();
+    await finishImport(imports, started.id);
     const job = imports.get(started.id);
 
     assert.equal(job?.phase, 'error');
@@ -449,6 +458,47 @@ test('history import retains completed windows and stops before the next one whe
     assert.equal(job?.windowsDone, 1);
     assert.equal(job?.costCny, 0.01);
     assert.equal(calls, 1);
-    assert.equal(repository.getTagRun(groupSession.account, sessionId(groupSession)), undefined);
+    assert.equal(repository.getTagRun(groupSession.account, sessionId(groupSession))?.lastMessageTime, messages[79]?.time);
+  });
+});
+
+test('incremental import saves the first known-ID page and then stops requesting older pages', async () => {
+  await withRepository(async (repository) => {
+    const config = makeConfig({ nicknames: [] });
+    const messages = Array.from({ length: 150 }, (_, index) => incomingMessage(index));
+    const known = messages[0];
+    const onKnownPage = [messages[50], known, messages[49]];
+    assert.ok(known && messages[49] && messages[50]);
+    repository.saveMessage({
+      sessionId: sessionId(groupSession),
+      messageId: known.messageId,
+      senderId: known.senderId,
+      senderName: known.senderName,
+      isSelf: false,
+      plainText: known.plainText,
+      segments: known.segments,
+      time: known.time,
+    });
+    const adapter = new PagedHistoryAdapter();
+    adapter.pages = [messages.slice(100), onKnownPage, messages.slice(0, 49)];
+    const impressions = createImpressionsService({ repository, getConfig: () => config, callModel: async () => {
+      throw new Error('confirmation must happen before extraction');
+    } });
+    const imports = createHistoryImportService({
+      repository,
+      getConfig: () => config,
+      impressionsService: impressions,
+      getTemplate: () => extractTemplate,
+      wait: async () => {},
+    });
+
+    const started = imports.start({ session: groupSession, target: 200, adapter });
+    assert.ok(started);
+    await imports.idle();
+
+    assert.equal(adapter.requests.length, 2);
+    assert.equal(repository.messageBySessionAndId(sessionId(groupSession), messages[49].messageId)?.messageId, messages[49].messageId);
+    assert.equal(repository.messageBySessionAndId(sessionId(groupSession), messages[50].messageId)?.messageId, messages[50].messageId);
+    assert.equal(imports.get(started.id)?.fetched, 53);
   });
 });

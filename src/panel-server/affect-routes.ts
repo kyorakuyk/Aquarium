@@ -49,6 +49,7 @@ const tagPatchSchema = z.object({
 const affinityPatchSchema = z.object({ value: z.number().int().min(0).max(100) }).strict();
 const historyImportSchema = z.object({
   target: z.union([z.literal(200), z.literal(500), z.literal(1_000), z.literal(2_000)]),
+  mode: z.enum(['incremental', 'full']).default('incremental'),
 }).strict();
 
 function parseJsonBody<T>(body: unknown, schema: z.ZodType<T>): T | undefined {
@@ -335,7 +336,8 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
         memberTagsText: memberTagsText === null ? null : redactSensitiveText(memberTagsText),
       };
     });
-    return context.json({ sessionId: id, groupTags, members });
+    const lastMessageTime = options.repository.getTagRun(key.account, id)?.lastMessageTime ?? null;
+    return context.json({ sessionId: id, groupTags, members, lastMessageTime });
   });
 
   app.post('/api/impressions/:sessionId/import', async (context) => {
@@ -353,9 +355,16 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     if (runtime.getStatus() !== 'online') return context.json({ error: '小号不在线' }, 503);
     if (historyImports.isRunning(id)) return context.json({ error: '该群已有导入任务' }, 409);
 
-    const job = historyImports.start({ session: key, target: body.target, adapter: runtime.adapter });
+    const job = historyImports.start({ session: key, target: body.target, mode: body.mode, adapter: runtime.adapter });
     if (!job) return context.json({ error: '该群已有印象提取任务' }, 409);
     return context.json({ id: job.id }, 202);
+  });
+
+  app.post('/api/impressions/import/:jobId/confirm', (context) => {
+    if (!historyImports) return context.json({ error: '历史导入暂不可用' }, 503);
+    const job = historyImports.confirm(context.req.param('jobId'));
+    if (!job) return context.json({ error: '导入任务已过期、正在整理或不存在' }, 409);
+    return context.json(job, job.phase === 'extracting' ? 202 : 200);
   });
 
   app.get('/api/impressions/import/:jobId', (context) => {
