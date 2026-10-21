@@ -41,6 +41,17 @@ export interface TagClassificationStatus {
   completedAt: number | null;
 }
 
+export type TagClassificationStage =
+  | '读取待整理标签'
+  | '预处理标签'
+  | '读取配置和预算'
+  | '构建模型请求'
+  | '调用模型'
+  | '解析模型结果'
+  | '写入标签'
+  | '读取剩余标签'
+  | '写入完成标记';
+
 export interface TagClassificationServiceOptions {
   repository: StoreRepository;
   classificationRepository: TagClassificationRepository;
@@ -48,7 +59,7 @@ export interface TagClassificationServiceOptions {
   getTemplate: () => ClassifyTagsPromptTemplate;
   callModel?: PipelineModelCall;
   now?: () => number;
-  onError?: (error: unknown) => void;
+  onError?: (error: unknown, stage: TagClassificationStage) => void;
 }
 
 export interface TagClassificationService {
@@ -178,15 +189,16 @@ export function createTagClassificationService(options: TagClassificationService
   };
   let pending: Promise<void> | undefined;
 
+  let currentStage: TagClassificationStage = '读取待整理标签';
   const remainingCount = () => options.classificationRepository.listTagsToClassify().length;
 
   function updateStatus(patch: Partial<TagClassificationStatus>): void {
     current = { ...current, ...patch };
   }
 
-  function reportError(error: unknown): void {
+  function reportError(error: unknown, stage: TagClassificationStage): void {
     try {
-      options.onError?.(error);
+      options.onError?.(error, stage);
     } catch {
       // 后台整理失败不能影响 Aquarium 主流程。
     }
@@ -223,6 +235,7 @@ export function createTagClassificationService(options: TagClassificationService
   }
 
   async function classifyRemaining(): Promise<void> {
+    currentStage = '读取待整理标签';
     const initial = options.classificationRepository.listTagsToClassify();
     updateStatus({
       state: 'running',
@@ -235,6 +248,7 @@ export function createTagClassificationService(options: TagClassificationService
       completedAt: null,
     });
 
+    currentStage = '预处理标签';
     const scopes = new Map<string, { scope: 'group' | 'member'; tags: StoredTag[] }>();
     for (const tag of initial) {
       const phrase = tag.category === 'speech' && (tag.status === 'candidate' || tag.status === 'confirmed')
@@ -253,14 +267,17 @@ export function createTagClassificationService(options: TagClassificationService
             text: prepared.text,
             norm: normalizeTagText(prepared.text),
           };
+          currentStage = '写入标签';
           if (classifySingle(tag.id, profile, now())) {
             current = { ...current, processed: current.processed + 1 };
           }
         } else {
+          currentStage = '写入标签';
           options.repository.updateTag(tag.id, { status: 'rejected', updatedAt: now() });
           options.classificationRepository.markTagReclassified(tag.id);
           current = { ...current, processed: current.processed + 1 };
         }
+        currentStage = '预处理标签';
         continue;
       }
       const scope = tag.userId === null ? 'group' : 'member';
@@ -275,23 +292,28 @@ export function createTagClassificationService(options: TagClassificationService
         const batch = tags.slice(offset, offset + TAG_CLASSIFICATION_BATCH_SIZE);
         const account = batch[0]?.account;
         if (account === undefined) continue;
+        currentStage = '读取配置和预算';
         const config = options.getConfig();
         if (budgetState(config, options.repository.costToday()) === 'exceeded') {
           updateStatus({ state: 'budget', remaining: remainingCount() });
           return;
         }
 
-        const response = await callModel('extract', buildClassifyTagsMessages(
+        currentStage = '构建模型请求';
+        const messages = buildClassifyTagsMessages(
           batch,
           scope,
           options.getTemplate(),
-        ), {
+        );
+        currentStage = '调用模型';
+        const response = await callModel('extract', messages, {
           config,
           account,
           costToday: () => options.repository.costToday(),
           recordUsage: (usage) => options.repository.recordUsage({ ...usage, account }),
           now,
         });
+        currentStage = '解析模型结果';
         const items = parseClassifyTagsResponse(response.text);
         if (!items || !sameOutputSet(items, batch)) {
           updateStatus({ state: 'incomplete', remaining: remainingCount() });
@@ -311,6 +333,7 @@ export function createTagClassificationService(options: TagClassificationService
 
         const itemById = new Map(items.map((item) => [item.id, item]));
         const mergeSources: ClassifyTagsItem[] = [];
+        currentStage = '写入标签';
         for (const item of items) {
           const target = item.mergeInto === null ? undefined : itemById.get(item.mergeInto);
           const sourceTag = tagsById.get(item.id);
@@ -356,11 +379,14 @@ export function createTagClassificationService(options: TagClassificationService
           }
         }
         updateStatus({ remaining: remainingCount() });
+        currentStage = '预处理标签';
       }
     }
 
+    currentStage = '读取剩余标签';
     const remaining = remainingCount();
     if (remaining === 0) {
+      currentStage = '写入完成标记';
       options.classificationRepository.markLegacyMiscClassificationComplete(now());
       updateStatus({ state: 'completed', remaining: 0, completedAt: now() });
     } else {
@@ -382,8 +408,14 @@ export function createTagClassificationService(options: TagClassificationService
     }
     const task = classifyRemaining()
       .catch((error: unknown) => {
-        reportError(error);
-        updateStatus({ state: 'error', remaining: remainingCount() });
+        reportError(error, currentStage);
+        let remaining = current.remaining;
+        try {
+          remaining = remainingCount();
+        } catch {
+          // 读取剩余条数失败时仍保留错误状态供面板诊断和重试。
+        }
+        updateStatus({ state: 'error', remaining });
       })
       .finally(() => {
         if (pending === task) pending = undefined;

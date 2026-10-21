@@ -17,7 +17,7 @@ import { ImpressionsDetail } from '../components/ImpressionsDetail.tsx';
 import { ImpressionsSidebar } from '../components/ImpressionsSidebar.tsx';
 import { parseAppHash, serializeAppHash } from '../hash-navigation.ts';
 import { buildIdentityTargets } from '../identity-targets.ts';
-import { shouldRefreshHistoryImport } from '../impressions-refresh-model.ts';
+import { shouldRefreshHistoryImport, tagClassificationStatusText } from '../impressions-refresh-model.ts';
 import { useImpressionsBackgroundRefresh } from '../use-impressions-background-refresh.ts';
 
 const PrivateFactsPanel = lazy(() => import('../components/PrivateFactsPanel.tsx').then((module) => ({ default: module.PrivateFactsPanel })));
@@ -61,6 +61,7 @@ export function ImpressionsPage() {
   const [selectedUserId, setSelectedUserId] = useState<number | undefined>(() => currentImpressionsRoute()?.userId);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [tagClassificationRetrying, setTagClassificationRetrying] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [historyMode, setHistoryMode] = useState<HistoryImportMode>('incremental');
   const [historyTarget, setHistoryTarget] = useState<HistoryImportTarget>(200);
@@ -136,13 +137,14 @@ export function ImpressionsPage() {
     }
   }, []);
 
-  const { tagClassificationStatus, extractionRunning } = useImpressionsBackgroundRefresh({
+  const { tagClassificationStatus, extractionRunning, retryTagClassification } = useImpressionsBackgroundRefresh({
     sessionId: selectedId,
     enabled: Boolean(selectedId),
     historyExtractionActive,
     lastViewLoadStartedAt,
     onRefresh: load,
   });
+  const tagClassificationMessage = tagClassificationStatusText(tagClassificationStatus);
 
   useEffect(() => {
     if (selectedId) void load(selectedId);
@@ -273,6 +275,19 @@ export function ImpressionsPage() {
     if (selectedId) writeImpressionsHash(selectedId, userId, false);
   }
 
+  async function retryOldTagClassification(): Promise<void> {
+    if (tagClassificationRetrying) return;
+    setTagClassificationRetrying(true);
+    setError('');
+    try {
+      await retryTagClassification();
+    } catch {
+      setError('旧标签整理重试失败，请稍后再试。');
+    } finally {
+      setTagClassificationRetrying(false);
+    }
+  }
+
   function openHistoryDialog(): void {
     if (historyImportActive) {
       setHistoryDialogOpen(true);
@@ -348,9 +363,15 @@ export function ImpressionsPage() {
         <p className="page-description">它对群友的了解，也是你了解朋友的一本册子。</p>
       </header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
-      {tab === 'groups' && tagClassificationStatus?.state === 'running' && <p className="muted" role="status">
-        正在整理旧标签：{tagClassificationStatus.processed.toLocaleString('zh-CN')} / {tagClassificationStatus.total.toLocaleString('zh-CN')}。
-      </p>}
+      {tab === 'groups' && tagClassificationStatus?.state === 'running' && tagClassificationMessage
+        && <p className="muted" role="status">{tagClassificationMessage}</p>}
+      {tab === 'groups' && tagClassificationStatus?.state === 'error' && tagClassificationMessage
+        && <div className="notice notice-warn impressions-classification-error" role="alert">
+          <span>{tagClassificationMessage}</span>
+          <button className="text-button" type="button" disabled={tagClassificationRetrying} onClick={() => void retryOldTagClassification()}>
+            {tagClassificationRetrying ? '正在重试…' : '重试'}
+          </button>
+        </div>}
       {tab === 'groups' && extractionRunning && <p className="muted" role="status">正在整理当前群的印象…</p>}
       {historyImportActive && historyJob && <p className="muted" role="status">
         {historyJob.phase === 'fetching' ? '正在拉取群聊历史…' : historyJob.phase === 'extracting' ? '正在整理历史印象…' : '历史整理等待确认。'}

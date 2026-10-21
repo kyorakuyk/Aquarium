@@ -75,7 +75,7 @@ export interface PanelServerOptions {
   fetch?: typeof fetch;
   testProvider?: (provider: string, model: string, config: AquariumConfig) => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
   cliRuntime?: CliRuntime;
-  onError?: (error: unknown) => void;
+  onError?: (error: unknown, context?: { method?: string; path?: string; stage?: string }) => void;
 }
 
 const sandboxSchema = z.object({
@@ -190,7 +190,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
       return { value: await Promise.race([request, timeout]), degraded: false };
     } catch (error) {
       if (timedOut) clearRequest();
-      options.onError?.(error);
+      options.onError?.(error, { stage: `读取 QQ ${label} 联系人` });
       return { value: cached, degraded: true };
     } finally {
       if (timer !== undefined) clearTimeout(timer);
@@ -349,7 +349,9 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     const contacts = await Promise.all(accounts.map(loadContacts));
     const enabled = await Promise.all(accounts.map((runtime, index) => {
       const snapshot = contacts[index] ?? { groups: [], friends: [], degraded: true };
-      return listEnabledSessions(runtime.adapter, config, options.onError, snapshot);
+      return listEnabledSessions(runtime.adapter, config, (error) => {
+        options.onError?.(error, { method: 'GET', path: '/api/status', stage: '查询已启用会话' });
+      }, snapshot);
     }));
     const todayCostCny = options.repository.costToday();
     return context.json({
@@ -578,7 +580,12 @@ export function createPanelApp(options: PanelServerOptions): Hono {
   app.all('/api/*', (context) => context.json({ error: 'Not found' }, 404));
 
   app.onError((error, context) => {
-    options.onError?.(error);
+    const request = context.req.raw;
+    options.onError?.(error, {
+      method: request.method,
+      path: new URL(request.url).pathname,
+      stage: '面板路由处理',
+    });
     return context.json({ error: 'Internal server error' }, 500);
   });
 

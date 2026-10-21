@@ -1,6 +1,8 @@
 .impressions-workspace { display: grid; grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); align-items: start; gap: 16px; }
 .impressions-sidebar { display: grid; min-width: 0; gap: 12px; }
 .impressions-sidebar-box { display: grid; min-width: 0; gap: 12px; padding: 12px; }
+.impressions-classification-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0; }
+.impressions-classification-error .text-button { flex: none; }
 .impressions-group-card { display: grid; width: 100%; min-width: 0; gap: 9px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--ink); cursor: pointer; font: inherit; text-align: left; }
 .impressions-group-card.is-selected { border-color: var(--accent); }
 .impressions-group-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

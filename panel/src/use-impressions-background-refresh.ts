@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiRequest } from './api.ts';
 import { watchImpressionsRunState, type ImpressionsRunStatus } from './impressions-events.ts';
 import { shouldRefreshCompletedExtraction } from './impressions-refresh-model.ts';
@@ -27,11 +27,31 @@ export function useImpressionsBackgroundRefresh({
 }: ImpressionsBackgroundRefreshOptions): {
   tagClassificationStatus?: TagClassificationStatusView;
   extractionRunning: boolean;
+  retryTagClassification: () => Promise<void>;
 } {
   const [tagClassificationStatus, setTagClassificationStatus] = useState<TagClassificationStatusView>();
   const [extractionRunning, setExtractionRunning] = useState(false);
+  const [tagClassificationRefreshVersion, setTagClassificationRefreshVersion] = useState(0);
   const onRefreshRef = useRef(onRefresh);
   onRefreshRef.current = onRefresh;
+
+  const retryTagClassification = useCallback(async (): Promise<void> => {
+    try {
+      const status = await apiRequest<TagClassificationStatusView>('/api/tags/classify', { method: 'POST' });
+      setTagClassificationStatus(status);
+    } catch (reason) {
+      try {
+        const status = await apiRequest<TagClassificationStatusView>('/api/tags/classify');
+        setTagClassificationStatus(status);
+        if (status.state === 'running') return;
+      } catch {
+        // Keep the original start failure; the status refresh below will retry independently.
+      }
+      throw reason;
+    } finally {
+      setTagClassificationRefreshVersion((version) => version + 1);
+    }
+  }, []);
 
   useEffect(() => {
     if (!enabled || !sessionId) return;
@@ -74,7 +94,7 @@ export function useImpressionsBackgroundRefresh({
       active = false;
       window.clearInterval(timer);
     };
-  }, [enabled, lastViewLoadStartedAt, sessionId]);
+  }, [enabled, lastViewLoadStartedAt, sessionId, tagClassificationRefreshVersion]);
 
   useEffect(() => {
     setExtractionRunning(false);
@@ -138,5 +158,5 @@ export function useImpressionsBackgroundRefresh({
     };
   }, [enabled, historyExtractionActive, sessionId]);
 
-  return { tagClassificationStatus, extractionRunning };
+  return { tagClassificationStatus, extractionRunning, retryTagClassification };
 }

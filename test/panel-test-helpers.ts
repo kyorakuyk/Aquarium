@@ -104,6 +104,7 @@ export async function withPanel<T>(
     callModel?: PanelServerOptions['callModel'];
     stickerServices?: PanelServerOptions['stickerServices'];
     tagClassificationService?: PanelServerOptions['tagClassificationService'];
+    onError?: PanelServerOptions['onError'];
   } = {},
 ): Promise<T> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-panel-test-'));
@@ -182,6 +183,7 @@ export async function withPanel<T>(
     ...(panelOptions.tagClassificationService
       ? { tagClassificationService: panelOptions.tagClassificationService }
       : {}),
+    ...(panelOptions.onError ? { onError: panelOptions.onError } : {}),
     callModel: panelOptions.callModel ?? (async (slot: string, _messages: unknown[], options: SlotCallOptions): Promise<SlotResult> => {
       modelSlots.push(slot);
       options.recordUsage({

@@ -40,6 +40,7 @@ import {
   createSnowLumaRestartHandler,
   createTrayMenuActionHandler,
 } from '../host/windows/tray-actions.ts';
+import { describeError } from './error-description.ts';
 
 const logger = createLogger('app');
 const configPath = path.join(process.cwd(), 'data', 'config.yaml');
@@ -135,17 +136,6 @@ const restartSnowLuma = createSnowLumaRestartHandler({
 
 function hasEnabledSession(config: typeof initialConfig): boolean {
   return config.defaults.enabled || Object.values(config.sessions).some((session) => session.enabled === true);
-}
-
-function describeError(error: unknown): string {
-  if (!error || typeof error !== 'object') return '未知错误';
-  const details = error as { name?: unknown; status?: unknown; code?: unknown; hostname?: unknown };
-  return [
-    typeof details.name === 'string' ? details.name : 'Error',
-    ...(typeof details.status === 'number' ? [`status=${details.status}`] : []),
-    ...(typeof details.code === 'string' ? [`code=${details.code}`] : []),
-    ...(typeof details.hostname === 'string' ? [`host=${details.hostname}`] : []),
-  ].join(' ');
 }
 
 function accountSignature(config: typeof initialConfig): string {
@@ -406,7 +396,12 @@ await startPanelWhileAccountStartupRuns(accountStartup, () => {
             return sessionQueue.run(sessionId(message.session), () => pipeline(message, { replay: true }));
           },
           root: process.cwd(),
-          onError: (error) => logger.error(`管理面板请求失败：${describeError(error)}`),
+          onError: (error, context) => {
+            const location = context?.method && context.path
+              ? `${context.method} ${context.path}`
+              : context?.stage ?? '面板请求处理';
+            logger.error(`管理面板请求失败（${location}）：${describeError(error, context?.stage ?? location)}`);
+          },
         });
         panelServer.once('listening', () => {
           logger.info(`管理面板已启动：${panelConfig.panel.host}:${panelConfig.panel.port}`);

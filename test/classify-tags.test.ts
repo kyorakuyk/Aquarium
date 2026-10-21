@@ -451,3 +451,47 @@ test('整理命中已否决的分类文本时删除来源标签而不复活该�
     database.close();
   }
 });
+
+test('startup 分类失败记录安全阶段，面板可再次触发整理', async () => {
+  const database = openDatabase(':memory:');
+  try {
+    const repository = createRepository(database);
+    const classifications = createTagClassificationRepository(database);
+    const id = insertTag(repository, { userId: null });
+    database.prepare('UPDATE tags SET needs_reclassification = 1 WHERE id = ?').run(id);
+    let modelCalls = 0;
+    const errors: unknown[][] = [];
+    const service = createTagClassificationService({
+      repository,
+      classificationRepository: classifications,
+      getConfig: () => configWithBudget(1),
+      getTemplate: () => promptTemplateStore.get().classifyTags,
+      now: () => at,
+      onError: (...args: unknown[]) => errors.push(args),
+      callModel: async (_slot, messages) => {
+        modelCalls += 1;
+        if (modelCalls === 1) throw new Error('synthetic provider failure');
+        return responseFor(messages, (tagId) => ({
+          id: tagId,
+          category: 'positioning',
+          subject: null,
+          polarity: null,
+          mergeInto: null,
+        }));
+      },
+    });
+
+    service.startOnStartup();
+    await service.idle();
+    assert.equal(service.status().state, 'error');
+    assert.equal(errors[0]?.[1], '调用模型');
+    assert.equal((errors[0]?.[0] as Error | undefined)?.message, 'synthetic provider failure');
+
+    assert.equal(service.startManual(), true);
+    await service.idle();
+    assert.equal(service.status().state, 'completed');
+    assert.equal(modelCalls, 2);
+  } finally {
+    database.close();
+  }
+});

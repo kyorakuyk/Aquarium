@@ -1,6 +1,6 @@
 import type { AquariumConfig } from '../config/schema.ts';
 import { createHistoryImportService } from '../core/impressions/history-import.ts';
-import { createTagClassificationService } from '../core/impressions/classify-tags.ts';
+import { createTagClassificationService, type TagClassificationStage } from '../core/impressions/classify-tags.ts';
 import { createMemberSummaryService } from '../core/impressions/member-summary.ts';
 import { createGroupSummaryService } from '../core/impressions/group-summary.ts';
 import { createImpressionsService } from '../core/impressions/service.ts';
@@ -27,7 +27,7 @@ export function createMemoryServices(options: {
   tagClassificationRepository: TagClassificationRepository;
   getConfig: () => AquariumConfig;
   logger: ServiceLogger;
-  describeError: (error: unknown) => string;
+  describeError: (error: unknown, stage?: TagClassificationStage) => string;
   callModel?: PipelineModelCall;
   now?: () => number;
 }) {
@@ -74,7 +74,7 @@ export function createMemoryServices(options: {
     classificationRepository: options.tagClassificationRepository,
     getConfig: options.getConfig,
     getTemplate: () => promptTemplateStore.get().classifyTags,
-    onError: (error) => options.logger.error(`旧标签整理失败：${options.describeError(error)}`),
+    onError: (error, stage) => options.logger.error(`旧标签整理失败：${options.describeError(error, stage)}`),
   });
   const privateFactsService = createPrivateFactsService({
     repository: options.repository,
