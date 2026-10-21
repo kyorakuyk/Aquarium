@@ -546,4 +546,7 @@ M3 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **69
 - F6 收尾实测：`test/impressions-model.test.ts` **11/11**，`npm run check` **751/751**，`npm run panel:build` 成功（**163** 个模块），主 bundle **568.80 kB**，仍高于默认 500 kB 提示线；`git diff --check` 通过。只检查了静态设计参考与代码，未启动 GUI；实机视觉验收待用户执行。
 - V4 验收 F7：`describeError` 保留安全元数据并附失败阶段，不记录原始异常消息；旧标签整理报告具体阶段，面板异常记录方法/路径（不含 query），联系人回退记录对应读取阶段。启动整理进入 error 后显示「上次整理失败，可重试」和重试按钮；按钮通过认证的 `POST /api/tags/classify` 重启任务。
 - F7 收尾实测：四个定向文件 **17/17**；`npm run check` **756/756**，`npm run panel:build` 成功（**163** 个模块），主 bundle **569.69 kB**，仍高于默认 500 kB 提示线；`git diff --check` 通过。错误摘要测试确认聊天文本不进入日志；无 GUI、真实模型或 QQ 验收。
+- V4 验收 F8 离线调查：源码原先没有单实例/端口检测；`config.example.yaml` 的面板默认端口为 5180，面板 bind 失败时主程序只记录错误并继续机器人启动。现在在配置载入后、数据库和账号适配器启动前探测配置的 loopback 面板地址：已连接、超时或非 `ECONNREFUSED` 错误均 fail-closed 并退出；明确拒绝探测非 loopback 主机，避免启动探测连接外部地址。
+- F8 重连路径调查：OneBot SDK 关闭内建 reconnect，由适配器单一 in-flight 重试 owner 管理 2/4/8/16/30 秒退避；`retryNow` 的快速窗口为 30 秒、每秒重试。QQ watcher 按 PID 保存判定并合并并发扫描；SnowLuma 子进程仅在退出后按 1/2/4/.../30 秒退避重启。现有代码不能解释或证实历史约 12 秒掉线的根因，旧 `node.exe` 的身份也无法从离线源码确定；端口检查是针对“已有同配置实例”的预防，不是根因证明。未启动 `npm start`、QQ、SnowLuma 或 GUI。
+- F8 收尾实测：五个定向文件 **37/37**；`npm run check` **760/760**；`git diff --check` 通过。测试用 fake socket，不访问网络；该预检只能发现已在监听的端口，两个进程同时启动仍有检查/绑定竞态，且任何占用配置面板端口的服务都会触发保守退出。
 - M8 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **739/739** 项测试；`npm run panel:build` 成功（**158** 个模块），主 bundle **562.23 kB**，仍高于默认 500 kB 提示线；`git diff --check` 通过。未运行 GUI、`npm start`、真实模型、QQ 或 SnowLuma；静态参照页已检查。R9 独立审查已通过，§16.4 用户真实体验验收仍待执行。

@@ -41,10 +41,17 @@ import {
   createTrayMenuActionHandler,
 } from '../host/windows/tray-actions.ts';
 import { describeError } from './error-description.ts';
+import { isPanelPortOccupied } from './panel-instance-guard.ts';
 
 const logger = createLogger('app');
 const configPath = path.join(process.cwd(), 'data', 'config.yaml');
 const initialConfig = loadConfig({ configPath });
+if (await isPanelPortOccupied(initialConfig.panel.host, initialConfig.panel.port)) {
+  logger.error(
+    `管理面板地址 ${initialConfig.panel.host}:${initialConfig.panel.port} 已被占用，可能已有 Aquarium 实例运行；为避免重复连接同一 SnowLuma，当前进程退出。`,
+  );
+  process.exit(1);
+}
 const database = openDatabase();
 const repository = createRepository(database);
 const memberSummaryRepository = createMemberSummaryRepository(database);
