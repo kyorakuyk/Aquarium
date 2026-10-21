@@ -336,9 +336,10 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
   const runOnlineStartupTasks = createOnlineStartupTasks({
     catchUpHistory: async () => {
       try {
-        await catchUpHistory();
+        return await catchUpHistory();
       } catch (error) {
         logger.error(`账号 ${adapter.account} 的离线补课启动失败：${describeError(error)}`);
+        return false;
       }
     },
     syncStickers: async () => {
@@ -348,7 +349,11 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
         logger.error(`账号 ${adapter.account} 的表情库同步失败：${describeError(error)}`);
       }
     },
+    onError: (error) => {
+      logger.error(`账号 ${adapter.account} 的上线启动任务失败：${describeError(error)}`);
+    },
   });
+  subscriptions.push(() => runOnlineStartupTasks.close());
   subscriptions.push(adapter.onStatus((status) => {
     currentStatus = status;
     adapterStatuses.set(accountConfig.uin, status);

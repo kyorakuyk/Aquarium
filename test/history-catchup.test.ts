@@ -303,3 +303,23 @@ test('离线补课逐个会话串行拉取历史', async () => {
     assert.equal(maxActive, 1);
   });
 });
+
+test('任一会话补课失败时返回失败，仍继续处理后续会话', async () => {
+  await withRepository(async (repository) => {
+    const groupKey = sessionId(groupSession);
+    const friendKey = sessionId(privateSession);
+    const config = makeConfig({ sessions: { [groupKey]: { enabled: true }, [friendKey]: { enabled: true } } });
+    const adapter = new FakeAdapter();
+    const calls: string[] = [];
+    adapter.history = async (session) => {
+      calls.push(sessionId(session));
+      if (session.kind === 'group') throw new Error('fixture history failure');
+      return [];
+    };
+    const harness = createHarness(adapter, repository, config);
+
+    assert.equal(await harness.catchUp(), false);
+    assert.deepEqual(calls, [groupKey, friendKey]);
+    assert.equal(harness.errors.length, 1);
+  });
+});

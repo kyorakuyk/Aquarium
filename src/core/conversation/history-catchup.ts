@@ -38,15 +38,19 @@ export function createHistoryCatchUp(options: {
   enqueue: QueueTask;
   now?: () => number;
   onError?: (error: unknown, session?: SessionKey) => void;
-}): () => Promise<void> {
+}): () => Promise<boolean> {
   const now = options.now ?? Date.now;
 
-  return async function catchUpHistory(): Promise<void> {
+  return async function catchUpHistory(): Promise<boolean> {
+    let succeeded = true;
     const config = options.getConfig();
     const sessions = await listEnabledSessions(
       options.adapter,
       config,
-      (error) => options.onError?.(error),
+      (error) => {
+        succeeded = false;
+        options.onError?.(error);
+      },
     );
 
     for (const session of sessions) {
@@ -78,8 +82,10 @@ export function createHistoryCatchUp(options: {
           alreadySaved: true,
         }));
       } catch (error) {
+        succeeded = false;
         options.onError?.(error, session);
       }
     }
+    return succeeded;
   };
 }
