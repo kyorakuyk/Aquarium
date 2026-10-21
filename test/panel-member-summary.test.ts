@@ -69,3 +69,19 @@ test('群友一句话印象可手动保存、读回且限制为 50 个 Unicode �
     })).status, 400);
   });
 });
+
+test('没有当前群标签的合法成员可读取 null，但仍不能写入摘要', async () => {
+  await withPanel(async ({ app }) => {
+    const endpoint = `/api/member-summaries/${encodeURIComponent(sessionId(groupSession))}/43`;
+    const read = await app.request(endpoint, { headers: authHeaders() });
+    assert.equal(read.status, 200);
+    assert.equal(await read.json(), null);
+
+    const write = await app.request(endpoint, {
+      method: 'PUT',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ text: '没有当前群标签' }),
+    });
+    assert.equal(write.status, 404);
+  });
+});

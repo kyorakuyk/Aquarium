@@ -305,7 +305,10 @@ export function ImpressionsPage() {
             groupTagCount={selectedView?.groupTags.length ?? 0}
             memberTagCount={selectedView?.members.reduce((count, member) => count + member.tags.length, 0) ?? 0}
             disabled={busy || historyImportActive || !selectedGroup?.name || !selectedView}
-            onChanged={() => load(selectedId)}
+            onChanged={async () => {
+              setSelectedUserId(undefined);
+              return load(selectedId);
+            }}
           />}
         </div>}
       </div>

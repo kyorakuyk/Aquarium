@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiRequest, type GroupSummaryView, type MemberSummaryView } from '../api.ts';
+import { memberSummaryErrorMessage } from '../member-summary-errors.ts';
 import { containsSensitiveText, redactSensitiveText } from '../sensitive-text.ts';
 
 type SummaryView = Pick<GroupSummaryView | MemberSummaryView, 'text' | 'manual'>;
@@ -22,7 +23,7 @@ export function ImpressionSummaryEditor({ endpoint, subject }: { endpoint: strin
     void apiRequest<SummaryView | null>(endpoint).then((result) => {
       if (active) setSummary(result);
     }).catch((reason: unknown) => {
-      if (active) setError(reason instanceof Error ? reason.message : '读取一句话印象失败');
+      if (active) setError(memberSummaryErrorMessage(reason, 'read'));
     }).finally(() => {
       if (active) setLoading(false);
     });
@@ -39,7 +40,7 @@ export function ImpressionSummaryEditor({ endpoint, subject }: { endpoint: strin
       setSummary(saved);
       setEditing(false);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '保存一句话印象失败');
+      setError(memberSummaryErrorMessage(reason, 'save'));
     } finally {
       setSaving(false);
     }

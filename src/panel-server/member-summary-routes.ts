@@ -15,27 +15,33 @@ export interface MemberSummaryRouteOptions {
   now: () => number;
 }
 
-function scope(options: MemberSummaryRouteOptions, sessionId: string, rawUserId: string) {
+function baseScope(options: MemberSummaryRouteOptions, sessionId: string, rawUserId: string) {
   const key = parseSessionId(sessionId);
   const userId = Number(rawUserId);
   if (!key || key.kind !== 'group'
     || !options.getConfig().accounts.some((account) => account.uin === key.account)
     || !Number.isSafeInteger(userId) || userId <= 0) return undefined;
-  const memberExists = options.repository.listTagsForSession(key.account, sessionId)
-    .some((tag) => tag.userId === userId);
-  return memberExists ? { account: key.account, userId, sessionId } : undefined;
+  return { account: key.account, userId, sessionId };
+}
+
+function taggedMemberScope(options: MemberSummaryRouteOptions, sessionId: string, rawUserId: string) {
+  const params = baseScope(options, sessionId, rawUserId);
+  if (!params) return undefined;
+  const memberExists = options.repository.listTagsForSession(params.account, sessionId)
+    .some((tag) => tag.userId === params.userId);
+  return memberExists ? params : undefined;
 }
 
 export function registerMemberSummaryRoutes(app: Hono, options: MemberSummaryRouteOptions): void {
   app.get('/api/member-summaries/:sessionId/:userId', (context) => {
-    const params = scope(options, context.req.param('sessionId'), context.req.param('userId'));
+    const params = baseScope(options, context.req.param('sessionId'), context.req.param('userId'));
     if (!params) return context.json({ error: 'Member summary target not found' }, 404);
     const summary = options.summaries.get(params.account, params.userId);
     return context.json(summary ? { ...summary, text: redactSensitiveText(summary.text) } : null);
   });
 
   app.put('/api/member-summaries/:sessionId/:userId', async (context) => {
-    const params = scope(options, context.req.param('sessionId'), context.req.param('userId'));
+    const params = taggedMemberScope(options, context.req.param('sessionId'), context.req.param('userId'));
     if (!params) return context.json({ error: 'Member summary target not found' }, 404);
 
     let rawBody: unknown;
