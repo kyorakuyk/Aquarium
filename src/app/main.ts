@@ -42,6 +42,7 @@ import {
 } from '../host/windows/tray-actions.ts';
 import { describeError } from './error-description.ts';
 import { isPanelPortOccupied } from './panel-instance-guard.ts';
+import { createOnlineStartupTasks } from './online-startup-tasks.ts';
 
 const logger = createLogger('app');
 const configPath = path.join(process.cwd(), 'data', 'config.yaml');
@@ -332,15 +333,30 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
       logger.error(`账号 ${adapter.account} 的离线补课（${context}）失败：${describeError(error)}`);
     },
   });
+  const runOnlineStartupTasks = createOnlineStartupTasks({
+    catchUpHistory: async () => {
+      try {
+        await catchUpHistory();
+      } catch (error) {
+        logger.error(`账号 ${adapter.account} 的离线补课启动失败：${describeError(error)}`);
+      }
+    },
+    syncStickers: async () => {
+      try {
+        await stickerService.sync();
+      } catch (error) {
+        logger.error(`账号 ${adapter.account} 的表情库同步失败：${describeError(error)}`);
+      }
+    },
+  });
   subscriptions.push(adapter.onStatus((status) => {
     currentStatus = status;
     adapterStatuses.set(accountConfig.uin, status);
     logger.info(`账号 ${adapter.account} 状态：${status}`);
     if (status === 'online') {
-      void catchUpHistory().catch((error: unknown) => {
-        logger.error(`账号 ${adapter.account} 的离线补课启动失败：${describeError(error)}`);
+      void runOnlineStartupTasks().catch((error: unknown) => {
+        logger.error(`账号 ${adapter.account} 的上线启动任务失败：${describeError(error)}`);
       });
-      void stickerService.sync().catch(() => {});
     }
   }));
   const activityRouter = createAccountActivityRouter({

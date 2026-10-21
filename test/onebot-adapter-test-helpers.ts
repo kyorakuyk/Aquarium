@@ -68,6 +68,11 @@ export function createFakeClient(loginUserId = account, failedConnections = 0, h
     pendingConnection: undefined as Promise<void> | undefined,
     disconnectBeforeGroupSend: false,
     hangGroupSend: false,
+    hangGroupHistory: false,
+    getStatusCalls: 0,
+    getStatusTimeouts: [] as number[],
+    failStatus: false,
+    hangStatus: false,
     sentGroup: [] as unknown[],
     sentPrivate: [] as unknown[],
     markedGroup: [] as unknown[],
@@ -121,6 +126,13 @@ export function createFakeClient(loginUserId = account, failedConnections = 0, h
         if (hangLoginInfo) return new Promise<never>(() => {});
         return { user_id: state.loginUserId, nickname: 'Aquarium' };
       },
+      async getStatus(options?: { timeoutMs?: number }) {
+        state.getStatusCalls += 1;
+        if (options?.timeoutMs !== undefined) state.getStatusTimeouts.push(options.timeoutMs);
+        if (state.hangStatus) return new Promise<never>(() => {});
+        if (state.failStatus) throw new Error('fixture status probe failure');
+        return { online: true, good: true, time: 1 };
+      },
       close() {
         state.closeCalls += 1;
         state.connected = false;
@@ -153,6 +165,7 @@ export function createFakeClient(loginUserId = account, failedConnections = 0, h
       },
       async getGroupMessageHistory(params: { group_id: number; count: number; message_id: number; reverse_order: boolean }) {
         state.groupHistoryCalls.push(params);
+        if (state.hangGroupHistory) return new Promise<never>(() => {});
         return { messages: state.groupHistory };
       },
       async getFriendMessageHistory() {

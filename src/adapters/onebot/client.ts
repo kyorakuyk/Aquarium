@@ -4,6 +4,8 @@ import { SnowLumaWebSocketClient } from '@snowluma/sdk';
 import type {
   JsonObject,
   OneBotMessageEvent,
+  RequestOptions,
+  StatusInfo,
   SnowLumaWebSocketClientOptions,
 } from '@snowluma/sdk';
 
@@ -14,6 +16,7 @@ export interface OneBotClient {
   onMessage(listener: (event: OneBotMessageEvent) => void): () => void;
   connect(): Promise<void>;
   getLoginInfo(): Promise<{ user_id: number; nickname: string }>;
+  getStatus(options?: RequestOptions): Promise<StatusInfo>;
   close(): void;
   sendGroupMessage(groupId: number, message: unknown): Promise<{ message_id: number }>;
   sendPrivateMessage(userId: number, message: unknown): Promise<{ message_id: number }>;

@@ -356,6 +356,7 @@ test('公开动作超时会让仍连接的 socket 离线并替换 client', async
   adapter.start();
   await new Promise<void>((resolve) => setImmediate(resolve));
   first.state.hangGroupSend = true;
+  first.state.failStatus = true;
   const sending = adapter.send(
     { account, kind: 'group', peer: 123456 },
     [{ type: 'text', text: 'hello' }],
@@ -367,12 +368,52 @@ test('公开动作超时会让仍连接的 socket 离线并替换 client', async
   await assert.rejects(sending, /send_message timed out after 60000ms/u);
 
   assert.equal(statuses.at(-1), 'offline');
+  assert.equal(first.state.getStatusCalls, 1);
+  assert.deepEqual(first.state.getStatusTimeouts, [1_000]);
   assert.equal(first.state.closeCalls, 1);
   retryTimers.runNext();
   await new Promise<void>((resolve) => setImmediate(resolve));
   assert.equal(factoryCalls, 2);
   assert.equal(statuses.at(-1), 'online');
   adapter.close();
+});
+
+test('历史拉取超时但 get_status 探测成功时保持在线', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  const retryTimers = createTimerQueue();
+  const actionTimers = createTimerQueue();
+  const statuses: string[] = [];
+  let factoryCalls = 0;
+  const adapter = new OneBotAdapter({ account, snowlumaDir: root }, () => {
+    factoryCalls += 1;
+    return fake.client;
+  }, {
+    setRetryTimer: retryTimers.set,
+    clearRetryTimer: retryTimers.clear,
+    setActionTimer: actionTimers.set,
+    clearActionTimer: actionTimers.clear,
+  });
+  adapter.onStatus((status) => statuses.push(status));
+  t.after(() => adapter.close());
+
+  adapter.start();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  fake.state.hangGroupHistory = true;
+  const history = adapter.history({ account, kind: 'group', peer: 123456 }, 1);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
+  assert.deepEqual([...actionTimers.pending.values()].map((timer) => timer.delay), [10_000]);
+  assert.equal(actionTimers.runNext(), 10_000);
+  await assert.rejects(history, /get_message_history timed out after 10000ms/u);
+
+  assert.equal(statuses.at(-1), 'online');
+  assert.equal(fake.state.getStatusCalls, 1);
+  assert.deepEqual(fake.state.getStatusTimeouts, [1_000]);
+  assert.equal(fake.state.closeCalls, 0);
+  assert.equal(factoryCalls, 1);
+  assert.equal(retryTimers.pending.size, 0);
+  assert.equal(actionTimers.pending.size, 0);
 });
 
 test('适配器动作总超时覆盖断线后等待重连握手的时间', async (t) => {

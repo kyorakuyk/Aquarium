@@ -12,6 +12,7 @@ import type {
   QqProfileActions,
   ProtocolAdapter,
 } from '../types.ts';
+import { createOneBotActionTimeoutController, type ActionTimeoutController } from './action-timeout.ts';
 import {
   convertIncomingMessage,
   shouldDispatchMessage,
@@ -52,13 +53,6 @@ function timeoutForAction(action: string): number {
 
 class AccountMismatchError extends Error {}
 
-class AdapterTimeoutError extends Error {
-  constructor(action: string, timeoutMs: number) {
-    super(`OneBot action ${action} timed out after ${timeoutMs}ms`);
-    this.name = 'AdapterTimeoutError';
-  }
-}
-
 class AdapterOfflineError extends Error {
   constructor(account: number) {
     super(`OneBot adapter ${account} is not online`);
@@ -97,6 +91,7 @@ export class OneBotAdapter implements ProtocolAdapter {
   private readonly clearActionTimer: typeof globalThis.clearTimeout;
   private readonly setRetryTimer: NonNullable<OneBotAdapterRuntimeOptions['setRetryTimer']>;
   private readonly clearRetryTimer: typeof globalThis.clearTimeout;
+  private readonly actionTimeoutController: ActionTimeoutController<OneBotClient>;
   private status: AdapterStatus = 'offline';
   private connectionInFlight: Promise<void> | undefined;
   private retryAttemptInFlight: Promise<void> | undefined;
@@ -148,6 +143,27 @@ export class OneBotAdapter implements ProtocolAdapter {
       (action, run) => this.withActionTimeout(action, run),
     );
     this.bindClient(this.client);
+    this.actionTimeoutController = createOneBotActionTimeoutController({
+      getClient: () => this.client,
+      isOnline: () => this.status === 'online',
+      isAccountVerified: () => this.accountVerified,
+      setTimer: this.setActionTimer,
+      clearTimer: this.clearActionTimer,
+      retireClient: (client) => {
+        if (client !== this.client || this.clientRequiresReplacement) return;
+        this.clientRequiresReplacement = true;
+        this.accountVerified = false;
+        this.nickname = '';
+        this.setStatus('offline');
+        try {
+          // SDK reconnect is disabled; the application retry loop remains active.
+          client.close();
+        } catch (error) {
+          try { this.onConnectionError?.(error); } catch { /* preserve the timeout */ }
+        }
+        this.scheduleRetry();
+      },
+    });
   }
 
   private bindClient(client: OneBotClient): void {
@@ -553,37 +569,13 @@ export class OneBotAdapter implements ProtocolAdapter {
     requireOnline = true,
     timeoutMs = timeoutForAction(action),
   ): Promise<T> {
-    const client = this.client;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<never>((_resolve, reject) => {
-      timer = this.setActionTimer(
-        () => reject(new AdapterTimeoutError(action, timeoutMs)),
-        timeoutMs,
-      );
+    return this.actionTimeoutController.run({
+      action,
+      client: this.client,
+      run,
+      timeoutMs,
+      ...(requireOnline ? { assertOnline: () => this.assertOnline() } : {}),
     });
-    try {
-      return await Promise.race([Promise.resolve().then(() => {
-        if (requireOnline) this.assertOnline();
-        return run();
-      }), timeout]);
-    } catch (error) {
-      if (error instanceof AdapterTimeoutError && client === this.client) {
-        this.clientRequiresReplacement = true;
-        this.accountVerified = false;
-        this.nickname = '';
-        this.setStatus('offline');
-        try {
-          // SDK reconnect is disabled; the application retry loop remains active.
-          client.close();
-        } catch (closeError) {
-          try { this.onConnectionError?.(closeError); } catch { /* preserve the timeout */ }
-        }
-        this.scheduleRetry();
-      }
-      throw error;
-    } finally {
-      if (timer !== undefined) this.clearActionTimer(timer);
-    }
   }
 
   private setStatus(status: AdapterStatus): void {

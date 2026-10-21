@@ -260,3 +260,46 @@ test('拉取离线历史期间实时会话队列不被阻塞', async () => {
     await catchUp;
   });
 });
+
+test('离线补课逐个会话串行拉取历史', async () => {
+  await withRepository(async (repository) => {
+    const groupKey = sessionId(groupSession);
+    const friendKey = sessionId(privateSession);
+    const config = makeConfig({ sessions: { [groupKey]: { enabled: true }, [friendKey]: { enabled: true } } });
+    const adapter = new FakeAdapter();
+    adapter.groups = [{ groupId: groupSession.peer, name: 'A' }];
+    adapter.friends = [{ userId: privateSession.peer, nickname: 'A' }];
+    const calls: string[] = [];
+    let active = 0;
+    let maxActive = 0;
+    let releaseGroupHistory!: () => void;
+    let notifyGroupHistoryStarted!: () => void;
+    const groupHistoryGate = new Promise<void>((resolve) => { releaseGroupHistory = resolve; });
+    const groupHistoryStarted = new Promise<void>((resolve) => { notifyGroupHistoryStarted = resolve; });
+    adapter.history = async (session) => {
+      const key = sessionId(session);
+      calls.push(key);
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      try {
+        if (key === groupKey) {
+          notifyGroupHistoryStarted();
+          await groupHistoryGate;
+        }
+        return [];
+      } finally {
+        active -= 1;
+      }
+    };
+    const harness = createHarness(adapter, repository, config);
+
+    const catchUp = harness.catchUp();
+    await groupHistoryStarted;
+    assert.deepEqual(calls, [groupKey]);
+    releaseGroupHistory();
+    await catchUp;
+
+    assert.deepEqual(calls, [groupKey, friendKey]);
+    assert.equal(maxActive, 1);
+  });
+});
