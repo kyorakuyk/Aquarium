@@ -43,14 +43,31 @@ import {
 import { describeError } from './error-description.ts';
 import { isPanelPortOccupied } from './panel-instance-guard.ts';
 import { createOnlineStartupTasks } from './online-startup-tasks.ts';
+import { acquireInstanceLock } from './instance-lock.ts';
 
 const logger = createLogger('app');
+const instanceLock = acquireInstanceLock({
+  lockPath: path.join(process.cwd(), 'data', 'aquarium.lock'),
+  onLog: (level, message) => {
+    if (level === 'error') logger.error(message);
+    else if (level === 'warn') logger.warn(message);
+    else logger.info(message);
+  },
+  onLost: () => { void shutdown('单实例锁丢失'); },
+});
+if (!instanceLock.allowed) {
+  logger.error(`启动被拒：${instanceLock.reason}`);
+  process.exit(1);
+}
+logger.info(`单实例锁：${instanceLock.reason}${instanceLock.degraded ? '（degraded 放行）' : ''}`);
+process.once('exit', instanceLock.release);
 const configPath = path.join(process.cwd(), 'data', 'config.yaml');
 const initialConfig = loadConfig({ configPath });
 if (await isPanelPortOccupied(initialConfig.panel.host, initialConfig.panel.port)) {
   logger.error(
     `管理面板地址 ${initialConfig.panel.host}:${initialConfig.panel.port} 已被占用，可能已有 Aquarium 实例运行；为避免重复连接同一 SnowLuma，当前进程退出。`,
   );
+  instanceLock.release();
   process.exit(1);
 }
 const database = openDatabase();
@@ -174,6 +191,7 @@ async function shutdown(signal: string): Promise<void> {
   await privateMentionService.idle();
   await cliRuntime.stopAll();
   database.close();
+  instanceLock.release();
   logger.info('Aquarium 已关闭。');
 }
 
