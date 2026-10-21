@@ -434,7 +434,6 @@ export function ImpressionsPage() {
             <h2 id="history-import-title">拉取群聊历史</h2>
             <p className="muted">只读取记录、整理印象，不会在群里发言。</p>
           </div>
-          <button className="button button-secondary" type="button" onClick={() => setHistoryDialogOpen(false)}>关闭</button>
         </div>
         {historyGroup && !historyGroup.enabled && <p className="notice history-import-disabled-notice">这个群还没启用：会整理印象，但它不会在群里说话。</p>}
         {!historyJobId && !historyStarting && <div className="history-import-form">

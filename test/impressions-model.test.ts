@@ -85,6 +85,39 @@ test('member preview excludes locked, candidate, inferred identity and misc tags
   assert.deepEqual(memberPreviewTags(tags).map(({ text }) => text), ['不喜欢外号', '幽默']);
 });
 
+test('member list shows a message count instead of empty tag copy and repeated neutral affinity', () => {
+  const memberRowPresentation = Reflect.get(impressionsModel, 'memberRowPresentation') as (
+    highlights: readonly string[],
+    messageCount: number,
+    affinityLevel: string,
+  ) => { subtitle: string; showAffinity: boolean };
+
+  assert.equal(typeof memberRowPresentation, 'function');
+  if (typeof memberRowPresentation !== 'function') return;
+  assert.deepEqual(memberRowPresentation([], 7, 'neutral'), { subtitle: '7 条发言', showAffinity: false });
+  assert.deepEqual(memberRowPresentation([], 0, 'neutral'), { subtitle: '0 条发言', showAffinity: false });
+  assert.deepEqual(memberRowPresentation([], 7, 'warm'), { subtitle: '7 条发言', showAffinity: true });
+  assert.deepEqual(memberRowPresentation(['游戏 › FPS', '短句连发'], 7, 'neutral'), {
+    subtitle: '游戏 › FPS · 短句连发',
+    showAffinity: true,
+  });
+});
+
+test('QQ sex and age formatting treats zero age as private without repeating unknown values', () => {
+  const memberSexAgeLabel = Reflect.get(impressionsModel, 'memberSexAgeLabel') as (
+    sex: string | undefined,
+    age: number | undefined,
+  ) => string;
+
+  assert.equal(typeof memberSexAgeLabel, 'function');
+  if (typeof memberSexAgeLabel !== 'function') return;
+  assert.equal(memberSexAgeLabel('male', 18), '男 · 18 岁');
+  assert.equal(memberSexAgeLabel('male', 0), '男 · 未公开');
+  assert.equal(memberSexAgeLabel('female', undefined), '女 · 未公开');
+  assert.equal(memberSexAgeLabel('unknown', 0), '未公开');
+  assert.equal(memberSexAgeLabel(undefined, undefined), '未公开');
+});
+
 test('group member search matches name, group card, and tag text', () => {
   const members = [
     { userId: 42, name: '小明', qqProfile: { card: '明天见' }, tags: [{ text: 'CS2', subject: '游戏', category: 'fandom' }], messageCount: 4, lastMessageTime: 100, affinity: { value: -20 } },

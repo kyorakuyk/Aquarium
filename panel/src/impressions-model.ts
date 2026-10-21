@@ -1,3 +1,5 @@
+import type { AffinityLevel, QqMemberProfileView } from './api.ts';
+
 export interface ActivityDay {
   date: string;
   count: number;
@@ -72,6 +74,25 @@ export function memberPreviewTags(tags: readonly MemberPreviewTag[], limit = 3):
       || right.lastSeen - left.lastSeen
       || left.id - right.id)
     .slice(0, Math.max(0, limit));
+}
+
+export function memberRowPresentation(
+  highlights: readonly string[],
+  messageCount: number,
+  affinityLevel: AffinityLevel,
+): { subtitle: string; showAffinity: boolean } {
+  const hasHighlights = highlights.length > 0;
+  return {
+    subtitle: hasHighlights ? highlights.join(' · ') : `${messageCount.toLocaleString('zh-CN')} 条发言`,
+    showAffinity: hasHighlights || affinityLevel !== 'neutral',
+  };
+}
+
+export function memberSexAgeLabel(sex: QqMemberProfileView['sex'], age: number | undefined): string {
+  const sexLabel = sex === 'male' ? '男' : sex === 'female' ? '女' : undefined;
+  const ageLabel = Number.isSafeInteger(age) && (age ?? 0) > 0 ? `${age} 岁` : undefined;
+  if (!sexLabel && !ageLabel) return '未公开';
+  return `${sexLabel ?? '未公开'} · ${ageLabel ?? '未公开'}`;
 }
 
 export function searchAndSortMembers<T extends SearchableImpressionsMember>(

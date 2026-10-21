@@ -23,6 +23,7 @@
 .impressions-silent-toggle { min-height: 44px; padding: 0 5px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 10px; text-align: left; }
 .impressions-silent-toggle:hover { color: var(--accent); }
 .impressions-member-row { display: grid; grid-template-columns: minmax(0, 1fr) 132px; align-items: center; gap: 5px; min-width: 0; padding: 5px; border-bottom: 1px solid var(--line); border-radius: 8px; }
+.impressions-member-row.is-compact { grid-template-columns: minmax(0, 1fr); }
 .impressions-member-row:last-child { border-bottom: 0; }
 .impressions-member-row.is-selected { background: var(--accent-soft); border-left: 3px solid var(--accent); }
 .impressions-member-select { display: flex; min-width: 0; min-height: 52px; align-items: center; gap: 9px; padding: 5px; border: 0; border-radius: 7px; background: transparent; color: var(--ink); cursor: pointer; text-align: left; }
@@ -31,7 +32,8 @@
 .impressions-member-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .impressions-member-tags { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .impressions-member-row .member-affinity { width: 132px; min-width: 132px; }
-.impressions-member-row .member-affinity-toggle { width: 132px; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px; }
+.impressions-member-row .member-affinity-toggle { width: 132px; grid-template-columns: auto auto; justify-content: flex-end; gap: 4px; }
+.impressions-member-row .member-affinity-toggle progress { display: none; }
 .impressions-member-row .member-affinity-toggle strong { font-size: 10px; }
 .member-profile-card { display: grid; min-width: 0; gap: 15px; padding: 18px 20px; }
 .member-profile-heading { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 7px 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }

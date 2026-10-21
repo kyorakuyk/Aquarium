@@ -1,15 +1,10 @@
 import type { QqMemberProfileView } from '../api.ts';
+import { memberSexAgeLabel } from '../impressions-model.ts';
 
 const ROLE_LABELS: Record<NonNullable<QqMemberProfileView['role']>, string> = {
   owner: '群主',
   admin: '管理员',
   member: '成员',
-};
-
-const SEX_LABELS: Record<NonNullable<QqMemberProfileView['sex']>, string> = {
-  male: '男',
-  female: '女',
-  unknown: '未公开',
 };
 
 function dateFromSeconds(value: number | undefined, includeTime = false): string {
@@ -31,8 +26,7 @@ function ProfileField({ label, value, locked = false, mono = false }: {
 }
 
 export function MemberQqProfile({ profile }: { profile: QqMemberProfileView }) {
-  const sex = profile.sex ? SEX_LABELS[profile.sex] : '未公开';
-  const age = profile.age === undefined ? '未公开' : `${profile.age} 岁`;
+  const sexAge = memberSexAgeLabel(profile.sex, profile.age);
   return <section className="qq-member-profile" aria-labelledby="member-qq-profile-title">
     <header className="qq-member-profile-heading">
       <div><h3 id="member-qq-profile-title">QQ 资料</h3><span className="muted">来自 QQ</span></div>
@@ -45,7 +39,7 @@ export function MemberQqProfile({ profile }: { profile: QqMemberProfileView }) {
       <ProfileField label="入群时间" value={dateFromSeconds(profile.joinTime)} locked mono />
       <ProfileField label="最后发言" value={dateFromSeconds(profile.lastSentTime, true)} mono />
       <ProfileField label="群等级" value={profile.level ? `Lv.${profile.level}` : '—'} locked mono />
-      <ProfileField label="性别 / 年龄" value={`${sex} · ${age}`} locked />
+      <ProfileField label="性别 / 年龄" value={sexAge} locked />
       <ProfileField label="Q 龄" value={profile.qage === undefined ? '—' : `${profile.qage} 年`} locked mono />
       {profile.isRobot && <ProfileField label="QQ 标记" value="机器人" />}
     </dl>
