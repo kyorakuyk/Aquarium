@@ -7,6 +7,7 @@ import {
 } from '../api.ts';
 import { MemberTagRows, type MemberTagAdd } from './MemberTagRows.tsx';
 import { ActivityHeatmap } from './ActivityHeatmap.tsx';
+import { MemberQqProfile } from './MemberQqProfile.tsx';
 import { containsSensitiveText, redactSensitiveText } from '../sensitive-text.ts';
 
 const AFFINITY_LABELS: Record<ImpressionsView['members'][number]['affinity']['level'], string> = {
@@ -129,6 +130,7 @@ export function MemberProfileCard({ sessionId, member, busy, onAction, onRename,
         {summaryError && <p className="notice notice-warn" role="alert">{summaryError}</p>}
       </div>
     </header>
+    {member.qqProfile && <MemberQqProfile profile={member.qqProfile} />}
     <ActivityHeatmap sessionId={sessionId} userId={member.userId} />
     <MemberTagRows
       sessionId={sessionId}

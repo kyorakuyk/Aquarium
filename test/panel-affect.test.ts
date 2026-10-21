@@ -220,6 +220,124 @@ test('印象 API 原样返回群友名但继续脱敏标签正文与证据引文
   });
 });
 
+test('印象 API keeps signature evidence typed and redacts its text', async () => {
+  await withPanel(async ({ app, repository }) => {
+    const key = sessionId(groupSession);
+    const credential = ['Q7m2P9x4', 'B8n5'].join('');
+    repository.insertTag({
+      account,
+      sessionId: key,
+      userId: 42,
+      text: 'INTJ',
+      norm: 'intj',
+      category: 'identity',
+      subject: null,
+      polarity: null,
+      origin: 'self_report',
+      locked: false,
+      status: 'confirmed',
+      source: 'auto',
+      samples: 1,
+      evidence: [{ kind: 'signature', text: `token=${credential}`, fetchedAt: now }],
+      firstSeen: now,
+      lastSeen: now,
+      supersededBy: null,
+      updatedAt: now,
+    });
+
+    const response = await app.request(`/api/impressions/${key}`, { headers: authHeaders() });
+    assert.equal(response.status, 200);
+    const body = await response.json() as {
+      members: Array<{ tags: Array<{ text: string; evidence: Array<Record<string, unknown>> }> }>;
+    };
+    const tag = body.members[0]?.tags[0];
+    assert.equal(tag?.text, 'INTJ');
+    assert.deepEqual(tag?.evidence[0], {
+      kind: 'signature',
+      text: '[敏感内容已隐藏]',
+      fetchedAt: now,
+    });
+    assert.equal(JSON.stringify(body).includes(credential), false);
+  });
+});
+
+test('群印象页读取 QQ 资料时缓存 24 小时，手动刷新会强制请求', async () => {
+  await withPanel(async ({ app, adapter, repository }) => {
+    const key = sessionId(groupSession);
+    const calls = new Map<string, number>();
+    const count = (name: string) => calls.set(name, (calls.get(name) ?? 0) + 1);
+    adapter.getGroupInfo = async () => {
+      count('group');
+      return {
+        groupName: '测试群', memberCount: 1, maxMemberCount: 200,
+        groupCreateTime: Date.UTC(2021, 0, 1) / 1_000, groupLevel: 4, groupDescription: '夜间开黑',
+      };
+    };
+    adapter.getGroupMembers = async () => {
+      count('members');
+      return [{
+        userId: 42, nickname: '测试群友', card: '群名片', role: 'admin', title: '测试头衔',
+        joinTime: Date.UTC(2021, 0, 1) / 1_000, lastSentTime: now / 1_000,
+        level: '42', sex: 'female', age: 23, isRobot: false,
+      }];
+    };
+    adapter.getGroupHonors = async () => { count('honors'); return []; };
+    adapter.getStrangerInfo = async () => {
+      count('stranger');
+      return { longNick: 'INTJ', regTime: Date.UTC(2021, 0, 1) / 1_000 };
+    };
+    adapter.getGroupNoticeLatest = async () => { count('notice'); return '最新公告'; };
+    adapter.getEssenceCount = async () => { count('essence'); return 2; };
+    repository.saveMessage({
+      sessionId: key,
+      messageId: 'qq-profile-name',
+      senderId: 42,
+      senderName: '测试群友',
+      isSelf: false,
+      plainText: '晚上好',
+      segments: [],
+      time: now,
+    });
+
+    const getProfile = () => app.request(`/api/impressions/${key}`, { headers: authHeaders() });
+    const firstResponse = await getProfile();
+    assert.equal(firstResponse.status, 200);
+    const first = await firstResponse.json() as {
+      qqGroupProfile: {
+        groupInfo: { groupName?: string; groupDescription?: string };
+        honors: unknown[];
+        latestNotice: string | null;
+        essenceCount: number | null;
+        composition: { sex: { female: number }; joinDuration: { overThreeYears: number } } | null;
+      };
+      members: Array<{ userId: number; qqProfile: { card?: string; role?: string; title?: string; qage?: number } }>;
+    };
+    assert.equal(first.qqGroupProfile.groupInfo.groupName, '测试群');
+    assert.equal(first.qqGroupProfile.groupInfo.groupDescription, '夜间开黑');
+    assert.deepEqual(first.qqGroupProfile.honors, []);
+    assert.equal(first.qqGroupProfile.latestNotice, '最新公告');
+    assert.equal(first.qqGroupProfile.essenceCount, 2);
+    assert.deepEqual(first.qqGroupProfile.composition, {
+      sex: { male: 0, female: 1, unknown: 0 },
+      joinDuration: { overThreeYears: 1, oneToThreeYears: 0, withinOneYear: 0, unknown: 0 },
+    });
+    assert.equal(first.members[0]?.qqProfile.card, '群名片');
+    assert.equal(first.members[0]?.qqProfile.role, 'admin');
+    assert.equal(first.members[0]?.qqProfile.title, '测试头衔');
+    assert.equal(first.members[0]?.qqProfile.qage, 5);
+    assert.deepEqual([...calls.values()], [1, 1, 1, 1, 1, 1]);
+
+    await getProfile();
+    assert.deepEqual([...calls.values()], [1, 1, 1, 1, 1, 1]);
+    const refreshResponse = await app.request(`/api/impressions/${key}/refresh-qq-profile`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    assert.equal(refreshResponse.status, 200);
+    assert.deepEqual([...calls.values()], [2, 2, 2, 2, 2, 2]);
+  });
+});
+
 test('标签 API：手动新增、改文字与改状态', async () => {
   await withPanel(async ({ app, repository }) => {
     const key = sessionId(groupSession);

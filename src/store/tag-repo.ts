@@ -12,11 +12,20 @@ import { createTagSubjectRepository } from './tag-subject-repo.ts';
 export type TagStatus = 'candidate' | 'confirmed' | 'rejected' | 'superseded';
 export type TagSource = 'auto' | 'manual';
 
-export interface TagEvidence {
+export interface MessageTagEvidence {
+  kind?: 'message';
   messageId: string;
   time: number;
   quote: string;
 }
+
+export interface SignatureTagEvidence {
+  kind: 'signature';
+  text: string;
+  fetchedAt: number;
+}
+
+export type TagEvidence = MessageTagEvidence | SignatureTagEvidence;
 
 export interface TagRecord {
   account: number;

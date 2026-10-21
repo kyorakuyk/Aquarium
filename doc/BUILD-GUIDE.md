@@ -454,11 +454,11 @@ M2 不是另起一套聊天管线，而是在现有 pipeline 上增加可配置�
 
 ## 16. Impressions V4：结构整理、提示词前缀与标签分类 v2（2026-10-21）
 
-本节补充 §16 夜间任务中已完成的 S1–S4、K1–K3 和 M1–M3。各任务的细项与停止点以 `doc/plans/PLAN.md` §16 为准；这里记录新目录的职责和关键设计，方便从当前代码继续阅读。
+本节补充 §16 夜间任务中已完成的 S1–S4、K1–K3 和 M1–M4。各任务的细项与停止点以 `doc/plans/PLAN.md` §16 为准；这里记录新目录的职责和关键设计，方便从当前代码继续阅读。
 
 ### 16.1 S1–S4：迁移与 core 的职责边界
 
-- `src/store/db.ts` 负责打开数据库并按版本顺序执行迁移；每个版本的 SQL 变更在 `src/store/migrations/v01.ts` 至 `v17.ts` 中独立审查。新增 schema 时追加迁移，不改写已发布版本；迁移测试也验证版本连续、旧数据保留和重复打开的幂等性。
+- `src/store/db.ts` 负责打开数据库并按版本顺序执行迁移；每个版本的 SQL 变更在 `src/store/migrations/v01.ts` 至 `v18.ts` 中独立审查。新增 schema 时追加迁移，不改写已发布版本；迁移测试也验证版本连续、旧数据保留和重复打开的幂等性。
 - `StoreRepository` 的接口与存储 DTO 位于 `src/store/repository-types.ts`，由 `src/store/repository.ts` 继续 re-export；实现文件聚焦查询组合和读写逻辑，避免契约堆叠继续扩大。
 - 标签分类、适用范围、半衰期、subject 路径等纯规则位于 `src/core/impressions/tag-model.ts`，不依赖 SQLite。为避免 `store` 与 `core` 互相耦合，边界检查只给 `store` 到该纯模型模块开了一个明确白名单。
 - 出没统计归 `src/core/profiles/presence.ts`，统计作息标签的协调归 `presence-service.ts`；`src/core/conversation/`、`shared/`、`prompt/` 等目录按职责组织会话、共同类型和提示词能力。
@@ -491,4 +491,12 @@ M2 不是另起一套聊天管线，而是在现有 pipeline 上增加可配置�
 
 ### 16.6 验证边界
 
-M3 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **691/691** 项测试；`npm run panel:build` 成功（148 个模块），Vite 仍提示主 bundle **529.36 kB** 超过默认 500 kB 提示线。新增测试覆盖已存 ID 停页、增量/全量水位线、逐窗口推进、重复证据、确认前不提取、预览变化重确认、15 分钟释放和最近 30 次估价；假模型离线验证。未运行 `npm start`、真实模型、QQ、SnowLuma 或 GUI。当前完成 M1–M3；M4–M8 和 R9 仍待执行，R9 后按 `doc/plans/PLAN.md` §16.4 清单停下并由用户做真实体验验收。
+M3 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **691/691** 项测试；`npm run panel:build` 成功（148 个模块），Vite 仍提示主 bundle **529.36 kB** 超过默认 500 kB 提示线。新增测试覆盖已存 ID 停页、增量/全量水位线、逐窗口推进、重复证据、确认前不提取、预览变化重确认、15 分钟释放和最近 30 次估价；假模型离线验证。M4 实现与边界见 §16.7。夜间均未运行 `npm start`、真实模型、QQ、SnowLuma 或 GUI；真实体验验收仍在 R9 后由用户执行。
+
+### 16.7 M4：QQ 资料缓存、自述与受限提示注入
+
+- OneBot adapter 只通过 `client.raw(action, params)` 调用计划列出的资料动作，并从响应中挑选允许字段；各动作沿用现有超时包装，单项失败变为该字段不可用，不增加重试或输出原始响应。`qq_group_profiles` 按账号/群、`qq_member_profiles` 按账号/群/用户隔离；打开群印象页时 24 小时 TTL 控制自动刷新，手动按钮强制刷新，成员名册成功后整组替换以清除过期成员。
+- `get_stranger_info.long_nick` 只有在包含独立 MBTI 整词时才生成 `identity / self_report / confirmed` 标签；原始签名作为 `kind: signature` evidence，MBTI 变化会更新该标签，签名不再包含 MBTI 时只删除签名来源标签。否决机制仍生效；message evidence 与 signature evidence 是不同联合类型，重复 messageId 判重和分类引文处理不会把签名误当作聊天消息。
+- 提示词只取群名片、群主/管理员身份和头衔；群名片/头衔先脱敏并 JSON 引用。性别、年龄、Q 龄、群等级、入群时间、最后发言时间及个性签名正文都不注入。当前群视图顶部常驻显示“群资料”和“QQ 资料”两块；群资料块显示人数、建群时间、群等级与简介，QQ 资料块显示不可用字段、荣誉、公告、精华数量、地区（固定“QQ 不提供”）及性别/入群时长两条构成条形图。成员详情也显示对应 QQ 资料；性别、年龄、Q 龄、等级与入群时间带锁标记。响应只公开筛选后的资料，签名 evidence、公告、简介、头衔等内容仍走原有脱敏路径。
+- 项目运行依赖与只读 `reference/SnowLuma` 均仍标记 `@snowluma/sdk` 1.14.22；M4 按 PLAN 指定的 v2.0.3 action/schema 使用通用 `raw` 调用，没有升级依赖。假 adapter 与接口契约测试覆盖字段映射；由于夜间禁止启动 SnowLuma/QQ，真实运行兼容性仍未验证。
+- M4 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **702/702** 项测试；`npm run panel:build` 成功（150 个模块），Vite 主 bundle **537.11 kB**，仍高于默认 500 kB 提示线。签名写入/更新/删除、否决、提示不含性别年龄、内容脱敏、缓存 TTL、手动刷新及构成统计都有离线测试。未进行 GUI 验收；R9 后用户执行 §16.4 体验清单。

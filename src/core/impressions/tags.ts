@@ -83,7 +83,7 @@ export function applyTagObservation(
   if (existing.status === 'rejected' || existing.status === 'superseded') {
     return { action: 'ignore', reason: 'no_revival' };
   }
-  if (existing.evidence.some((item) => item.messageId === input.messageId)) {
+  if (existing.evidence.some((item) => item.kind !== 'signature' && item.messageId === input.messageId)) {
     return { action: 'ignore', reason: 'duplicate' };
   }
   const samples = existing.samples + 1;

@@ -48,7 +48,7 @@ export function parseReplySystemTemplate(
   validatePlaceholders('reply-system.md', replySystem.groupNote, ['groupNote'], ['groupNote']);
   validatePlaceholders('reply-system.md', replySystem.request, [], []);
   validatePlaceholders('reply-system.md', replySystem.groupTags, ['tags'], ['tags']);
-  validatePlaceholders('reply-system.md', replySystem.memberTags, ['name', 'tags'], ['name', 'tags']);
+  validatePlaceholders('reply-system.md', replySystem.memberTags, ['name', 'profile', 'tags'], ['name', 'tags']);
   validatePlaceholders('reply-system.md', replySystem.privateFacts, ['name', 'facts'], ['name', 'facts']);
   validatePlaceholders('reply-system.md', replySystem.knownFacts, ['facts'], ['facts']);
   validatePlaceholders('reply-system.md', replySystem.stickers, ['list'], ['list']);

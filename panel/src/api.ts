@@ -153,11 +153,16 @@ export type TagCategory = 'positioning' | 'topic' | 'atmosphere' | 'meme' | 'nor
 export type TagOrigin = 'self_report' | 'inferred' | 'stats' | 'manual';
 export type TagPolarity = 'like' | 'dislike' | null;
 
-export interface TagEvidenceView {
+export type TagEvidenceView = {
+  kind?: 'message';
   messageId: string;
   time: number;
   quote: string;
-}
+} | {
+  kind: 'signature';
+  text: string;
+  fetchedAt: number;
+};
 
 export interface TagView {
   id: number;
@@ -186,14 +191,49 @@ export interface TagVetoView {
   createdAt: number;
 }
 
+export interface QqGroupProfileView {
+  groupInfo: {
+    groupName?: string;
+    memberCount?: number;
+    maxMemberCount?: number;
+    groupCreateTime?: number;
+    groupLevel?: number;
+    groupDescription?: string;
+  } | null;
+  honors: Array<{ kind: 'dragon_king' | 'performer' | 'legend' | 'emotion' | 'strong_newbie'; userId?: number; nickname?: string }> | null;
+  latestNotice: string | null;
+  essenceCount: number | null;
+  membersAvailable: boolean;
+  composition: {
+    sex: { male: number; female: number; unknown: number };
+    joinDuration: { overThreeYears: number; oneToThreeYears: number; withinOneYear: number; unknown: number };
+  } | null;
+  fetchedAt: number | null;
+}
+
+export interface QqMemberProfileView {
+  card?: string;
+  role?: 'owner' | 'admin' | 'member';
+  title?: string;
+  joinTime?: number;
+  lastSentTime?: number;
+  level?: string;
+  sex?: 'male' | 'female' | 'unknown';
+  age?: number;
+  qage?: number;
+  isRobot?: boolean;
+}
+
 export interface ImpressionsView {
   sessionId: string;
   lastMessageTime: number | null;
   groupTags: TagView[];
+  qqGroupProfile: QqGroupProfileView | null;
   members: Array<{
     userId: number;
     name: string;
     affinity: AffinityView;
+    qqProfile: QqMemberProfileView | null;
     tags: TagView[];
     memberTagsAllowed: boolean;
     memberTagsText: string | null;

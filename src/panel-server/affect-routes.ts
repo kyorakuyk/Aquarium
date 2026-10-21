@@ -5,6 +5,8 @@ import { parseSessionId } from '../core/conversation/sessions.ts';
 import { bandOf, decayValue, nextBand } from '../core/mood/core.ts';
 import { buildMoodSeriesPoints, distanceToNextBand } from '../core/mood/series.ts';
 import { sleepEnergy, sleepPlan, type SleepWakeState } from '../core/sleep/index.ts';
+import { createQqProfileService } from '../core/profiles/qq-profile-service.ts';
+import { summarizeQqMemberComposition } from '../core/profiles/qq-profile-view.ts';
 import { normalizeTagText, tagActivation, tagHalfLifeMs } from '../core/impressions/tags.ts';
 import { TAG_TEXT_MAX, TAG_TEXT_MIN } from '../core/impressions/service.ts';
 import { buildMemberTagPrompt } from '../core/impressions/member-tags.ts';
@@ -77,7 +79,9 @@ function tagView(tag: StoredTag, at: number) {
     source: tag.source,
     samples: tag.samples,
     activation: tagActivation(tag, at),
-    evidence: tag.evidence.map((item) => ({ ...item, quote: redactSensitiveText(item.quote) })),
+    evidence: tag.evidence.map((item) => item.kind === 'signature'
+      ? { kind: item.kind, text: redactSensitiveText(item.text), fetchedAt: item.fetchedAt }
+      : { ...item, quote: redactSensitiveText(item.quote) }),
     firstSeen: tag.firstSeen,
     lastSeen: tag.lastSeen,
   };
@@ -126,6 +130,7 @@ function moodBandChanges(events: readonly StoredMoodEvent[], from: number, to: n
 export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): void {
   const now = options.now ?? Date.now;
   const affinityService = createAffinityService({ repository: options.repository, getConfig: options.getConfig });
+  const qqProfiles = createQqProfileService({ repository: options.repository, now });
   const historyImports = options.historyImports;
 
   function primaryAccount(): number {
@@ -300,12 +305,37 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     });
   });
 
-  app.get('/api/impressions/:sessionId', (context) => {
+  app.get('/api/impressions/:sessionId', async (context) => {
     const id = context.req.param('sessionId');
     const key = parseSessionId(id);
     if (!key) return context.json({ error: 'Invalid session' }, 400);
 
     const at = now();
+    const runtime = key.kind === 'group'
+      ? options.accounts().find((candidate) => candidate.adapter.account === key.account)
+      : undefined;
+    const qqProfile = key.kind === 'group'
+      ? await qqProfiles.readGroup({
+        account: key.account,
+        groupId: key.peer,
+        ...(runtime?.getStatus() === 'online' ? { adapter: runtime.adapter } : {}),
+      })
+      : undefined;
+    const qqMemberProfiles = new Map((qqProfile?.members ?? []).map((profile) => [profile.userId, profile]));
+    const qqGroupProfile = qqProfile ? {
+      ...qqProfile.profile,
+      groupInfo: qqProfile.profile.groupInfo === null ? null : {
+        ...qqProfile.profile.groupInfo,
+        ...(qqProfile.profile.groupInfo.groupDescription === undefined
+          ? {}
+          : { groupDescription: redactSensitiveText(qqProfile.profile.groupInfo.groupDescription) }),
+      },
+      latestNotice: qqProfile.profile.latestNotice === null
+        ? null
+        : redactSensitiveText(qqProfile.profile.latestNotice),
+      composition: qqProfile.membersAvailable ? summarizeQqMemberComposition(qqProfile.members, at) : null,
+      fetchedAt: qqProfile.fetchedAt,
+    } : null;
     const tags = options.repository.listTagsForSession(key.account, id);
     const groupTags = tags.filter((tag) => tag.userId === null).map((tag) => tagView(tag, at));
     const memberIds = [...new Set(
@@ -320,24 +350,59 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
         purpose: 'prompt',
       }) === 'allow';
       const memberPrompt = memberAllowed
-        ? buildMemberTagPrompt(memberTags, at)
-        : { text: '', dropped: 0 };
-      const memberTagsText = memberPrompt.text
+        ? buildMemberTagPrompt(
+          memberTags,
+          at,
+          key.kind === 'group' ? qqProfiles.getCachedMemberProfile(key.account, key.peer, userId) : undefined,
+        )
+        : { text: '', dropped: 0, profileText: '' };
+      const memberTagsText = memberPrompt.text || memberPrompt.profileText
         ? promptTemplateStore.get().replySystem.memberTags
           .replaceAll('{{name}}', JSON.stringify(name))
-          .replaceAll('{{tags}}', memberPrompt.text)
+          .replaceAll('{{profile}}', memberPrompt.profileText)
+          .replaceAll('{{tags}}', memberPrompt.text || '暂无已确认标签')
         : null;
       return {
         userId,
         name,
         affinity: affinityService.getCurrent(key.account, userId, at),
+        qqProfile: (() => {
+          const profile = qqMemberProfiles.get(userId);
+          if (!profile) return null;
+          return {
+            card: profile.card,
+            role: profile.role,
+            ...(profile.title === undefined ? {} : { title: redactSensitiveText(profile.title) }),
+            sex: profile.sex,
+            age: profile.age,
+            qage: profile.qage,
+            level: profile.level,
+            joinTime: profile.joinTime,
+            lastSentTime: profile.lastSentTime,
+            isRobot: profile.isRobot,
+          };
+        })(),
         tags: memberTags.map((tag) => tagView(tag, at)),
         memberTagsAllowed: memberAllowed,
         memberTagsText: memberTagsText === null ? null : redactSensitiveText(memberTagsText),
       };
     });
     const lastMessageTime = options.repository.getTagRun(key.account, id)?.lastMessageTime ?? null;
-    return context.json({ sessionId: id, groupTags, members, lastMessageTime });
+    return context.json({ sessionId: id, groupTags, members, lastMessageTime, qqGroupProfile });
+  });
+
+  app.post('/api/impressions/:sessionId/refresh-qq-profile', async (context) => {
+    const id = context.req.param('sessionId');
+    const key = parseSessionId(id);
+    if (!key || key.kind !== 'group') return context.json({ error: '仅支持群聊 QQ 资料刷新' }, 400);
+    const runtime = options.accounts().find((candidate) => candidate.adapter.account === key.account);
+    const result = await qqProfiles.readGroup({
+      account: key.account,
+      groupId: key.peer,
+      force: true,
+      ...(runtime?.getStatus() === 'online' ? { adapter: runtime.adapter } : {}),
+    });
+    return context.json({ refreshed: runtime?.getStatus() === 'online', fetchedAt: result.fetchedAt });
   });
 
   app.post('/api/impressions/:sessionId/import', async (context) => {

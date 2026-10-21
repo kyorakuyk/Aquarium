@@ -7,6 +7,7 @@ import { createPrivateFactControlsQueries } from './privacy-controls-repo.ts';
 import { createPrivateFactMentionQueries } from './privacy-mention-repo.ts';
 import { createStickerQueries } from './sticker-repo.ts';
 import { createRecentExtractUsageQueries } from './recent-extract-usage-repo.ts';
+import { createQqProfileQueries } from './qq-profile-repo.ts';
 import type { ImageCaptionKind, StoreRepository } from './repository-types.ts';
 
 export type {
@@ -195,6 +196,7 @@ export function createRepository(
   return {
     ...createPanelQueries(database, clock),
     ...createRecentExtractUsageQueries(database),
+    ...createQqProfileQueries(database),
     ...createAffectQueries(database),
     ...createPersonaVersionRepository(database, clock),
     ...createPrivacyQueries(database),

@@ -155,9 +155,14 @@ export function ImpressionTag({
           <span className="mono muted">观察 {tag.samples} 次 · 激活 {tag.activation.toFixed(2)}</span>
         </div>
         <ul className="tag-popover-evidence">
-          {tag.evidence.slice(0, 3).map((item) => <li key={item.messageId}>
-            <span>{redactSensitiveText(item.quote) || '（无引文）'}</span><time className="mono muted">{formatTime(item.time)}</time>
-          </li>)}
+          {tag.evidence.slice(0, 3).map((item, index) => item.kind === 'signature'
+            ? <li key={`signature:${item.fetchedAt}:${index}`}>
+              <span>QQ 个性签名：{redactSensitiveText(item.text) || '（无签名）'}</span>
+              <time className="mono muted">{formatTime(item.fetchedAt)}</time>
+            </li>
+            : <li key={item.messageId}>
+              <span>{redactSensitiveText(item.quote) || '（无引文）'}</span><time className="mono muted">{formatTime(item.time)}</time>
+            </li>)}
           {tag.evidence.length === 0 && <li className="muted">暂无观察证据。</li>}
         </ul>
         {!editing && <div className="tag-popover-actions">

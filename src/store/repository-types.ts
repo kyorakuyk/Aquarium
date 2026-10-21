@@ -17,6 +17,7 @@ import type {
 } from './privacy-repo.ts';
 import type { PersonaVersionRepository } from './persona-version-repo.ts';
 import type { RecentExtractUsageRepository } from './recent-extract-usage-repo.ts';
+import type { QqProfileRepository } from './qq-profile-repo.ts';
 import type { StickerRepository } from './sticker-repo.ts';
 import type { TagVetoRepository } from './tag-veto-repo.ts';
 
@@ -140,7 +141,7 @@ export interface StoredPipelineTrace extends PipelineTraceRecord {
   id: number;
 }
 
-export interface StoreRepository extends RecentExtractUsageRepository, PersonaVersionRepository, PrivacyRepository, PrivateFactMentionRepository, PrivateFactControlsRepository, StickerRepository, TagVetoRepository {
+export interface StoreRepository extends RecentExtractUsageRepository, PersonaVersionRepository, PrivacyRepository, PrivateFactMentionRepository, PrivateFactControlsRepository, StickerRepository, TagVetoRepository, QqProfileRepository {
   saveMessage(message: MessageStorageRecord): boolean;
   updateMessageSegments(sessionId: string, messageId: string, segments: unknown[]): void;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];

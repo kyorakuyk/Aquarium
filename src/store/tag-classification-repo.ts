@@ -59,13 +59,23 @@ function numberValue(value: unknown, field: string): number {
 }
 
 function evidenceUnion(target: TagEvidence[], source: TagEvidence[]): TagEvidence[] {
-  const byMessageId = new Map<string, TagEvidence>();
+  const messages = new Map<string, Extract<TagEvidence, { messageId: string }>>();
+  const signatures = new Map<string, Extract<TagEvidence, { kind: 'signature' }>>();
   for (const evidence of [...target, ...source]) {
-    const previous = byMessageId.get(evidence.messageId);
-    if (!previous || evidence.time >= previous.time) byMessageId.set(evidence.messageId, evidence);
+    if (evidence.kind === 'signature') {
+      const previous = signatures.get(evidence.text);
+      if (!previous || evidence.fetchedAt >= previous.fetchedAt) signatures.set(evidence.text, evidence);
+      continue;
+    }
+    const previous = messages.get(evidence.messageId);
+    if (!previous || evidence.time >= previous.time) messages.set(evidence.messageId, evidence);
   }
-  return [...byMessageId.values()].sort((left, right) => left.time - right.time
-    || left.messageId.localeCompare(right.messageId));
+  const union: TagEvidence[] = [...messages.values(), ...signatures.values()];
+  const timeOf = (evidence: TagEvidence) => evidence.kind === 'signature' ? evidence.fetchedAt : evidence.time;
+  const keyOf = (evidence: TagEvidence) => evidence.kind === 'signature'
+    ? `signature:${evidence.text}`
+    : `message:${evidence.messageId}`;
+  return union.sort((left, right) => timeOf(left) - timeOf(right) || keyOf(left).localeCompare(keyOf(right)));
 }
 
 export function createTagClassificationRepository(database: DatabaseSync): TagClassificationRepository {

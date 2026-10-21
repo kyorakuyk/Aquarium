@@ -1,5 +1,6 @@
 import type { StoredTag } from '../../store/affect-repo.ts';
 import type { StoreRepository } from '../../store/repository.ts';
+import { createQqProfileService } from '../profiles/qq-profile-service.ts';
 import { sessionId, type SessionKey } from '../shared/events.ts';
 import { decide } from '../privacy/policy.ts';
 import type { ReplySystemTemplate } from '../prompt/templates.ts';
@@ -26,6 +27,7 @@ export function buildImpressionsPromptBlocks(
 ): { groupTags?: string; memberTags?: string; droppedTags: number } {
   if (input.session.kind !== 'group') return { droppedTags: 0 };
   const account = input.session.account;
+  const qqProfiles = createQqProfileService({ repository, now: () => input.now });
   const target = { kind: 'group' as const, sessionId: sessionId(input.session) };
   const groupAllowed = decide({
     info: { origin: 'group', sessionId: input.sessionId, ownerId: null },
@@ -41,8 +43,12 @@ export function buildImpressionsPromptBlocks(
     purpose: 'prompt',
   }) === 'allow';
   const memberSelection = !memberAllowed
-    ? { text: '', dropped: 0 }
-    : buildMemberTagPrompt(repository.listTagsForSubject(account, input.sessionId, input.senderId), input.now);
+    ? { text: '', dropped: 0, profileText: '' }
+    : buildMemberTagPrompt(
+      repository.listTagsForSubject(account, input.sessionId, input.senderId),
+      input.now,
+      qqProfiles.getCachedMemberProfile(account, input.session.peer, input.senderId),
+    );
   const blocks: { groupTags?: string; memberTags?: string; droppedTags: number } = {
     droppedTags: groupSelection.dropped + memberSelection.dropped,
   };
@@ -50,10 +56,11 @@ export function buildImpressionsPromptBlocks(
     blocks.groupTags = input.template.groupTags
       .replaceAll('{{tags}}', groupSelection.tags.map(displayTagText).join('、'));
   }
-  if (memberSelection.text.length > 0) {
+  if (memberSelection.text.length > 0 || memberSelection.profileText.length > 0) {
     blocks.memberTags = input.template.memberTags
       .replaceAll('{{name}}', JSON.stringify(input.senderName))
-      .replaceAll('{{tags}}', memberSelection.text);
+      .replaceAll('{{profile}}', memberSelection.profileText)
+      .replaceAll('{{tags}}', memberSelection.text || '暂无已确认标签');
   }
   return blocks;
 }

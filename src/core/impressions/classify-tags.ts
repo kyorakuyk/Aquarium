@@ -71,7 +71,7 @@ export function buildClassifyTagsMessages(
       text,
       norm,
       status,
-      evidence: evidence.map(({ quote }) => quote),
+      evidence: evidence.filter((item) => item.kind !== 'signature').map(({ quote }) => quote),
     }));
   const user = template.user
     .replaceAll('{{scope}}', scope)
@@ -128,7 +128,11 @@ const identityTextPattern = /^(?:[IE][NS][TF][JP]|(?:Ni|Ne|Si|Se|Ti|Te|Fi|Fe)(?:
 
 function profileForTag(item: ClassifyTagsItem, tag: StoredTag, scope: 'group' | 'member'): TagClassificationProfile | undefined {
   if (!isTagCategoryForScope(item.category, scope)) return undefined;
-  const preparedText = prepareTagText(item.category, item.text, tag.evidence.map(({ quote }) => quote));
+  const preparedText = prepareTagText(
+    item.category,
+    item.text,
+    tag.evidence.filter((evidence) => evidence.kind !== 'signature').map(({ quote }) => quote),
+  );
   if (!preparedText.ok) return undefined;
   if (item.category === 'identity' && !identityTextPattern.test(preparedText.text)) return undefined;
   if (item.category !== 'topic' && item.category !== 'fandom' && item.subject !== null) return undefined;

@@ -17,6 +17,7 @@ import { ActivityHeatmap } from '../components/ActivityHeatmap.tsx';
 import { ImpressionTag, InlineTagAdd } from '../components/ImpressionTag.tsx';
 import { ImpressionsMemberRow } from '../components/ImpressionsMemberRow.tsx';
 import { MemberProfileCard } from '../components/MemberProfileCard.tsx';
+import { QqGroupProfilePanel } from '../components/QqGroupProfilePanel.tsx';
 import { TagVetoMenu } from '../components/TagVetoMenu.tsx';
 
 const PrivateFactsPanel = lazy(() => import('../components/PrivateFactsPanel.tsx').then((module) => ({ default: module.PrivateFactsPanel })));
@@ -353,6 +354,11 @@ export function ImpressionsPage() {
       </Suspense>}
       {tab === 'groups' && <>
       {!view && <div className="empty-state">选择一个群，查看它攒下的标签。</div>}
+      {view && <QqGroupProfilePanel
+        sessionId={view.sessionId}
+        profile={view.qqGroupProfile}
+        onReload={() => load(view.sessionId)}
+      />}
       {view && <div className="impressions-workspace">
         <aside className="impressions-sidebar">
           <GroupTags

@@ -77,7 +77,7 @@ test('成员提示筛除 locked、misc 与未确认的 inferred identity', () =>
     tag({ id: 4, category: 'schedule', text: '夜猫子' }),
   ], now);
 
-  assert.deepEqual(result, { text: '作息：夜猫子', dropped: 0 });
+  assert.deepEqual(result, { text: '作息：夜猫子', dropped: 0, profileText: '' });
 });
 
 test('超过 160 字时从末尾的组开始丢弃并计数', () => {

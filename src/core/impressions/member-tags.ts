@@ -1,12 +1,37 @@
 import type { StoredTag } from '../../store/affect-repo.ts';
 import type { TagCategory } from './tag-model.ts';
 import { ACTIVATION_MIN, MEMBER_TAGS_LIMIT, tagActivation } from './tags.ts';
+import { redactSensitiveText } from './sensitive-text.ts';
 
 type MemberGroup = 'dislike' | 'personality' | 'fandom' | 'identity' | 'recent' | 'schedule' | 'communication';
 
 const MEMBER_GROUP_ORDER: readonly MemberGroup[] = [
   'dislike', 'personality', 'fandom', 'identity', 'recent', 'schedule', 'communication',
 ];
+
+export interface MemberPromptProfile {
+  card?: string;
+  role?: 'owner' | 'admin' | 'member';
+  title?: string;
+}
+
+function promptProfileValue(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const text = Array.from(redactSensitiveText(value.trim())).slice(0, 80).join('');
+  return text.length > 0 ? JSON.stringify(text) : undefined;
+}
+
+export function formatMemberProfileContext(profile?: MemberPromptProfile): string {
+  if (!profile) return '';
+  const fields: string[] = [];
+  const card = promptProfileValue(profile.card);
+  const title = promptProfileValue(profile.title);
+  if (card) fields.push(`群名片：${card}`);
+  if (profile.role === 'owner') fields.push('群主');
+  else if (profile.role === 'admin') fields.push('管理员');
+  if (title) fields.push(`头衔：${title}`);
+  return fields.length > 0 ? `（${fields.join('，')}）` : '';
+}
 
 function memberGroup(category: TagCategory): MemberGroup | undefined {
   switch (category) {
@@ -133,7 +158,8 @@ export function formatMemberTags(tags: readonly StoredTag[]): string {
 export function buildMemberTagPrompt(
   tags: readonly StoredTag[],
   now: number,
-): { text: string; dropped: number } {
+  profile?: MemberPromptProfile,
+): { text: string; dropped: number; profileText: string } {
   const eligible = tags
     .filter((tag) => !tag.locked
       && memberGroup(tag.category) !== undefined
@@ -174,5 +200,5 @@ export function buildMemberTagPrompt(
     dropped += removeIds.size;
     text = formatMemberTags(retained);
   }
-  return { text, dropped };
+  return { text, dropped, profileText: formatMemberProfileContext(profile) };
 }

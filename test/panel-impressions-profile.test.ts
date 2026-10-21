@@ -65,6 +65,7 @@ test('画像卡注入文本与提示词一致，并排除锁定和 misc 标签',
     const selected = buildMemberTagPrompt(storedTags, now);
     const expected = promptTemplateStore.get().replySystem.memberTags
       .replaceAll('{{name}}', JSON.stringify('小明'))
+      .replaceAll('{{profile}}', '')
       .replaceAll('{{tags}}', selected.text);
 
     assert.equal(response.status, 200);
