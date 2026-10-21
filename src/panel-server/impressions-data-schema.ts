@@ -34,6 +34,11 @@ export const importFileSchema = z.object({
   sessionId: z.string().min(1),
   groupName: z.string().min(1),
   tags: z.array(importTagSchema).optional().default([]),
+  groupSummary: z.object({
+    text: z.string().min(1).max(50),
+    manual: z.boolean(),
+    updatedAt: nonNegativeTime,
+  }).strict().optional(),
   summaries: z.array(z.object({
     userId: positiveId,
     text: z.string().min(1).max(50),

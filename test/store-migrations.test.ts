@@ -9,7 +9,7 @@ import { createRepository } from '../src/store/repository.ts';
 
 test('migration versions start at one and are continuous and unique', () => {
   const versions = migrations.map(({ version }) => version);
-  assert.deepEqual(versions, Array.from({ length: 20 }, (_, index) => index + 1));
+  assert.deepEqual(versions, Array.from({ length: 21 }, (_, index) => index + 1));
   assert.equal(new Set(versions).size, versions.length);
   assert.ok(migrations.every(({ up }) => typeof up === 'function'));
 });
@@ -21,7 +21,7 @@ test('v17 tag veto table remains available at the current schema version', () =>
     const columns = database.prepare("PRAGMA table_info('tag_vetoes')").all() as Array<{ name: string }>;
     const indexes = database.prepare("PRAGMA index_list('tag_vetoes')").all() as Array<{ name: string }>;
 
-    assert.equal(version.version, 20);
+    assert.equal(version.version, 21);
     assert.deepEqual(columns.map(({ name }) => name), [
       'id', 'account', 'session_id', 'user_id', 'category', 'subject_norm', 'text_norm', 'created_at',
     ]);
@@ -40,7 +40,7 @@ test('v18 creates account- and group-scoped QQ profile caches', () => {
     const memberColumns = database.prepare("PRAGMA table_info('qq_member_profiles')")
       .all() as Array<{ name: string; pk: number }>;
 
-    assert.equal(version.version, 20);
+    assert.equal(version.version, 21);
     assert.deepEqual(groupColumns.map(({ name }) => name), ['account', 'group_id', 'json', 'fetched_at']);
     assert.deepEqual(groupColumns.map(({ pk }) => pk), [1, 2, 0, 0]);
     assert.deepEqual(memberColumns.map(({ name }) => name), [
@@ -100,7 +100,7 @@ test('v20 schedules only unlocked quoted member speech tags for reclassification
       needs_reclassification: number;
     }>;
 
-    assert.equal(version.version, 20);
+    assert.equal(version.version, 21);
     assert.deepEqual(markers.map(({ id, needs_reclassification }) => ({ id, needs_reclassification })), [
       { id: supported, needs_reclassification: 1 },
       { id: supportedCurly, needs_reclassification: 1 },

@@ -43,6 +43,7 @@ import type { MemberSummaryRepository } from '../store/member-summary-repo.ts';
 import { registerTagSubjectRoutes } from './tag-subject-routes.ts';
 import { registerTagVetoRoutes } from './tag-veto-routes.ts';
 import { registerMemberSummaryRoutes } from './member-summary-routes.ts';
+import { registerGroupSummaryRoutes } from './group-summary-routes.ts';
 import { registerIdentityRoutes } from './identity-routes.ts';
 import { registerImpressionsDataRoutes } from './impressions-data-routes.ts';
 
@@ -275,6 +276,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     now,
   });
   registerIdentityRoutes(app, { getConfig: options.getConfig, repository: options.repository, now });
+  registerGroupSummaryRoutes(app, { getConfig: options.getConfig, repository: options.repository, now });
   registerTagVetoRoutes(app, options.repository);
   if (options.tagSubjects) {
     registerTagSubjectRoutes(app, {

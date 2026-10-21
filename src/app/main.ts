@@ -113,7 +113,7 @@ subscriptions.push(startProfileActivitySchedule({
   service: profileActivityService,
   onError: (error) => logger.error(`作息统计更新失败：${describeError(error)}`),
 }));
-const { impressionsService, memberSummaryService, tagClassificationService, privateFactsService, privateMentionService, privacyGateService, historyImports } = createMemoryServices({
+const { impressionsService, memberSummaryService, groupSummaryService, tagClassificationService, privateFactsService, privateMentionService, privacyGateService, historyImports } = createMemoryServices({
   repository,
   memberSummaryRepository,
   tagSubjects,
@@ -170,6 +170,7 @@ async function shutdown(signal: string): Promise<void> {
   await sessionQueue.idle();
   await impressionsService.idle();
   await memberSummaryService.idle();
+  await groupSummaryService.idle();
   await tagClassificationService.idle();
   await privateFactsService.idle();
   await privateMentionService.idle();

@@ -77,7 +77,7 @@ export function createMemberSummaryService(options: MemberSummaryServiceOptions)
       task = Promise.resolve().then(async () => {
         const current = options.summaryRepository.get(account, userId);
         if (current?.manual || current?.updatedAt !== expectedUpdatedAt) return;
-        const user = template.user.replaceAll('{{tags}}', tagText);
+        const user = template.user.replaceAll('{{subject}}', '群友').replaceAll('{{tags}}', tagText);
         const response = await callModel('extract', [
           { role: 'system', content: template.system },
           { role: 'user', content: user },

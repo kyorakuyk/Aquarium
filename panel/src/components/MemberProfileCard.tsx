@@ -1,16 +1,10 @@
-import { useEffect, useState } from 'react';
-import {
-  apiRequest,
-  type ImpressionsView,
-  type MemberSummaryView,
-  type TagStatus,
-} from '../api.ts';
+import type { ImpressionsView, TagStatus } from '../api.ts';
 import { MemberTagRows, type MemberTagAdd } from './MemberTagRows.tsx';
 import { ActivityHeatmap } from './ActivityHeatmap.tsx';
+import { ImpressionSummaryEditor } from './ImpressionSummaryEditor.tsx';
 import { MemberQqProfile } from './MemberQqProfile.tsx';
 import { IdentityRelationsPanel } from './IdentityRelationsPanel.tsx';
 import type { QqMemberTargetView } from '../api.ts';
-import { containsSensitiveText, redactSensitiveText } from '../sensitive-text.ts';
 
 const AFFINITY_LABELS: Record<ImpressionsView['members'][number]['affinity']['level'], string> = {
   cold: '疏远',
@@ -38,49 +32,7 @@ export function MemberProfileCard({ sessionId, member, busy, relationTargets, on
   onDelete: TagDelete;
   onAdd: MemberTagAdd;
 }) {
-  const [summary, setSummary] = useState<MemberSummaryView | null>();
-  const [summaryLoading, setSummaryLoading] = useState(true);
-  const [summaryEditing, setSummaryEditing] = useState(false);
-  const [summaryDraft, setSummaryDraft] = useState('');
-  const [summarySensitiveInput, setSummarySensitiveInput] = useState(false);
-  const [summarySaving, setSummarySaving] = useState(false);
-  const [summaryError, setSummaryError] = useState('');
-
   const summaryEndpoint = `/api/member-summaries/${encodeURIComponent(sessionId)}/${member.userId}`;
-  useEffect(() => {
-    let active = true;
-    setSummaryLoading(true);
-    setSummaryError('');
-    setSummaryEditing(false);
-    void apiRequest<MemberSummaryView | null>(summaryEndpoint).then((result) => {
-      if (active) setSummary(result);
-    }).catch((reason: unknown) => {
-      if (active) setSummaryError(reason instanceof Error ? reason.message : '读取一句话印象失败');
-    }).finally(() => {
-      if (active) setSummaryLoading(false);
-    });
-    return () => { active = false; };
-  }, [summaryEndpoint]);
-
-  async function saveSummary(): Promise<void> {
-    const text = summaryDraft.trim();
-    if (!text || Array.from(text).length > 50 || /[\r\n]/u.test(text) || containsSensitiveText(text) || summarySaving) return;
-    setSummarySaving(true);
-    setSummaryError('');
-    try {
-      const saved = await apiRequest<MemberSummaryView>(summaryEndpoint, {
-        method: 'PUT',
-        body: JSON.stringify({ text }),
-      });
-      setSummary(saved);
-      setSummaryEditing(false);
-    } catch (reason) {
-      setSummaryError(reason instanceof Error ? reason.message : '保存一句话印象失败');
-    } finally {
-      setSummarySaving(false);
-    }
-  }
-
   const name = member.name;
   return <section className="panel-card member-profile-card" aria-label={`${name}的画像卡`}>
     <header className="member-profile-heading">
@@ -90,50 +42,9 @@ export function MemberProfileCard({ sessionId, member, busy, relationTargets, on
         <span className="mono muted">QQ {member.userId}</span>
       </div>
       <span className="member-profile-affinity">{AFFINITY_LABELS[member.affinity.level]} · {member.affinity.value}</span>
-      <div className="member-summary">
-        <div className="member-summary-heading">
-          <span className="small-heading">一句话印象</span>
-          {summary?.manual && <span className="status-pill">手动</span>}
-          {!summaryEditing && <button className="text-button" type="button" disabled={summaryLoading || summarySaving} onClick={() => {
-            setSummaryDraft(summary?.text ?? '');
-            setSummarySensitiveInput(false);
-            setSummaryEditing(true);
-          }}>{summary ? '改写' : '添加'}</button>}
-        </div>
-        {summaryLoading && <p className="muted" role="status">正在读取…</p>}
-        {!summaryLoading && !summaryEditing && <p className="member-summary-text">
-          {summary ? redactSensitiveText(summary.text) : '还没有一句话印象。'}
-        </p>}
-        {summaryEditing && <div className="member-summary-editor">
-          <textarea
-            value={summaryDraft}
-            rows={2}
-            aria-label="编辑一句话印象"
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              if (containsSensitiveText(value)) {
-                setSummaryDraft('');
-                setSummarySensitiveInput(true);
-                setSummaryError('疑似敏感凭据已清除，未发送。');
-              } else {
-                setSummaryDraft(value);
-                setSummarySensitiveInput(false);
-                setSummaryError('');
-              }
-            }}
-          />
-          <span className="muted">{Array.from(summaryDraft).length}/50 个 Unicode 字符</span>
-          {summarySensitiveInput && <span className="tag-sensitive-hint" role="status">疑似敏感凭据已清除，未发送。</span>}
-          <div className="member-summary-actions">
-            <button className="button button-primary" type="button" disabled={summarySaving || summarySensitiveInput || !summaryDraft.trim() || Array.from(summaryDraft.trim()).length > 50 || /[\r\n]/u.test(summaryDraft)} onClick={() => void saveSummary()}>
-              {summarySaving ? '正在保存…' : '保存为手动印象'}
-            </button>
-            <button className="text-button" type="button" disabled={summarySaving} onClick={() => { setSummaryEditing(false); setSummarySensitiveInput(false); setSummaryError(''); }}>取消</button>
-          </div>
-        </div>}
-        {summaryError && <p className="notice notice-warn" role="alert">{summaryError}</p>}
-      </div>
+      <ImpressionSummaryEditor endpoint={summaryEndpoint} subject={name} />
     </header>
+    <ActivityHeatmap sessionId={sessionId} userId={member.userId} scheduleDrop={member.scheduleDrop} />
     {member.qqProfile && <MemberQqProfile profile={member.qqProfile} />}
     <IdentityRelationsPanel
       sessionId={sessionId}
@@ -144,7 +55,6 @@ export function MemberProfileCard({ sessionId, member, busy, relationTargets, on
       targets={relationTargets}
       onUpdated={onIdentityUpdated}
     />
-    <ActivityHeatmap sessionId={sessionId} userId={member.userId} />
     <MemberTagRows
       sessionId={sessionId}
       tags={member.tags}

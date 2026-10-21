@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import * as impressionsModel from '../panel/src/impressions-model.ts';
 import {
   activityCalendarCells,
   activityLevel,
@@ -82,6 +83,60 @@ test('member preview excludes locked, candidate, inferred identity and misc tags
   ];
 
   assert.deepEqual(memberPreviewTags(tags).map(({ text }) => text), ['不喜欢外号', '幽默']);
+});
+
+test('group member search matches name, group card, and tag text', () => {
+  const members = [
+    { userId: 42, name: '小明', qqProfile: { card: '明天见' }, tags: [{ text: 'CS2', subject: '游戏', category: 'fandom' }], messageCount: 4, lastMessageTime: 100, affinity: { value: -20 } },
+    { userId: 43, name: '小青', qqProfile: { card: '小雨' }, tags: [{ text: '旅行', subject: null, category: 'personality' }], messageCount: 10, lastMessageTime: 60, affinity: { value: 50 } },
+    { userId: 44, name: '小林', qqProfile: null, tags: [{ text: '明日方舟', subject: null, category: 'fandom' }], messageCount: 1, lastMessageTime: 200, affinity: { value: 10 } },
+  ] as const;
+  const searchAndSortMembers = Reflect.get(impressionsModel, 'searchAndSortMembers') as (
+    items: typeof members,
+    query: string,
+    sort: 'recent' | 'messages' | 'affinity',
+  ) => typeof members[number][] | undefined;
+
+  assert.equal(typeof searchAndSortMembers, 'function');
+  if (typeof searchAndSortMembers !== 'function') return;
+  assert.deepEqual(searchAndSortMembers(members, '小明', 'recent').map(({ userId }) => userId), [42]);
+  assert.deepEqual(searchAndSortMembers(members, '小雨', 'recent').map(({ userId }) => userId), [43]);
+  assert.deepEqual(searchAndSortMembers(members, 'cs2', 'recent').map(({ userId }) => userId), [42]);
+});
+
+test('group member sorting uses recent messages, message volume, or affinity without mutating input', () => {
+  const members = [
+    { userId: 42, name: '小明', qqProfile: null, tags: [], messageCount: 4, lastMessageTime: 100, affinity: { value: -20 } },
+    { userId: 43, name: '小青', qqProfile: null, tags: [], messageCount: 10, lastMessageTime: 60, affinity: { value: 50 } },
+    { userId: 44, name: '小林', qqProfile: null, tags: [], messageCount: 1, lastMessageTime: 200, affinity: { value: 10 } },
+  ] as const;
+  const searchAndSortMembers = Reflect.get(impressionsModel, 'searchAndSortMembers') as (
+    items: typeof members,
+    query: string,
+    sort: 'recent' | 'messages' | 'affinity',
+  ) => typeof members[number][] | undefined;
+
+  assert.equal(typeof searchAndSortMembers, 'function');
+  if (typeof searchAndSortMembers !== 'function') return;
+  assert.deepEqual(searchAndSortMembers(members, '', 'recent').map(({ userId }) => userId), [44, 42, 43]);
+  assert.deepEqual(searchAndSortMembers(members, '', 'messages').map(({ userId }) => userId), [43, 42, 44]);
+  assert.deepEqual(searchAndSortMembers(members, '', 'affinity').map(({ userId }) => userId), [43, 44, 42]);
+  assert.deepEqual(members.map(({ userId }) => userId), [42, 43, 44]);
+});
+
+test('three-hour activity peak wraps midnight and chooses the first tied window', () => {
+  const peakActivityWindow = Reflect.get(impressionsModel, 'peakActivityWindow') as (
+    buckets: readonly number[],
+  ) => { from: number; to: number; ratio: number } | undefined;
+  const buckets = Array.from({ length: 24 }, () => 0);
+  buckets[23] = 0.4;
+  buckets[0] = 0.4;
+  buckets[1] = 0.2;
+
+  assert.equal(typeof peakActivityWindow, 'function');
+  if (typeof peakActivityWindow !== 'function') return;
+  assert.deepEqual(peakActivityWindow(buckets), { from: 23, to: 2, ratio: 1 });
+  assert.equal(peakActivityWindow([]), undefined);
 });
 
 test('recent-tag fade label follows the supplied local fade timestamp', () => {

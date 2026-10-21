@@ -28,6 +28,7 @@ import { isTagCategoryForScope, prepareTagText, type TagCategory, type TagDropRe
 import { mapMessageToMainIdentity } from '../profiles/account-identity.ts';
 import { buildImpressionsPromptBlocks } from './prompt-blocks.ts';
 import type { TagSubjectRepository } from '../../store/tag-subject-repo.ts';
+import { recordScheduleTagDrop } from './record-tag-drop.ts';
 
 export const EXTRACT_BATCH_TRIGGER = { messages: 60, sinceMs: 30 * 60 * 1000 } as const;
 export const EXTRACT_SLOW_TRIGGER = { messages: 10, sinceMs: 6 * 60 * 60 * 1000 } as const;
@@ -155,9 +156,10 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
   ): void {
     let newCount = 0;
     const incrementedTagIds = new Set<number>();
-    const recordDrop = (reason?: TagDropReason) => {
+    const recordDrop = (reason?: TagDropReason, dropped?: { category: TagCategory; text: string }) => {
       counters.dropped += 1;
       if (reason) counters.droppedTagReasons[reason] = (counters.droppedTagReasons[reason] ?? 0) + 1;
+      if (reason === 'schedule_by_stats' && dropped) recordScheduleTagDrop(options.repository, { account, sessionId: sessionKey, userId, ...dropped, time: at }, reportError);
     };
     const isTagVetoed = (category: TagCategory, subjectPath: string | null, textNorm: string): boolean =>
       options.repository.isTagVetoed({ account, sessionId: sessionKey, userId, category, subject: subjectPath, textNorm });
@@ -250,7 +252,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       const sourceRecord = recordsById.get(item.messageId);
       const preparedText = prepareTagText(item.category, item.text, sourceRecord ? [sourceRecord.plainText] : []);
       if (!preparedText.ok) {
-        recordDrop(preparedText.reason);
+        recordDrop(preparedText.reason, { category: item.category, text: item.text });
         continue;
       }
       const normalizedItem = { ...item, text: preparedText.text };
@@ -332,7 +334,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       const sourceRecord = recordsById.get(item.messageId);
       const preparedText = prepareTagText(item.category, item.text, sourceRecord ? [sourceRecord.plainText] : []);
       if (!preparedText.ok) {
-        recordDrop(preparedText.reason);
+        recordDrop(preparedText.reason, { category: item.category, text: item.text });
         continue;
       }
       const normalizedItem = { ...item, text: preparedText.text };

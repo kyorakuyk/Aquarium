@@ -454,11 +454,11 @@ M2 不是另起一套聊天管线，而是在现有 pipeline 上增加可配置�
 
 ## 16. Impressions V4：结构整理、提示词前缀与标签分类 v2（2026-10-21）
 
-本节补充 §16 夜间任务中已完成的 S1–S4、K1–K3 和 M1–M7。各任务的细项与停止点以 `doc/plans/PLAN.md` §16 为准；这里记录新目录的职责和关键设计，方便从当前代码继续阅读。
+本节补充 §16 夜间任务中已完成的 S1–S4、K1–K3 和 M1–M8。各任务的细项与停止点以 `doc/plans/PLAN.md` §16 为准；这里记录新目录的职责和关键设计，方便从当前代码继续阅读。
 
 ### 16.1 S1–S4：迁移与 core 的职责边界
 
-- `src/store/db.ts` 负责打开数据库并按版本顺序执行迁移；每个版本的 SQL 变更在 `src/store/migrations/v01.ts` 至 `v20.ts` 中独立审查。新增 schema 时追加迁移，不改写已发布版本；迁移测试也验证版本连续、旧数据保留和重复打开的幂等性。
+- `src/store/db.ts` 负责打开数据库并按版本顺序执行迁移；每个版本的 SQL 变更在 `src/store/migrations/v01.ts` 至 `v21.ts` 中独立审查。新增 schema 时追加迁移，不改写已发布版本；迁移测试也验证版本连续、旧数据保留和重复打开的幂等性。
 - `StoreRepository` 的接口与存储 DTO 位于 `src/store/repository-types.ts`，由 `src/store/repository.ts` 继续 re-export；实现文件聚焦查询组合和读写逻辑，避免契约堆叠继续扩大。
 - 标签分类、适用范围、半衰期、subject 路径等纯规则位于 `src/core/impressions/tag-model.ts`，不依赖 SQLite。为避免 `store` 与 `core` 互相耦合，边界检查只给 `store` 到该纯模型模块开了一个明确白名单。
 - 出没统计归 `src/core/profiles/presence.ts`，统计作息标签的协调归 `presence-service.ts`；`src/core/conversation/`、`shared/`、`prompt/` 等目录按职责组织会话、共同类型和提示词能力。
@@ -522,8 +522,16 @@ M3 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **69
 ### 16.10 M7：导出、导入与初始化
 
 - API 与面板由 `src/panel-server/impressions-data-routes.ts` 和 `panel/src/components/ImpressionsDataMenu.tsx` 负责；传输文件的 Zod schema、数据库应用、备份写入分别放在 `impressions-data-schema.ts`、`impressions-data-import.ts`、`impressions-data-backup.ts`。复用项目已有 Zod、SQLite 和浏览器 Blob 下载，没有新增 npm 依赖。
-- JSON 固定 `version: 1`，带当前群 `account/sessionId/groupName`。省略 `include` 时导出标签、摘要、subjects、vetoes、relations 和 accountKinds；可显式额外导出近一年活动日历或 L1 私聊事实。活动只保存聚合计数，不导出聊天正文；它是消息的派生快照，导入时仍以本地聊天记录重算。L0 在任何选项下都不进入文件。标签、证据、摘要、主题、veto 和私聊事实正文继续经过原有敏感文本遮蔽；展示用群名走名称字段。
+- JSON 固定 `version: 1`，带当前群 `account/sessionId/groupName`。省略 `include` 时导出标签、成员摘要、subjects、vetoes、relations 和 accountKinds；可显式额外导出近一年活动日历或 L1 私聊事实。活动只保存聚合计数，不导出聊天正文；它是消息的派生快照，导入时仍以本地聊天记录重算。L0 在任何选项下都不进入文件。标签、证据、摘要、主题、veto 和私聊事实正文继续经过原有敏感文本遮蔽；展示用群名走名称字段。
 - 标签导出排除 `superseded` tombstone，因为其替代项引用的是本地数据库行 ID；摘要、账号类型、关系的成员范围仍从当前会话的全部标签计算，不会因成员只剩 superseded 标签而漏掉其共享摘要。导入先对严格结构做校验，要求 version 1 且群会话在当前账号联系人中存在；面板还检查文件 sessionId 与当前选中群一致。预览按对象、分类、规范化文本给出新增/冲突数。`merge` 保留现有冲突，`overwrite` 更新未锁定冲突；已有锁定标签不改。veto、摘要、subjects、账号类型、关系和显式 L1 事实在同一 SQLite 事务中应用，失败回滚。
 - 实际导入和 reset 前都先把当前群的默认数据写入应用根目录 `data/backups/`，备份使用独占创建避免覆盖；若备份创建失败，操作在任何数据库写入前中止。Windows 文件名不能含 `:`，因此 sessionId 在备份文件名中转换为短横线。
-- reset 通过群名精确确认，只清当前群 tags、vetoes 和整理水位线；它保留聊天、活动/好感、私聊事实、身份关系，以及 account+userId 共享的成员摘要和 account+category 共享的 subjects，避免误清其他群的数据。当前尚无群级一句话摘要持久化表，按确认留待 M8。
-- M7 验证：`npm run check` 通过依赖边界检查及 **728/728** 项测试；聚焦数据转移/初始化及相关接口测试 **25/25**。`npm run panel:build` 成功（**153** 个模块），主 bundle **556.47 kB**，仍高于默认 500 kB 提示线。真实 GUI、QQ、SnowLuma 和模型验收未运行；M8 与 R9 仍待完成。
+- reset 通过群名精确确认，只清当前群 tags、vetoes、整理水位线、该群的一句话摘要和作息标签丢弃事件；它保留聊天、活动/好感、私聊事实、身份关系，以及 account+userId 共享的成员摘要和 account+category 共享的 subjects，避免单群初始化误删其他群的数据。群级摘要与丢弃事件按 account+sessionId 隔离。
+- M7 验证：`npm run check` 通过依赖边界检查及 **728/728** 项测试；聚焦数据转移/初始化及相关接口测试 **25/25**。`npm run panel:build` 成功（**153** 个模块），主 bundle **556.47 kB**，仍高于默认 500 kB 提示线。真实 GUI、QQ、SnowLuma 和模型验收未运行；M8 已完成，R9 阶段审查仍待执行。
+
+### 16.11 M8：群级摘要、作息丢弃记录与 V4 面板
+
+- schema v21 新增 `group_summaries` 与 `tag_drop_events`。群级摘要在成功的群画像提取后复用 `prompts/member-summary.md`（`subject` 为“群”），仅在至少 3 条确认且未锁定的群标签发生变化时调用 extract 槽位；传给模型的标签文字与主题路径、生成摘要均继续脱敏，摘要限制 50 字，手工摘要会锁定并阻止后续自动覆盖。摘要参与现有导入/导出；reset 确认框明确列出群级摘要和该群近期模型作息丢弃提示，同时说明成员共享摘要会保留；reset 仅删除当前群摘要与该群的丢弃事件，不影响其他群。丢弃事件是 7 天内的暂存提示，不进入导出文件。
+- 模型输出被统计规则拒绝为作息标签时，写入已脱敏的 `schedule_by_stats` 事件；仓储按 account、session、对象隔离，最多保留最近 7 天，详情 API 只返回对应群/群友最近一条供冲突提示使用。
+- 印象详情 API 同时提供实际群标签注入文本、群友消息数/最近发言时间与排布数据；注入文案由现有受限选择器生成，不能用数据库中所有已确认标签代替。群级摘要和标签正文仍走原有敏感文本遮蔽。
+- 面板按三张 `ImpressionsV4` 静态参照页拆分为群侧栏、群卡、共用详情、群/QQ 资料和摘要编辑器。群友支持按名字、群名片、标签搜索，按最近发言、发言量、好感度排序；无发言成员折叠显示。详情在群与群友间复用，含一句话摘要、作息与出没（时段、周、月、年视图；时段轴至 24 点）、资料、身份关系（仅群友）、分类标签、实际注入文本与图例；作息标签丢弃提示仅显示 7 天内最多一条，不对模型提议断言其与统计峰值必然冲突。
+- M8 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **739/739** 项测试；`npm run panel:build` 成功（**158** 个模块），主 bundle **562.23 kB**，仍高于默认 500 kB 提示线；`git diff --check` 通过。未运行 GUI、`npm start`、真实模型、QQ 或 SnowLuma；静态参照页已检查。R9 阶段审查及用户真实体验验收仍待执行。

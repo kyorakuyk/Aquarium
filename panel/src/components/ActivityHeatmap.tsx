@@ -6,7 +6,7 @@ import {
   type ActivityResponseView,
   type ActivityView,
 } from '../api.ts';
-import { activityCalendarCells, activityLevel } from '../impressions-model.ts';
+import { activityCalendarCells, activityLevel, peakActivityWindow } from '../impressions-model.ts';
 
 const VIEW_LABELS: ReadonlyArray<{ value: ActivityView; label: string }> = [
   { value: 'hour', label: '时段' },
@@ -35,7 +35,7 @@ function DistributionChart({ data }: { data: ActivityDistributionView }) {
         />)}
       </div>
       <div className="activity-hour-axis" aria-hidden="true">
-        {[0, 3, 6, 9, 12, 15, 18, 21].map((hour) => <span key={hour}>{hour}</span>)}
+        {[0, 3, 6, 9, 12, 15, 18, 21, 24].map((hour) => <span key={hour}>{hour}</span>)}
       </div>
     </div>;
   }
@@ -82,10 +82,11 @@ function ActivitySummary({ data }: { data: ActivityResponseView }) {
   </div>;
 }
 
-export function ActivityHeatmap({ sessionId, userId, group = false }: {
+export function ActivityHeatmap({ sessionId, userId, group = false, scheduleDrop = null }: {
   sessionId: string;
   userId?: number;
   group?: boolean;
+  scheduleDrop?: { text: string } | null;
 }) {
   const [view, setView] = useState<ActivityView>('hour');
   const [data, setData] = useState<ActivityResponseView>();
@@ -133,13 +134,16 @@ export function ActivityHeatmap({ sessionId, userId, group = false }: {
   }
 
   const suggestion = group && data?.view === 'hour' ? data.suggestion : null;
+  const peak = data?.view === 'hour' ? peakActivityWindow(data.buckets) : undefined;
+  const peakFrom = peak ? String(peak.from).padStart(2, '0') : '';
+  const peakTo = peak ? String(peak.to === 0 ? 24 : peak.to).padStart(2, '0') : '';
   return <section className={`activity-panel${group ? ' activity-panel-group' : ''}`}>
     <div className="activity-heading">
       <div>
-        <h3>{group ? '群级出没' : '作息与出没'}</h3>
+        <h3>作息与出没</h3>
         {data && <p className="muted">{view === 'hour' || view === 'week' ? '近 90 天，占比' : view === 'month' ? '近 30 天，按本地日期' : '近 365 天，按本地日期'}</p>}
       </div>
-      {!group && <div className="activity-view-tabs" role="group" aria-label="出没视图">
+      <div className="activity-view-tabs" role="group" aria-label="出没视图">
         {VIEW_LABELS.map((item) => <button
           className={view === item.value ? 'is-active' : ''}
           type="button"
@@ -147,13 +151,16 @@ export function ActivityHeatmap({ sessionId, userId, group = false }: {
           key={item.value}
           onClick={() => setView(item.value)}
         >{item.label}</button>)}
-      </div>}
+      </div>
     </div>
     {error && <p className="notice notice-warn" role="alert">{error}</p>}
     {loading && !data && <p className="muted" role="status">正在读取出没统计…</p>}
     {!loading && !data && !error && <p className="muted">暂无出没数据。</p>}
     {data && (data.view === 'hour' || data.view === 'week') && <DistributionChart data={data} />}
     {data && (data.view === 'month' || data.view === 'year') && <CalendarChart data={data} />}
+    {scheduleDrop && data?.view === 'hour' && peak && <p className="activity-schedule-drop" role="status">
+      模型曾推测「{scheduleDrop.text}」，该作息提议已被统计规则丢弃。统计显示 {peakFrom}–{peakTo} 点最活跃；作息只认统计。
+    </p>}
     {data && <div className="activity-legend" aria-label="颜色按相对发言量由少到多">
       <span>少</span>
       {ACTIVITY_LEVELS.map((level) => <span className={`activity-cell activity-level-${level}`} aria-hidden="true" key={level} />)}

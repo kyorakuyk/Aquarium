@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { apiRequest, post } from '../api.ts';
+import { apiRequest, post, type GroupSummaryView } from '../api.ts';
 import { TagVetoMenu } from './TagVetoMenu.tsx';
 
 interface ImportPreview {
@@ -48,7 +48,12 @@ export function ImpressionsDataMenu({ sessionId, groupName, groupTagCount, membe
   const [preview, setPreview] = useState<ImportPreview>();
   const [mode, setMode] = useState<'merge' | 'overwrite'>('merge');
   const [confirmation, setConfirmation] = useState('');
-  const [resetCounts, setResetCounts] = useState<{ groupTags: number; memberTags: number; vetoes: number }>();
+  const [resetCounts, setResetCounts] = useState<{
+    groupTags: number;
+    memberTags: number;
+    vetoes: number;
+    hasGroupSummary: boolean;
+  }>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
@@ -182,13 +187,15 @@ export function ImpressionsDataMenu({ sessionId, groupName, groupTagCount, membe
     setError('');
     setResetCounts(undefined);
     try {
-      const vetoes = await apiRequest<unknown[]>(
-        `/api/tag-vetoes?sessionId=${encodeURIComponent(sessionId)}`,
-      );
+      const [vetoes, groupSummary] = await Promise.all([
+        apiRequest<unknown[]>(`/api/tag-vetoes?sessionId=${encodeURIComponent(sessionId)}`),
+        apiRequest<GroupSummaryView | null>(`/api/group-summaries/${encodeURIComponent(sessionId)}`),
+      ]);
       setResetCounts({
         groupTags: groupTagCount,
         memberTags: memberTagCount,
         vetoes: vetoes.length,
+        hasGroupSummary: groupSummary !== null,
       });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '读取初始化范围失败');
@@ -268,6 +275,7 @@ export function ImpressionsDataMenu({ sessionId, groupName, groupTagCount, membe
       {fileName && <p className="impressions-data-file-name mono">{fileName}</p>}
       {busy && <p className="muted" aria-live="polite">正在读取并检查文件…</p>}
       {preview && <>
+        {isRecord(importDocument?.groupSummary) && <p className="muted">文件还包含群的一句话印象；{mode === 'merge' ? '合并时保留已有摘要。' : '覆盖时以文件为准。'}</p>}
         <dl className="impressions-import-counts">
           <div><dt>新增标签</dt><dd>{preview.added}</dd></div>
           <div><dt>与现有冲突</dt><dd>{preview.conflicts}</dd></div>
@@ -292,8 +300,8 @@ export function ImpressionsDataMenu({ sessionId, groupName, groupTagCount, membe
         <div><span className="eyebrow">{groupName}</span><h2 id="impressions-reset-title">初始化这个群的印象</h2></div>
         <button className="button button-secondary" type="button" onClick={() => setResetOpen(false)}>关闭</button>
       </header>
-      <p>会清空：群标签 {resetCounts?.groupTags ?? '—'} 条、群友标签 {resetCounts?.memberTags ?? '—'} 条、否决记录 {resetCounts?.vetoes ?? '—'} 条和整理水位线。</p>
-      <p className="muted">会保留：聊天记录、出没统计、好感度、私聊记忆、身份与关系、共享的一句话印象和主题别名。</p>
+      <p>会清空：群标签 <span className="mono">{resetCounts?.groupTags ?? '—'}</span> 条、群友标签 <span className="mono">{resetCounts?.memberTags ?? '—'}</span> 条、群级一句话印象 <span className="mono">{resetCounts ? (resetCounts.hasGroupSummary ? '1' : '0') : '—'}</span> 条、否决记录 <span className="mono">{resetCounts?.vetoes ?? '—'}</span> 条、整理水位线和该群近期模型作息丢弃提示。</p>
+      <p className="muted">会保留：聊天记录、出没统计、好感度、私聊记忆、身份与关系、成员共享的一句话印象和主题别名。</p>
       <p className="impressions-data-backup-note">✓ 会先自动导出一份备份到 <code>data/backups/</code></p>
       <label className="impressions-reset-confirm"><span>输入群名确认：<strong>{groupName}</strong></span><input value={confirmation} onChange={(event) => setConfirmation(event.currentTarget.value)} autoComplete="off" /></label>
       {error && <p className="notice notice-warn" role="alert">{error}</p>}

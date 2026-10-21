@@ -33,6 +33,16 @@ const PROFILE_ROWS: ReadonlyArray<{ category: TagCategory; label: string }> = [
   { category: 'misc', label: '其他' },
 ];
 
+const GROUP_ROWS: ReadonlyArray<{ category: TagCategory; label: string }> = [
+  { category: 'positioning', label: '定位' },
+  { category: 'topic', label: '话题' },
+  { category: 'atmosphere', label: '氛围' },
+  { category: 'meme', label: '群梗' },
+  { category: 'norms', label: '规矩' },
+  { category: 'recent', label: '近况' },
+  { category: 'misc', label: '其他' },
+];
+
 function displayText(tag: TagView): string {
   const base = tag.category === 'fandom' && tag.subject
     ? `${tag.subject.replaceAll('/', ' › ')} › ${tag.text}${tag.polarity === 'dislike' ? ' · 不喜欢' : ''}`
@@ -200,7 +210,7 @@ function TagRow({ label, category, tags, sessionId, busy, onAction, onRename, on
   </div>;
 }
 
-export function MemberTagRows({ sessionId, tags, busy, onAction, onRename, onLock, onDelete, onAdd }: {
+export function MemberTagRows({ sessionId, tags, busy, onAction, onRename, onLock, onDelete, onAdd, scope = 'member' }: {
   sessionId: string;
   tags: TagView[];
   busy: boolean;
@@ -209,8 +219,10 @@ export function MemberTagRows({ sessionId, tags, busy, onAction, onRename, onLoc
   onLock: TagLock;
   onDelete: TagDelete;
   onAdd: MemberTagAdd;
+  scope?: 'member' | 'group';
 }) {
   const scheduleTags = tags.filter((tag) => tag.category === 'schedule');
+  const rows = scope === 'group' ? GROUP_ROWS : PROFILE_ROWS;
   return <div className="profile-tag-rows">
     <TagRow
       label="作息"
@@ -224,7 +236,7 @@ export function MemberTagRows({ sessionId, tags, busy, onAction, onRename, onLoc
       onDelete={onDelete}
       onAdd={onAdd}
     />
-    {PROFILE_ROWS.map(({ category, label }) => <TagRow
+    {rows.map(({ category, label }) => <TagRow
       key={category}
       label={label}
       category={category}

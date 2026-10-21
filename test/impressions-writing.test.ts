@@ -72,6 +72,16 @@ test('提取去掉标签前缀，并记录 schedule_by_stats 丢弃原因', asyn
       assert.equal(summary.dropped, 1);
       assert.deepEqual(summary.droppedTagReasons, { schedule_by_stats: 1 });
       assert.deepEqual(tags.map(({ text, category }) => ({ text, category })), [{ text: '游戏', category: 'topic' }]);
+      assert.deepEqual(repository.latestScheduleDrop(groupSession.account, key, null, now - 7 * 24 * 60 * 60 * 1_000), {
+        id: 1,
+        account: groupSession.account,
+        sessionId: key,
+        userId: null,
+        category: 'personality',
+        text: '熬夜玩家',
+        reason: 'schedule_by_stats',
+        time: now,
+      });
     } finally {
       release();
     }

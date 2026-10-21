@@ -11,6 +11,8 @@ import { createQqProfileQueries } from './qq-profile-repo.ts';
 import { createIdentityQueries } from './identity-repo.ts';
 import { createTagQueries } from './tag-repo.ts';
 import { createTagVetoQueries } from './tag-veto-repo.ts';
+import { createGroupSummaryRepository } from './group-summary-repo.ts';
+import { createTagDropRepository } from './tag-drop-repo.ts';
 import type { ImageCaptionKind, StoreRepository } from './repository-types.ts';
 
 export type {
@@ -85,6 +87,13 @@ export function createRepository(
   const deleteSessionTags = database.prepare('DELETE FROM tags WHERE account = ? AND session_id = ?');
   const deleteSessionVetoes = database.prepare('DELETE FROM tag_vetoes WHERE account = ? AND session_id = ?');
   const deleteSessionTagRuns = database.prepare('DELETE FROM tag_runs WHERE account = ? AND session_id = ?');
+  const selectMemberMessageStats = database.prepare(`
+    SELECT sender_id, COUNT(*) AS message_count, MAX(time) AS last_message_time
+    FROM messages
+    WHERE session_id = ? AND is_self = 0
+    GROUP BY sender_id
+    ORDER BY last_message_time DESC, sender_id
+  `);
   const selectLastMessageTime = database.prepare(
     'SELECT MAX(time) AS latest_time FROM messages WHERE session_id = ?',
   );
@@ -202,6 +211,8 @@ export function createRepository(
 
   const identityTags = createTagQueries(database);
   const identityVetoes = createTagVetoQueries(database, identityTags);
+  const groupSummaries = createGroupSummaryRepository(database);
+  const tagDrops = createTagDropRepository(database);
   const transaction = <T>(task: () => T): T => {
     database.exec('BEGIN IMMEDIATE');
     let transactionOpen = true;
@@ -224,6 +235,8 @@ export function createRepository(
       const tags = Number(deleteSessionTags.run(account, sessionId).changes);
       const vetoes = Number(deleteSessionVetoes.run(account, sessionId).changes);
       deleteSessionTagRuns.run(account, sessionId);
+      groupSummaries.deleteGroupSummary(account, sessionId);
+      tagDrops.deleteTagDropsForSession(account, sessionId);
       return { tags, vetoes };
     });
   };
@@ -232,6 +245,8 @@ export function createRepository(
     ...createRecentExtractUsageQueries(database),
     ...createQqProfileQueries(database),
     ...createIdentityQueries(database, identityTags, identityVetoes),
+    ...groupSummaries,
+    ...tagDrops,
     ...createAffectQueries(database),
     ...createPersonaVersionRepository(database, clock),
     ...createPrivacyQueries(database),
@@ -288,6 +303,15 @@ export function createRepository(
         plainText: stringValue(row.plain_text, 'plain_text'),
         segments: JSON.parse(stringValue(row.segments_json, 'segments_json')) as unknown[],
         time: numberValue(row.time, 'time'),
+      }));
+    },
+
+    memberMessageStats(sessionId) {
+      const rows = selectMemberMessageStats.all(sessionId) as Array<Record<string, unknown>>;
+      return rows.map((row) => ({
+        userId: numberValue(row.sender_id, 'sender_id'),
+        messageCount: numberValue(row.message_count, 'message_count'),
+        lastMessageTime: numberValue(row.last_message_time, 'last_message_time'),
       }));
     },
 

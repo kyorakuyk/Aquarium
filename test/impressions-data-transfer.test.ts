@@ -104,6 +104,7 @@ test('impressions export never includes L0 and includes L1 only on explicit requ
     });
     repository.insertPrivateFact(privateFact(ownerId, 'L0', 'L0绝不导出标记'));
     repository.insertPrivateFact(privateFact(ownerId, 'L1', 'L1显式导出标记'));
+    repository.saveManualGroupSummary({ account, sessionId: groupId, text: '群聊晚上常讨论游戏。', updatedAt: now });
     const sensitiveTag = tagRecord('SensitiveValue9001');
     sensitiveTag.evidence = [{ kind: 'message', messageId: 'sensitive-export', time: now, quote: 'SensitiveValue9001' }];
     repository.insertTag(sensitiveTag);
@@ -128,6 +129,18 @@ test('impressions export never includes L0 and includes L1 only on explicit requ
     assert.equal((defaults.summaries as Array<{ userId: number }>).some((summary) => summary.userId === 43), true);
     assert.equal('activity' in defaults, false);
     assert.equal('privateFactsL1' in defaults, false);
+    assert.deepEqual(defaults.groupSummary, {
+      text: '群聊晚上常讨论游戏。',
+      manual: true,
+      updatedAt: now,
+    });
+
+    const tagsOnlyResponse = await app.request(
+      `/api/impressions/export?sessionId=${encodeURIComponent(groupId)}&include=tags`,
+      { headers: authHeaders() },
+    );
+    assert.equal(tagsOnlyResponse.status, 200);
+    assert.equal('groupSummary' in (await tagsOnlyResponse.json() as Record<string, unknown>), false);
 
     const l1Response = await app.request(
       `/api/impressions/export?sessionId=${encodeURIComponent(groupId)}&include=l1`,
@@ -183,6 +196,7 @@ test('impressions import preview counts new tags, conflicts, vetoes, and summari
       sessionId: groupId,
       groupName: '测试群',
       tags: [exportedTag('喜欢旅行'), exportedTag('喜欢电影')],
+      groupSummary: { text: '😀'.repeat(50), manual: true, updatedAt: now },
       summaries: [{ userId: 42, text: '喜欢旅行与电影', manual: true, updatedAt: now }],
       subjects: [],
       vetoes: [{ userId: 42, category: 'personality', subjectNorm: '', textNorm: '被否决', createdAt: now }],
@@ -289,6 +303,7 @@ test('import restores group vetoes, shared profiles, identities, relations, and 
     });
     const file = {
       ...importFile([exportedTag('喜欢旅行')], 'merge'),
+      groupSummary: { text: '群聊晚上常讨论游戏。', manual: true, updatedAt: now },
       summaries: [{ userId: 42, text: '喜欢旅行', manual: true, updatedAt: now }],
       subjects: [{ category: 'topic', name: '鸣潮', aliases: ['WW'] }],
       vetoes: [{ userId: 42, category: 'personality', subjectNorm: '', textNorm: '不再学习', createdAt: now }],
@@ -326,6 +341,7 @@ test('import restores group vetoes, shared profiles, identities, relations, and 
     assert.equal(repository.listTagsForSession(account, groupId).length, 1);
     assert.equal(repository.listTagVetoes(account, groupId).length, 1);
     assert.equal(memberSummaryRepository.get(account, 42)?.text, '喜欢旅行');
+    assert.equal(repository.getGroupSummary(account, groupId)?.text, '群聊晚上常讨论游戏。');
     assert.equal(repository.getAccountKind(account, 42)?.kind, 'human');
     assert.equal(repository.listRelationsForUser(account, 42)[0]?.locked, true);
     const subjects = await app.request(`/api/tag-subjects/${groupId}/topic`, { headers: authHeaders() });

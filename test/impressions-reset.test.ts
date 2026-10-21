@@ -60,6 +60,17 @@ test('reset requires the current group name and preserves shared data and other 
     repository.saveTagRun({ account, sessionId: groupId, lastRunAt: now, lastMessageTime: now });
     repository.saveTagRun({ account, sessionId: otherGroupId, lastRunAt: now, lastMessageTime: now });
     repository.setAccountKind(account, 42, 'human', now);
+    repository.saveManualGroupSummary({ account, sessionId: groupId, text: '当前群的摘要', updatedAt: now });
+    repository.saveManualGroupSummary({ account, sessionId: otherGroupId, text: '另一群的摘要', updatedAt: now });
+    repository.recordTagDrop({
+      account,
+      sessionId: groupId,
+      userId: null,
+      category: 'schedule',
+      text: '最近总是熬夜',
+      reason: 'schedule_by_stats',
+      time: now,
+    });
     repository.createRelation({
       account,
       aUserId: 42,
@@ -100,7 +111,10 @@ test('reset requires the current group name and preserves shared data and other 
     assert.equal(repository.listTagsForSession(account, groupId).length, 0);
     assert.equal(repository.listTagVetoes(account, groupId).length, 0);
     assert.equal(repository.getTagRun(account, groupId), undefined);
+    assert.equal(repository.getGroupSummary(account, groupId), undefined);
+    assert.equal(repository.latestScheduleDrop(account, groupId, null, now - 7 * 24 * 60 * 60 * 1_000), undefined);
     assert.equal(repository.listTagsForSession(account, otherGroupId).length, 1);
+    assert.equal(repository.getGroupSummary(account, otherGroupId)?.text, '另一群的摘要');
     assert.equal(repository.listTagVetoes(account, otherGroupId).length, 1);
     assert.notEqual(repository.getTagRun(account, otherGroupId), undefined);
     assert.equal(repository.getAccountKind(account, 42)?.kind, 'human');
@@ -116,11 +130,13 @@ test('reset requires the current group name and preserves shared data and other 
       version: number;
       sessionId: string;
       tags: unknown[];
+      groupSummary?: { text: string };
       privateFactsL1?: unknown;
     };
     assert.equal(backup.version, 1);
     assert.equal(backup.sessionId, groupId);
     assert.equal(backup.tags.length, 2);
+    assert.equal(backup.groupSummary?.text, '当前群的摘要');
     assert.equal(backup.privateFactsL1, undefined);
   });
 });

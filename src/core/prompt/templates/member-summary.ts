@@ -17,6 +17,6 @@ export function parseMemberSummaryTemplate(
   }
   const memberSummary = { ...template, system: fields.system, user: fields.user };
   validatePlaceholders('member-summary.md', memberSummary.system, [], []);
-  validatePlaceholders('member-summary.md', memberSummary.user, ['tags'], ['tags']);
+  validatePlaceholders('member-summary.md', memberSummary.user, ['subject', 'tags'], ['subject', 'tags']);
   return memberSummary;
 }

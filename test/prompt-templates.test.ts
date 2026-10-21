@@ -255,5 +255,6 @@ test('member-summary 模板声明标签输入并限制 50 字', () => {
 
   assert.ok(template);
   assert.ok(template.system.includes('50 个 Unicode 字符'));
+  assert.ok(template.user.includes('{{subject}}'));
   assert.ok(template.user.includes('{{tags}}'));
 });

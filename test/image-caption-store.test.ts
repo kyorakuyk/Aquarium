@@ -58,7 +58,7 @@ test('版本 9 图片缓存升级保留旧描述并增加认知元数据列', ()
     const columns = database.prepare("PRAGMA table_info('image_captions')")
       .all() as Array<{ name: string }>;
 
-    assert.equal(version.version, 20);
+    assert.equal(version.version, 21);
     assert.equal(retained.caption, '[图片：旧缓存]');
     assert.equal(retained.time, 77);
     assert.ok(columns.some(({ name }) => name === 'md5'));

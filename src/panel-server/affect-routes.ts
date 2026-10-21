@@ -25,6 +25,7 @@ import {
   normalizeTagSubjectPath,
   TAG_CATEGORY_KEYS,
 } from '../core/impressions/tag-model.ts';
+import { buildImpressionsLayoutContext } from './impressions-layout-context.ts';
 
 export interface AffectRouteOptions {
   getConfig: () => AquariumConfig;
@@ -345,11 +346,16 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     } : null;
     const tags = options.repository.listTagsForSession(key.account, id);
     const groupTags = tags.filter((tag) => tag.userId === null).map((tag) => tagView(tag, at));
-    const memberIds = [...new Set(
-      tags.map((tag) => tag.userId)
-        .filter((userId): userId is number => userId !== null)
-        .map((userId) => options.repository.mainUserIdFor(key.account, userId)),
-    )];
+    const layout = buildImpressionsLayoutContext({
+      repository: options.repository,
+      session: key,
+      sessionId: id,
+      now: at,
+      tags,
+      rosterUserIds: (qqProfile?.members ?? []).map((profile) => profile.userId),
+      template: promptTemplateStore.get().replySystem,
+    });
+    const { groupTagsText, groupScheduleDrop, messageActivity, memberIds, memberScheduleDrops } = layout;
     const members = memberIds.map((userId) => {
       const name = accountUserName(options.repository, key.account, id, userId);
       const memberTags = tags.filter((tag) => tag.userId !== null
@@ -397,6 +403,9 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
       return {
         userId,
         name,
+        messageCount: messageActivity.get(userId)?.messageCount ?? 0,
+        lastMessageTime: messageActivity.get(userId)?.lastMessageTime ?? null,
+        scheduleDrop: memberScheduleDrops.get(userId) ?? null,
         kind,
         relations,
         affinity: affinityService.getCurrent(key.account, userId, at),
@@ -422,7 +431,16 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
       };
     });
     const lastMessageTime = options.repository.getTagRun(key.account, id)?.lastMessageTime ?? null;
-    return context.json({ sessionId: id, groupTags, members, lastMessageTime, qqGroupProfile, qqMembers });
+    return context.json({
+      sessionId: id,
+      groupTags,
+      groupTagsText,
+      groupScheduleDrop: groupScheduleDrop ?? null,
+      members,
+      lastMessageTime,
+      qqGroupProfile,
+      qqMembers,
+    });
   });
 
   app.post('/api/impressions/:sessionId/refresh-qq-profile', async (context) => {

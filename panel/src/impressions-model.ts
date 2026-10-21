@@ -29,6 +29,24 @@ export interface MemberPreviewTag {
   lastSeen: number;
 }
 
+export type ImpressionsMemberSort = 'recent' | 'messages' | 'affinity';
+
+export interface SearchableImpressionsMember {
+  userId: number;
+  name: string;
+  messageCount: number;
+  lastMessageTime: number | null;
+  affinity: { value: number };
+  qqProfile: { card?: string } | null;
+  tags: ReadonlyArray<{ text: string; subject?: string | null }>;
+}
+
+export interface ActivityPeakWindow {
+  from: number;
+  to: number;
+  ratio: number;
+}
+
 const DAY_MS = 24 * 60 * 60 * 1_000;
 
 export function activityLevel(value: number, maximum: number): 0 | 1 | 2 | 3 | 4 {
@@ -54,6 +72,39 @@ export function memberPreviewTags(tags: readonly MemberPreviewTag[], limit = 3):
       || right.lastSeen - left.lastSeen
       || left.id - right.id)
     .slice(0, Math.max(0, limit));
+}
+
+export function searchAndSortMembers<T extends SearchableImpressionsMember>(
+  members: readonly T[],
+  query: string,
+  sort: ImpressionsMemberSort,
+): T[] {
+  const needle = query.trim().toLocaleLowerCase();
+  return members.filter((member) => needle.length === 0
+    || member.name.toLocaleLowerCase().includes(needle)
+    || (member.qqProfile?.card ?? '').toLocaleLowerCase().includes(needle)
+    || member.tags.some((tag) => `${tag.subject ?? ''} ${tag.text}`.toLocaleLowerCase().includes(needle)))
+    .slice()
+    .sort((left, right) => {
+      const score = sort === 'recent'
+        ? (right.lastMessageTime ?? 0) - (left.lastMessageTime ?? 0)
+        : sort === 'messages'
+          ? right.messageCount - left.messageCount
+          : right.affinity.value - left.affinity.value;
+      return score || left.name.localeCompare(right.name, 'zh-CN') || left.userId - right.userId;
+    });
+}
+
+export function peakActivityWindow(buckets: readonly number[], hours = 3): ActivityPeakWindow | undefined {
+  if (buckets.length !== 24 || !Number.isSafeInteger(hours) || hours < 1 || hours > 24
+    || buckets.some((value) => !Number.isFinite(value) || value < 0)) return undefined;
+  let peak: ActivityPeakWindow | undefined;
+  for (let from = 0; from < 24; from += 1) {
+    const ratio = Array.from({ length: hours }, (_, offset) => buckets[(from + offset) % 24] ?? 0)
+      .reduce((sum, value) => sum + value, 0);
+    if (!peak || ratio > peak.ratio) peak = { from, to: (from + hours) % 24, ratio };
+  }
+  return peak?.ratio ? peak : undefined;
 }
 
 function parseLocalDate(value: string): Date | undefined {

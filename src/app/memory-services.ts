@@ -2,7 +2,9 @@ import type { AquariumConfig } from '../config/schema.ts';
 import { createHistoryImportService } from '../core/impressions/history-import.ts';
 import { createTagClassificationService } from '../core/impressions/classify-tags.ts';
 import { createMemberSummaryService } from '../core/impressions/member-summary.ts';
+import { createGroupSummaryService } from '../core/impressions/group-summary.ts';
 import { createImpressionsService } from '../core/impressions/service.ts';
+import type { PipelineModelCall } from '../core/conversation/steps/types.ts';
 import { createPrivateFactsService } from '../core/privacy/service.ts';
 import { createPrivacyGateService } from '../core/privacy/group-gate.ts';
 import { createPrivacyMentionService } from '../core/privacy/mentions.ts';
@@ -26,18 +28,33 @@ export function createMemoryServices(options: {
   getConfig: () => AquariumConfig;
   logger: ServiceLogger;
   describeError: (error: unknown) => string;
+  callModel?: PipelineModelCall;
+  now?: () => number;
 }) {
+  const now = options.now ?? Date.now;
   const memberSummaryService = createMemberSummaryService({
     repository: options.repository,
     summaryRepository: options.memberSummaryRepository,
     getConfig: options.getConfig,
     getTemplate: () => promptTemplateStore.get().memberSummary,
+    ...(options.callModel ? { callModel: options.callModel } : {}),
+    now,
     onError: (error) => options.logger.error(`一句话印象生成失败：${options.describeError(error)}`),
+  });
+  const groupSummaryService = createGroupSummaryService({
+    repository: options.repository,
+    getConfig: options.getConfig,
+    getTemplate: () => promptTemplateStore.get().memberSummary,
+    ...(options.callModel ? { callModel: options.callModel } : {}),
+    now,
+    onError: (error) => options.logger.error(`群级一句话印象生成失败：${options.describeError(error)}`),
   });
   const impressionsService = createImpressionsService({
     repository: options.repository,
     tagSubjects: options.tagSubjects,
     getConfig: options.getConfig,
+    ...(options.callModel ? { callModel: options.callModel } : {}),
+    now,
     onError: (error) => options.logger.error(`印象提取失败：${options.describeError(error)}`),
     onWarn: (message) => options.logger.warn(message),
     onMemberSummaryCheck: memberSummaryService.maybeGenerate,
@@ -49,6 +66,7 @@ export function createMemoryServices(options: {
       options.logger.info(
         `印象提取 ${summary.sessionId}：${summary.status}，新增 ${summary.inserted}、观察 ${summary.observed}、推翻 ${summary.superseded}、丢弃 ${summary.dropped}${dropReasons ? `（${dropReasons}）` : ''}。`,
       );
+      if (summary.status === 'done') groupSummaryService.maybeGenerate(summary.account, summary.sessionId, now());
     },
   });
   const tagClassificationService = createTagClassificationService({
@@ -99,6 +117,7 @@ export function createMemoryServices(options: {
   return {
     impressionsService,
     memberSummaryService,
+    groupSummaryService,
     tagClassificationService,
     privateFactsService,
     privateMentionService,

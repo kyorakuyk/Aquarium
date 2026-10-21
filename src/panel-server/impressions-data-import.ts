@@ -140,6 +140,19 @@ export function applyImpressionsImport(input: {
       });
     }
 
+    if (file.groupSummary) {
+      const existing = repository.getGroupSummary(account, sessionId);
+      if (!existing || mode === 'overwrite') {
+        repository.saveImportedGroupSummary({
+          account,
+          sessionId,
+          text: redactSensitiveText(file.groupSummary.text),
+          manual: file.groupSummary.manual,
+          updatedAt: file.groupSummary.updatedAt,
+        });
+      }
+    }
+
     for (const subject of file.subjects) {
       if (!tagSubjects) continue;
       const name = redactSensitiveText(subject.name);

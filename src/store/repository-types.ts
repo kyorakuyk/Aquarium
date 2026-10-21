@@ -21,6 +21,8 @@ import type { QqProfileRepository } from './qq-profile-repo.ts';
 import type { StickerRepository } from './sticker-repo.ts';
 import type { TagVetoRepository } from './tag-veto-repo.ts';
 import type { IdentityRepository } from './identity-repo.ts';
+import type { GroupSummaryRepository } from './group-summary-repo.ts';
+import type { TagDropRepository } from './tag-drop-repo.ts';
 
 export interface MessageStorageRecord {
   sessionId: string;
@@ -31,6 +33,12 @@ export interface MessageStorageRecord {
   plainText: string;
   segments: unknown[];
   time: number;
+}
+
+export interface MemberMessageStats {
+  userId: number;
+  messageCount: number;
+  lastMessageTime: number;
 }
 
 export interface UsageRecord {
@@ -142,13 +150,14 @@ export interface StoredPipelineTrace extends PipelineTraceRecord {
   id: number;
 }
 
-export interface StoreRepository extends RecentExtractUsageRepository, PersonaVersionRepository, PrivacyRepository, PrivateFactMentionRepository, PrivateFactControlsRepository, StickerRepository, TagVetoRepository, QqProfileRepository, IdentityRepository {
+export interface StoreRepository extends RecentExtractUsageRepository, PersonaVersionRepository, PrivacyRepository, PrivateFactMentionRepository, PrivateFactControlsRepository, StickerRepository, TagVetoRepository, QqProfileRepository, IdentityRepository, GroupSummaryRepository, TagDropRepository {
   transaction<T>(task: () => T): T;
   resetImpressionsSession(account: number, sessionId: string): { tags: number; vetoes: number };
   saveMessage(message: MessageStorageRecord): boolean;
   updateMessageSegments(sessionId: string, messageId: string, segments: unknown[]): void;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];
   messagesInRange(sessionId: string, fromTime: number, toTime: number): MessageStorageRecord[];
+  memberMessageStats(sessionId: string): MemberMessageStats[];
   profileActivitySessions(fromTime: number, toTime: number): string[];
   lastMessageTime(sessionId: string): number | null;
   lastMessageBefore(sessionId: string, beforeTime: number): MessageStorageRecord | undefined;

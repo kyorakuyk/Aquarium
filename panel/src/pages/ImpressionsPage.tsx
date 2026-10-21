@@ -10,24 +10,15 @@ import {
   type TagCategory,
   type TagPolarity,
   type TagStatus,
-  type TagView,
 } from '../api.ts';
 import { AffinityPanel } from '../components/AffinityPanel.tsx';
-import { ActivityHeatmap } from '../components/ActivityHeatmap.tsx';
-import { ImpressionTag, InlineTagAdd } from '../components/ImpressionTag.tsx';
-import { ImpressionsMemberRow } from '../components/ImpressionsMemberRow.tsx';
-import { MemberProfileCard } from '../components/MemberProfileCard.tsx';
 import { ImpressionsDataMenu } from '../components/ImpressionsDataMenu.tsx';
-import { QqGroupProfilePanel } from '../components/QqGroupProfilePanel.tsx';
+import { ImpressionsDetail } from '../components/ImpressionsDetail.tsx';
+import { ImpressionsSidebar } from '../components/ImpressionsSidebar.tsx';
 import { buildIdentityTargets } from '../identity-targets.ts';
 
 const PrivateFactsPanel = lazy(() => import('../components/PrivateFactsPanel.tsx').then((module) => ({ default: module.PrivateFactsPanel })));
 
-type TagAction = (id: number, status: TagStatus) => Promise<boolean>;
-type TagRename = (id: number, text: string) => Promise<boolean>;
-type TagLock = (id: number, locked: boolean) => Promise<boolean>;
-type TagDelete = (id: number) => Promise<boolean>;
-type TagAdd = (text: string) => Promise<boolean>;
 type HistoryImportTarget = 200 | 500 | 1_000 | 2_000;
 
 const HISTORY_IMPORT_TARGETS: HistoryImportTarget[] = [200, 500, 1_000, 2_000];
@@ -42,49 +33,6 @@ function historyFailureLabel(job: HistoryImportJobView): string {
   if (reason === 'network') return '网络错误';
   if (reason === 'http') return `HTTP ${failureHttpStatus ?? '错误'}`;
   return '其他错误';
-}
-
-function TagCollection({ tags, label, busy, onAction, onRename, onLock, onDelete, onAdd }: {
-  tags: TagView[];
-  label: string;
-  busy: boolean;
-  onAction: TagAction;
-  onRename: TagRename;
-  onLock: TagLock;
-  onDelete: TagDelete;
-  onAdd: TagAdd;
-}) {
-  const [showRejected, setShowRejected] = useState(false);
-  const active = tags.filter((tag) => tag.status !== 'rejected');
-  const rejected = tags.filter((tag) => tag.status === 'rejected');
-  return (
-    <div className="tag-collection">
-      {active.length === 0 && <span className="muted tag-empty">还没有标签</span>}
-      {active.map((tag) => <ImpressionTag key={tag.id} tag={tag} busy={busy} onAction={onAction} onRename={onRename} onLock={onLock} onDelete={onDelete} />)}
-      <InlineTagAdd label={label} busy={busy} onSubmit={onAdd} />
-      {rejected.length > 0 && <button className="rejected-tags-toggle" type="button" aria-expanded={showRejected} onClick={() => setShowRejected((value) => !value)}>
-        {showRejected ? '收起已否决' : `+${rejected.length} 已否决`}
-      </button>}
-      {showRejected && rejected.map((tag) => <ImpressionTag key={tag.id} tag={tag} busy={busy} onAction={onAction} onRename={onRename} onLock={onLock} onDelete={onDelete} />)}
-    </div>
-  );
-}
-
-function GroupTags({ tags, busy, onAction, onRename, onLock, onDelete, onAdd }: {
-  tags: TagView[];
-  busy: boolean;
-  onAction: TagAction;
-  onRename: TagRename;
-  onLock: TagLock;
-  onDelete: TagDelete;
-  onAdd: TagAdd;
-}) {
-  return (
-    <section className="panel-card group-vibe-card">
-      <h2>群的氛围</h2>
-      <TagCollection tags={tags} label="新增群标签" busy={busy} onAction={onAction} onRename={onRename} onLock={onLock} onDelete={onDelete} onAdd={onAdd} />
-    </section>
-  );
 }
 
 export function ImpressionsPage() {
@@ -135,14 +83,16 @@ export function ImpressionsPage() {
     else setView(undefined);
   }, [selectedId, load]);
 
+  useEffect(() => setSelectedUserId(undefined), [selectedId]);
+
   useEffect(() => {
     if (!view) {
       setSelectedUserId(undefined);
       return;
     }
-    setSelectedUserId((current) => view.members.some((member) => member.userId === current)
+    setSelectedUserId((current) => current !== undefined && view.members.some((member) => member.userId === current)
       ? current
-      : view.members[0]?.userId);
+      : undefined);
   }, [view]);
 
   useEffect(() => {
@@ -251,7 +201,7 @@ export function ImpressionsPage() {
   const historyWaterline = historyJob?.sessionId === selectedId
     ? historyJob.waterlineTime
     : view?.sessionId === selectedId ? view.lastMessageTime : null;
-  const selectedMember = view?.members.find((member) => member.userId === selectedUserId);
+  const selectedMember = selectedView?.members.find((member) => member.userId === selectedUserId);
 
   function openHistoryDialog(): void {
     if (historyImportActive) {
@@ -364,56 +314,30 @@ export function ImpressionsPage() {
         <PrivateFactsPanel sessions={privateSessions} loadingFriends={sessionsLoading} />
       </Suspense>}
       {tab === 'groups' && <>
-      {!view && <div className="empty-state">选择一个群，查看它攒下的标签。</div>}
-      {view && <QqGroupProfilePanel
-        sessionId={view.sessionId}
-        profile={view.qqGroupProfile}
-        onReload={() => load(view.sessionId)}
-      />}
-      {view && <div className="impressions-workspace">
-        <aside className="impressions-sidebar">
-          <GroupTags
-            tags={view.groupTags}
-            busy={busy}
-            onAction={(id, status) => runAction(id, { status })}
-            onRename={(id, text) => runAction(id, { text })}
-            onLock={(id, locked) => runAction(id, { locked })}
-            onDelete={deleteTag}
-            onAdd={(text) => addTag(null, text)}
-          />
-          <ActivityHeatmap sessionId={view.sessionId} group />
-          <section className="panel-card member-list-section">
-            <div className="section-heading">
-              <div><h2>群友</h2></div>
-              <span className="muted">{view.members.length} 人 · 按最近发言</span>
-            </div>
-            {view.members.length === 0 && <p className="muted">还没有群友标签；群里聊得多一些就会出现。</p>}
-            <div className="member-list">
-              {view.members.map((member) => <ImpressionsMemberRow
-                key={member.userId}
-                member={member}
-                account={Number(view.sessionId.split(':', 1)[0])}
-                selected={member.userId === selectedUserId}
-                onSelect={() => setSelectedUserId(member.userId)}
-              />)}
-            </div>
-          </section>
-        </aside>
-        {selectedMember
-          ? <MemberProfileCard
-            key={`${view.sessionId}:${selectedMember.userId}`}
-            sessionId={view.sessionId}
-            member={selectedMember}
-            busy={busy}
-            relationTargets={buildIdentityTargets(view, privateSessions)}
-            onIdentityUpdated={() => load(view.sessionId)}
-            onAction={(id, status) => runAction(id, { status })}
-            onRename={(id, text) => runAction(id, { text })}
-            onLock={(id, locked) => runAction(id, { locked })}
-            onDelete={deleteTag}
-            onAdd={(text, category, subject, polarity) => addTag(selectedMember.userId, text, category, subject, polarity)}
-          />
-          : <div className="panel-card member-profile-empty">选择一位群友，查看它眼里的画像。</div>}
+      {!selectedView && <div className="empty-state">{selectedGroup ? '正在读取群印象…' : '选择一个群，查看它攒下的印象。'}</div>}
+      {selectedView && selectedGroup && <div className="impressions-workspace">
+        <ImpressionsSidebar
+          group={selectedGroup}
+          view={selectedView}
+          selectedUserId={selectedUserId}
+          onSelectGroup={() => setSelectedUserId(undefined)}
+          onSelectMember={setSelectedUserId}
+        />
+        <ImpressionsDetail
+          sessionId={selectedView.sessionId}
+          groupName={selectedGroup.name}
+          enabled={selectedGroup.enabled}
+          view={selectedView}
+          member={selectedMember}
+          relationTargets={buildIdentityTargets(selectedView, privateSessions)}
+          busy={busy}
+          onReload={() => load(selectedView.sessionId)}
+          onAction={(id, status) => runAction(id, { status })}
+          onRename={(id, text) => runAction(id, { text })}
+          onLock={(id, locked) => runAction(id, { locked })}
+          onDelete={deleteTag}
+          onAdd={addTag}
+        />
       </div>}
       </>}
       <dialog

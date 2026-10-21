@@ -247,11 +247,16 @@ export interface ImpressionsView {
   sessionId: string;
   lastMessageTime: number | null;
   groupTags: TagView[];
+  groupTagsText: string | null;
+  groupScheduleDrop: { text: string; time: number } | null;
   qqGroupProfile: QqGroupProfileView | null;
   qqMembers: QqMemberTargetView[];
   members: Array<{
     userId: number;
     name: string;
+    messageCount: number;
+    lastMessageTime: number | null;
+    scheduleDrop: { text: string; time: number } | null;
     kind: AccountKind | null;
     relations: MemberRelationView[];
     affinity: AffinityView;
@@ -260,6 +265,14 @@ export interface ImpressionsView {
     memberTagsAllowed: boolean;
     memberTagsText: string | null;
   }>;
+}
+
+export interface GroupSummaryView {
+  account: number;
+  sessionId: string;
+  text: string;
+  manual: boolean;
+  updatedAt: number;
 }
 
 export interface MemberSummaryView {

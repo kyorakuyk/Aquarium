@@ -98,6 +98,14 @@ function exportDocument(options: ImpressionsDataRouteOptions, input: {
   };
   if (includes.has('tags')) exported.tags = tags.map(exportedTag);
   if (includes.has('summaries')) {
+    const groupSummary = options.repository.getGroupSummary(account, sessionId);
+    if (groupSummary) {
+      exported.groupSummary = {
+        text: redactSensitiveText(groupSummary.text),
+        manual: groupSummary.manual,
+        updatedAt: groupSummary.updatedAt,
+      };
+    }
     exported.summaries = memberIds.flatMap((userId) => {
       const summary = options.summaries?.get(account, userId);
       return summary ? [{ userId, text: redactSensitiveText(summary.text), manual: summary.manual, updatedAt: summary.updatedAt }] : [];
