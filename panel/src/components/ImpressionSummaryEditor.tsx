@@ -5,7 +5,11 @@ import { containsSensitiveText, redactSensitiveText } from '../sensitive-text.ts
 
 type SummaryView = Pick<GroupSummaryView | MemberSummaryView, 'text' | 'manual'>;
 
-export function ImpressionSummaryEditor({ endpoint, subject }: { endpoint: string; subject: string }) {
+export function ImpressionSummaryEditor({ endpoint, subject, refreshVersion = 0 }: {
+  endpoint: string;
+  subject: string;
+  refreshVersion?: number;
+}) {
   const [summary, setSummary] = useState<SummaryView | null>();
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -15,11 +19,19 @@ export function ImpressionSummaryEditor({ endpoint, subject }: { endpoint: strin
   const [error, setError] = useState('');
 
   useEffect(() => {
-    let active = true;
-    setLoading(true);
     setSummary(undefined);
+    setLoading(true);
     setError('');
     setEditing(false);
+    setDraft('');
+    setSensitiveInput(false);
+  }, [endpoint]);
+
+  useEffect(() => {
+    if (editing) return;
+    let active = true;
+    setLoading(true);
+    setError('');
     void apiRequest<SummaryView | null>(endpoint).then((result) => {
       if (active) setSummary(result);
     }).catch((reason: unknown) => {
@@ -28,7 +40,7 @@ export function ImpressionSummaryEditor({ endpoint, subject }: { endpoint: strin
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [endpoint]);
+  }, [editing, endpoint, refreshVersion]);
 
   async function save(): Promise<void> {
     const text = draft.trim();

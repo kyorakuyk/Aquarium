@@ -20,9 +20,10 @@ type TagRename = (id: number, text: string) => Promise<boolean>;
 type TagLock = (id: number, locked: boolean) => Promise<boolean>;
 type TagDelete = (id: number) => Promise<boolean>;
 
-export function MemberProfileCard({ sessionId, member, busy, relationTargets, onIdentityUpdated, onAction, onRename, onLock, onDelete, onAdd }: {
+export function MemberProfileCard({ sessionId, member, refreshVersion, busy, relationTargets, onIdentityUpdated, onAction, onRename, onLock, onDelete, onAdd }: {
   sessionId: string;
   member: Member;
+  refreshVersion: number;
   busy: boolean;
   relationTargets: QqMemberTargetView[];
   onIdentityUpdated: () => Promise<unknown>;
@@ -42,9 +43,9 @@ export function MemberProfileCard({ sessionId, member, busy, relationTargets, on
         <span className="mono muted">QQ {member.userId}</span>
       </div>
       <span className="member-profile-affinity">{AFFINITY_LABELS[member.affinity.level]} · {member.affinity.value}</span>
-      <ImpressionSummaryEditor endpoint={summaryEndpoint} subject={name} />
+      <ImpressionSummaryEditor endpoint={summaryEndpoint} subject={name} refreshVersion={refreshVersion} />
     </header>
-    <ActivityHeatmap sessionId={sessionId} userId={member.userId} scheduleDrop={member.scheduleDrop} />
+    <ActivityHeatmap sessionId={sessionId} userId={member.userId} scheduleDrop={member.scheduleDrop} refreshVersion={refreshVersion} />
     {member.qqProfile && <MemberQqProfile profile={member.qqProfile} />}
     <IdentityRelationsPanel
       sessionId={sessionId}

@@ -16,6 +16,8 @@ import { ImpressionsDataMenu } from '../components/ImpressionsDataMenu.tsx';
 import { ImpressionsDetail } from '../components/ImpressionsDetail.tsx';
 import { ImpressionsSidebar } from '../components/ImpressionsSidebar.tsx';
 import { buildIdentityTargets } from '../identity-targets.ts';
+import { shouldRefreshHistoryImport } from '../impressions-refresh-model.ts';
+import { useImpressionsBackgroundRefresh } from '../use-impressions-background-refresh.ts';
 
 const PrivateFactsPanel = lazy(() => import('../components/PrivateFactsPanel.tsx').then((module) => ({ default: module.PrivateFactsPanel })));
 
@@ -54,8 +56,12 @@ export function ImpressionsPage() {
   const [historyConfirming, setHistoryConfirming] = useState(false);
   const [historyCancelling, setHistoryCancelling] = useState(false);
   const [historyError, setHistoryError] = useState('');
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const refreshedHistoryJobs = useRef(new Set<string>());
   const historyDialogRef = useRef<HTMLDialogElement>(null);
+  const lastViewLoadStartedAt = useRef(0);
+  const historyImportActive = historyStarting || Boolean(historyJobId && !isHistoryImportTerminal(historyJob));
+  const historyExtractionActive = historyJob?.phase === 'extracting';
 
   useEffect(() => {
     void apiRequest<SessionView[]>('/api/sessions').then((rows) => {
@@ -68,8 +74,11 @@ export function ImpressionsPage() {
   }, []);
 
   const load = useCallback(async (sessionId: string): Promise<boolean> => {
+    const startedAt = Date.now();
+    lastViewLoadStartedAt.current = startedAt;
     try {
       setView(await apiRequest<ImpressionsView>(`/api/impressions/${sessionId}`));
+      setRefreshVersion((current) => current + 1);
       setError('');
       return true;
     } catch (reason) {
@@ -77,6 +86,14 @@ export function ImpressionsPage() {
       return false;
     }
   }, []);
+
+  const { tagClassificationStatus, extractionRunning } = useImpressionsBackgroundRefresh({
+    sessionId: selectedId,
+    enabled: Boolean(selectedId),
+    historyExtractionActive,
+    lastViewLoadStartedAt,
+    onRefresh: load,
+  });
 
   useEffect(() => {
     if (selectedId) void load(selectedId);
@@ -119,8 +136,7 @@ export function ImpressionsPage() {
         setHistoryJob(current);
         if (isHistoryImportTerminal(current)) {
           window.clearInterval(timer);
-          if (current.phase === 'done'
-            && current.sessionId === selectedId
+          if (shouldRefreshHistoryImport(current.phase, current.sessionId, selectedId)
             && !refreshedHistoryJobs.current.has(current.id)) {
             refreshedHistoryJobs.current.add(current.id);
             void load(current.sessionId);
@@ -194,7 +210,6 @@ export function ImpressionsPage() {
     }
   }
 
-  const historyImportActive = historyStarting || Boolean(historyJobId && !isHistoryImportTerminal(historyJob));
   const selectedGroup = groups.find((group) => group.sessionId === selectedId);
   const selectedView = view?.sessionId === selectedId ? view : undefined;
   const historyGroup = groups.find((group) => group.sessionId === (historyJob?.sessionId ?? selectedId));
@@ -278,6 +293,13 @@ export function ImpressionsPage() {
         <p className="page-description">它对群友的了解，也是你了解朋友的一本册子。</p>
       </header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
+      {tab === 'groups' && tagClassificationStatus?.state === 'running' && <p className="muted" role="status">
+        正在整理旧标签：{tagClassificationStatus.processed.toLocaleString('zh-CN')} / {tagClassificationStatus.total.toLocaleString('zh-CN')}。
+      </p>}
+      {tab === 'groups' && extractionRunning && <p className="muted" role="status">正在整理当前群的印象…</p>}
+      {historyImportActive && historyJob && <p className="muted" role="status">
+        {historyJob.phase === 'fetching' ? '正在拉取群聊历史…' : historyJob.phase === 'extracting' ? '正在整理历史印象…' : '历史整理等待确认。'}
+      </p>}
       <div className="impressions-controls">
         <div className="page-tabs" role="tablist" aria-label="印象视图">
           <button className={tab === 'groups' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'groups'} onClick={() => setTab('groups')}>群聊</button>
@@ -331,6 +353,7 @@ export function ImpressionsPage() {
           groupName={selectedGroup.name}
           enabled={selectedGroup.enabled}
           view={selectedView}
+          refreshVersion={refreshVersion}
           member={selectedMember}
           relationTargets={buildIdentityTargets(selectedView, privateSessions)}
           busy={busy}

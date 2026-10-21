@@ -9,7 +9,7 @@ type TagRename = (id: number, text: string) => Promise<boolean>;
 type TagLock = (id: number, locked: boolean) => Promise<boolean>;
 type TagDelete = (id: number) => Promise<boolean>;
 
-export function GroupProfileCard({ sessionId, groupName, enabled, profile, tags, injectedText, scheduleDrop, onReload, busy, onAction, onRename, onLock, onDelete, onAdd }: {
+export function GroupProfileCard({ sessionId, groupName, enabled, profile, tags, injectedText, scheduleDrop, refreshVersion, onReload, busy, onAction, onRename, onLock, onDelete, onAdd }: {
   sessionId: string;
   groupName: string;
   enabled: boolean;
@@ -17,6 +17,7 @@ export function GroupProfileCard({ sessionId, groupName, enabled, profile, tags,
   tags: TagView[];
   injectedText: string | null;
   scheduleDrop: { text: string } | null;
+  refreshVersion: number;
   onReload: () => Promise<boolean>;
   busy: boolean;
   onAction: TagAction;
@@ -34,9 +35,9 @@ export function GroupProfileCard({ sessionId, groupName, enabled, profile, tags,
         <span className="mono muted">群号 {sessionId.split(':').at(-1) ?? ''}</span>
       </div>
       <span className="status-pill">群聊 · {enabled ? '已启用' : '未启用'}</span>
-      <ImpressionSummaryEditor endpoint={summaryEndpoint} subject="群" />
+      <ImpressionSummaryEditor endpoint={summaryEndpoint} subject="群" refreshVersion={refreshVersion} />
     </header>
-    <ActivityHeatmap sessionId={sessionId} group scheduleDrop={scheduleDrop} />
+    <ActivityHeatmap sessionId={sessionId} group scheduleDrop={scheduleDrop} refreshVersion={refreshVersion} />
     <QqGroupProfilePanel sessionId={sessionId} profile={profile} onReload={onReload} />
     <section className="group-profile-tags" aria-labelledby="group-profile-tags-title">
       <h3 id="group-profile-tags-title">分类标签</h3>

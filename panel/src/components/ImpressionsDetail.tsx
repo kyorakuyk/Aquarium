@@ -10,11 +10,12 @@ import { GroupProfileCard } from './GroupProfileCard.tsx';
 import { MemberProfileCard } from './MemberProfileCard.tsx';
 import type { MemberTagAdd } from './MemberTagRows.tsx';
 
-export function ImpressionsDetail({ sessionId, groupName, enabled, view, member, relationTargets, busy, onReload, onAction, onRename, onLock, onDelete, onAdd }: {
+export function ImpressionsDetail({ sessionId, groupName, enabled, view, refreshVersion, member, relationTargets, busy, onReload, onAction, onRename, onLock, onDelete, onAdd }: {
   sessionId: string;
   groupName: string;
   enabled: boolean;
   view: ImpressionsView;
+  refreshVersion: number;
   member: ImpressionsView['members'][number] | undefined;
   relationTargets: QqMemberTargetView[];
   busy: boolean;
@@ -32,6 +33,7 @@ export function ImpressionsDetail({ sessionId, groupName, enabled, view, member,
     enabled={enabled}
     profile={view.qqGroupProfile}
     tags={view.groupTags}
+    refreshVersion={refreshVersion}
     injectedText={view.groupTagsText}
     scheduleDrop={view.groupScheduleDrop}
     onReload={onReload}
@@ -46,6 +48,7 @@ export function ImpressionsDetail({ sessionId, groupName, enabled, view, member,
     key={`${sessionId}:${member.userId}`}
     sessionId={sessionId}
     member={member}
+    refreshVersion={refreshVersion}
     busy={busy}
     relationTargets={relationTargets}
     onIdentityUpdated={onReload}

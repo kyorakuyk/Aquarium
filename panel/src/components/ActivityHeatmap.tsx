@@ -82,11 +82,12 @@ function ActivitySummary({ data }: { data: ActivityResponseView }) {
   </div>;
 }
 
-export function ActivityHeatmap({ sessionId, userId, group = false, scheduleDrop = null }: {
+export function ActivityHeatmap({ sessionId, userId, group = false, scheduleDrop = null, refreshVersion = 0 }: {
   sessionId: string;
   userId?: number;
   group?: boolean;
   scheduleDrop?: { text: string } | null;
+  refreshVersion?: number;
 }) {
   const [view, setView] = useState<ActivityView>('hour');
   const [data, setData] = useState<ActivityResponseView>();
@@ -103,8 +104,6 @@ export function ActivityHeatmap({ sessionId, userId, group = false, scheduleDrop
     setLoading(true);
     setData(undefined);
     setError('');
-    setSuggestionHidden(false);
-    setSuggestionMessage('');
     void apiRequest<ActivityResponseView>(`/api/activity?${query.toString()}`).then((result) => {
       if (active) setData(result);
     }).catch((reason: unknown) => {
@@ -113,6 +112,11 @@ export function ActivityHeatmap({ sessionId, userId, group = false, scheduleDrop
       if (active) setLoading(false);
     });
     return () => { active = false; };
+  }, [sessionId, userId, refreshVersion, view]);
+
+  useEffect(() => {
+    setSuggestionHidden(false);
+    setSuggestionMessage('');
   }, [sessionId, userId, view]);
 
   async function updateSuggestion(action: 'apply' | 'dismiss'): Promise<void> {

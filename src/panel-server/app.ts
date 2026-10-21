@@ -32,6 +32,7 @@ import type { ContactSnapshot, PanelAccountRuntime } from './types.ts';
 import { budgetState } from '../llm/budget.ts';
 import type { SleepWakeState } from '../core/sleep/index.ts';
 import type { HistoryImportService } from '../core/impressions/history-import.ts';
+import type { ImpressionsService } from '../core/impressions/service.ts';
 import type { TagClassificationService } from '../core/impressions/classify-tags.ts';
 import type { StickerService } from '../core/stickers/service.ts';
 import { registerStickerRoutes } from './sticker-routes.ts';
@@ -46,6 +47,7 @@ import { registerMemberSummaryRoutes } from './member-summary-routes.ts';
 import { registerGroupSummaryRoutes } from './group-summary-routes.ts';
 import { registerIdentityRoutes } from './identity-routes.ts';
 import { registerImpressionsDataRoutes } from './impressions-data-routes.ts';
+import { registerImpressionsStatusRoutes } from './impressions-status-routes.ts';
 
 export interface PanelServerOptions {
   password: string;
@@ -62,6 +64,7 @@ export interface PanelServerOptions {
   replayMessage?: (message: IncomingMessage) => Promise<PipelineResult | undefined>;
   sleepWakeState?: SleepWakeState;
   historyImports?: HistoryImportService;
+  impressionsService?: ImpressionsService;
   tagClassificationService?: TagClassificationService;
   profileActivity?: ProfileActivityService;
   tagSubjects?: TagSubjectRepository;
@@ -274,6 +277,10 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     sleepWakeState: options.sleepWakeState,
     historyImports: options.historyImports,
     now,
+  });
+  registerImpressionsStatusRoutes(app, {
+    accounts: options.accounts,
+    impressionsService: options.impressionsService,
   });
   registerIdentityRoutes(app, { getConfig: options.getConfig, repository: options.repository, now });
   registerGroupSummaryRoutes(app, { getConfig: options.getConfig, repository: options.repository, now });

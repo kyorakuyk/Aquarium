@@ -29,6 +29,11 @@ import { mapMessageToMainIdentity } from '../profiles/account-identity.ts';
 import { buildImpressionsPromptBlocks } from './prompt-blocks.ts';
 import type { TagSubjectRepository } from '../../store/tag-subject-repo.ts';
 import { recordScheduleTagDrop } from './record-tag-drop.ts';
+import {
+  createImpressionsRunState,
+  type ImpressionsRunStateEvent,
+  type ImpressionsRunStateSnapshot,
+} from './run-state.ts';
 
 export const EXTRACT_BATCH_TRIGGER = { messages: 60, sinceMs: 30 * 60 * 1000 } as const;
 export const EXTRACT_SLOW_TRIGGER = { messages: 10, sinceMs: 6 * 60 * 60 * 1000 } as const;
@@ -72,6 +77,9 @@ export interface ImpressionsServiceOptions {
 export interface ImpressionsService {
   maybeExtract(input: { session: SessionKey; now: number; template: ExtractTagsPromptTemplate }): void;
   tryAcquireSession(sessionId: string): (() => void) | undefined;
+  isRunning(sessionId: string): boolean;
+  extractionStatus(sessionId: string): ImpressionsRunStateSnapshot;
+  subscribeRunState(listener: (event: ImpressionsRunStateEvent) => void): () => void;
   extractWindowUnderSessionLock(input: {
     session: SessionKey;
     records: MessageStorageRecord[];
@@ -92,7 +100,7 @@ export interface ImpressionsService {
 export function createImpressionsService(options: ImpressionsServiceOptions): ImpressionsService {
   const now = options.now ?? Date.now;
   const callModel = options.callModel ?? callSlot;
-  const running = new Set<string>();
+  const runState = createImpressionsRunState({ now, onError: reportError });
   const pending = new Set<Promise<void>>();
 
   function report(summary: ExtractSummary): void {
@@ -113,17 +121,6 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     } catch {
       // 后台提取失败不能影响回复。
     }
-  }
-
-  function tryAcquireSession(sessionKey: string): (() => void) | undefined {
-    if (running.has(sessionKey)) return undefined;
-    running.add(sessionKey);
-    let released = false;
-    return () => {
-      if (released) return;
-      released = true;
-      running.delete(sessionKey);
-    };
   }
 
   function quoteOf(plainText: string): string {
@@ -548,19 +545,22 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
   }
 
   return {
-    tryAcquireSession,
+    tryAcquireSession: runState.tryAcquire,
+    isRunning: runState.isRunning,
+    extractionStatus: runState.status,
+    subscribeRunState: runState.subscribe,
 
     extractWindowUnderSessionLock(input) {
       if (input.session.kind !== 'group') throw new RangeError('印象提取只支持群聊');
       const key = sessionId(input.session);
-      if (!running.has(key)) throw new Error('extractWindowUnderSessionLock requires the group lock');
+      if (!runState.isRunning(key)) throw new Error('extractWindowUnderSessionLock requires the group lock');
       return runExtraction(options.getConfig(), input.session, key, input.now, input.template, input.records, false);
     },
 
     maybeExtract(input) {
       if (input.session.kind !== 'group') return;
       const sessionKey = sessionId(input.session);
-      if (running.has(sessionKey)) return;
+      if (runState.isRunning(sessionKey)) return;
 
       const config = options.getConfig();
       if (!resolveSession(config, input.session).enabled) return;
@@ -577,7 +577,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         || (n >= EXTRACT_SLOW_TRIGGER.messages && sinceRun >= EXTRACT_SLOW_TRIGGER.sinceMs);
       if (!due) return;
 
-      const release = tryAcquireSession(sessionKey);
+      const release = runState.tryAcquire(sessionKey);
       if (!release) return;
       const task = runExtraction(config, input.session, sessionKey, input.now, input.template)
         .then(() => undefined)

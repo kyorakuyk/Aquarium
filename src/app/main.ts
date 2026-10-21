@@ -392,6 +392,7 @@ await startPanelWhileAccountStartupRuns(accountStartup, () => {
           accounts: () => panelAccounts,
           stickerServices: () => stickerServices,
           historyImports,
+          impressionsService,
           tagClassificationService,
           profileActivity: profileActivityService,
           tagSubjects,

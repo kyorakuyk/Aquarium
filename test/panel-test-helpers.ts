@@ -87,6 +87,7 @@ export async function withPanel<T>(
     memberSummaryRepository: ReturnType<typeof createMemberSummaryRepository>;
     adapter: FakeAdapter;
     historyImports: ReturnType<typeof createHistoryImportService>;
+    impressionsService: ReturnType<typeof createImpressionsService>;
     modelSlots: string[];
     replayedMessages: IncomingMessage[];
     sleepWakeState: ReturnType<typeof createSleepWakeState>;
@@ -167,6 +168,7 @@ export async function withPanel<T>(
     memberSummaryRepository,
     accounts: () => [{ adapter, getStatus: () => adapter.status, getNickname: () => adapter.nickname }],
     historyImports,
+    impressionsService,
     sleepWakeState,
     management: () => [management],
     root,
@@ -229,6 +231,7 @@ export async function withPanel<T>(
       memberSummaryRepository,
       adapter,
       historyImports,
+      impressionsService,
       modelSlots,
       replayedMessages,
       sleepWakeState,
