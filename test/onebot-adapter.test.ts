@@ -517,3 +517,92 @@ test('adapter 状态在线但底层 WebSocket 已断开时动作 fail fast', asy
   assert.equal(fake.state.sentGroup.length, 0);
   adapter.close();
 });
+
+test('心跳日志记录声明间隔和实测间隔，成功兜底探测记录耗时与结果', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  const retryTimers = createTimerQueue();
+  const actionTimers = createTimerQueue();
+  const debugMessages: string[] = [];
+  let now = 1_700_000_000_000;
+  const adapter = new OneBotAdapter({
+    account,
+    snowlumaDir: root,
+    onDebug: (message) => debugMessages.push(message),
+  }, () => fake.client, {
+    setRetryTimer: retryTimers.set,
+    clearRetryTimer: retryTimers.clear,
+    setActionTimer: actionTimers.set,
+    clearActionTimer: actionTimers.clear,
+    now: () => now,
+  });
+  const statuses: string[] = [];
+  adapter.onStatus((status) => statuses.push(status));
+  t.after(() => adapter.close());
+
+  adapter.start();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  fake.emitEvent({ post_type: 'meta_event', meta_event_type: 'heartbeat', interval: 10_000, status: { online: true, good: true } });
+  now += 10_000;
+  fake.emitEvent({ post_type: 'meta_event', meta_event_type: 'heartbeat', interval: 10_000, status: { online: true, good: true } });
+  now += 20_001;
+  fake.state.statusProbeEffect = () => { now += 125; };
+  fake.state.hangGroupHistory = true;
+  const history = adapter.history({ account, kind: 'group', peer: 123456 }, 1);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
+  actionTimers.runNext();
+  await assert.rejects(history, /get_message_history timed out after 10000ms/u);
+
+  assert.ok(debugMessages.some((message) => message.includes('intervalMs=10000')
+    && message.includes('observedGapMs=10000')));
+  assert.ok(debugMessages.some((message) => message.includes('get_status')
+    && message.includes('durationMs=125')
+    && message.includes('result=ok')
+    && message.includes('online=true')
+    && message.includes('good=true')));
+  assert.equal(statuses.at(-1), 'online');
+  assert.equal(fake.state.closeCalls, 0);
+});
+
+test('失败的 get_status 兜底探测记录耗时与安全结果', async (t) => {
+  const root = createFixture(t, [{ host: '127.0.0.1', port: 3001 }]);
+  const fake = createFakeClient();
+  const retryTimers = createTimerQueue();
+  const actionTimers = createTimerQueue();
+  const debugMessages: string[] = [];
+  let now = 1_700_000_000_000;
+  const adapter = new OneBotAdapter({
+    account,
+    snowlumaDir: root,
+    onDebug: (message) => debugMessages.push(message),
+  }, () => fake.client, {
+    setRetryTimer: retryTimers.set,
+    clearRetryTimer: retryTimers.clear,
+    setActionTimer: actionTimers.set,
+    clearActionTimer: actionTimers.clear,
+    now: () => now,
+  });
+  const statuses: string[] = [];
+  adapter.onStatus((status) => statuses.push(status));
+  t.after(() => adapter.close());
+
+  adapter.start();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  now += 60_001;
+  fake.state.failStatus = true;
+  fake.state.statusProbeEffect = () => { now += 250; };
+  fake.state.hangGroupHistory = true;
+  const history = adapter.history({ account, kind: 'group', peer: 123456 }, 1);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
+  actionTimers.runNext();
+  await assert.rejects(history, /get_message_history timed out after 10000ms/u);
+
+  assert.ok(debugMessages.some((message) => message.includes('get_status')
+    && message.includes('durationMs=250')
+    && message.includes('result=error')));
+  assert.ok(debugMessages.every((message) => !message.includes('fixture status probe failure')));
+  assert.equal(statuses.at(-1), 'offline');
+  assert.equal(fake.state.closeCalls, 1);
+});

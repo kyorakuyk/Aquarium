@@ -92,10 +92,14 @@ export function createOneBotActionTimeoutController(options: {
   getHeartbeatIntervalMs: () => number;
   now: () => number;
   onHealthStatus: (status: { online: boolean; good: boolean }) => void;
+  onProbeLog?: (message: string) => void;
   setTimer: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   clearTimer: typeof globalThis.clearTimeout;
   retireClient: (client: OneBotClient) => void;
 }): ActionTimeoutController<OneBotClient> {
+  const logProbe = (message: string): void => {
+    try { options.onProbeLog?.(message); } catch { /* diagnostics must not alter the probe result */ }
+  };
   return createActionTimeoutController({
     setTimer: options.setTimer,
     clearTimer: options.clearTimer,
@@ -110,14 +114,20 @@ export function createOneBotActionTimeoutController(options: {
         || options.now() - lastPacketAt <= options.getHeartbeatIntervalMs() * 2) {
         return true;
       }
+      const startedAt = options.now();
       try {
         const status = await client.getStatus({ timeoutMs: HEALTH_CHECK_TIMEOUT_MS });
+        const durationMs = Math.max(0, options.now() - startedAt);
         if (client !== options.getClient() || !options.isOnline() || !options.isAccountVerified() || !client.isConnected) {
+          logProbe(`get_status 兜底探测 durationMs=${durationMs} result=stale online=${status.online} good=${status.good} timeoutMs=${HEALTH_CHECK_TIMEOUT_MS}`);
           return false;
         }
         options.onHealthStatus({ online: status.online, good: status.good });
+        logProbe(`get_status 兜底探测 durationMs=${durationMs} result=ok online=${status.online} good=${status.good} timeoutMs=${HEALTH_CHECK_TIMEOUT_MS}`);
         return true;
       } catch {
+        const durationMs = Math.max(0, options.now() - startedAt);
+        logProbe(`get_status 兜底探测 durationMs=${durationMs} result=error timeoutMs=${HEALTH_CHECK_TIMEOUT_MS}`);
         return false;
       }
     },

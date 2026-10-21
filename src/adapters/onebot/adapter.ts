@@ -148,6 +148,7 @@ export class OneBotAdapter implements ProtocolAdapter {
       getHeartbeatIntervalMs: () => this.connectionHealth.intervalMs,
       now: this.now,
       onHealthStatus: (health) => this.connectionHealth.recordStatus(health),
+      onProbeLog: (message) => this.onDebug?.(`账号 ${this.account} ${message}`),
       setTimer: this.setActionTimer,
       clearTimer: this.clearActionTimer,
       retireClient: (client) => {

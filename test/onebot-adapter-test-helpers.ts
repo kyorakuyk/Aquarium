@@ -74,6 +74,7 @@ export function createFakeClient(loginUserId = account, failedConnections = 0, h
     getStatusTimeouts: [] as number[],
     failStatus: false,
     hangStatus: false,
+    statusProbeEffect: undefined as (() => void) | undefined,
     getStatusResult: { online: true, good: true, time: 1 },
     sentGroup: [] as unknown[],
     sentPrivate: [] as unknown[],
@@ -138,6 +139,7 @@ export function createFakeClient(loginUserId = account, failedConnections = 0, h
       async getStatus(options?: { timeoutMs?: number }) {
         state.getStatusCalls += 1;
         if (options?.timeoutMs !== undefined) state.getStatusTimeouts.push(options.timeoutMs);
+        state.statusProbeEffect?.();
         if (state.hangStatus) return new Promise<never>(() => {});
         if (state.failStatus) throw new Error('fixture status probe failure');
         return state.getStatusResult;

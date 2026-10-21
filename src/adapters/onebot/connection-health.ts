@@ -7,6 +7,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export class OneBotConnectionHealth {
   private connectionOpenedAt: number | undefined;
   private lastEventAt: number | undefined;
+  private lastHeartbeatAt: number | undefined;
   private heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL_MS;
   private heartbeatOnline: boolean | undefined;
   private heartbeatGood: boolean | undefined;
@@ -50,26 +51,33 @@ export class OneBotConnectionHealth {
   reset(): void {
     this.connectionOpenedAt = undefined;
     this.lastEventAt = undefined;
+    this.lastHeartbeatAt = undefined;
     this.heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL_MS;
     this.heartbeatOnline = undefined;
     this.heartbeatGood = undefined;
   }
 
   recordPacket(event: unknown): void {
-    this.lastEventAt = this.options.now();
+    const receivedAt = this.options.now();
+    this.lastEventAt = receivedAt;
     if (!isRecord(event) || event.post_type !== 'meta_event' || event.meta_event_type !== 'heartbeat') return;
 
+    const observedGapMs = this.lastHeartbeatAt === undefined ? undefined : receivedAt - this.lastHeartbeatAt;
+    this.lastHeartbeatAt = receivedAt;
     this.heartbeatInterval = typeof event.interval === 'number'
       && Number.isSafeInteger(event.interval)
       && event.interval > 0
       ? event.interval
       : DEFAULT_HEARTBEAT_INTERVAL_MS;
     const status = isRecord(event.status) ? event.status : undefined;
+    const online = typeof status?.online === 'boolean' ? status.online : undefined;
+    const good = typeof status?.good === 'boolean' ? status.good : undefined;
+    this.debug(
+      `账号 ${this.options.account} SnowLuma 心跳：intervalMs=${this.heartbeatInterval}`
+      + ` observedGapMs=${observedGapMs ?? 'first'} online=${online ?? 'unknown'} good=${good ?? 'unknown'}。`,
+    );
     if (status) {
-      this.updateStatus(
-        typeof status.online === 'boolean' ? status.online : undefined,
-        typeof status.good === 'boolean' ? status.good : undefined,
-      );
+      this.updateStatus(online, good);
     }
   }
 
@@ -81,9 +89,13 @@ export class OneBotConnectionHealth {
     if (online !== undefined) this.heartbeatOnline = online;
     if (good !== undefined) this.heartbeatGood = good;
     if (online === false) {
-      this.options.onDebug?.(`账号 ${this.options.account} SnowLuma 心跳报告 status.online=false；保持 WebSocket 连接。`);
+      this.debug(`账号 ${this.options.account} SnowLuma 心跳报告 status.online=false；保持 WebSocket 连接。`);
     } else if (good === false) {
-      this.options.onDebug?.(`账号 ${this.options.account} SnowLuma 心跳报告 good=false；接收链路异常，不触发重连。`);
+      this.debug(`账号 ${this.options.account} SnowLuma 心跳报告 good=false；接收链路异常，不触发重连。`);
     }
+  }
+
+  private debug(message: string): void {
+    try { this.options.onDebug?.(message); } catch { /* diagnostics must not alter connection health */ }
   }
 }
