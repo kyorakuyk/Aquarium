@@ -10,6 +10,8 @@ import { summarizeQqMemberComposition } from '../core/profiles/qq-profile-view.t
 import { normalizeTagText, tagActivation, tagHalfLifeMs } from '../core/impressions/tags.ts';
 import { TAG_TEXT_MAX, TAG_TEXT_MIN } from '../core/impressions/service.ts';
 import { buildMemberTagPrompt } from '../core/impressions/member-tags.ts';
+import { relationPromptLines } from '../core/impressions/prompt-blocks.ts';
+import { accountUserName } from '../core/profiles/account-identity.ts';
 import { decide } from '../core/privacy/policy.ts';
 import { promptTemplateStore } from '../core/prompt/templates.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
@@ -322,6 +324,11 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
       })
       : undefined;
     const qqMemberProfiles = new Map((qqProfile?.members ?? []).map((profile) => [profile.userId, profile]));
+    const qqMembers = (qqProfile?.members ?? []).map((profile) => ({
+      userId: profile.userId,
+      name: profile.nickname?.trim() || profile.card?.trim() || String(profile.userId),
+      ...(profile.card === undefined ? {} : { card: redactSensitiveText(profile.card) }),
+    }));
     const qqGroupProfile = qqProfile ? {
       ...qqProfile.profile,
       groupInfo: qqProfile.profile.groupInfo === null ? null : {
@@ -339,11 +346,33 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     const tags = options.repository.listTagsForSession(key.account, id);
     const groupTags = tags.filter((tag) => tag.userId === null).map((tag) => tagView(tag, at));
     const memberIds = [...new Set(
-      tags.map((tag) => tag.userId).filter((userId): userId is number => userId !== null),
+      tags.map((tag) => tag.userId)
+        .filter((userId): userId is number => userId !== null)
+        .map((userId) => options.repository.mainUserIdFor(key.account, userId)),
     )];
     const members = memberIds.map((userId) => {
-      const name = options.repository.senderNameFor(id, userId) ?? String(userId);
-      const memberTags = tags.filter((tag) => tag.userId === userId);
+      const name = accountUserName(options.repository, key.account, id, userId);
+      const memberTags = tags.filter((tag) => tag.userId !== null
+        && options.repository.mainUserIdFor(key.account, tag.userId) === userId);
+      const kind = options.repository.getAccountKind(key.account, userId)?.kind ?? null;
+      const relations = options.repository.listRelationsForUser(key.account, userId).flatMap((relation) => {
+        const currentIsMain = relation.aUserId === userId;
+        const rawOtherUserId = currentIsMain ? relation.bUserId : relation.aUserId;
+        const otherUserId = relation.type === 'alt'
+          ? rawOtherUserId
+          : options.repository.mainUserIdFor(key.account, rawOtherUserId);
+        if (relation.type !== 'alt' && otherUserId === userId) return [];
+        const otherName = accountUserName(options.repository, key.account, id, otherUserId);
+        return [{
+          id: relation.id,
+          type: relation.type,
+          label: relation.label === null ? null : redactSensitiveText(relation.label),
+          locked: relation.locked,
+          otherUserId,
+          otherName,
+          currentRole: relation.type === 'alt' ? (currentIsMain ? 'main' as const : 'alt' as const) : null,
+        }];
+      });
       const memberAllowed = userId !== key.account && decide({
         info: { origin: 'group', sessionId: id, ownerId: userId },
         target: { kind: 'group', sessionId: id },
@@ -353,18 +382,23 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
         ? buildMemberTagPrompt(
           memberTags,
           at,
-          key.kind === 'group' ? qqProfiles.getCachedMemberProfile(key.account, key.peer, userId) : undefined,
+          {
+            ...qqProfiles.getCachedMemberProfile(key.account, key.peer, userId),
+            relationships: relationPromptLines(options.repository, key.account, id, userId),
+          },
         )
         : { text: '', dropped: 0, profileText: '' };
       const memberTagsText = memberPrompt.text || memberPrompt.profileText
         ? promptTemplateStore.get().replySystem.memberTags
-          .replaceAll('{{name}}', JSON.stringify(name))
+          .replaceAll('{{name}}', JSON.stringify(kind === 'bot' ? `${name}（bot）` : name))
           .replaceAll('{{profile}}', memberPrompt.profileText)
           .replaceAll('{{tags}}', memberPrompt.text || '暂无已确认标签')
         : null;
       return {
         userId,
         name,
+        kind,
+        relations,
         affinity: affinityService.getCurrent(key.account, userId, at),
         qqProfile: (() => {
           const profile = qqMemberProfiles.get(userId);
@@ -388,7 +422,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
       };
     });
     const lastMessageTime = options.repository.getTagRun(key.account, id)?.lastMessageTime ?? null;
-    return context.json({ sessionId: id, groupTags, members, lastMessageTime, qqGroupProfile });
+    return context.json({ sessionId: id, groupTags, members, lastMessageTime, qqGroupProfile, qqMembers });
   });
 
   app.post('/api/impressions/:sessionId/refresh-qq-profile', async (context) => {

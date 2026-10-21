@@ -13,6 +13,7 @@ export interface MemberPromptProfile {
   card?: string;
   role?: 'owner' | 'admin' | 'member';
   title?: string;
+  relationships?: readonly string[];
 }
 
 function promptProfileValue(value: string | undefined): string | undefined {
@@ -30,6 +31,7 @@ export function formatMemberProfileContext(profile?: MemberPromptProfile): strin
   if (profile.role === 'owner') fields.push('群主');
   else if (profile.role === 'admin') fields.push('管理员');
   if (title) fields.push(`头衔：${title}`);
+  fields.push(...(profile.relationships ?? []).filter((relationship) => relationship.length > 0));
   return fields.length > 0 ? `（${fields.join('，')}）` : '';
 }
 

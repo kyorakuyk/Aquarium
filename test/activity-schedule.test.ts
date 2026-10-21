@@ -206,3 +206,46 @@ test('群和群友按本地最活跃三小时生成标签，群级星期标签�
     database.close();
   }
 });
+
+test('小号消息参与主号的作息标签统计', async () => {
+  const database = openDatabase(':memory:');
+  try {
+    const repository = createRepository(database);
+    const suggestionRepository = createActivitySuggestionRepository(database);
+    const base = makeConfig();
+    const config = {
+      ...base,
+      profile: { schedule: { ...base.profile.schedule, minimumMessages: 20 } },
+    };
+    const at = new Date(2026, 5, 1, 4, 0, 0, 0).getTime();
+    for (let index = 0; index < 30; index += 1) {
+      const time = new Date(at);
+      time.setDate(time.getDate() - index - 1);
+      time.setHours(23, 0, 0, 0);
+      repository.saveMessage({
+        sessionId,
+        messageId: `alt-schedule-${index}`,
+        senderId: 43,
+        senderName: '小号',
+        isSelf: false,
+        plainText: '晚间消息',
+        segments: [{ type: 'text', text: '晚间消息' }],
+        time: time.getTime(),
+      });
+    }
+    repository.linkAltAccount({ account, aUserId: 42, bUserId: 43, createdAt: at });
+    const service = createProfileActivityService({
+      repository,
+      suggestionRepository,
+      getConfig: () => config,
+      now: () => at,
+    });
+
+    await service.recomputeSchedules(at);
+    const tags = repository.listTagsForSession(account, sessionId);
+    assert.equal(tags.some((tag) => tag.userId === 42 && tag.text === '夜猫子' && tag.origin === 'stats'), true);
+    assert.equal(tags.some((tag) => tag.userId === 43 && tag.origin === 'stats'), false);
+  } finally {
+    database.close();
+  }
+});

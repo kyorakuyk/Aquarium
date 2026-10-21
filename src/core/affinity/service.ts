@@ -65,6 +65,8 @@ function levelIndex(level: AffinityLevel): number {
 }
 
 export function createAffinityService(options: AffinityServiceOptions): AffinityService {
+  const mainUserId = (account: number, userId: number): number => options.repository.mainUserIdFor(account, userId);
+
   function currentState(account: number, userId: number, at: number): CurrentAffinity {
     const stored = options.repository.getAffinityState(account, userId);
     const value = stored
@@ -186,10 +188,12 @@ export function createAffinityService(options: AffinityServiceOptions): Affinity
   return {
     recordAppraise(input) {
       const config = options.getConfig();
-      if (!config.affinity.enabled || input.userId === null || input.userId === input.account || input.appliedDv === 0) return;
+      if (!config.affinity.enabled || input.userId === null || input.appliedDv === 0) return;
+      const userId = mainUserId(input.account, input.userId);
+      if (userId === input.account) return;
       const delta = appraiseAffinityDelta(input.appliedDv);
-      const current = currentState(input.account, input.userId, input.time);
-      const history = todayHistory(input.account, input.userId, input.time);
+      const current = currentState(input.account, userId, input.time);
+      const history = todayHistory(input.account, userId, input.time);
       const applied = applyDailyAffinityCap(delta, history, input.time);
       applyAutomaticEvent({
         current,
@@ -204,10 +208,11 @@ export function createAffinityService(options: AffinityServiceOptions): Affinity
 
     recordCalled(input) {
       const config = options.getConfig();
-      if (!config.affinity.enabled || input.userId === input.account) return;
-      const history = todayHistory(input.account, input.userId, input.now);
+      const userId = mainUserId(input.account, input.userId);
+      if (!config.affinity.enabled || userId === input.account) return;
+      const history = todayHistory(input.account, userId, input.now);
       if (!canCountCalledAffinity(history, input.now)) return;
-      const current = currentState(input.account, input.userId, input.now);
+      const current = currentState(input.account, userId, input.now);
       const delta = 0.5;
       const applied = applyDailyAffinityCap(delta, history, input.now);
       applyAutomaticEvent({
@@ -222,33 +227,36 @@ export function createAffinityService(options: AffinityServiceOptions): Affinity
     },
 
     promptBlock(input) {
-      if (!options.getConfig().affinity.enabled || input.userId === input.account) return undefined;
-      const current = currentState(input.account, input.userId, input.now);
+      const userId = mainUserId(input.account, input.userId);
+      if (!options.getConfig().affinity.enabled || userId === input.account) return undefined;
+      const current = currentState(input.account, userId, input.now);
       if (current.level === 'neutral') return undefined;
       return input.template.affinity[current.level].replaceAll('{{name}}', JSON.stringify(input.name));
     },
 
     getCurrent(account, userId, at) {
-      return currentView(currentState(account, userId, at));
+      return currentView(currentState(account, mainUserId(account, userId), at));
     },
 
     listCurrent(account, at) {
-      return options.repository.listAffinityStates(account)
-        .map((state) => currentView(currentState(account, state.userId, at)));
+      const userIds = new Set(options.repository.listAffinityStates(account)
+        .map((state) => mainUserId(account, state.userId)));
+      return [...userIds].map((userId) => currentView(currentState(account, userId, at)));
     },
 
     setManual(input) {
       if (!Number.isSafeInteger(input.value) || input.value < 0 || input.value > 100) {
         throw new RangeError('好感度必须是 0–100 的整数');
       }
-      const stored = options.repository.getAffinityState(input.account, input.userId);
-      const current = currentState(input.account, input.userId, input.now);
+      const userId = mainUserId(input.account, input.userId);
+      const stored = options.repository.getAffinityState(input.account, userId);
+      const current = currentState(input.account, userId, input.now);
       const level = affinityLevelOf(input.value);
       const levelChanged = level !== current.level;
       const delta = input.value - current.value;
       recordEvent({
         account: input.account,
-        userId: input.userId,
+        userId,
         time: input.now,
         source: 'manual',
         sessionId: null,
@@ -260,7 +268,7 @@ export function createAffinityService(options: AffinityServiceOptions): Affinity
       });
       options.repository.saveAffinityState({
         account: input.account,
-        userId: input.userId,
+        userId,
         value: input.value,
         level,
         levelSince: levelChanged ? input.now : current.levelSince,

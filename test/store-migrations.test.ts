@@ -5,7 +5,7 @@ import { migrations } from '../src/store/migrations/index.ts';
 
 test('migration versions start at one and are continuous and unique', () => {
   const versions = migrations.map(({ version }) => version);
-  assert.deepEqual(versions, Array.from({ length: 18 }, (_, index) => index + 1));
+  assert.deepEqual(versions, Array.from({ length: 19 }, (_, index) => index + 1));
   assert.equal(new Set(versions).size, versions.length);
   assert.ok(migrations.every(({ up }) => typeof up === 'function'));
 });
@@ -17,7 +17,7 @@ test('v17 tag veto table remains available at the current schema version', () =>
     const columns = database.prepare("PRAGMA table_info('tag_vetoes')").all() as Array<{ name: string }>;
     const indexes = database.prepare("PRAGMA index_list('tag_vetoes')").all() as Array<{ name: string }>;
 
-    assert.equal(version.version, 18);
+    assert.equal(version.version, 19);
     assert.deepEqual(columns.map(({ name }) => name), [
       'id', 'account', 'session_id', 'user_id', 'category', 'subject_norm', 'text_norm', 'created_at',
     ]);
@@ -36,7 +36,7 @@ test('v18 creates account- and group-scoped QQ profile caches', () => {
     const memberColumns = database.prepare("PRAGMA table_info('qq_member_profiles')")
       .all() as Array<{ name: string; pk: number }>;
 
-    assert.equal(version.version, 18);
+    assert.equal(version.version, 19);
     assert.deepEqual(groupColumns.map(({ name }) => name), ['account', 'group_id', 'json', 'fetched_at']);
     assert.deepEqual(groupColumns.map(({ pk }) => pk), [1, 2, 0, 0]);
     assert.deepEqual(memberColumns.map(({ name }) => name), [

@@ -198,8 +198,12 @@ export function createProfileActivityService(options: ProfileActivityServiceOpti
       if (!key || key.kind !== 'group') continue;
       const messages = options.repository.messagesInRange(sessionId, from, at)
         .filter((message) => !message.isSelf);
+      const identityMessages = messages.map((message) => ({
+        ...message,
+        senderId: options.repository.mainUserIdFor(key.account, message.senderId),
+      }));
       const byUser = new Map<number, MessageStorageRecord[]>();
-      for (const message of messages) {
+      for (const message of identityMessages) {
         const userMessages = byUser.get(message.senderId) ?? [];
         userMessages.push(message);
         byUser.set(message.senderId, userMessages);
@@ -213,7 +217,7 @@ export function createProfileActivityService(options: ProfileActivityServiceOpti
         ...activityTags.map((tag) => tag.userId),
       ]);
       for (const userId of subjectIds) {
-        const subjectMessages = userId === null ? messages : byUser.get(userId) ?? [];
+        const subjectMessages = userId === null ? identityMessages : byUser.get(userId) ?? [];
         const metrics = metricsFor(subjectMessages, days, at);
         const subjectTags = activityTags.filter((tag) => tag.userId === userId);
         const expectedLabels = new Set<string>();

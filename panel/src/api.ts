@@ -224,14 +224,36 @@ export interface QqMemberProfileView {
   isRobot?: boolean;
 }
 
+export type AccountKind = 'human' | 'bot' | 'alt' | 'owner';
+export type RelationType = 'alt' | 'lover' | 'brother' | 'sister' | 'roommate' | 'enemy' | 'other';
+
+export interface MemberRelationView {
+  id: number;
+  type: RelationType;
+  label: string | null;
+  locked: boolean;
+  otherUserId: number;
+  otherName: string;
+  currentRole: 'main' | 'alt' | null;
+}
+
+export interface QqMemberTargetView {
+  userId: number;
+  name: string;
+  card?: string;
+}
+
 export interface ImpressionsView {
   sessionId: string;
   lastMessageTime: number | null;
   groupTags: TagView[];
   qqGroupProfile: QqGroupProfileView | null;
+  qqMembers: QqMemberTargetView[];
   members: Array<{
     userId: number;
     name: string;
+    kind: AccountKind | null;
+    relations: MemberRelationView[];
     affinity: AffinityView;
     qqProfile: QqMemberProfileView | null;
     tags: TagView[];

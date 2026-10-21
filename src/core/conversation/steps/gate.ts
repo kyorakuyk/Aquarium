@@ -26,6 +26,9 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
   };
   ctx.state.config = config;
   ctx.state.settings = settings;
+  if (ctx.options.repository.getAccountKind(ctx.message.session.account, ctx.message.senderId)?.kind === 'bot') {
+    return { next: false, reason: 'from_bot' };
+  }
   let callOptions = ctx.state.callOptions ?? createSlotCallOptions(ctx, config);
   ctx.state.callOptions = callOptions;
 

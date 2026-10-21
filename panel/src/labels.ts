@@ -7,6 +7,7 @@ const decisionLabels: Record<string, string> = {
   duplicate: '重复消息',
   command_ignored: '指令已忽略',
   mode_mention_only: '只在被叫时',
+  from_bot: '机器人消息（不回复）',
   asleep: '睡着了',
   goodnight: '晚安',
   batched: '合并处理',
@@ -27,7 +28,7 @@ const decisionLabels: Record<string, string> = {
 };
 
 const neutralReasons = new Set([
-  'not_mentioned', 'disabled', 'duplicate', 'command_ignored', 'mode_mention_only',
+  'not_mentioned', 'disabled', 'duplicate', 'command_ignored', 'mode_mention_only', 'from_bot',
   'asleep', 'goodnight', 'batched', 'backoff', 'prefilter', 'judge_skip', 'proactive_cooldown',
 ]);
 const warningReasons = new Set([

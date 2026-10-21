@@ -50,6 +50,8 @@ function makeContext(
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
 
   const repository = {
+    getAccountKind: () => undefined,
+    mainUserIdFor: (_account: number, userId: number) => userId,
     saveMessage: (_record: unknown) => true,
     recordDecision: () => {},
     recentMessages: () => [],

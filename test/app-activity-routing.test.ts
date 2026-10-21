@@ -69,6 +69,7 @@ function fakeTimers() {
 function createHarness(options: {
   config?: ReturnType<typeof makeConfig>;
   isMuted?: boolean;
+  botUser?: boolean;
   costToday?: number;
 } = {}) {
   const clock = fakeTimers();
@@ -90,6 +91,7 @@ function createHarness(options: {
     queue,
     getConfig: () => options.config ?? makeConfig(),
     management,
+    isBotAccount: () => options.botUser ?? false,
     costToday: () => options.costToday ?? 0,
     processMessage: async (incoming, routedOptions) => {
       processed.push({ messageId: incoming.messageId, options: routedOptions });
@@ -153,6 +155,16 @@ test('mention-only messages and recognized management commands bypass batching',
   assert.deepEqual(command.handled, ['owner-command']);
   assert.deepEqual(command.processed, []);
   command.router.close();
+});
+
+test('bot 管理命令绕过管理处理器并进入 pipeline gate', async () => {
+  const bot = createHarness({ config: makeConfig({ owner: ownerId }), botUser: true });
+  bot.router.route(message('bot-owner-command', '/aq ping'));
+  await bot.queue.idle();
+
+  assert.deepEqual(bot.handled, []);
+  assert.deepEqual(bot.processed.map(({ messageId }) => messageId), ['bot-owner-command']);
+  bot.router.close();
 });
 
 test('disabled, muted, and over-budget sessions do not enter a quiet window', async () => {

@@ -1,6 +1,6 @@
-# Aquarium 施工导读：从骨架到 Impressions V4 M3
+# Aquarium 施工导读：从骨架到 Impressions V4 M5
 
-> 本文是随代码一起更新的学习材料。目标不是让你记住所有 API，而是让你能回答：程序分成哪些部分、每一层负责什么、为什么选这些库，以及每个任务怎样验证。前文记录 T0–T6、阶段 B 的 R1–R9、阶段 C/D、M2-A A1–A6 和 §9.0 U1–U4；§15 补充 2026-10-20 的 V18f 图片认知和 §13 P1–P6 隐私记忆；§16 补充 2026-10-21 的 S1–S4、K1–K3 与 Impressions V4 M1–M3。M4–M8 和 R9 尚未在本节覆盖。真实 SnowLuma/QQ、模型、Windows GUI 与用户验收仍按各自清单执行。
+> 本文是随代码一起更新的学习材料。目标不是让你记住所有 API，而是让你能回答：程序分成哪些部分、每一层负责什么、为什么选这些库，以及每个任务怎样验证。前文记录 T0–T6、阶段 B 的 R1–R9、阶段 C/D、M2-A A1–A6 和 §9.0 U1–U4；§15 补充 2026-10-20 的 V18f 图片认知和 §13 P1–P6 隐私记忆；§16 补充 2026-10-21 的 S1–S4、K1–K3 与 Impressions V4 M1–M5。M6–M8 和 R9 尚未在本节覆盖。真实 SnowLuma/QQ、模型、Windows GUI 与用户验收仍按各自清单执行。
 >
 > 自动化测试和生产构建不等于真实运行验收。夜间运行不会替代真实 SnowLuma/QQ、模型、Windows GUI 或控制台体验确认。
 
@@ -454,11 +454,11 @@ M2 不是另起一套聊天管线，而是在现有 pipeline 上增加可配置�
 
 ## 16. Impressions V4：结构整理、提示词前缀与标签分类 v2（2026-10-21）
 
-本节补充 §16 夜间任务中已完成的 S1–S4、K1–K3 和 M1–M4。各任务的细项与停止点以 `doc/plans/PLAN.md` §16 为准；这里记录新目录的职责和关键设计，方便从当前代码继续阅读。
+本节补充 §16 夜间任务中已完成的 S1–S4、K1–K3 和 M1–M5。各任务的细项与停止点以 `doc/plans/PLAN.md` §16 为准；这里记录新目录的职责和关键设计，方便从当前代码继续阅读。
 
 ### 16.1 S1–S4：迁移与 core 的职责边界
 
-- `src/store/db.ts` 负责打开数据库并按版本顺序执行迁移；每个版本的 SQL 变更在 `src/store/migrations/v01.ts` 至 `v18.ts` 中独立审查。新增 schema 时追加迁移，不改写已发布版本；迁移测试也验证版本连续、旧数据保留和重复打开的幂等性。
+- `src/store/db.ts` 负责打开数据库并按版本顺序执行迁移；每个版本的 SQL 变更在 `src/store/migrations/v01.ts` 至 `v19.ts` 中独立审查。新增 schema 时追加迁移，不改写已发布版本；迁移测试也验证版本连续、旧数据保留和重复打开的幂等性。
 - `StoreRepository` 的接口与存储 DTO 位于 `src/store/repository-types.ts`，由 `src/store/repository.ts` 继续 re-export；实现文件聚焦查询组合和读写逻辑，避免契约堆叠继续扩大。
 - 标签分类、适用范围、半衰期、subject 路径等纯规则位于 `src/core/impressions/tag-model.ts`，不依赖 SQLite。为避免 `store` 与 `core` 互相耦合，边界检查只给 `store` 到该纯模型模块开了一个明确白名单。
 - 出没统计归 `src/core/profiles/presence.ts`，统计作息标签的协调归 `presence-service.ts`；`src/core/conversation/`、`shared/`、`prompt/` 等目录按职责组织会话、共同类型和提示词能力。
@@ -500,3 +500,13 @@ M3 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **69
 - 提示词只取群名片、群主/管理员身份和头衔；群名片/头衔先脱敏并 JSON 引用。性别、年龄、Q 龄、群等级、入群时间、最后发言时间及个性签名正文都不注入。当前群视图顶部常驻显示“群资料”和“QQ 资料”两块；群资料块显示人数、建群时间、群等级与简介，QQ 资料块显示不可用字段、荣誉、公告、精华数量、地区（固定“QQ 不提供”）及性别/入群时长两条构成条形图。成员详情也显示对应 QQ 资料；性别、年龄、Q 龄、等级与入群时间带锁标记。响应只公开筛选后的资料，签名 evidence、公告、简介、头衔等内容仍走原有脱敏路径。
 - 项目运行依赖与只读 `reference/SnowLuma` 均仍标记 `@snowluma/sdk` 1.14.22；M4 按 PLAN 指定的 v2.0.3 action/schema 使用通用 `raw` 调用，没有升级依赖。假 adapter 与接口契约测试覆盖字段映射；由于夜间禁止启动 SnowLuma/QQ，真实运行兼容性仍未验证。
 - M4 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **702/702** 项测试；`npm run panel:build` 成功（150 个模块），Vite 主 bundle **537.11 kB**，仍高于默认 500 kB 提示线。签名写入/更新/删除、否决、提示不含性别年龄、内容脱敏、缓存 TTL、手动刷新及构成统计都有离线测试。未进行 GUI 验收；R9 后用户执行 §16.4 体验清单。
+
+### 16.8 M5：身份、关系与小号归并
+
+- schema v19 新增 `account_kinds` 与 `relations`。前者按账号与 QQ 用户保存人工选择的 `human / bot / alt / owner`；后者保存关系两端、类型、自定义名称和注入锁。`alt` 保留方向（b 是 a 的小号）；其他关系按用户 ID 排序存成一对，因而两边读取到同一条关系。用户修改 QQ 的 `is_robot` 标记不会自动改变 kind，只显示可选建议。
+- 本步没有新增 npm 依赖：SQLite 使用项目已有的 `node:sqlite` 持久化，身份 API 复用已有 Zod 做请求边界校验，面板沿用 React；小号主号映射与提示格式化是本地纯 TypeScript 规则，不需要额外服务或模型调用。
+- `linkAltAccount` 是一个 SQLite 事务：拒绝自链接、重复链接和嵌套链接；为可合并的既有主号标签合并 evidence 与 samples，按 messageId 去重，再将小号来源标签标为 `superseded`。已有的手动 bot 类型不会被链接操作覆盖。解除链接只删除关系，不反向拆分标签；关系失效后，小号之后的新消息自然恢复原始 userId 统计。
+- `src/core/profiles/account-identity.ts` 把映射放在读取/提示层：消息仍按原始 `sender_id` 落库；组装聊天上下文、历史印象提取、好感度和出没统计时才查找当前主号。名称优先采用当前/历史发言名，名称缺失或只是数字 ID 时再从按群缓存的群名片、昵称回退。好感事件、memberTags 和作息汇总统一使用主号 ID。
+- bot gate 在消息持久化之后跳过回复并记录 `from_bot`；应用路由还会绕过先于 pipeline 的管理命令短路，让 bot 发来的管理样式消息也进入该 gate。memberTags 中 bot 的姓名以 JSON 引号包裹并加“（bot）”，不能用名称伪造身份标记。
+- 关系只由人手动建立，`prompts/extract-tags.md` 明确禁止模型输出或推测人际关系。`relationPromptLines` 从双方视角生成未锁定关系；锁定后立即不注入，并将提示限制为最多 5 行、180 个 Unicode 字符。身份 API 限定到当前账号和群，写后 read-back；“身份与关系”面板支持手动 kind、QQ 机器人建议、搜索本群成员/好友、直接输入 QQ 号、建立关系、锁定/恢复注入和解除链接。自定义关系名称仍经过敏感文本检查。
+- M5 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **717/717** 项测试；`npm run panel:build` 成功（**152** 个模块），当前主 bundle 为 **544.77 kB**，仍高于默认 500 kB 提示线。定向测试覆盖 bot gate 与管理命令旁路、小号消息和活动/好感映射、建链时标签与证据合并、解除后不回拆、双向关系及锁定不注入、手工 kind 和面板 API read-back。未启动真实 QQ、模型、服务或 GUI；M6–M8、R9 及真实体验验收仍待完成。

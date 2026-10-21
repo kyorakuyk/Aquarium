@@ -25,6 +25,7 @@ import {
   normalizeTagText,
 } from './tags.ts';
 import { isTagCategoryForScope, prepareTagText, type TagCategory, type TagDropReason } from './tag-model.ts';
+import { mapMessageToMainIdentity } from '../profiles/account-identity.ts';
 import { buildImpressionsPromptBlocks } from './prompt-blocks.ts';
 import type { TagSubjectRepository } from '../../store/tag-subject-repo.ts';
 
@@ -439,7 +440,8 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       return finish('budget');
     }
 
-    const recordsById = new Map(records.map((record) => [
+    const identityRecords = records.map((record) => mapMessageToMainIdentity(options.repository, account, record));
+    const recordsById = new Map(identityRecords.map((record) => [
       record.messageId,
       {
         time: record.time,
@@ -449,10 +451,9 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         externalLinkShare: isExternalLinkShareText(record.plainText),
       },
     ]));
-    const senderIds = new Set<number>();
-    for (const record of records) {
-      if (!record.isSelf && record.senderId !== account) senderIds.add(record.senderId);
-    }
+    const senderIds = new Set(identityRecords
+      .filter((record) => !record.isSelf && record.senderId !== account)
+      .map((record) => record.senderId));
     const keepStatuses = (tag: StoredTag): boolean => tag.status === 'candidate' || tag.status === 'confirmed';
     const groupTags = options.repository.listTagsForSubject(account, sessionKey, null).filter(keepStatuses);
     const memberTags = [...senderIds].map((userId) => ({
@@ -467,7 +468,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       : selected?.model ?? 'unknown';
     const startedAt = now();
     const result = await runExtract(
-      records,
+      identityRecords,
       {
         group: groupTags,
         members: memberTags,

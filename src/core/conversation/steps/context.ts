@@ -4,6 +4,7 @@ import { loadPersona } from '../../../persona/load.ts';
 import { effectiveTalkLevel, renderTraitsBlock } from '../../../persona/traits.ts';
 import { renderFloatBlock } from '../../mood/render.ts';
 import { redactSensitiveText } from '../../impressions/sensitive-text.ts';
+import { mapMessageToMainIdentity, resolveAccountIdentity } from '../../profiles/account-identity.ts';
 import { createSlotCallOptions } from './call-options.ts';
 import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep } from './types.ts';
@@ -14,6 +15,12 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   if (!config || !settings) throw new Error('gate step must run before context step');
 
   const account = config.accounts.find((entry) => entry.uin === ctx.message.session.account);
+  const identity = resolveAccountIdentity(ctx.options.repository, {
+    account: ctx.message.session.account,
+    sessionId: ctx.currentSessionId,
+    userId: ctx.message.senderId,
+    fallbackName: ctx.message.senderName,
+  });
   const nickname = ctx.options.getNickname().trim() || String(ctx.message.session.account);
   let persona: string;
   if (ctx.state.persona !== undefined && ctx.state.personaTraits !== undefined) {
@@ -50,13 +57,13 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   });
 
   const contextCount = ctx.state.proactiveMode ? 8 : settings.contextMessages;
-  const contextRecords = ctx.processOptions.replay
+  const contextRecords = (ctx.processOptions.replay
     ? ctx.options.repository.recentMessagesThrough(ctx.currentSessionId, ctx.message.messageId, contextCount)
     : ctx.contextWindow.select(
       ctx.currentSessionId,
       contextCount,
       ctx.options.repository.recentMessages(ctx.currentSessionId, contextCount * 2),
-    );
+    )).map((record) => mapMessageToMainIdentity(ctx.options.repository, ctx.message.session.account, record));
   const context = contextRecords.map((record) => ({
     ...record,
     plainText: messageTextWithImageCaptions(
@@ -69,15 +76,15 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   const tagBlocks = ctx.options.impressionsService?.promptBlocks({
     session: ctx.message.session,
     sessionId: ctx.currentSessionId,
-    senderId: ctx.message.senderId,
-    senderName: ctx.message.senderName,
+    senderId: identity.userId,
+    senderName: identity.name,
     now: ctx.now(),
     template: ctx.state.promptTemplates.replySystem,
   }) ?? { droppedTags: 0 };
   if (tagBlocks.droppedTags > 0) ctx.state.droppedTags = tagBlocks.droppedTags;
   const privateFactsBlock = ctx.options.privateFactsService?.promptBlock({
     session: ctx.message.session,
-    name: ctx.message.senderName,
+    name: identity.name,
     now: ctx.now(),
     template: ctx.state.promptTemplates.replySystem,
   });
@@ -93,8 +100,8 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   }
   const affinityBlock = ctx.options.affinityService?.promptBlock({
     account: ctx.message.session.account,
-    userId: ctx.message.senderId,
-    name: ctx.message.senderName,
+    userId: identity.userId,
+    name: identity.name,
     now: ctx.now(),
     template: ctx.state.promptTemplates.affect,
   });

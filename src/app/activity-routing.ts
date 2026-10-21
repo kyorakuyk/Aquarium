@@ -15,6 +15,7 @@ export interface AccountActivityRouterOptions<Timer> {
   queue: SessionQueue;
   getConfig: () => AquariumConfig;
   management: Pick<ManagementCommands, 'handle' | 'isMuted'>;
+  isBotAccount?: (account: number, userId: number) => boolean;
   costToday: () => number;
   processMessage: (message: IncomingMessage, options: RoutedActivityOptions) => Promise<unknown>;
   onError?: (error: unknown, message: IncomingMessage) => void;
@@ -39,7 +40,8 @@ export function createAccountActivityRouter<Timer>(
       return !isManagementCommand(message, config.owner);
     },
     async processMessage(message, routedOptions) {
-      if (!routedOptions.batched && await options.management.handle(message)) return;
+      const isBot = options.isBotAccount?.(message.session.account, message.senderId) ?? false;
+      if (!isBot && !routedOptions.batched && await options.management.handle(message)) return;
       await options.processMessage(message, routedOptions);
     },
     onError: options.onError,

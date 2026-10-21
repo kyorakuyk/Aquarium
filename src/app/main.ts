@@ -352,6 +352,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     queue: sessionQueue,
     getConfig: () => configWatcher.getConfig(),
     management,
+    isBotAccount: (targetAccount, userId) => repository.getAccountKind(targetAccount, userId)?.kind === 'bot',
     costToday: () => repository.costToday(),
     processMessage: (message, processOptions) => pipeline(message, processOptions),
     onError: (error, message) => {

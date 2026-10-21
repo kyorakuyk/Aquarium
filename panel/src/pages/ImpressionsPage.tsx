@@ -19,6 +19,7 @@ import { ImpressionsMemberRow } from '../components/ImpressionsMemberRow.tsx';
 import { MemberProfileCard } from '../components/MemberProfileCard.tsx';
 import { QqGroupProfilePanel } from '../components/QqGroupProfilePanel.tsx';
 import { TagVetoMenu } from '../components/TagVetoMenu.tsx';
+import { buildIdentityTargets } from '../identity-targets.ts';
 
 const PrivateFactsPanel = lazy(() => import('../components/PrivateFactsPanel.tsx').then((module) => ({ default: module.PrivateFactsPanel })));
 
@@ -394,6 +395,8 @@ export function ImpressionsPage() {
             sessionId={view.sessionId}
             member={selectedMember}
             busy={busy}
+            relationTargets={buildIdentityTargets(view, privateSessions)}
+            onIdentityUpdated={() => load(view.sessionId)}
             onAction={(id, status) => runAction(id, { status })}
             onRename={(id, text) => runAction(id, { text })}
             onLock={(id, locked) => runAction(id, { locked })}

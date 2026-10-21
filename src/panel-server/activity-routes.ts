@@ -43,7 +43,8 @@ function parseSuggestionBody(body: unknown): z.infer<typeof suggestionBodySchema
 export function registerActivityRoutes(app: Hono, options: ActivityRouteOptions): void {
   app.get('/api/activity', (context) => {
     const sessionId = context.req.query('sessionId');
-    if (!sessionId || !groupSessionKey(sessionId, options.getConfig())) {
+    const key = sessionId ? groupSessionKey(sessionId, options.getConfig()) : undefined;
+    if (!sessionId || !key) {
       return context.json({ error: 'Invalid group session' }, 400);
     }
     const rawView = context.req.query('view') ?? 'hour';
@@ -62,8 +63,12 @@ export function registerActivityRoutes(app: Hono, options: ActivityRouteOptions)
     const now = options.now();
     if (!Number.isFinite(now)) return context.json({ error: 'Invalid activity time' }, 500);
     const from = localStartOfDays(now, view === 'year' ? 365 : 90);
-    const messages = options.repository.messagesInRange(sessionId, from, now);
-    const activity = buildActivityResponse(messages, now, view, userId);
+    const messages = options.repository.messagesInRange(sessionId, from, now).map((message) => ({
+      ...message,
+      senderId: options.repository.mainUserIdFor(key.account, message.senderId),
+    }));
+    const identityUserId = userId === undefined ? undefined : options.repository.mainUserIdFor(key.account, userId);
+    const activity = buildActivityResponse(messages, now, view, identityUserId);
     if (view === 'hour' && userId === undefined) {
       return context.json({
         ...activity,

@@ -108,7 +108,9 @@ function createGateContext(sample: EvalSample, config: AquariumConfig): StepCont
   const now = () => 1_800_000_000_000;
   const options = {
     getConfig: () => config,
-    repository: {} as StoreRepository,
+    repository: {
+      getAccountKind: () => undefined,
+    } as unknown as StoreRepository,
     adapter: {} as ProtocolAdapter,
     getNickname: () => 'Bot',
     callModel: unusedModelCall,

@@ -8,6 +8,8 @@ import {
 import { MemberTagRows, type MemberTagAdd } from './MemberTagRows.tsx';
 import { ActivityHeatmap } from './ActivityHeatmap.tsx';
 import { MemberQqProfile } from './MemberQqProfile.tsx';
+import { IdentityRelationsPanel } from './IdentityRelationsPanel.tsx';
+import type { QqMemberTargetView } from '../api.ts';
 import { containsSensitiveText, redactSensitiveText } from '../sensitive-text.ts';
 
 const AFFINITY_LABELS: Record<ImpressionsView['members'][number]['affinity']['level'], string> = {
@@ -24,10 +26,12 @@ type TagRename = (id: number, text: string) => Promise<boolean>;
 type TagLock = (id: number, locked: boolean) => Promise<boolean>;
 type TagDelete = (id: number) => Promise<boolean>;
 
-export function MemberProfileCard({ sessionId, member, busy, onAction, onRename, onLock, onDelete, onAdd }: {
+export function MemberProfileCard({ sessionId, member, busy, relationTargets, onIdentityUpdated, onAction, onRename, onLock, onDelete, onAdd }: {
   sessionId: string;
   member: Member;
   busy: boolean;
+  relationTargets: QqMemberTargetView[];
+  onIdentityUpdated: () => Promise<unknown>;
   onAction: TagAction;
   onRename: TagRename;
   onLock: TagLock;
@@ -131,6 +135,15 @@ export function MemberProfileCard({ sessionId, member, busy, onAction, onRename,
       </div>
     </header>
     {member.qqProfile && <MemberQqProfile profile={member.qqProfile} />}
+    <IdentityRelationsPanel
+      sessionId={sessionId}
+      userId={member.userId}
+      kind={member.kind}
+      relations={member.relations}
+      isRobot={member.qqProfile?.isRobot === true}
+      targets={relationTargets}
+      onUpdated={onIdentityUpdated}
+    />
     <ActivityHeatmap sessionId={sessionId} userId={member.userId} />
     <MemberTagRows
       sessionId={sessionId}

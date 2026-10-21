@@ -8,6 +8,9 @@ import { createPrivateFactMentionQueries } from './privacy-mention-repo.ts';
 import { createStickerQueries } from './sticker-repo.ts';
 import { createRecentExtractUsageQueries } from './recent-extract-usage-repo.ts';
 import { createQqProfileQueries } from './qq-profile-repo.ts';
+import { createIdentityQueries } from './identity-repo.ts';
+import { createTagQueries } from './tag-repo.ts';
+import { createTagVetoQueries } from './tag-veto-repo.ts';
 import type { ImageCaptionKind, StoreRepository } from './repository-types.ts';
 
 export type {
@@ -28,6 +31,7 @@ export type {
   UsageSlotSummary,
   UsageSummary,
 } from './repository-types.ts';
+export type { AccountKind, AccountKindRecord, RelationRecord, RelationType, StoredRelation } from './identity-repo.ts';
 
 function limitValue(count: number): number {
   if (!Number.isSafeInteger(count) || count < 0) {
@@ -193,10 +197,13 @@ export function createRepository(
   `);
   const deleteExpiredPipelineTraces = database.prepare('DELETE FROM pipeline_traces WHERE time < ?');
 
+  const identityTags = createTagQueries(database);
+  const identityVetoes = createTagVetoQueries(database, identityTags);
   return {
     ...createPanelQueries(database, clock),
     ...createRecentExtractUsageQueries(database),
     ...createQqProfileQueries(database),
+    ...createIdentityQueries(database, identityTags, identityVetoes),
     ...createAffectQueries(database),
     ...createPersonaVersionRepository(database, clock),
     ...createPrivacyQueries(database),

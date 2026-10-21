@@ -95,6 +95,7 @@ test('runExtract returns model errors for the caller instead of discarding them'
 test('提取上下文包含现有 tag_subjects canonical names 与 aliases', () => {
   const template = promptTemplateStore.get().extractTags;
   assert.ok(template.system.includes('schedule 只由本地统计或主人手动生成'));
+  assert.ok(template.system.includes('不要输出人际关系'));
   assert.ok(template.system.includes('group 可用 positioning、topic、atmosphere、meme、norms、recent'));
   assert.ok(template.system.includes('member 可用 identity、personality、fandom、speech、catchphrase'));
   const messages = buildExtractMessages([{
