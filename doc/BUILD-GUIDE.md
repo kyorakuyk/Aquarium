@@ -1,6 +1,6 @@
-# Aquarium 施工导读：从骨架到 Impressions V4 M6
+# Aquarium 施工导读：从骨架到 Impressions V4 M7
 
-> 本文是随代码一起更新的学习材料。目标不是让你记住所有 API，而是让你能回答：程序分成哪些部分、每一层负责什么、为什么选这些库，以及每个任务怎样验证。前文记录 T0–T6、阶段 B 的 R1–R9、阶段 C/D、M2-A A1–A6 和 §9.0 U1–U4；§15 补充 2026-10-20 的 V18f 图片认知和 §13 P1–P6 隐私记忆；§16 补充 2026-10-21 的 S1–S4、K1–K3 与 Impressions V4 M1–M6。M7–M8 和 R9 尚未在本节覆盖。真实 SnowLuma/QQ、模型、Windows GUI 与用户验收仍按各自清单执行。
+> 本文是随代码一起更新的学习材料。目标不是让你记住所有 API，而是让你能回答：程序分成哪些部分、每一层负责什么、为什么选这些库，以及每个任务怎样验证。前文记录 T0–T6、阶段 B 的 R1–R9、阶段 C/D、M2-A A1–A6 和 §9.0 U1–U4；§15 补充 2026-10-20 的 V18f 图片认知和 §13 P1–P6 隐私记忆；§16 补充 2026-10-21 的 S1–S4、K1–K3 与 Impressions V4 M1–M7。M8 和 R9 尚未在本节覆盖。真实 SnowLuma/QQ、模型、Windows GUI 与用户验收仍按各自清单执行。
 >
 > 自动化测试和生产构建不等于真实运行验收。夜间运行不会替代真实 SnowLuma/QQ、模型、Windows GUI 或控制台体验确认。
 
@@ -454,7 +454,7 @@ M2 不是另起一套聊天管线，而是在现有 pipeline 上增加可配置�
 
 ## 16. Impressions V4：结构整理、提示词前缀与标签分类 v2（2026-10-21）
 
-本节补充 §16 夜间任务中已完成的 S1–S4、K1–K3 和 M1–M6。各任务的细项与停止点以 `doc/plans/PLAN.md` §16 为准；这里记录新目录的职责和关键设计，方便从当前代码继续阅读。
+本节补充 §16 夜间任务中已完成的 S1–S4、K1–K3 和 M1–M7。各任务的细项与停止点以 `doc/plans/PLAN.md` §16 为准；这里记录新目录的职责和关键设计，方便从当前代码继续阅读。
 
 ### 16.1 S1–S4：迁移与 core 的职责边界
 
@@ -517,4 +517,13 @@ M3 收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **69
 - migration v20 为未锁定、非终态成员 `speech` 标签中被一对 `「」` 或 `“”` 完整包住的旧文本设置 `needs_reclassification`。迁移先确认 `tags` 表和必需列存在，重复打开安全；普通说话风格、锁定标签、已 superseded 标签不被标记。
 - 整理器输入现在包含原始 `category`，因此旧 `speech` 与普通待分类文本可以区分。对于迁移标记的引号说话风格，代码先去掉外层引号并按证据校验：命中证据时直接改成 `catchphrase`，不需要模型猜类别；证据缺失或文本不合法时标为 `rejected`，同时清除重分类标记，避免无证据原话反复进入提示词。其余类别仍沿用现有批次分类器和 M1 校验。
 - 提示词也明确规定：引号包住的旧 `speech` 原话应归到 `catchphrase`，只在证据含有原话时允许输出。成员提示把口头禅排在说话风格之后，格式为 `口头禅「要饭」「饿死了」`；群梗在 `groupTags` 中也以中文引号显示。`test/impressions-writing.test.ts` 从真实 prompt-block builder 验证群梗和多条口头禅格式；`test/classify-tags.test.ts` 验证带证据迁移、缺证据拒绝及不调用模型；`test/store-migrations.test.ts` 验证 v20 的旧标签筛选。
-- M6 没有新增 npm 依赖。收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **720/720** 项测试；未改动 panel，因此本任务未单独重跑 `npm run panel:build`。没有启动真实模型、QQ、SnowLuma、服务或 GUI；M7、M8、R9 与真实体验验收仍待完成。
+- M6 没有新增 npm 依赖。收尾实测：`npm run check` 通过 TypeScript、依赖边界检查和 **720/720** 项测试；未改动 panel，因此本任务未单独重跑 `npm run panel:build`。没有启动真实模型、QQ、SnowLuma、服务或 GUI；M8、R9 与真实体验验收仍待完成。
+
+### 16.10 M7：导出、导入与初始化
+
+- API 与面板由 `src/panel-server/impressions-data-routes.ts` 和 `panel/src/components/ImpressionsDataMenu.tsx` 负责；传输文件的 Zod schema、数据库应用、备份写入分别放在 `impressions-data-schema.ts`、`impressions-data-import.ts`、`impressions-data-backup.ts`。复用项目已有 Zod、SQLite 和浏览器 Blob 下载，没有新增 npm 依赖。
+- JSON 固定 `version: 1`，带当前群 `account/sessionId/groupName`。省略 `include` 时导出标签、摘要、subjects、vetoes、relations 和 accountKinds；可显式额外导出近一年活动日历或 L1 私聊事实。活动只保存聚合计数，不导出聊天正文；它是消息的派生快照，导入时仍以本地聊天记录重算。L0 在任何选项下都不进入文件。标签、证据、摘要、主题、veto 和私聊事实正文继续经过原有敏感文本遮蔽；展示用群名走名称字段。
+- 标签导出排除 `superseded` tombstone，因为其替代项引用的是本地数据库行 ID；摘要、账号类型、关系的成员范围仍从当前会话的全部标签计算，不会因成员只剩 superseded 标签而漏掉其共享摘要。导入先对严格结构做校验，要求 version 1 且群会话在当前账号联系人中存在；面板还检查文件 sessionId 与当前选中群一致。预览按对象、分类、规范化文本给出新增/冲突数。`merge` 保留现有冲突，`overwrite` 更新未锁定冲突；已有锁定标签不改。veto、摘要、subjects、账号类型、关系和显式 L1 事实在同一 SQLite 事务中应用，失败回滚。
+- 实际导入和 reset 前都先把当前群的默认数据写入应用根目录 `data/backups/`，备份使用独占创建避免覆盖；若备份创建失败，操作在任何数据库写入前中止。Windows 文件名不能含 `:`，因此 sessionId 在备份文件名中转换为短横线。
+- reset 通过群名精确确认，只清当前群 tags、vetoes 和整理水位线；它保留聊天、活动/好感、私聊事实、身份关系，以及 account+userId 共享的成员摘要和 account+category 共享的 subjects，避免误清其他群的数据。当前尚无群级一句话摘要持久化表，按确认留待 M8。
+- M7 验证：`npm run check` 通过依赖边界检查及 **728/728** 项测试；聚焦数据转移/初始化及相关接口测试 **25/25**。`npm run panel:build` 成功（**153** 个模块），主 bundle **556.47 kB**，仍高于默认 500 kB 提示线。真实 GUI、QQ、SnowLuma 和模型验收未运行；M8 与 R9 仍待完成。

@@ -143,6 +143,8 @@ export interface StoredPipelineTrace extends PipelineTraceRecord {
 }
 
 export interface StoreRepository extends RecentExtractUsageRepository, PersonaVersionRepository, PrivacyRepository, PrivateFactMentionRepository, PrivateFactControlsRepository, StickerRepository, TagVetoRepository, QqProfileRepository, IdentityRepository {
+  transaction<T>(task: () => T): T;
+  resetImpressionsSession(account: number, sessionId: string): { tags: number; vetoes: number };
   saveMessage(message: MessageStorageRecord): boolean;
   updateMessageSegments(sessionId: string, messageId: string, segments: unknown[]): void;
   recentMessages(sessionId: string, count: number): MessageStorageRecord[];

@@ -82,6 +82,9 @@ export function createRepository(
     SELECT session_id FROM tags WHERE origin = 'stats' AND category = 'schedule'
     ORDER BY session_id
   `);
+  const deleteSessionTags = database.prepare('DELETE FROM tags WHERE account = ? AND session_id = ?');
+  const deleteSessionVetoes = database.prepare('DELETE FROM tag_vetoes WHERE account = ? AND session_id = ?');
+  const deleteSessionTagRuns = database.prepare('DELETE FROM tag_runs WHERE account = ? AND session_id = ?');
   const selectLastMessageTime = database.prepare(
     'SELECT MAX(time) AS latest_time FROM messages WHERE session_id = ?',
   );
@@ -199,6 +202,31 @@ export function createRepository(
 
   const identityTags = createTagQueries(database);
   const identityVetoes = createTagVetoQueries(database, identityTags);
+  const transaction = <T>(task: () => T): T => {
+    database.exec('BEGIN IMMEDIATE');
+    let transactionOpen = true;
+    try {
+      const result = task();
+      database.exec('COMMIT');
+      transactionOpen = false;
+      return result;
+    } catch (error) {
+      if (transactionOpen) database.exec('ROLLBACK');
+      throw error;
+    }
+  };
+  const resetImpressionsSession = (account: number, sessionId: string) => {
+    if (!Number.isSafeInteger(account) || account <= 0
+      || typeof sessionId !== 'string' || !sessionId.startsWith(`${account}:group:`)) {
+      throw new RangeError('印象初始化会话无效');
+    }
+    return transaction(() => {
+      const tags = Number(deleteSessionTags.run(account, sessionId).changes);
+      const vetoes = Number(deleteSessionVetoes.run(account, sessionId).changes);
+      deleteSessionTagRuns.run(account, sessionId);
+      return { tags, vetoes };
+    });
+  };
   return {
     ...createPanelQueries(database, clock),
     ...createRecentExtractUsageQueries(database),
@@ -210,6 +238,8 @@ export function createRepository(
     ...createPrivateFactMentionQueries(database),
     ...createPrivateFactControlsQueries(database),
     ...createStickerQueries(database),
+    transaction,
+    resetImpressionsSession,
     saveMessage(message) {
       const result = insertMessage.run(
         message.sessionId,

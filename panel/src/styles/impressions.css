@@ -111,6 +111,32 @@
 .impressions-data-menu summary::-webkit-details-marker { display: none; }
 .impressions-data-menu-items { position: absolute; top: calc(100% + 5px); right: 0; z-index: 25; min-width: 190px; padding: 5px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
 .impressions-data-menu-items .text-button { width: 100%; min-height: 44px; padding: 0 10px; text-align: left; }
+.impressions-data-reset-item { color: var(--warn-ink); }
+.impressions-data-dialog { width: min(560px, calc(100vw - 28px)); max-height: min(86vh, 760px); overflow-y: auto; padding: 19px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); color: var(--ink); }
+.impressions-data-dialog::backdrop { background: color-mix(in srgb, var(--ink) 36%, transparent); }
+.impressions-data-dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.impressions-data-dialog-heading h2 { margin: 2px 0 4px; font-size: 17px; }
+.impressions-data-dialog > p { font-size: 12px; line-height: 1.6; }
+.impressions-data-options, .impressions-import-modes { display: grid; gap: 7px; margin: 14px 0; padding: 0; border: 0; }
+.impressions-data-options label, .impressions-import-modes label { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: start; gap: 10px; min-height: 50px; padding: 9px; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; }
+.impressions-data-options input, .impressions-import-modes input { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--accent); }
+.impressions-data-options label > span, .impressions-import-modes label > span { display: grid; gap: 3px; }
+.impressions-data-options strong, .impressions-import-modes strong { font-size: 12px; }
+.impressions-data-options small, .impressions-import-modes small { color: var(--muted); font-size: 10px; line-height: 1.5; }
+.impressions-data-dialog-footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.impressions-data-dialog-footer .button { min-height: 44px; }
+.impressions-data-file { display: grid; gap: 7px; margin: 14px 0 4px; color: var(--ink-2); font-size: 12px; }
+.impressions-data-file input { width: 100%; min-height: 44px; color: var(--ink-2); font: inherit; }
+.impressions-data-file-name { margin: 4px 0 10px; overflow-wrap: anywhere; font-size: 11px; }
+.impressions-import-counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
+.impressions-import-counts div { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); }
+.impressions-import-counts dt { color: var(--muted); font-size: 10px; }
+.impressions-import-counts dd { margin: 0; font-family: var(--mono); font-size: 18px; }
+.impressions-import-modes legend { margin-bottom: 7px; color: var(--ink-2); font-size: 12px; font-weight: 600; }
+.impressions-data-backup-note { padding: 9px 10px; border-radius: 8px; background: var(--surface-2); color: var(--accent); }
+.impressions-reset-confirm { display: grid; gap: 6px; margin: 14px 0; color: var(--ink-2); font-size: 11px; }
+.impressions-reset-confirm input { min-height: 44px; padding: 8px 10px; }
+.impressions-data-status { margin: 0; color: var(--accent); font-size: 11px; }
 .tag-vetoes-dialog { width: min(620px, calc(100vw - 28px)); max-height: min(86vh, 720px); overflow-y: auto; padding: 18px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); color: var(--ink); }
 .tag-vetoes-dialog::backdrop { background: color-mix(in srgb, var(--ink) 36%, transparent); }
 .tag-vetoes-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
@@ -142,4 +168,6 @@
   .tag-subject-row { grid-template-columns: minmax(0, 1fr); }
   .tag-subject-row > .button, .tag-subject-aliases { grid-column: 1; }
   .tag-subject-new { grid-template-columns: 1fr; }
+  .impressions-data-dialog { padding: 15px; }
+  .impressions-import-counts { grid-template-columns: minmax(0, 1fr); }
 }

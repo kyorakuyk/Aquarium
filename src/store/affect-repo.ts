@@ -76,7 +76,7 @@ export type AffectRepositoryQueries = Pick<StoreRepository,
   | 'getAffinityState' | 'listAffinityStates' | 'saveAffinityState' | 'recordAffinityEvent' | 'recentAffinityEvents' | 'affinityEventsSince' | 'latestSenderNameForAccount'
   | 'insertTag' | 'tagById' | 'deleteTag' | 'listTagsForSubject' | 'listTagsForSession' | 'listGroupTagsForUser' | 'senderNameFor'
   | 'updateTag' | 'deleteActivityTag' | 'getTagRun' | 'saveTagRun'
-  | 'deleteTagAndCreateVeto' | 'listTagVetoes' | 'isTagVetoed' | 'deleteTagVeto'
+  | 'deleteTagAndCreateVeto' | 'insertTagVeto' | 'deleteTagVetoesForSession' | 'listTagVetoes' | 'isTagVetoed' | 'deleteTagVeto'
   | 'countMessagesAfter'
 >;
 

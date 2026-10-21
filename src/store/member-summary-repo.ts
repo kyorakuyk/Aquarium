@@ -14,6 +14,7 @@ export interface MemberSummaryRepository {
   get(account: number, userId: number): MemberSummaryRecord | undefined;
   saveGenerated(input: MemberSummaryWrite): boolean;
   saveManual(input: MemberSummaryWrite): void;
+  saveImported(input: MemberSummaryWrite & { manual: boolean }): void;
 }
 
 function numberValue(value: unknown, field: string): number {
@@ -73,6 +74,14 @@ export function createMemberSummaryRepository(database: DatabaseSync): MemberSum
       manual = 1,
       updated_at = excluded.updated_at
   `);
+  const saveImported = database.prepare(`
+    INSERT INTO member_summaries (account, user_id, text, manual, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(account, user_id) DO UPDATE SET
+      text = excluded.text,
+      manual = excluded.manual,
+      updated_at = excluded.updated_at
+  `);
 
   return {
     get(account: number, userId: number): MemberSummaryRecord | undefined {
@@ -89,6 +98,10 @@ export function createMemberSummaryRepository(database: DatabaseSync): MemberSum
     saveManual(input: MemberSummaryWrite): void {
       const text = validateSummary(input);
       saveManual.run(input.account, input.userId, text, input.updatedAt);
+    },
+    saveImported(input) {
+      const text = validateSummary(input);
+      saveImported.run(input.account, input.userId, text, input.manual ? 1 : 0, input.updatedAt);
     },
   };
 }

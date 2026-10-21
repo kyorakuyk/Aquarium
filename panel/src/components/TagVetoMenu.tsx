@@ -25,7 +25,12 @@ function formatTime(value: number): string {
   }).format(value);
 }
 
-export function TagVetoMenu({ sessionId, disabled }: { sessionId: string; disabled: boolean }) {
+export function TagVetoMenu({ sessionId, disabled, openRequest = 0, renderMenu = true }: {
+  sessionId: string;
+  disabled: boolean;
+  openRequest?: number;
+  renderMenu?: boolean;
+}) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [vetoes, setVetoes] = useState<TagVetoView[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,6 +44,10 @@ export function TagVetoMenu({ sessionId, disabled }: { sessionId: string; disabl
     if (dialogOpen && !dialog.open) dialog.showModal();
     if (!dialogOpen && dialog.open) dialog.close();
   }, [dialogOpen]);
+
+  useEffect(() => {
+    if (openRequest > 0) setDialogOpen(true);
+  }, [openRequest]);
 
   useEffect(() => {
     if (!dialogOpen) return undefined;
@@ -69,18 +78,14 @@ export function TagVetoMenu({ sessionId, disabled }: { sessionId: string; disabl
   }
 
   return <>
-    <details className="impressions-data-menu">
+    {renderMenu && <details className="impressions-data-menu">
       <summary className="button button-secondary">印象数据</summary>
       <div className="impressions-data-menu-items" role="menu">
-        <button
-          className="text-button"
-          type="button"
-          role="menuitem"
-          disabled={disabled}
-          onClick={() => setDialogOpen(true)}
-        >已否决的标签…</button>
+        <button className="text-button" type="button" role="menuitem" disabled={disabled} onClick={() => setDialogOpen(true)}>
+          已否决的标签…
+        </button>
       </div>
-    </details>
+    </details>}
     <dialog
       className="tag-vetoes-dialog"
       ref={dialogRef}

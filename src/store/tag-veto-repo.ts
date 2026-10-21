@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { normalizeTagSubjectPath, type TagCategory } from '../core/impressions/tag-model.ts';
+import { isTagCategory, normalizeTagSubjectPath, type TagCategory } from '../core/impressions/tag-model.ts';
 import type { TagRepositoryQueries } from './tag-repo.ts';
 import { createTagSubjectRepository } from './tag-subject-repo.ts';
 
@@ -16,6 +16,8 @@ export interface TagVetoRecord {
 
 export interface TagVetoRepository {
   deleteTagAndCreateVeto(id: number): boolean;
+  insertTagVeto(veto: Omit<TagVetoRecord, 'id'>): boolean;
+  deleteTagVetoesForSession(account: number, sessionId: string): number;
   listTagVetoes(account: number, sessionId: string): TagVetoRecord[];
   isTagVetoed(input: {
     account: number;
@@ -72,6 +74,7 @@ export function createTagVetoQueries(
     ORDER BY created_at DESC, id DESC
   `);
   const deleteVetoById = database.prepare('DELETE FROM tag_vetoes WHERE id = ?');
+  const deleteVetoesForSession = database.prepare('DELETE FROM tag_vetoes WHERE account = ? AND session_id = ?');
 
   const subjectNorm = (account: number, category: TagCategory, subject: string | null): string => {
     if (subject === null) return '';
@@ -134,6 +137,44 @@ export function createTagVetoQueries(
         textNorm: stringValue(row.text_norm, 'text_norm'),
         createdAt: numberValue(row.created_at, 'created_at'),
       }));
+    },
+
+    insertTagVeto(veto) {
+      const subjectNorm = veto.subjectNorm === '' ? '' : normalizeTagSubjectPath(veto.subjectNorm);
+      const textNorm = veto.textNorm;
+      if (!Number.isSafeInteger(veto.account) || veto.account <= 0
+        || !Number.isSafeInteger(veto.createdAt) || veto.createdAt < 0
+        || (veto.userId !== null && (!Number.isSafeInteger(veto.userId) || veto.userId <= 0))
+        || !isTagCategory(veto.category)
+        || !veto.sessionId.startsWith(`${veto.account}:group:`)
+        || veto.subjectNorm.length > 120 || subjectNorm === null || subjectNorm === undefined
+        || textNorm.length === 0 || textNorm.length > 120) {
+        throw new RangeError('标签否决记录无效');
+      }
+      const result = insertVetoIfMissing.run(
+        veto.account,
+        veto.sessionId,
+        veto.userId,
+        veto.category,
+        subjectNorm,
+        textNorm,
+        veto.createdAt,
+        veto.account,
+        veto.sessionId,
+        veto.userId,
+        veto.category,
+        subjectNorm,
+        textNorm,
+      );
+      return Number(result.changes) > 0;
+    },
+
+    deleteTagVetoesForSession(account, sessionId) {
+      if (!Number.isSafeInteger(account) || account <= 0
+        || typeof sessionId !== 'string' || !sessionId.startsWith(`${account}:group:`)) {
+        throw new RangeError('标签否决会话无效');
+      }
+      return Number(deleteVetoesForSession.run(account, sessionId).changes);
     },
 
     isTagVetoed(input) {

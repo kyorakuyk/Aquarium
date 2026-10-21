@@ -44,6 +44,7 @@ import { registerTagSubjectRoutes } from './tag-subject-routes.ts';
 import { registerTagVetoRoutes } from './tag-veto-routes.ts';
 import { registerMemberSummaryRoutes } from './member-summary-routes.ts';
 import { registerIdentityRoutes } from './identity-routes.ts';
+import { registerImpressionsDataRoutes } from './impressions-data-routes.ts';
 
 export interface PanelServerOptions {
   password: string;
@@ -254,6 +255,16 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     accounts: options.accounts,
     loadContacts,
     serializeConfigWrite,
+  });
+  registerImpressionsDataRoutes(app, {
+    root,
+    getConfig: options.getConfig,
+    repository: options.repository,
+    accounts: options.accounts,
+    loadContacts,
+    ...(options.tagSubjects ? { tagSubjects: options.tagSubjects } : {}),
+    ...(options.memberSummaryRepository ? { summaries: options.memberSummaryRepository } : {}),
+    now,
   });
   registerAffectRoutes(app, {
     getConfig: options.getConfig,

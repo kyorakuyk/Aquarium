@@ -17,8 +17,8 @@ import { ActivityHeatmap } from '../components/ActivityHeatmap.tsx';
 import { ImpressionTag, InlineTagAdd } from '../components/ImpressionTag.tsx';
 import { ImpressionsMemberRow } from '../components/ImpressionsMemberRow.tsx';
 import { MemberProfileCard } from '../components/MemberProfileCard.tsx';
+import { ImpressionsDataMenu } from '../components/ImpressionsDataMenu.tsx';
 import { QqGroupProfilePanel } from '../components/QqGroupProfilePanel.tsx';
-import { TagVetoMenu } from '../components/TagVetoMenu.tsx';
 import { buildIdentityTargets } from '../identity-targets.ts';
 
 const PrivateFactsPanel = lazy(() => import('../components/PrivateFactsPanel.tsx').then((module) => ({ default: module.PrivateFactsPanel })));
@@ -245,6 +245,8 @@ export function ImpressionsPage() {
   }
 
   const historyImportActive = historyStarting || Boolean(historyJobId && !isHistoryImportTerminal(historyJob));
+  const selectedGroup = groups.find((group) => group.sessionId === selectedId);
+  const selectedView = view?.sessionId === selectedId ? view : undefined;
   const historyGroup = groups.find((group) => group.sessionId === (historyJob?.sessionId ?? selectedId));
   const historyWaterline = historyJob?.sessionId === selectedId
     ? historyJob.waterlineTime
@@ -346,7 +348,15 @@ export function ImpressionsPage() {
             disabled={!selectedId}
             onClick={openHistoryDialog}
           >{historyImportActive ? '查看进度' : '拉取历史'}</button>
-          {selectedId && <TagVetoMenu sessionId={selectedId} disabled={busy} />}
+          {selectedId && <ImpressionsDataMenu
+            key={selectedId}
+            sessionId={selectedId}
+            groupName={selectedGroup?.name ?? ''}
+            groupTagCount={selectedView?.groupTags.length ?? 0}
+            memberTagCount={selectedView?.members.reduce((count, member) => count + member.tags.length, 0) ?? 0}
+            disabled={busy || historyImportActive || !selectedGroup?.name || !selectedView}
+            onChanged={() => load(selectedId)}
+          />}
         </div>}
       </div>
       {tab === 'people' && <AffinityPanel />}

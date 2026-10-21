@@ -84,6 +84,7 @@ export async function withPanel<T>(
     root: string;
     database: ReturnType<typeof openDatabase>;
     repository: ReturnType<typeof createRepository>;
+    memberSummaryRepository: ReturnType<typeof createMemberSummaryRepository>;
     adapter: FakeAdapter;
     historyImports: ReturnType<typeof createHistoryImportService>;
     modelSlots: string[];
@@ -225,6 +226,7 @@ export async function withPanel<T>(
       root,
       database,
       repository,
+      memberSummaryRepository,
       adapter,
       historyImports,
       modelSlots,
