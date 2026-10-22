@@ -1,9 +1,12 @@
 import type { DatabaseSync } from 'node:sqlite';
 import {
+  isTagKind,
   isTagCategory,
   isTagOrigin,
   isTagPolarity,
+  tagKindFor,
   type TagCategory,
+  type TagKind,
   type TagOrigin,
   type TagPolarity,
 } from '../core/impressions/tag-model.ts';
@@ -50,6 +53,7 @@ export interface TagRecord {
 
 export interface StoredTag extends TagRecord {
   id: number;
+  kind: TagKind;
 }
 
 export interface TagUpdate {
@@ -94,7 +98,7 @@ export interface TagRepositoryQueries {
 }
 
 const TAG_COLUMNS = [
-  'id', 'account', 'session_id', 'user_id', 'text', 'norm', 'category', 'subject', 'polarity', 'origin', 'locked',
+  'id', 'account', 'session_id', 'user_id', 'text', 'norm', 'category', 'kind', 'subject', 'polarity', 'origin', 'locked',
   'status', 'source', 'samples', 'evidence_json', 'first_seen', 'last_seen', 'superseded_by', 'updated_at',
 ].join(', ');
 
@@ -121,10 +125,12 @@ function nullableString(value: unknown, field: string): string | null {
 
 function tagRecord(row: Record<string, unknown>): StoredTag {
   const category = stringValue(row.category, 'category');
+  const kind = stringValue(row.kind, 'kind');
   const origin = stringValue(row.origin, 'origin');
   const polarityValue = nullableString(row.polarity, 'polarity');
   const lockedValue = numberValue(row.locked, 'locked');
   if (!isTagCategory(category)) throw new Error('数据库字段 category 无效');
+  if (!isTagKind(kind)) throw new Error('数据库字段 kind 无效');
   if (!isTagOrigin(origin)) throw new Error('数据库字段 origin 无效');
   if (polarityValue !== null && !isTagPolarity(polarityValue)) throw new Error('数据库字段 polarity 无效');
   if (lockedValue !== 0 && lockedValue !== 1) throw new Error('数据库字段 locked 无效');
@@ -136,6 +142,7 @@ function tagRecord(row: Record<string, unknown>): StoredTag {
     text: stringValue(row.text, 'text'),
     norm: stringValue(row.norm, 'norm'),
     category,
+    kind,
     subject: nullableString(row.subject, 'subject'),
     polarity: polarityValue,
     origin,
@@ -172,9 +179,9 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
   const subjects = createTagSubjectRepository(database);
   const insertTag = database.prepare(`
     INSERT INTO tags
-      (account, session_id, user_id, text, norm, category, subject, polarity, origin, locked,
+      (account, session_id, user_id, text, norm, category, kind, subject, polarity, origin, locked,
        status, source, samples, evidence_json, first_seen, last_seen, superseded_by, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const selectTagById = database.prepare(`SELECT ${TAG_COLUMNS} FROM tags WHERE id = ?`);
   const deleteTagById = database.prepare('DELETE FROM tags WHERE id = ?');
@@ -244,6 +251,7 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
         tag.text,
         tag.norm,
         tag.category,
+        tagKindFor(tag.category, tag.polarity),
         subject,
         tag.polarity,
         tag.origin,
@@ -312,6 +320,9 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
       const categoryValue = update.category ?? stringValue(row.category, 'category');
       if (!isTagCategory(categoryValue)) throw new Error('数据库字段 category 无效');
       const category = categoryValue;
+      const polarityValue = update.polarity === undefined ? nullableString(row.polarity, 'polarity') : update.polarity;
+      if (polarityValue !== null && !isTagPolarity(polarityValue)) throw new Error('数据库字段 polarity 无效');
+      const updatesKind = entries.some(([field]) => field === 'category' || field === 'polarity');
       const account = numberValue(row.account, 'account');
       const assignments = entries.map(([field]) => `${tagUpdateColumns[field]} = ?`);
       const values = entries.map(([field, value]) => {
@@ -322,6 +333,10 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
         }
         return value;
       });
+      if (updatesKind) {
+        assignments.push('kind = ?');
+        values.push(tagKindFor(category, polarityValue));
+      }
       database.prepare(`UPDATE tags SET ${assignments.join(', ')} WHERE id = ?`)
         .run(...values as Array<string | number | null>, id);
     },

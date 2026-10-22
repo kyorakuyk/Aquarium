@@ -386,7 +386,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
       }) === 'allow';
       const memberPrompt = memberAllowed
         ? buildMemberTagPrompt(
-          memberTags,
+          memberTags.filter((tag) => tag.kind === 'fact'),
           at,
           {
             ...qqProfiles.getCachedMemberProfile(key.account, key.peer, userId),
@@ -394,7 +394,8 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
           },
         )
         : { text: '', dropped: 0, profileText: '' };
-      const memberTagsText = memberPrompt.text || memberPrompt.profileText
+      const hasMemberContext = memberPrompt.text.length > 0 || memberPrompt.profileText.length > 0 || kind === 'bot';
+      const memberTagsText = hasMemberContext
         ? promptTemplateStore.get().replySystem.memberTags
           .replaceAll('{{name}}', JSON.stringify(kind === 'bot' ? `${name}（bot）` : name))
           .replaceAll('{{profile}}', memberPrompt.profileText)

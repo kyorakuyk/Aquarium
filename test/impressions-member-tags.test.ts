@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { StoredTag } from '../src/store/affect-repo.ts';
+import { tagKindFor } from '../src/core/impressions/tag-model.ts';
 import { buildMemberTagPrompt, formatMemberTags } from '../src/core/impressions/member-tags.ts';
 
 const now = 1_800_000_000_000;
 
 function tag(overrides: Partial<StoredTag> = {}): StoredTag {
-  return {
+  const record: StoredTag = {
     id: 1,
     account: 900000001,
     sessionId: '900000001:group:123456',
@@ -18,6 +19,7 @@ function tag(overrides: Partial<StoredTag> = {}): StoredTag {
     polarity: null,
     origin: 'inferred',
     locked: false,
+    kind: 'view',
     status: 'confirmed',
     source: 'auto',
     samples: 2,
@@ -28,6 +30,7 @@ function tag(overrides: Partial<StoredTag> = {}): StoredTag {
     updatedAt: now,
     ...overrides,
   };
+  return { ...record, kind: tagKindFor(record.category, record.polarity) };
 }
 
 test('群友标签按规定分组顺序格式化为快照文本', () => {

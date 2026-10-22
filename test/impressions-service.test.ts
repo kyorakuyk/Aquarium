@@ -431,9 +431,13 @@ test('同一轮同标签 samples 最多加一且重复 observe 证据均保留',
     const updated = repository.tagById(seeded);
     assert.equal(updated?.samples, 2);
     assert.equal(updated?.status, 'confirmed');
-    assert.deepEqual(updated?.evidence.map((item) => item.messageId), ['seed', 'msg-3', 'msg-4']);
+    assert.deepEqual(updated?.evidence
+      .filter((item) => item.kind !== 'signature')
+      .map((item) => item.messageId), ['seed', 'msg-3', 'msg-4']);
     assert.equal(repository.tagById(existingByNew)?.samples, 2);
-    assert.deepEqual(repository.tagById(existingByNew)?.evidence.map((item) => item.messageId), ['seed-movie', 'msg-6']);
+    assert.deepEqual(repository.tagById(existingByNew)?.evidence
+      .filter((item) => item.kind !== 'signature')
+      .map((item) => item.messageId), ['seed-movie', 'msg-6']);
     assert.equal(harness.summaries[0]?.observed, 3);
     assert.equal(harness.summaries[0]?.dropped, 2);
   });
@@ -546,7 +550,7 @@ test('contradict 新标签计入每个主语每次最多新增三条', async () 
   });
 });
 
-test('已确认标签注入群与群友块，私聊不注入，丢弃数进追踪', async () => {
+test('群聊提示仅注入 fact 标签，view 标签与私聊标签不注入', async () => {
   await withRepository(async (repository, personaRoot) => {
     const key = sessionId(groupSession);
     const harness = createImpressionsHarness(repository, makeConfig(), personaRoot);
@@ -588,16 +592,16 @@ test('已确认标签注入群与群友块，私聊不注入，丢弃数进追�
     await harness.impressionsService.idle();
 
     const groupPrompt = harness.replyPrompts[0] ?? '';
-    assert.ok(groupPrompt.includes('这个群的氛围：爱聊游戏、扩展一、扩展二、扩展三、扩展四、扩展五'));
+    assert.equal(groupPrompt.includes('这个群的氛围'), false);
     assert.ok(groupPrompt.includes('关于"小明"：作息：夜猫子'));
     const groupDetail = repository.recentDecisions(1)[0]?.detail as {
       promptBlocks?: Array<{ id: string }>;
       droppedTags?: number;
     };
     assert.deepEqual(groupDetail.promptBlocks?.map((block) => block.id), [
-      'persona', 'rules', 'groupNote', 'groupTags', 'memberTags',
+      'persona', 'rules', 'groupNote', 'memberTags',
     ]);
-    assert.equal(groupDetail.droppedTags, 2);
+    assert.equal(groupDetail.droppedTags, undefined);
 
     const privateSession: SessionKey = { account, kind: 'private', peer: 42 };
     harness.clock.value += 60_000;

@@ -17,8 +17,13 @@ export const TAG_CATEGORY_KEYS = [
 
 export type TagCategoryKey = typeof TAG_CATEGORY_KEYS[number];
 export type TagCategory = TagCategoryKey | 'misc';
+export type TagKind = 'fact' | 'view';
 export type TagOrigin = 'self_report' | 'inferred' | 'stats' | 'manual';
 export type TagPolarity = 'like' | 'dislike' | null;
+
+const VIEW_TAG_CATEGORIES: ReadonlySet<TagCategory> = new Set([
+  'atmosphere', 'personality', 'speech', 'social', 'dislike', 'misc',
+]);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -98,6 +103,14 @@ export function isTagCategoryKey(value: unknown): value is TagCategoryKey {
 
 export function isTagCategory(value: unknown): value is TagCategory {
   return value === 'misc' || isTagCategoryKey(value);
+}
+
+export function tagKindFor(category: TagCategory, polarity: TagPolarity): TagKind {
+  return polarity !== null || VIEW_TAG_CATEGORIES.has(category) ? 'view' : 'fact';
+}
+
+export function isTagKind(value: unknown): value is TagKind {
+  return value === 'fact' || value === 'view';
 }
 
 export function isTagOrigin(value: unknown): value is TagOrigin {

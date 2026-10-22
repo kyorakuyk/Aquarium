@@ -89,7 +89,8 @@ export function buildImpressionsPromptBlocks(
     purpose: 'prompt',
   }) === 'allow';
   const groupSelection = groupAllowed
-    ? selectInjectableTags(repository.listTagsForSubject(account, input.sessionId, null), input.now, GROUP_TAGS_LIMIT)
+    ? selectInjectableTags(repository.listTagsForSubject(account, input.sessionId, null)
+      .filter((tag) => tag.kind === 'fact'), input.now, GROUP_TAGS_LIMIT)
     : { tags: [] as StoredTag[], dropped: 0 };
   const memberAllowed = identity.userId !== account && decide({
     info: { origin: 'group', sessionId: input.sessionId, ownerId: identity.userId },
@@ -99,7 +100,8 @@ export function buildImpressionsPromptBlocks(
   const memberSelection = !memberAllowed
     ? { text: '', dropped: 0, profileText: '' }
     : buildMemberTagPrompt(
-      repository.listTagsForSubject(account, input.sessionId, identity.userId),
+      repository.listTagsForSubject(account, input.sessionId, identity.userId)
+        .filter((tag) => tag.kind === 'fact'),
       input.now,
       {
         ...qqProfiles.getCachedMemberProfile(account, input.session.peer, identity.userId),
@@ -113,7 +115,7 @@ export function buildImpressionsPromptBlocks(
     blocks.groupTags = input.template.groupTags
       .replaceAll('{{tags}}', groupSelection.tags.map(displayTagText).join('、'));
   }
-  if (memberSelection.text.length > 0 || memberSelection.profileText.length > 0) {
+  if (memberSelection.text.length > 0 || memberSelection.profileText.length > 0 || identity.kind === 'bot') {
     blocks.memberTags = input.template.memberTags
       .replaceAll('{{name}}', JSON.stringify(identity.kind === 'bot' ? `${identity.name}（bot）` : identity.name))
       .replaceAll('{{profile}}', memberSelection.profileText)

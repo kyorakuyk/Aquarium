@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { StoredTag, TagEvidence } from '../src/store/affect-repo.ts';
+import { tagKindFor } from '../src/core/impressions/tag-model.ts';
 import {
   ACTIVATION_MIN,
   applyTagContradiction,
@@ -17,7 +18,7 @@ import {
 const dayMs = 24 * 60 * 60 * 1000;
 
 function tag(overrides: Partial<StoredTag> = {}): StoredTag {
-  return {
+  const record: StoredTag = {
     id: 1,
     account: 900000001,
     sessionId: '900000001:group:123456',
@@ -29,6 +30,7 @@ function tag(overrides: Partial<StoredTag> = {}): StoredTag {
     polarity: null,
     origin: 'inferred',
     locked: false,
+    kind: 'view',
     status: 'candidate',
     source: 'auto',
     samples: 1,
@@ -39,6 +41,7 @@ function tag(overrides: Partial<StoredTag> = {}): StoredTag {
     updatedAt: 0,
     ...overrides,
   };
+  return { ...record, kind: tagKindFor(record.category, record.polarity) };
 }
 
 test('观察只统计新的证据消息并更新 last_seen，重复 messageId 不计数', () => {
@@ -59,7 +62,9 @@ test('观察只统计新的证据消息并更新 last_seen，重复 messageId �
   assert.equal(observed.id, 1);
   assert.equal(observed.samples, 2);
   assert.equal(observed.lastSeen, 2_000);
-  assert.deepEqual(observed.evidence.map((item: TagEvidence) => item.messageId), ['m1', 'm2']);
+  assert.deepEqual(observed.evidence
+    .filter((item) => item.kind !== 'signature')
+    .map((item) => item.messageId), ['m1', 'm2']);
 
   const duplicate = applyTagObservation([existing], {
     text: '爱聊游戏',

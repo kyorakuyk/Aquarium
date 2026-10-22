@@ -24,7 +24,7 @@ import {
   applyTagObservation,
   normalizeTagText,
 } from './tags.ts';
-import { isTagCategoryForScope, prepareTagText, type TagCategory, type TagDropReason } from './tag-model.ts';
+import { isTagCategoryForScope, prepareTagText, tagKindFor, type TagCategory, type TagDropReason } from './tag-model.ts';
 import { mapMessageToMainIdentity } from '../profiles/account-identity.ts';
 import { buildImpressionsPromptBlocks } from './prompt-blocks.ts';
 import type { TagSubjectRepository } from '../../store/tag-subject-repo.ts';
@@ -183,11 +183,10 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         origin = 'inferred';
       }
       return {
-        category: item.category,
-        subject: item.subject,
+        category: item.category, subject: item.subject,
         polarity: item.polarity,
-        origin,
-        locked: item.sensitive,
+        origin, locked: item.sensitive,
+        kind: tagKindFor(item.category, item.polarity),
       };
     };
 

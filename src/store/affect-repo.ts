@@ -4,6 +4,7 @@ import { createTagQueries } from './tag-repo.ts';
 import { createTagVetoQueries } from './tag-veto-repo.ts';
 
 export type { StoredTag, TagEvidence, TagRecord, TagRunRecord, TagSource, TagStatus, TagUpdate } from './tag-repo.ts';
+export type { TagKind } from '../core/impressions/tag-model.ts';
 
 export type MoodBand = 'low' | 'annoyed' | 'calm' | 'happy' | 'excited';
 export type MoodEventSource = 'appraise' | 'rule' | 'band';

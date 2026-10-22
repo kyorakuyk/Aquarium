@@ -10,7 +10,7 @@ function jsonHeaders(): HeadersInit {
   return { ...authHeaders(), 'Content-Type': 'application/json' };
 }
 
-test('画像卡注入文本与提示词一致，并排除锁定和 misc 标签', async () => {
+test('画像卡实际注入行与提示词一致，并只包含 fact 标签', async () => {
   await withPanel(async ({ app, repository }) => {
     const key = sessionId(groupSession);
     const addTag = (tag: {
@@ -62,7 +62,7 @@ test('画像卡注入文本与提示词一致，并排除锁定和 misc 标签',
     };
     const member = body.members[0]!;
     const storedTags = repository.listTagsForSubject(account, key, 42);
-    const selected = buildMemberTagPrompt(storedTags, now);
+    const selected = buildMemberTagPrompt(storedTags.filter((tag) => tag.kind === 'fact'), now);
     const expected = promptTemplateStore.get().replySystem.memberTags
       .replaceAll('{{name}}', JSON.stringify('小明'))
       .replaceAll('{{profile}}', '')
@@ -71,6 +71,8 @@ test('画像卡注入文本与提示词一致，并排除锁定和 misc 标签',
     assert.equal(response.status, 200);
     assert.equal(member.memberTagsAllowed, true);
     assert.equal(member.memberTagsText, expected);
+    assert.equal(member.memberTagsText?.includes('幽默'), false);
+    assert.equal(member.memberTagsText?.includes('CS2'), false);
     assert.equal(member.memberTagsText?.includes('锁定标签'), false);
     assert.equal(member.memberTagsText?.includes('旧 misc 标签'), false);
   });
