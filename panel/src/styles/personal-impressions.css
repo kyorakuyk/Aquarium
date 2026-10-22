@@ -1,0 +1,24 @@
+.personal-impressions-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.personal-impressions-account { display: grid; width: min(100%, 260px); gap: 6px; color: var(--muted); font-size: 12px; }
+.personal-impressions-groups { display: grid; gap: 16px; }
+.personal-impression-group { overflow: hidden; padding: 0 20px; }
+.personal-impression-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 0 13px; border-bottom: 1px solid var(--line); }
+.personal-impression-group-heading h2 { margin: 0; font-size: 16px; }
+.personal-impression-group-heading p { margin: 5px 0 0; color: var(--muted); font-size: 12px; font-family: var(--mono); }
+.personal-impression-list { display: grid; }
+.personal-impression-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, auto); align-items: center; gap: 20px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.personal-impression-row:last-child { border-bottom: 0; }
+.personal-impression-copy { min-width: 0; }
+.personal-impression-text { margin: 0 0 8px; color: var(--ink); font-size: 15px; line-height: 1.55; overflow-wrap: anywhere; }
+.personal-impression-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--muted); font-size: 12px; }
+.personal-impression-actions { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: flex-end; gap: 8px; }
+.personal-impression-actions .button { min-height: 44px; padding: 0 12px; font-size: 12px; white-space: nowrap; }
+.personal-impression-promotion { display: grid; justify-items: start; gap: 5px; }
+.personal-impression-reason { max-width: 240px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.personal-impressions-page > .notice { margin-bottom: 16px; }
+
+@media (max-width: 760px) {
+  .personal-impressions-header { align-items: flex-start; flex-direction: column; }
+  .personal-impression-row { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .personal-impression-actions { justify-content: flex-start; }
+}

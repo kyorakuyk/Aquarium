@@ -101,9 +101,14 @@ test('extract-private 模板按原始文件哈希加载并保留私聊提取指�
 });
 
 test('reply-system 模板提供带 name 和 facts 占位符的 privateFacts 块', () => {
-  const template = promptTemplateStore.get().replySystem as unknown as { privateFacts?: string; knownFacts?: string };
+  const template = promptTemplateStore.get().replySystem as unknown as {
+    privateFacts?: string;
+    knownFacts?: string;
+    impressions?: string;
+  };
   assert.equal(template.privateFacts, '你和{{name}}私聊时了解到：{{facts}}（自然地记得就好，不要逐条复述）');
   assert.equal(template.knownFacts, '你私下知道：{{facts}}（对方已经在群里提过；别人问起才接，不要主动透露细节）');
+  assert.equal(template.impressions, '以下是你个人的看法，带 ? 的不确定，可与他人不同：{{tags}}');
 });
 
 test('privacy-gate 模板按 context 和 facts 占位符加载', () => {

@@ -60,6 +60,7 @@ export interface ExtractSummary {
 export interface ImpressionsPromptBlocks {
   groupTags?: string;
   memberTags?: string;
+  impressions?: string;
   droppedTags: number;
 }
 
@@ -221,9 +222,12 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         updatedAt: at,
         ...(lockSensitive ? { locked: true } : {}),
       };
+      const nextSamples = update.samples;
+      const certain = target.kind === 'view'
+        && (target.origin === 'manual' || target.source === 'manual' || nextSamples >= 3);
       if (!alreadyIncremented) incrementedTagIds.add(target.id);
       options.repository.updateTag(outcome.id, update);
-      Object.assign(target, update);
+      Object.assign(target, update, { certain });
       counters.observed += 1;
       return true;
     };
@@ -299,6 +303,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
           norm: outcome.norm,
           ...profile,
           inPrompt: false,
+          certain: false,
           status: 'candidate',
           source: 'auto',
           samples: 1,
@@ -390,6 +395,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         norm: outcome.norm,
         ...profile,
         inPrompt: false,
+        certain: false,
         status: 'candidate',
         source: 'auto',
         samples: 1,

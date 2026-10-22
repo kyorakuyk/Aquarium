@@ -109,6 +109,17 @@ export function tagKindFor(category: TagCategory, polarity: TagPolarity): TagKin
   return polarity !== null || VIEW_TAG_CATEGORIES.has(category) ? 'view' : 'fact';
 }
 
+export function factPromotionUnavailableReason(
+  category: TagCategory,
+  scope?: TagScope,
+  sourceKind?: 'group' | 'private',
+): string | undefined {
+  if (sourceKind === 'private') return '私聊来源的印象不能提升为共享知识';
+  if (tagKindFor(category, null) === 'view') return `「${category}」分类表示主观看法，不适合作为知识`;
+  if (scope && !isTagCategoryForScope(category, scope)) return '该分类不适用于此成员或群聊范围，不能提升为知识';
+  return undefined;
+}
+
 export function isTagKind(value: unknown): value is TagKind {
   return value === 'fact' || value === 'view';
 }

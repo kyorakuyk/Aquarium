@@ -25,6 +25,7 @@ export interface TagPromptStateUpdate {
 
 export interface TagSelectionOptions {
   isEligible?: (tag: StoredTag) => boolean;
+  includeMisc?: boolean;
   renderText?: (tags: readonly StoredTag[]) => string;
 }
 
@@ -156,7 +157,7 @@ export function selectInjectableTags(
 ): { tags: StoredTag[]; dropped: number; stateUpdates: TagPromptStateUpdate[] } {
   const candidates: Array<{ tag: StoredTag; confidence: number; manual: boolean }> = [];
   for (const tag of tags) {
-    const eligible = !tag.locked && tag.category !== 'misc' && tag.status === 'confirmed'
+    const eligible = !tag.locked && (options.includeMisc === true || tag.category !== 'misc') && tag.status === 'confirmed'
       && (options.isEligible?.(tag) ?? true);
     const manual = tag.origin === 'manual' || tag.source === 'manual';
     const activation = tagActivation(tag, now);

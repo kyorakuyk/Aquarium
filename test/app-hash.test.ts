@@ -18,3 +18,9 @@ test('未知页面回退给调用方，忽略无效或不适用的选择参数',
   assert.deepEqual(parseAppHash('#/usage?sessionId=123%3Agroup%3A456&userId=789'), { page: 'usage' });
   assert.equal(serializeAppHash({ page: 'overview' }), '#/overview');
 });
+
+test('塑造下的个人印象页可直接由 hash 导航打开', () => {
+  const state = { page: 'personal-impressions' as const };
+  assert.equal(serializeAppHash(state), '#/personal-impressions');
+  assert.deepEqual(parseAppHash('#/personal-impressions'), state);
+});

@@ -21,6 +21,7 @@ function tag(overrides: Partial<StoredTag> = {}): StoredTag {
     locked: false,
     kind: 'view',
     inPrompt: false,
+    certain: false,
     status: 'confirmed',
     source: 'auto',
     samples: 2,

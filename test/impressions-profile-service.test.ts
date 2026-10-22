@@ -283,3 +283,45 @@ test('提取会话携带 tag_subjects 并在 fandom 标签落库前复用 canoni
     database.close();
   }
 });
+
+test('观察使 view 标签达到第三个样本时写入确定状态', async () => {
+  const database = openDatabase(':memory:');
+  try {
+    const repository = createRepository(database);
+    const subjects = createTagSubjectRepository(database);
+    const id = repository.insertTag({
+      account: groupSession.account,
+      sessionId: key,
+      userId: 42,
+      text: '喜欢猫',
+      norm: '喜欢猫',
+      category: 'personality',
+      subject: null,
+      polarity: null,
+      origin: 'inferred',
+      locked: false,
+      status: 'confirmed',
+      source: 'auto',
+      samples: 2,
+      evidence: [
+        { messageId: 'seed-1', time: at - 2_000, quote: '喜欢猫' },
+        { messageId: 'seed-2', time: at - 1_000, quote: '也喜欢猫' },
+      ],
+      firstSeen: at - 2_000,
+      lastSeen: at - 1_000,
+      supersededBy: null,
+      updatedAt: at - 1_000,
+    });
+
+    await runWindow(repository, subjects, [message('third-sample', 42, '我确实喜欢猫')], {
+      group: { observe: [], new: [], contradict: [] },
+      members: [{ userId: 42, observe: [{ id, messageId: 'third-sample' }], new: [], contradict: [] }],
+    });
+
+    const updated = repository.tagById(id) as unknown as { samples: number; certain?: boolean } | undefined;
+    assert.equal(updated?.samples, 3);
+    assert.equal(updated?.certain, true);
+  } finally {
+    database.close();
+  }
+});

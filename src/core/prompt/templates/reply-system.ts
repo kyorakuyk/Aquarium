@@ -6,6 +6,7 @@ export interface ReplySystemTemplate extends PromptTemplate {
   request: string;
   groupTags: string;
   memberTags: string;
+  impressions: string;
   privateFacts: string;
   knownFacts: string;
   stickers: string;
@@ -28,10 +29,11 @@ export function parseReplySystemTemplate(
     || typeof fields.request !== 'string' || fields.request.length === 0
     || typeof fields.groupTags !== 'string' || fields.groupTags.length === 0
     || typeof fields.memberTags !== 'string' || fields.memberTags.length === 0
+    || typeof fields.impressions !== 'string' || fields.impressions.length === 0
     || typeof fields.privateFacts !== 'string' || fields.privateFacts.length === 0
     || typeof fields.knownFacts !== 'string' || fields.knownFacts.length === 0
     || typeof fields.stickers !== 'string' || fields.stickers.length === 0) {
-    throw new Error('reply-system.md 必须包含非空 system、groupNote、request、groupTags、memberTags、privateFacts、knownFacts 和 stickers 文本');
+    throw new Error('reply-system.md 必须包含非空 system、groupNote、request、groupTags、memberTags、impressions、privateFacts、knownFacts 和 stickers 文本');
   }
   const replySystem = {
     ...template,
@@ -40,6 +42,7 @@ export function parseReplySystemTemplate(
     request: fields.request,
     groupTags: fields.groupTags,
     memberTags: fields.memberTags,
+    impressions: fields.impressions,
     privateFacts: fields.privateFacts,
     knownFacts: fields.knownFacts,
     stickers: fields.stickers,
@@ -49,6 +52,7 @@ export function parseReplySystemTemplate(
   validatePlaceholders('reply-system.md', replySystem.request, [], []);
   validatePlaceholders('reply-system.md', replySystem.groupTags, ['tags'], ['tags']);
   validatePlaceholders('reply-system.md', replySystem.memberTags, ['name', 'profile', 'tags'], ['name', 'tags']);
+  validatePlaceholders('reply-system.md', replySystem.impressions, ['tags'], ['tags']);
   validatePlaceholders('reply-system.md', replySystem.privateFacts, ['name', 'facts'], ['name', 'facts']);
   validatePlaceholders('reply-system.md', replySystem.knownFacts, ['facts'], ['facts']);
   validatePlaceholders('reply-system.md', replySystem.stickers, ['list'], ['list']);

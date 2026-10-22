@@ -6,6 +6,7 @@ import type {
   StoredAffinityEvent,
   StoredMoodEvent,
   StoredTag,
+  TagKind,
   TagRecord,
   TagRunRecord,
   TagUpdate,
@@ -206,10 +207,11 @@ export interface StoreRepository extends RecentExtractUsageRepository, PersonaVe
   latestSenderNameForAccount(account: number, userId: number): string | undefined;
   insertTag(tag: TagRecord): number;
   tagById(id: number): StoredTag | undefined;
-  deleteTag(id: number): boolean;
+  deleteTag(id: number, expected?: { account: number; kind: TagKind }): boolean;
   listTagsForSubject(account: number, sessionId: string, userId: number | null): StoredTag[];
   listTagsForSession(account: number, sessionId: string): StoredTag[];
   listGroupTagsForUser(account: number, userId: number): StoredTag[];
+  listViewTagsForAccount(account: number): StoredTag[];
   senderNameFor(sessionId: string, senderId: number): string | undefined;
   updateTag(id: number, update: TagUpdate): void;
   deleteActivityTag(id: number): void;

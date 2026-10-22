@@ -34,6 +34,7 @@ function statefulTag(overrides: Partial<StatefulTag> = {}): StatefulTag {
     supersededBy: null,
     updatedAt: now,
     inPrompt: false,
+    certain: false,
     ...overrides,
   };
 }

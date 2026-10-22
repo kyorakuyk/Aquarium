@@ -142,6 +142,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
       ...(tagBlocks.groupTags === undefined ? {} : { groupTags: tagBlocks.groupTags }),
       ...(privateFactsBlock === undefined ? {} : { privateFacts: privateFactsBlock }),
       ...(tagBlocks.memberTags === undefined ? {} : { memberTags: tagBlocks.memberTags }),
+      ...(tagBlocks.impressions === undefined ? {} : { impressions: tagBlocks.impressions }),
       ...(ctx.state.privacyPromptBlocks?.knownFacts === undefined
         ? {} : { knownFacts: ctx.state.privacyPromptBlocks.knownFacts }),
       ...(ctx.state.privacyPromptBlocks?.privateRule === undefined

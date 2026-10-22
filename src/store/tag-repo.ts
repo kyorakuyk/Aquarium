@@ -37,6 +37,7 @@ export interface TagRecord {
   text: string;
   norm: string;
   category: TagCategory;
+  kind?: TagKind;
   subject: string | null;
   polarity: TagPolarity;
   origin: TagOrigin;
@@ -55,12 +56,14 @@ export interface StoredTag extends TagRecord {
   id: number;
   kind: TagKind;
   inPrompt: boolean;
+  certain: boolean;
 }
 
 export interface TagUpdate {
   text?: string;
   norm?: string;
   category?: TagCategory;
+  kind?: TagKind;
   subject?: string | null;
   polarity?: TagPolarity;
   origin?: TagOrigin;
@@ -85,10 +88,11 @@ export interface TagRunRecord {
 export interface TagRepositoryQueries {
   insertTag(tag: TagRecord): number;
   tagById(id: number): StoredTag | undefined;
-  deleteTag(id: number): boolean;
+  deleteTag(id: number, expected?: { account: number; kind: TagKind }): boolean;
   listTagsForSubject(account: number, sessionId: string, userId: number | null): StoredTag[];
   listTagsForSession(account: number, sessionId: string): StoredTag[];
   listGroupTagsForUser(account: number, userId: number): StoredTag[];
+  listViewTagsForAccount(account: number): StoredTag[];
   listUnlockedMiscTags(): StoredTag[];
   countLockedMiscTags(): number;
   senderNameFor(sessionId: string, senderId: number): string | undefined;
@@ -101,7 +105,7 @@ export interface TagRepositoryQueries {
 
 const TAG_COLUMNS = [
   'id', 'account', 'session_id', 'user_id', 'text', 'norm', 'category', 'kind', 'in_prompt', 'subject', 'polarity', 'origin', 'locked',
-  'status', 'source', 'samples', 'evidence_json', 'first_seen', 'last_seen', 'superseded_by', 'updated_at',
+  'status', 'source', 'samples', 'evidence_json', 'first_seen', 'last_seen', 'superseded_by', 'updated_at', 'certain',
 ].join(', ');
 
 function numberValue(value: unknown, field: string): number {
@@ -132,12 +136,14 @@ function tagRecord(row: Record<string, unknown>): StoredTag {
   const polarityValue = nullableString(row.polarity, 'polarity');
   const lockedValue = numberValue(row.locked, 'locked');
   const inPromptValue = numberValue(row.in_prompt, 'in_prompt');
+  const certainValue = numberValue(row.certain, 'certain');
   if (!isTagCategory(category)) throw new Error('数据库字段 category 无效');
   if (!isTagKind(kind)) throw new Error('数据库字段 kind 无效');
   if (!isTagOrigin(origin)) throw new Error('数据库字段 origin 无效');
   if (polarityValue !== null && !isTagPolarity(polarityValue)) throw new Error('数据库字段 polarity 无效');
   if (lockedValue !== 0 && lockedValue !== 1) throw new Error('数据库字段 locked 无效');
   if (inPromptValue !== 0 && inPromptValue !== 1) throw new Error('数据库字段 in_prompt 无效');
+  if (certainValue !== 0 && certainValue !== 1) throw new Error('数据库字段 certain 无效');
   return {
     id: numberValue(row.id, 'id'),
     account: numberValue(row.account, 'account'),
@@ -148,6 +154,7 @@ function tagRecord(row: Record<string, unknown>): StoredTag {
     category,
     kind,
     inPrompt: inPromptValue === 1,
+    certain: certainValue === 1,
     subject: nullableString(row.subject, 'subject'),
     polarity: polarityValue,
     origin,
@@ -167,6 +174,7 @@ const tagUpdateColumns: Record<keyof TagUpdate, string> = {
   text: 'text',
   norm: 'norm',
   category: 'category',
+  kind: 'kind',
   subject: 'subject',
   polarity: 'polarity',
   origin: 'origin',
@@ -186,11 +194,12 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
   const insertTag = database.prepare(`
     INSERT INTO tags
       (account, session_id, user_id, text, norm, category, kind, subject, polarity, origin, locked,
-       status, source, samples, evidence_json, first_seen, last_seen, superseded_by, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       status, source, samples, evidence_json, first_seen, last_seen, superseded_by, updated_at, certain)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const selectTagById = database.prepare(`SELECT ${TAG_COLUMNS} FROM tags WHERE id = ?`);
   const deleteTagById = database.prepare('DELETE FROM tags WHERE id = ?');
+  const deleteTagByAccountAndKind = database.prepare('DELETE FROM tags WHERE id = ? AND account = ? AND kind = ?');
   const selectTagsForSubject = database.prepare(`
     SELECT ${TAG_COLUMNS}
     FROM tags
@@ -202,6 +211,12 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
     FROM tags
     WHERE account = ? AND session_id = ?
     ORDER BY last_seen DESC, id DESC
+  `);
+  const selectViewTagsForAccount = database.prepare(`
+    SELECT ${TAG_COLUMNS}
+    FROM tags
+    WHERE account = ? AND kind = 'view'
+    ORDER BY user_id, category, norm, id
   `);
   const selectGroupTagsForUser = database.prepare(`
     SELECT ${TAG_COLUMNS}
@@ -250,6 +265,7 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
       const subject = tag.subject === null
         ? null
         : subjects.canonicalTagSubject(tag.account, tag.category, tag.subject);
+      const kind = tag.kind ?? tagKindFor(tag.category, tag.polarity);
       const result = insertTag.run(
         tag.account,
         tag.sessionId,
@@ -257,7 +273,7 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
         tag.text,
         tag.norm,
         tag.category,
-        tagKindFor(tag.category, tag.polarity),
+        kind,
         subject,
         tag.polarity,
         tag.origin,
@@ -270,6 +286,7 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
         tag.lastSeen,
         tag.supersededBy,
         tag.updatedAt,
+        kind === 'view' && (tag.origin === 'manual' || tag.source === 'manual' || tag.samples >= 3) ? 1 : 0,
       );
       return numberValue(result.lastInsertRowid, 'lastInsertRowid');
     },
@@ -280,9 +297,11 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
       return row ? tagRecord(row) : undefined;
     },
 
-    deleteTag(id) {
+    deleteTag(id, expected) {
       if (!Number.isSafeInteger(id) || id <= 0) return false;
-      const result = deleteTagById.run(id);
+      const result = expected
+        ? deleteTagByAccountAndKind.run(id, expected.account, expected.kind)
+        : deleteTagById.run(id);
       return result.changes === 1 || result.changes === 1n;
     },
 
@@ -298,6 +317,11 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
 
     listGroupTagsForUser(account, userId) {
       const rows = selectGroupTagsForUser.all(account, userId, `${account}:group:%`) as Array<Record<string, unknown>>;
+      return rows.map(tagRecord);
+    },
+
+    listViewTagsForAccount(account) {
+      const rows = selectViewTagsForAccount.all(account) as Array<Record<string, unknown>>;
       return rows.map(tagRecord);
     },
 
@@ -329,6 +353,14 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
       const polarityValue = update.polarity === undefined ? nullableString(row.polarity, 'polarity') : update.polarity;
       if (polarityValue !== null && !isTagPolarity(polarityValue)) throw new Error('数据库字段 polarity 无效');
       const updatesKind = entries.some(([field]) => field === 'category' || field === 'polarity');
+      const explicitKind = update.kind;
+      if (explicitKind !== undefined && !isTagKind(explicitKind)) throw new Error('数据库字段 kind 无效');
+      const nextKind = explicitKind ?? (updatesKind
+        ? tagKindFor(category, polarityValue)
+        : stringValue(row.kind, 'kind') as TagKind);
+      const nextOrigin = update.origin ?? stringValue(row.origin, 'origin') as TagOrigin;
+      const nextSource = update.source ?? stringValue(row.source, 'source') as TagSource;
+      const nextSamples = update.samples ?? numberValue(row.samples, 'samples');
       const account = numberValue(row.account, 'account');
       const assignments = entries.map(([field]) => `${tagUpdateColumns[field]} = ?`);
       const values = entries.map(([field, value]) => {
@@ -339,15 +371,17 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
         }
         return value;
       });
-      if (updatesKind) {
-        const nextKind = tagKindFor(category, polarityValue);
+      if (updatesKind && explicitKind === undefined) {
         assignments.push('kind = ?');
         values.push(nextKind);
-        if (nextKind !== row.kind && !entries.some(([field]) => field === 'inPrompt')) {
-          assignments.push('in_prompt = ?');
-          values.push(0);
-        }
       }
+      if (nextKind !== row.kind && !entries.some(([field]) => field === 'inPrompt')) {
+        assignments.push('in_prompt = ?');
+        values.push(0);
+      }
+      assignments.push('certain = ?');
+      values.push(nextKind === 'view'
+        && (nextOrigin === 'manual' || nextSource === 'manual' || nextSamples >= 3) ? 1 : 0);
       database.prepare(`UPDATE tags SET ${assignments.join(', ')} WHERE id = ?`)
         .run(...values as Array<string | number | null>, id);
     },

@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { isTagCategory, normalizeTagSubjectPath, type TagCategory } from '../core/impressions/tag-model.ts';
+import { isTagCategory, normalizeTagSubjectPath, type TagCategory, type TagKind } from '../core/impressions/tag-model.ts';
 import type { TagRepositoryQueries } from './tag-repo.ts';
 import { createTagSubjectRepository } from './tag-subject-repo.ts';
 
@@ -15,7 +15,7 @@ export interface TagVetoRecord {
 }
 
 export interface TagVetoRepository {
-  deleteTagAndCreateVeto(id: number): boolean;
+  deleteTagAndCreateVeto(id: number, expected?: { account: number; kind: TagKind }): boolean;
   insertTagVeto(veto: Omit<TagVetoRecord, 'id'>): boolean;
   deleteTagVetoesForSession(account: number, sessionId: string): number;
   listTagVetoes(account: number, sessionId: string): TagVetoRecord[];
@@ -83,13 +83,13 @@ export function createTagVetoQueries(
   };
 
   return {
-    deleteTagAndCreateVeto(id) {
+    deleteTagAndCreateVeto(id, expected) {
       if (!Number.isSafeInteger(id) || id <= 0) return false;
       database.exec('BEGIN IMMEDIATE');
       let transactionOpen = true;
       try {
         const tag = tags.tagById(id);
-        if (!tag) {
+        if (!tag || (expected && (tag.account !== expected.account || tag.kind !== expected.kind))) {
           database.exec('ROLLBACK');
           transactionOpen = false;
           return false;
@@ -111,7 +111,7 @@ export function createTagVetoQueries(
           normalizedSubject,
           normalizedText,
         );
-        if (!tags.deleteTag(id)) {
+        if (!tags.deleteTag(id, expected)) {
           database.exec('ROLLBACK');
           transactionOpen = false;
           return false;

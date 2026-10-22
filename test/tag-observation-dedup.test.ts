@@ -12,6 +12,8 @@ const existing: StoredTag = {
   norm: '喜欢解谜游戏',
   category: 'topic',
   kind: 'fact',
+  inPrompt: false,
+  certain: false,
   subject: null,
   polarity: null,
   origin: 'inferred',

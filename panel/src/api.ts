@@ -185,6 +185,24 @@ export interface TagView {
   lastSeen: number;
 }
 
+export interface ViewImpression {
+  id: number;
+  sessionId: string;
+  sourceKind: 'group' | 'private' | null;
+  sessionLabel: string;
+  userId: number | null;
+  name: string;
+  text: string;
+  category: TagCategory;
+  kind: TagKind;
+  certain: boolean;
+  polarity: TagPolarity;
+  origin: TagOrigin;
+  source: 'auto' | 'manual';
+  status: TagStatus;
+  locked: boolean;
+}
+
 export interface TagVetoView {
   id: number;
   userId: number | null;

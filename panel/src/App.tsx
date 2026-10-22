@@ -8,6 +8,7 @@ import { PersonasPage } from './pages/PersonasPage.tsx';
 import { DecisionsPage } from './pages/DecisionsPage.tsx';
 import { UsagePage } from './pages/UsagePage.tsx';
 import { ImpressionsPage } from './pages/ImpressionsPage.tsx';
+import { PersonalImpressionsPage } from './pages/PersonalImpressionsPage.tsx';
 import { ModelsPage } from './pages/ModelsPage.tsx';
 import { StickersPage } from './pages/StickersPage.tsx';
 import { parseAppHash, serializeAppHash } from './hash-navigation.ts';
@@ -72,6 +73,7 @@ export function App() {
         {page === 'sandbox' && <DecisionsPage />}
         {page === 'usage' && <UsagePage />}
         {page === 'impressions' && <ImpressionsPage />}
+        {page === 'personal-impressions' && <PersonalImpressionsPage />}
         {page === 'stickers' && <StickersPage />}
       </main>
     </div>

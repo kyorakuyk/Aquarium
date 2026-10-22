@@ -129,6 +129,7 @@ test('提示词块按固定顺序渲染并跳过空块', () => {
       groupTags: '块-群标签',
       mood: '',
       memberTags: '块-群友标签',
+      impressions: '块-个人印象',
       privateFacts: '块-私聊记忆',
       knownFacts: '块-群里已知事实',
       privacyRule: '块-隐私规则',
@@ -142,7 +143,7 @@ test('提示词块按固定顺序渲染并跳过空块', () => {
   const userContent = String(messages[1]?.content);
   const systemPositions = ['块-人设', '块-性格底色', '本会话补充说明：块-群说明', '块-群标签']
     .map((text) => systemContent.indexOf(text));
-  const dynamicPositions = ['块-模式提示', '块-好感', '块-浮动值', '块-私聊记忆', '块-群友标签', '块-群里已知事实', '块-隐私规则', '块-表情候选', '请回复最后一条提到你的消息。']
+  const dynamicPositions = ['块-模式提示', '块-好感', '块-浮动值', '块-私聊记忆', '块-群友标签', '块-个人印象', '块-群里已知事实', '块-隐私规则', '块-表情候选', '请回复最后一条提到你的消息。']
     .map((text) => userContent.indexOf(text));
 
   assert.ok(systemPositions.every((position) => position >= 0));
@@ -154,7 +155,7 @@ test('提示词块按固定顺序渲染并跳过空块', () => {
   assert.equal(systemContent.includes('块-表情候选'), false);
   assert.deepEqual(
     describePromptBlocks(options).map(({ id }) => id),
-    ['persona', 'traits', 'rules', 'groupNote', 'groupTags', 'privateFacts', 'memberTags', 'knownFacts', 'privacyRule', 'affinity', 'float', 'stickers'],
+    ['persona', 'traits', 'rules', 'groupNote', 'groupTags', 'privateFacts', 'memberTags', 'impressions', 'knownFacts', 'privacyRule', 'affinity', 'float', 'stickers'],
   );
 });
 

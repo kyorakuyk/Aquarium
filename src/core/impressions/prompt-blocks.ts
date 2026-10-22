@@ -1,7 +1,8 @@
 import type { StoredTag } from '../../store/affect-repo.ts';
 import type { StoreRepository } from '../../store/repository.ts';
 import { createQqProfileService } from '../profiles/qq-profile-service.ts';
-import { sessionId, type SessionKey } from '../shared/events.ts';
+import { parseSessionId } from '../conversation/sessions.ts';
+import type { SessionKey } from '../shared/events.ts';
 import { decide } from '../privacy/policy.ts';
 import type { ReplySystemTemplate } from '../prompt/templates.ts';
 import { buildMemberTagPrompt } from './member-tags.ts';
@@ -19,6 +20,7 @@ const RELATION_LABELS = {
 
 const MAX_RELATION_LINES = 5;
 const MAX_RELATION_CHARACTERS = 180;
+const VIEW_TAGS_LIMIT = { max: 4, maxChars: 100 } as const;
 
 export function relationPromptLines(
   repository: StoreRepository,
@@ -69,61 +71,113 @@ function displayTagText(tag: Pick<StoredTag, 'category' | 'text'>): string {
   return tag.text.startsWith('「') && tag.text.endsWith('」') ? tag.text : `「${tag.text}」`;
 }
 
+function displayViewTagText(tag: StoredTag): string {
+  const text = redactSensitiveText(tag.text);
+  return tag.certain || text.endsWith('?') ? text : `${text}?`;
+}
+
+function viewTagAllowed(
+  tag: StoredTag,
+  account: number,
+  subjectId: number | null,
+  target: { kind: 'group'; sessionId: string } | { kind: 'private'; sessionId: string; peerId: number },
+): boolean {
+  if (tag.kind !== 'view' || (tag.userId !== null && tag.userId !== subjectId)) return false;
+  const source = parseSessionId(tag.sessionId);
+  if (!source || source.account !== account) return false;
+  const decision = decide({
+    info: {
+      origin: source.kind,
+      sessionId: tag.sessionId,
+      ownerId: tag.userId,
+      ...(source.kind === 'private' ? { level: 'L0' as const } : {}),
+    },
+    target,
+    purpose: 'prompt',
+  });
+  return decision === 'allow';
+}
+
 export function buildImpressionsPromptBlocks(
   repository: StoreRepository,
   input: PromptBlocksInput,
   onTagPromptStates?: (updates: readonly TagPromptStateUpdate[]) => void,
-): { groupTags?: string; memberTags?: string; droppedTags: number } {
-  if (input.session.kind !== 'group') return { droppedTags: 0 };
+): { groupTags?: string; memberTags?: string; impressions?: string; droppedTags: number } {
   const account = input.session.account;
-  const identity = resolveAccountIdentity(repository, {
-    account,
-    sessionId: input.sessionId,
-    userId: input.senderId,
-    fallbackName: input.senderName,
+  const identity = input.session.kind === 'group'
+    ? resolveAccountIdentity(repository, {
+      account,
+      sessionId: input.sessionId,
+      userId: input.senderId,
+      fallbackName: input.senderName,
+    })
+    : undefined;
+  const target = input.session.kind === 'private'
+    ? { kind: 'private' as const, sessionId: input.sessionId, peerId: input.session.peer }
+    : { kind: 'group' as const, sessionId: input.sessionId };
+  let groupSelection: ReturnType<typeof selectInjectableTags> = {
+    tags: [], dropped: 0, stateUpdates: [],
+  };
+  let groupAllowed = false;
+  let memberSelection = { text: '', dropped: 0, profileText: '', stateUpdates: [] as TagPromptStateUpdate[] };
+  if (input.session.kind === 'group' && identity) {
+    const qqProfiles = createQqProfileService({ repository, now: () => input.now });
+    groupAllowed = decide({
+      info: { origin: 'group', sessionId: input.sessionId, ownerId: null },
+      target,
+      purpose: 'prompt',
+    }) === 'allow';
+    if (groupAllowed) {
+      groupSelection = selectInjectableTags(repository.listTagsForSubject(account, input.sessionId, null)
+        .filter((tag) => tag.kind === 'fact'), input.now, GROUP_TAGS_LIMIT, {
+          renderText: (tags) => tags.map(displayTagText).join('、'),
+        });
+    }
+    const memberAllowed = identity.userId !== account && decide({
+      info: { origin: 'group', sessionId: input.sessionId, ownerId: identity.userId },
+      target,
+      purpose: 'prompt',
+    }) === 'allow';
+    if (memberAllowed) {
+      memberSelection = buildMemberTagPrompt(
+        repository.listTagsForSubject(account, input.sessionId, identity.userId)
+          .filter((tag) => tag.kind === 'fact'),
+        input.now,
+        {
+          ...qqProfiles.getCachedMemberProfile(account, input.session.peer, identity.userId),
+          relationships: relationPromptLines(repository, account, input.sessionId, identity.userId),
+        },
+      );
+    }
+  }
+  const subjectId = identity?.userId ?? (input.session.kind === 'private' ? input.session.peer : null);
+  const eligibleViewTags = repository.listViewTagsForAccount(account)
+    .filter((tag) => viewTagAllowed(tag, account, subjectId, target));
+  const viewSelection = selectInjectableTags(eligibleViewTags, input.now, VIEW_TAGS_LIMIT, {
+    includeMisc: true,
+    renderText: (tags) => tags.map(displayViewTagText).join('、'),
   });
-  const qqProfiles = createQqProfileService({ repository, now: () => input.now });
-  const target = { kind: 'group' as const, sessionId: sessionId(input.session) };
-  const groupAllowed = decide({
-    info: { origin: 'group', sessionId: input.sessionId, ownerId: null },
-    target,
-    purpose: 'prompt',
-  }) === 'allow';
-  const groupSelection = groupAllowed
-    ? selectInjectableTags(repository.listTagsForSubject(account, input.sessionId, null)
-      .filter((tag) => tag.kind === 'fact'), input.now, GROUP_TAGS_LIMIT, {
-        renderText: (tags) => tags.map(displayTagText).join('、'),
-      })
-    : { tags: [] as StoredTag[], dropped: 0, stateUpdates: [] };
-  const memberAllowed = identity.userId !== account && decide({
-    info: { origin: 'group', sessionId: input.sessionId, ownerId: identity.userId },
-    target,
-    purpose: 'prompt',
-  }) === 'allow';
-  const memberSelection = !memberAllowed
-    ? { text: '', dropped: 0, profileText: '', stateUpdates: [] }
-    : buildMemberTagPrompt(
-      repository.listTagsForSubject(account, input.sessionId, identity.userId)
-        .filter((tag) => tag.kind === 'fact'),
-      input.now,
-      {
-        ...qqProfiles.getCachedMemberProfile(account, input.session.peer, identity.userId),
-        relationships: relationPromptLines(repository, account, input.sessionId, identity.userId),
-      },
-    );
-  onTagPromptStates?.([...groupSelection.stateUpdates, ...memberSelection.stateUpdates]);
-  const blocks: { groupTags?: string; memberTags?: string; droppedTags: number } = {
-    droppedTags: groupSelection.dropped + memberSelection.dropped,
+  onTagPromptStates?.([
+    ...groupSelection.stateUpdates,
+    ...memberSelection.stateUpdates,
+    ...viewSelection.stateUpdates,
+  ]);
+  const blocks: { groupTags?: string; memberTags?: string; impressions?: string; droppedTags: number } = {
+    droppedTags: groupSelection.dropped + memberSelection.dropped + viewSelection.dropped,
   };
   if (groupSelection.tags.length > 0) {
     blocks.groupTags = input.template.groupTags
       .replaceAll('{{tags}}', groupSelection.tags.map(displayTagText).join('、'));
   }
-  if (memberSelection.text.length > 0 || memberSelection.profileText.length > 0 || identity.kind === 'bot') {
+  if (identity && (memberSelection.text.length > 0 || memberSelection.profileText.length > 0 || identity.kind === 'bot')) {
     blocks.memberTags = input.template.memberTags
       .replaceAll('{{name}}', JSON.stringify(identity.kind === 'bot' ? `${identity.name}（bot）` : identity.name))
       .replaceAll('{{profile}}', memberSelection.profileText)
       .replaceAll('{{tags}}', memberSelection.text || '暂无已确认标签');
+  }
+  if (viewSelection.tags.length > 0) {
+    blocks.impressions = input.template.impressions
+      .replaceAll('{{tags}}', viewSelection.tags.map(displayViewTagText).join('、'));
   }
   return blocks;
 }

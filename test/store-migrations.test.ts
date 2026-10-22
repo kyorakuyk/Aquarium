@@ -11,7 +11,7 @@ import { createRepository } from '../src/store/repository.ts';
 
 test('migration versions start at one and are continuous and unique', () => {
   const versions = migrations.map(({ version }) => version);
-  assert.deepEqual(versions, Array.from({ length: 23 }, (_, index) => index + 1));
+  assert.deepEqual(versions, Array.from({ length: 24 }, (_, index) => index + 1));
   assert.equal(new Set(versions).size, versions.length);
   assert.ok(migrations.every(({ up }) => typeof up === 'function'));
 });
@@ -23,7 +23,7 @@ test('v17 tag veto table remains available at the current schema version', () =>
     const columns = database.prepare("PRAGMA table_info('tag_vetoes')").all() as Array<{ name: string }>;
     const indexes = database.prepare("PRAGMA index_list('tag_vetoes')").all() as Array<{ name: string }>;
 
-    assert.equal(version.version, 23);
+    assert.equal(version.version, 24);
     assert.deepEqual(columns.map(({ name }) => name), [
       'id', 'account', 'session_id', 'user_id', 'category', 'subject_norm', 'text_norm', 'created_at',
     ]);
@@ -42,7 +42,7 @@ test('v18 creates account- and group-scoped QQ profile caches', () => {
     const memberColumns = database.prepare("PRAGMA table_info('qq_member_profiles')")
       .all() as Array<{ name: string; pk: number }>;
 
-    assert.equal(version.version, 23);
+    assert.equal(version.version, 24);
     assert.deepEqual(groupColumns.map(({ name }) => name), ['account', 'group_id', 'json', 'fetched_at']);
     assert.deepEqual(groupColumns.map(({ pk }) => pk), [1, 2, 0, 0]);
     assert.deepEqual(memberColumns.map(({ name }) => name), [
@@ -102,7 +102,7 @@ test('v20 schedules only unlocked quoted member speech tags for reclassification
       needs_reclassification: number;
     }>;
 
-    assert.equal(version.version, 23);
+    assert.equal(version.version, 24);
     assert.deepEqual(markers.map(({ id, needs_reclassification }) => ({ id, needs_reclassification })), [
       { id: supported, needs_reclassification: 1 },
       { id: supportedCurly, needs_reclassification: 1 },
@@ -203,7 +203,7 @@ test('v22 将旧标签回填为 kind 并完整保留原标签', () => {
     const columns = new Set((database.prepare("PRAGMA table_info('tags')").all() as Array<{ name: string }>)
       .map(({ name }) => name));
     assert.ok(columns.has('kind'));
-    assert.equal(version.version, 23);
+    assert.equal(version.version, 24);
     const migratedRows = database.prepare('SELECT text, kind FROM tags ORDER BY id').all() as Array<{
       text: string;
       kind: string;
@@ -272,7 +272,7 @@ test('v23 adds in_prompt with a false default and preserves v22 tags', () => {
     const columns = new Set((database.prepare("PRAGMA table_info('tags')").all() as Array<{ name: string }>)
       .map(({ name }) => name));
     assert.ok(columns.has('in_prompt'));
-    assert.equal(version.version, 23);
+    assert.equal(version.version, 24);
     const states = database.prepare('SELECT in_prompt FROM tags').all() as Array<{ in_prompt: number }>;
     assert.deepEqual(states.map(({ in_prompt }) => ({ in_prompt })), [{ in_prompt: 0 }]);
     const migratedRows = database.prepare(`

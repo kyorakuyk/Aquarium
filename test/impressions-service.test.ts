@@ -550,7 +550,7 @@ test('contradict 新标签计入每个主语每次最多新增三条', async () 
   });
 });
 
-test('群聊提示仅注入 fact 标签，view 标签与私聊标签不注入', async () => {
+test('群聊提示分开注入 fact 知识与符合范围的 view 印象', async () => {
   await withRepository(async (repository, personaRoot) => {
     const key = sessionId(groupSession);
     const harness = createImpressionsHarness(repository, makeConfig(), personaRoot);
@@ -594,14 +594,15 @@ test('群聊提示仅注入 fact 标签，view 标签与私聊标签不注入', 
     const groupPrompt = harness.replyPrompts[0] ?? '';
     assert.equal(groupPrompt.includes('这个群的氛围'), false);
     assert.ok(groupPrompt.includes('关于"小明"：作息：夜猫子'));
+    assert.ok(groupPrompt.includes('以下是你个人的看法，带 ? 的不确定，可与他人不同'));
     const groupDetail = repository.recentDecisions(1)[0]?.detail as {
       promptBlocks?: Array<{ id: string }>;
       droppedTags?: number;
     };
     assert.deepEqual(groupDetail.promptBlocks?.map((block) => block.id), [
-      'persona', 'rules', 'groupNote', 'memberTags',
+      'persona', 'rules', 'groupNote', 'memberTags', 'impressions',
     ]);
-    assert.equal(groupDetail.droppedTags, undefined);
+    assert.equal(groupDetail.droppedTags, 4);
 
     const privateSession: SessionKey = { account, kind: 'private', peer: 42 };
     harness.clock.value += 60_000;
@@ -668,6 +669,7 @@ test('标签注入在来源会话与目标会话不一致时经策略拒绝', as
         request: '',
         groupTags: 'group {{tags}}',
         memberTags: 'member {{name}} {{tags}}',
+        impressions: 'impressions {{tags}}',
         privateFacts: 'private {{name}} {{facts}}',
         knownFacts: 'known {{facts}}',
         stickers: '',
