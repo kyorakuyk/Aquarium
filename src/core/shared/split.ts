@@ -2,6 +2,11 @@ const MAX_PART_LENGTH = 80;
 const MAX_PARTS = 3;
 const TERMINAL_MARKS = new Set(['。', '！', '？', '!', '?', '…']);
 
+export interface SplitReplyOptions {
+  segmenting?: 'multi' | 'one_message';
+  maxPartLength?: number;
+}
+
 function characterCount(text: string): number {
   return Array.from(text).length;
 }
@@ -149,11 +154,11 @@ function attachToPrevious(parts: ReplyPart[], index: number, part: ReplyPart): v
   parts[index] = joinParts(moved, part);
 }
 
-function mergeAdjacentParts(parts: ReplyPart[], maxPartLength: number): ReplyPart[] {
+function mergeAdjacentParts(parts: ReplyPart[], maxPartLength: number, mergeAcrossLines: boolean): ReplyPart[] {
   const merged: ReplyPart[] = [];
   for (const part of parts) {
     const previous = merged.at(-1);
-    if (previous) {
+    if (previous && (mergeAcrossLines || previous.lastParagraph === part.firstParagraph)) {
       const combined = joinParts(previous, part);
       if (characterCount(combined.text) <= maxPartLength) {
         merged[merged.length - 1] = combined;
@@ -170,13 +175,19 @@ function mergeAdjacentParts(parts: ReplyPart[], maxPartLength: number): ReplyPar
 export function splitReply(
   text: string,
   maxParts: 1 | 2 | 3 = MAX_PARTS,
-  maxPartLength = MAX_PART_LENGTH,
+  options: SplitReplyOptions | number = {},
 ): string[] {
-  if (characterCount(text) <= maxPartLength) return text === '' ? [] : [text];
+  const segmenting = typeof options === 'number' ? 'multi' : options.segmenting ?? 'multi';
+  const maxPartLength = typeof options === 'number' ? options : options.maxPartLength ?? MAX_PART_LENGTH;
+  const hasLineBreak = /[\r\n]/u.test(text);
+  if (characterCount(text) <= maxPartLength) {
+    if (segmenting === 'one_message') return text === '' ? [] : [text];
+    if (!hasLineBreak) return text.trim() === '' ? [] : [text];
+  }
 
   const paragraphs = text.split(/\r\n|\r|\n/u);
   const parts = paragraphs.flatMap((paragraph, paragraphIndex) => {
-    if (!paragraph) return [];
+    if (!paragraph.trim()) return [];
     const sentences = characterCount(paragraph) > maxPartLength
       ? splitLongParagraph(paragraph)
       : [paragraph];
@@ -186,7 +197,11 @@ export function splitReply(
       lastParagraph: paragraphIndex,
     })));
   });
-  const merged = mergeAdjacentParts(attachPunctuationOnlyParts(parts, maxPartLength), maxPartLength);
+  const merged = mergeAdjacentParts(
+    attachPunctuationOnlyParts(parts, maxPartLength),
+    maxPartLength,
+    segmenting === 'one_message',
+  );
   if (merged.length <= maxParts) return merged.map((part) => part.text);
 
   let last = merged[maxParts - 1];

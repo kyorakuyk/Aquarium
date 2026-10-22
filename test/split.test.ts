@@ -30,14 +30,14 @@ test('splitReply 贪心合并可放入 80 字上限内的相邻短句', () => {
   assert.deepEqual(splitReply(first + second + third), [first + second, third]);
 });
 
-test('splitReply 先按换行拆分长回复', () => {
+test('splitReply 默认把非空长行分别拆成消息', () => {
   const firstLine = '甲'.repeat(50);
   const secondLine = '乙'.repeat(40);
 
   assert.deepEqual(splitReply(`${firstLine}\n${secondLine}`), [firstLine, secondLine]);
 });
 
-test('splitReply 合并跨段落片段时保留并计入换行', () => {
+test('splitReply 默认不把长行拆分片段与下一行贪心合并', () => {
   const firstParagraph = '甲'.repeat(100);
   const secondParagraph = '第二段……';
   const input = `${firstParagraph}\n${secondParagraph}`;
@@ -47,17 +47,8 @@ test('splitReply 合并跨段落片段时保留并计入换行', () => {
   const parts = splitReply(input);
 
   assert.ok(Array.from(input).length > 80);
-  assert.deepEqual(parts, [firstPart, `${remaining}\n${secondParagraph}`]);
+  assert.deepEqual(parts, [firstPart, remaining, secondParagraph]);
   assert.ok(parts.every((part) => Array.from(part).length <= 80));
-});
-
-test('splitReply 把跨段落换行计入 80 字上限', () => {
-  const firstParagraph = '甲'.repeat(40);
-  const secondParagraph = '乙'.repeat(40);
-  const input = `${firstParagraph}\n${secondParagraph}`;
-
-  assert.equal(Array.from(input).length, 81);
-  assert.deepEqual(splitReply(input), [firstParagraph, secondParagraph]);
 });
 
 test('splitReply 不把半角句点当作切分点', () => {
@@ -110,4 +101,24 @@ test('splitReply 支持人设指定的单条消息长度上限', () => {
 
   assert.deepEqual(parts.map((part) => Array.from(part).length), [40, 40, 20]);
   assert.equal(parts.join(''), '甲'.repeat(100));
+});
+
+test('splitReply 默认把多行短句分别发送并丢弃空白行', () => {
+  assert.deepEqual(splitReply('诶？突然说这个干嘛呀\n\n   \r\n……再说一遍嘛'), [
+    '诶？突然说这个干嘛呀',
+    '……再说一遍嘛',
+  ]);
+});
+
+test('splitReply 超出 maxParts 时把多余行并入最后一条', () => {
+  assert.deepEqual(splitReply('第一句\n第二句\n第三句', 2), [
+    '第一句',
+    '第二句\n第三句',
+  ]);
+});
+
+test('splitReply one_message 保留短回复中的换行', () => {
+  const input = '诶？突然说这个干嘛呀\n\n……再说一遍嘛';
+
+  assert.deepEqual(splitReply(input, 3, { segmenting: 'one_message' }), [input]);
 });

@@ -1,21 +1,24 @@
 import type { Segment } from '../../shared/events.ts';
 import type { StickerOffer } from '../../stickers/selection.ts';
 import { replyDelayMs } from '../pacing.ts';
-import { splitReply } from '../../shared/split.ts';
-import { personaSegmentingLimits } from '../../../persona/injection.ts';
+import { splitReply, type SplitReplyOptions } from '../../shared/split.ts';
 import { effectiveTalkLevel, replyPartLimitForTalk } from '../../../persona/traits.ts';
 import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep, type StepContext } from './types.ts';
 
-function segmentingLimitsForContext(ctx: StepContext): { maxParts: 1 | 2 | 3; maxPartLength: number } {
+function splitOptionsForContext(ctx: StepContext): { maxParts: 1 | 2 | 3; options: SplitReplyOptions } {
   const effectiveTalk = effectiveTalkLevel(
     ctx.state.personaTraits?.talk ?? 0,
     ctx.state.settings?.talkOffset ?? 0,
   );
-  return personaSegmentingLimits(ctx.state.personaProfile, {
+  const profile = ctx.state.personaProfile;
+  return {
     maxParts: replyPartLimitForTalk(effectiveTalk),
-    maxPartLength: 80,
-  });
+    options: {
+      segmenting: profile?.speech.segmenting ?? 'multi',
+      maxPartLength: profile?.speech.length.max ?? 80,
+    },
+  };
 }
 
 function stickerFallbackSegments(base64: string): Segment[] {
@@ -82,8 +85,8 @@ export const replayDeliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'de
   if (!result || replyText === undefined) {
     throw new Error('generate step must run before replay delivery');
   }
-  const limits = segmentingLimitsForContext(ctx);
-  ctx.state.parts = splitReply(replyText, limits.maxParts, limits.maxPartLength);
+  const splitOptions = splitOptionsForContext(ctx);
+  ctx.state.parts = splitReply(replyText, splitOptions.maxParts, splitOptions.options);
   return { next: false, reason: 'replay', replied: false };
 });
 
@@ -110,8 +113,8 @@ export const deliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'deliver'
       detail: { privacyEgress: { level: 'L0', checkFailed: true } },
     };
   }
-  const limits = segmentingLimitsForContext(ctx);
-  const parts = splitReply(replyText, limits.maxParts, limits.maxPartLength);
+  const splitOptions = splitOptionsForContext(ctx);
+  const parts = splitReply(replyText, splitOptions.maxParts, splitOptions.options);
   ctx.state.parts = parts;
   const sticker = ctx.state.chosenSticker;
 
