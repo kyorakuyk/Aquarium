@@ -73,14 +73,14 @@ function terminalTokens(text: string): string[] {
   return tokens;
 }
 
-function limitPartLength(text: string): string[] {
+function limitPartLength(text: string, maxPartLength: number): string[] {
   const parts: string[] = [];
   let current = '';
   let currentLength = 0;
 
   for (const token of terminalTokens(text)) {
     const tokenLength = characterCount(token);
-    if (current && currentLength + tokenLength > MAX_PART_LENGTH) {
+    if (current && currentLength + tokenLength > maxPartLength) {
       parts.push(current);
       current = '';
       currentLength = 0;
@@ -93,7 +93,7 @@ function limitPartLength(text: string): string[] {
   return parts;
 }
 
-function attachPunctuationOnlyParts(parts: ReplyPart[]): ReplyPart[] {
+function attachPunctuationOnlyParts(parts: ReplyPart[], maxPartLength: number): ReplyPart[] {
   const result = parts.map((part) => ({ ...part }));
   for (let index = 0; index < result.length; index += 1) {
     const part = result[index];
@@ -105,7 +105,7 @@ function attachPunctuationOnlyParts(parts: ReplyPart[]): ReplyPart[] {
       const separatorLength = part.lastParagraph === next.firstParagraph ? 0 : 1;
       const available = Math.max(
         0,
-        MAX_PART_LENGTH - characterCount(part.text) - separatorLength,
+        maxPartLength - characterCount(part.text) - separatorLength,
       );
       const nextCharacters = Array.from(next.text);
       const prefixLength = Math.min(available, nextCharacters.length);
@@ -149,13 +149,13 @@ function attachToPrevious(parts: ReplyPart[], index: number, part: ReplyPart): v
   parts[index] = joinParts(moved, part);
 }
 
-function mergeAdjacentParts(parts: ReplyPart[]): ReplyPart[] {
+function mergeAdjacentParts(parts: ReplyPart[], maxPartLength: number): ReplyPart[] {
   const merged: ReplyPart[] = [];
   for (const part of parts) {
     const previous = merged.at(-1);
     if (previous) {
       const combined = joinParts(previous, part);
-      if (characterCount(combined.text) <= MAX_PART_LENGTH) {
+      if (characterCount(combined.text) <= maxPartLength) {
         merged[merged.length - 1] = combined;
         continue;
       }
@@ -167,22 +167,26 @@ function mergeAdjacentParts(parts: ReplyPart[]): ReplyPart[] {
   return merged;
 }
 
-export function splitReply(text: string, maxParts: 1 | 2 | 3 = MAX_PARTS): string[] {
-  if (characterCount(text) <= MAX_PART_LENGTH) return text === '' ? [] : [text];
+export function splitReply(
+  text: string,
+  maxParts: 1 | 2 | 3 = MAX_PARTS,
+  maxPartLength = MAX_PART_LENGTH,
+): string[] {
+  if (characterCount(text) <= maxPartLength) return text === '' ? [] : [text];
 
   const paragraphs = text.split(/\r\n|\r|\n/u);
   const parts = paragraphs.flatMap((paragraph, paragraphIndex) => {
     if (!paragraph) return [];
-    const sentences = characterCount(paragraph) > MAX_PART_LENGTH
+    const sentences = characterCount(paragraph) > maxPartLength
       ? splitLongParagraph(paragraph)
       : [paragraph];
-    return sentences.flatMap((sentence) => limitPartLength(sentence).map((part): ReplyPart => ({
+    return sentences.flatMap((sentence) => limitPartLength(sentence, maxPartLength).map((part): ReplyPart => ({
       text: part,
       firstParagraph: paragraphIndex,
       lastParagraph: paragraphIndex,
     })));
   });
-  const merged = mergeAdjacentParts(attachPunctuationOnlyParts(parts));
+  const merged = mergeAdjacentParts(attachPunctuationOnlyParts(parts, maxPartLength), maxPartLength);
   if (merged.length <= maxParts) return merged.map((part) => part.text);
 
   let last = merged[maxParts - 1];

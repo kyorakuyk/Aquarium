@@ -216,6 +216,47 @@ test('context step loads the persona and assembles a prompt', async (t) => {
   traceFor(ctx, 'context');
 });
 
+test('context step injects only the affinity-matched audience and triggered persona mode', async (t) => {
+  const ctx = makeContext(t);
+  ctx.state.config = exampleConfig;
+  ctx.state.settings = resolveSession(exampleConfig, session);
+  ctx.message.plainText = '身体不适';
+  fs.writeFileSync(path.join(ctx.options.personaRoot ?? '', 'personas', 'default.md'), [
+    '---',
+    'name: 分段注入测试',
+    'aliases: []',
+    'identity: { kind: 测试角色, selfAwareness: 清楚身份, nameRule: fixed }',
+    'traits: { order: 0, morality: 0, talk: 0, mind: 0 }',
+    'speech:',
+    '  firstPerson: 我',
+    '  length: { min: 1, max: 100 }',
+    '  segmenting: multi',
+    '  catchphrases: []',
+    'audience:',
+    '  stranger: AUDIENCE_STRANGER',
+    '  acquaintance: AUDIENCE_ACQUAINTANCE',
+    '  close: AUDIENCE_CLOSE',
+    'modes:',
+    '  - { name: 闲聊, trigger: 默认, behavior: MODE_CASUAL }',
+    '  - { name: 认真, trigger: [身体不适], behavior: MODE_SERIOUS }',
+    'boundaries: { hard: [不要编造] }',
+    '---',
+    '背景',
+  ].join('\n'), 'utf8');
+  ctx.options.affinityService = {
+    getCurrent: () => ({ level: 'warm' }),
+    promptBlock: () => undefined,
+  } as unknown as NonNullable<typeof ctx.options.affinityService>;
+
+  assert.deepEqual(await contextStep(ctx), { next: true });
+  const system = String(ctx.state.prompt?.[0]?.content);
+  assert.ok(system.includes('AUDIENCE_ACQUAINTANCE'));
+  assert.ok(!system.includes('AUDIENCE_STRANGER'));
+  assert.ok(!system.includes('AUDIENCE_CLOSE'));
+  assert.ok(system.includes('MODE_SERIOUS'));
+  assert.ok(!system.includes('MODE_CASUAL'));
+});
+
 test('主动模式的八条提示上下文使用同一锚定窗口', async (t) => {
   const ctx = makeContext(t);
   const queriedCounts: number[] = [];

@@ -2,16 +2,20 @@ import type { Segment } from '../../shared/events.ts';
 import type { StickerOffer } from '../../stickers/selection.ts';
 import { replyDelayMs } from '../pacing.ts';
 import { splitReply } from '../../shared/split.ts';
+import { personaSegmentingLimits } from '../../../persona/injection.ts';
 import { effectiveTalkLevel, replyPartLimitForTalk } from '../../../persona/traits.ts';
 import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep, type StepContext } from './types.ts';
 
-function maxPartsForContext(ctx: StepContext): 1 | 2 | 3 {
+function segmentingLimitsForContext(ctx: StepContext): { maxParts: 1 | 2 | 3; maxPartLength: number } {
   const effectiveTalk = effectiveTalkLevel(
     ctx.state.personaTraits?.talk ?? 0,
     ctx.state.settings?.talkOffset ?? 0,
   );
-  return replyPartLimitForTalk(effectiveTalk);
+  return personaSegmentingLimits(ctx.state.personaProfile, {
+    maxParts: replyPartLimitForTalk(effectiveTalk),
+    maxPartLength: 80,
+  });
 }
 
 function stickerFallbackSegments(base64: string): Segment[] {
@@ -78,7 +82,8 @@ export const replayDeliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'de
   if (!result || replyText === undefined) {
     throw new Error('generate step must run before replay delivery');
   }
-  ctx.state.parts = splitReply(replyText, maxPartsForContext(ctx));
+  const limits = segmentingLimitsForContext(ctx);
+  ctx.state.parts = splitReply(replyText, limits.maxParts, limits.maxPartLength);
   return { next: false, reason: 'replay', replied: false };
 });
 
@@ -105,7 +110,8 @@ export const deliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'deliver'
       detail: { privacyEgress: { level: 'L0', checkFailed: true } },
     };
   }
-  const parts = splitReply(replyText, maxPartsForContext(ctx));
+  const limits = segmentingLimitsForContext(ctx);
+  const parts = splitReply(replyText, limits.maxParts, limits.maxPartLength);
   ctx.state.parts = parts;
   const sticker = ctx.state.chosenSticker;
 

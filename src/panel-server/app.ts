@@ -15,8 +15,7 @@ import { cleanReply } from '../core/shared/text.ts';
 import { splitReply } from '../core/shared/split.ts';
 import { promptTemplateStore } from '../core/prompt/templates.ts';
 import type { PipelineModelCall, PipelineResult } from '../core/conversation/pipeline.ts';
-import { loadPersona } from '../persona/load.ts';
-import { effectiveTalkLevel, renderTraitsBlock, replyPartLimitForTalk } from '../persona/traits.ts';
+import { prepareSandboxPersona } from './sandbox-persona.ts';
 import type { ManagementCommands } from '../core/conversation/management.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import { callSlot } from '../llm/slots.ts';
@@ -500,9 +499,8 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     const settings = resolveSession(config, key);
     const accountConfig = config.accounts.find((candidate) => candidate.uin === key.account);
     const nickname = runtime.getNickname();
-    const persona = loadPersona(accountConfig?.persona ?? 'default', nickname, { root });
-    const effectiveTalk = effectiveTalkLevel(persona.traits.talk, settings.talkOffset);
-    const traitsBlock = renderTraitsBlock(persona.traits, effectiveTalk, promptTemplateStore.get().traits);
+    const sandboxPersona = prepareSandboxPersona({ personaId: accountConfig?.persona ?? 'default', nickname, root, asOwner, settings, body,
+      traitsTemplate: promptTemplateStore.get().traits });
     const nowTime = now();
     const nonOwnerId = config.owner === 1 ? 2 : 1;
     const contextMessages = body.history.map((message, index) => {
@@ -529,11 +527,11 @@ export function createPanelApp(options: PanelServerOptions): Hono {
       time: nowTime,
     });
     const prompt = buildPromptMessages({
-      persona: persona.text,
+      persona: sandboxPersona.prompt,
       ownerId: config.owner,
       groupNote: settings.groupNote,
       context: contextMessages,
-      blocks: { traits: traitsBlock },
+      blocks: { traits: sandboxPersona.traitsBlock },
     });
     const modelCall = options.callModel ?? callSlot;
     const result = await modelCall('reply', prompt, {
@@ -543,7 +541,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
       recordUsage: (usage) => options.repository.recordUsage({ ...usage, account: key.account }),
     });
     const text = cleanReply(result.text, [nickname, ...settings.nicknames]);
-    const parts = splitReply(text, replyPartLimitForTalk(effectiveTalk));
+    const parts = splitReply(text, sandboxPersona.maxParts, sandboxPersona.maxPartLength);
     return context.json({
       parts,
       decisionSteps: [

@@ -104,3 +104,10 @@ test('splitReply 支持按有效话量进一步限制为一条或两条', () => 
   assert.equal(twoParts.join(''), input);
   assert.equal(splitReply(input, 3).length, 3);
 });
+
+test('splitReply 支持人设指定的单条消息长度上限', () => {
+  const parts = splitReply('甲'.repeat(100), 3, 40);
+
+  assert.deepEqual(parts.map((part) => Array.from(part).length), [40, 40, 20]);
+  assert.equal(parts.join(''), '甲'.repeat(100));
+});

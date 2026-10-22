@@ -1,12 +1,13 @@
 import { buildPromptMessages, describePromptBlocks, hashPromptMessages } from '../../prompt/index.ts';
 import { captionIncomingImages, messageTextWithImageCaptions } from '../../images/index.ts';
-import { loadPersona } from '../../../persona/load.ts';
+import { renderPersonaPrompt, personaAudienceTierFromAffinity } from '../../../persona/injection.ts';
 import { effectiveTalkLevel, renderTraitsBlock } from '../../../persona/traits.ts';
 import { renderFloatBlock } from '../../mood/render.ts';
 import { redactSensitiveText } from '../../impressions/sensitive-text.ts';
 import { mapMessageToMainIdentity, resolveAccountIdentity } from '../../profiles/account-identity.ts';
 import { createSlotCallOptions } from './call-options.ts';
 import { errorDetails } from './errors.ts';
+import { getPersonaForMessage } from './persona.ts';
 import { traceStep, type PipelineStep } from './types.ts';
 
 export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context', async () => {
@@ -22,21 +23,14 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     fallbackName: ctx.message.senderName,
   });
   const nickname = ctx.options.getNickname().trim() || String(ctx.message.session.account);
-  let persona: string;
-  if (ctx.state.persona !== undefined && ctx.state.personaTraits !== undefined) {
-    persona = ctx.state.persona;
-  } else {
-    try {
-      const loaded = loadPersona(account?.persona ?? 'default', nickname, {
-        ...(ctx.options.personaRoot === undefined ? {} : { root: ctx.options.personaRoot }),
-      });
-      persona = loaded.text;
-      ctx.state.personaTraits = loaded.traits;
-    } catch (error) {
-      ctx.options.onError?.(error, ctx.message);
-      return { next: false, reason: 'persona_error', detail: errorDetails(error) };
-    }
+  let loadedPersona: ReturnType<typeof getPersonaForMessage>;
+  try {
+    loadedPersona = getPersonaForMessage(ctx);
+  } catch (error) {
+    ctx.options.onError?.(error, ctx.message);
+    return { next: false, reason: 'persona_error', detail: errorDetails(error) };
   }
+  const persona = loadedPersona.text;
 
   const callOptions = ctx.state.callOptions ?? createSlotCallOptions(ctx, config);
   ctx.state.callOptions = callOptions;
@@ -73,6 +67,16 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
       config.slots.vision?.[0]?.model ?? 'unknown',
     ),
   }));
+  const affinityLevel = ctx.options.affinityService?.getCurrent(
+    ctx.message.session.account,
+    identity.userId,
+    ctx.now(),
+  ).level;
+  const personaPrompt = renderPersonaPrompt(loadedPersona, {
+    audienceTier: personaAudienceTierFromAffinity(affinityLevel) ?? 'stranger',
+    messageText: ctx.message.plainText,
+    historyText: context.slice(-8).map((record) => record.plainText).join('\n'),
+  });
   const tagBlocks = ctx.options.impressionsService?.promptBlocks({
     session: ctx.message.session,
     sessionId: ctx.currentSessionId,
@@ -126,7 +130,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     return ctx.state.promptTemplates.replySystem.stickers.replaceAll('{{list}}', offer.promptList);
   })();
   const promptOptions = {
-    persona,
+    persona: personaPrompt,
     ownerId: config.owner,
     groupNote: settings.groupNote,
     modeHint: settings.mode === 'busy' ? '你现在有点忙，回得简短随意。' : '',

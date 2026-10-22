@@ -62,3 +62,12 @@ test('repeated other-section headings receive unique preview block IDs', () => {
     .map((block) => block.id);
   assert.equal(new Set(ids).size, 2);
 });
+
+test('legacy persona sections treat internal horizontal rules as body text', () => {
+  const source = '身份介绍\n---\n- 不是 YAML\n---\n后续说明';
+  const form = parseSections(source);
+
+  assert.equal(form.title, '');
+  assert.equal(form.introduction, source);
+  assert.deepEqual(form.metadata, {});
+});

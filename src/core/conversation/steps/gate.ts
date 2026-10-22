@@ -7,11 +7,12 @@ import { createIdleBackoff } from '../../activity/backoff.ts';
 import { adjustThresholdForTalk, createActivityThreshold } from '../../activity/threshold.ts';
 import { messageTextWithImageCaptions } from '../../images/index.ts';
 import { resolveMode } from '../../activity/mode.ts';
-import { loadPersona } from '../../../persona/load.ts';
+import { matchesPersonaMustReply } from '../../../persona/injection.ts';
 import { effectiveTalkLevel } from '../../../persona/traits.ts';
 import { sleepEnergy, sleepPlan } from '../../sleep/index.ts';
 import { createSlotCallOptions } from './call-options.ts';
 import { errorDetails } from './errors.ts';
+import { getPersonaForMessage } from './persona.ts';
 import { traceStep, type PipelineStep } from './types.ts';
 
 const defaultIdleBackoff = createIdleBackoff();
@@ -87,8 +88,17 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
   if (ctx.options.isMuted?.(ctx.message.session)) return { next: false, reason: 'muted' };
   if (!settings.enabled) return { next: false, reason: 'disabled', detail: { enabled: false } };
 
+  let personaMustReply = false;
+  try {
+    const persona = getPersonaForMessage(ctx);
+    personaMustReply = matchesPersonaMustReply(persona.profile, ctx.message);
+  } catch (error) {
+    ctx.options.onError?.(error, ctx.message);
+    return { next: false, reason: 'persona_error', detail: errorDetails(error) };
+  }
+
   const trigger = messageTrigger(ctx.message, settings.nicknames);
-  if (trigger === 'none' && settings.mode !== 'mention_only') {
+  if (trigger === 'none' && !personaMustReply && settings.mode !== 'mention_only') {
     const proactivePrivacyAvoid = ctx.options.privacyGateService?.activeAvoid({
       session: ctx.message.session,
       now: ctx.now(),
@@ -125,7 +135,7 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
       true,
     )
     : 1;
-  if (trigger !== 'none') {
+  if (trigger !== 'none' || personaMustReply) {
     const rate = ctx.processOptions.replay
       ? ctx.rateLimiter.preview(ctx.message.session, ctx.message.senderId, settings.rate)
       : ctx.rateLimiter.check(ctx.message.session, ctx.message.senderId, settings.rate);
@@ -134,7 +144,7 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
     if (privacy?.action === 'avoid') {
       return { next: false, reason: 'privacy_avoid', detail: { privacy: privacy.detail } };
     }
-    if (!ctx.processOptions.replay) {
+    if (trigger !== 'none' && !ctx.processOptions.replay) {
       ctx.options.moodService?.recordCalled({
         account: ctx.message.session.account,
         sessionId: ctx.currentSessionId,
@@ -228,21 +238,6 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
   if (!judge.ok) {
     if (!ctx.processOptions.replay) backoff.recordNoReply(ctx.currentSessionId, ctx.now());
     return { next: false, reason: judge.reason, detail: prefilterDecisionDetail };
-  }
-
-  if (ctx.state.personaTraits === undefined) {
-    const account = config.accounts.find((entry) => entry.uin === ctx.message.session.account);
-    const nickname = ctx.options.getNickname().trim() || String(ctx.message.session.account);
-    try {
-      const loaded = loadPersona(account?.persona ?? 'default', nickname, {
-        ...(ctx.options.personaRoot === undefined ? {} : { root: ctx.options.personaRoot }),
-      });
-      ctx.state.persona = loaded.text;
-      ctx.state.personaTraits = loaded.traits;
-    } catch (error) {
-      ctx.options.onError?.(error, ctx.message);
-      return { next: false, reason: 'persona_error', detail: errorDetails(error) };
-    }
   }
 
   const thresholds = ctx.options.activityThreshold ?? defaultActivityThreshold;

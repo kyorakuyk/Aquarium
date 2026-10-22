@@ -49,7 +49,7 @@ export interface PersonaSectionBlock {
   text: string;
 }
 
-const frontmatterPattern = /^---[ \t]*\r?\n([\s\S]*?)^---[ \t]*(?:\r?\n|$)/m;
+const frontmatterPattern = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
 const headingPattern = /^## ([^\r\n]*)$/gm;
 const listHeadings = new Set<PersonaSectionHeading>(['口头禅', '常用表情', '底线']);
 
