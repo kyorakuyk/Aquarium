@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { apiRequest, type PanelStatus } from '../api.ts';
 import type { PageId } from '../components/Sidebar.tsx';
 import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
+import { hasPersonaIdCollision, normalizePersonaId, validPersonaId } from '../../../src/persona/persona-id.ts';
 import {
   buildSections,
   emptyPersonaSections,
@@ -34,8 +35,6 @@ interface PersonaImportDraft {
   mappedCount: number;
   otherCount: number;
 }
-
-const personaIdPattern = /^[a-z0-9_-]+$/u;
 
 export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => void }) {
   const [personas, setPersonas] = useState<PersonaCard[]>([]);
@@ -302,12 +301,12 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   }
 
   async function createPersona() {
-    const id = newId.trim();
-    if (!personaIdPattern.test(id)) {
-      setError('人设 ID 只能包含小写英文字母、数字、下划线和连字符。');
+    const id = normalizePersonaId(newId);
+    if (!validPersonaId(id)) {
+      setError('人设 ID 只能包含字母、数字、下划线和连字符，且长度为 1–40 个字符。');
       return;
     }
-    if (personas.some((persona) => persona.id === id)) {
+    if (hasPersonaIdCollision(personas.map((persona) => persona.id), id)) {
       setError('这个人设 ID 已存在。');
       return;
     }

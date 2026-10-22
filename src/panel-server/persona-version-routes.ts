@@ -110,7 +110,7 @@ export function recordPersonaVersionOnSave(repository: StoreRepository, id: stri
 export function registerPersonaVersionRoutes(app: Hono, root: string, repository: StoreRepository): void {
   app.get('/api/personas/:id/versions', (context) => {
     const id = context.req.param('id');
-    if (!validPersonaId(id)) return context.json({ error: 'Invalid persona ID' }, 400);
+    if (!validPersonaId(id.toLowerCase())) return context.json({ error: 'Invalid persona ID' }, 400);
     const userPath = personaPath(root, 'data/personas', id);
     const selectedPath = existsSync(userPath) ? userPath : personaPath(root, 'personas', id);
     if (!existsSync(selectedPath)) return context.json({ error: 'Persona not found' }, 404);
@@ -141,7 +141,7 @@ export function registerPersonaVersionRoutes(app: Hono, root: string, repository
   app.get('/api/personas/:id/versions/:versionId', (context) => {
     const id = context.req.param('id');
     const versionId = validPersonaVersionId(context.req.param('versionId'));
-    if (!validPersonaId(id)) return context.json({ error: 'Invalid persona ID' }, 400);
+    if (!validPersonaId(id.toLowerCase())) return context.json({ error: 'Invalid persona ID' }, 400);
     if (versionId === undefined) return context.json({ error: 'Invalid persona version ID' }, 400);
     const version = repository.personaVersion(id, versionId);
     if (!version) return context.json({ error: 'Persona version not found' }, 404);
@@ -157,7 +157,7 @@ export function registerPersonaVersionRoutes(app: Hono, root: string, repository
   app.post('/api/personas/:id/versions/:versionId/restore', (context) => {
     const id = context.req.param('id');
     const versionId = validPersonaVersionId(context.req.param('versionId'));
-    if (!validPersonaId(id)) return context.json({ error: 'Invalid persona ID' }, 400);
+    if (!validPersonaId(id.toLowerCase())) return context.json({ error: 'Invalid persona ID' }, 400);
     if (versionId === undefined) return context.json({ error: 'Invalid persona version ID' }, 400);
     const version = repository.personaVersion(id, versionId);
     if (!version) return context.json({ error: 'Persona version not found' }, 404);

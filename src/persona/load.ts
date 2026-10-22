@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import yaml from 'yaml';
+import { validPersonaId } from './persona-id.ts';
 
 export interface PersonaTraits {
   order: number;
@@ -315,7 +316,7 @@ export function loadPersona(
   nickname: string,
   options: LoadPersonaOptions = {},
 ): LoadedPersona {
-  if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error(`无效的人设 ID：${id}`);
+  if (!validPersonaId(id.toLowerCase())) throw new Error(`无效的人设 ID：${id}`);
   const root = options.root ?? process.cwd();
   const candidates = [
     join(root, 'data', 'personas', `${id}.md`),

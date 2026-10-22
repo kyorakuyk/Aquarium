@@ -91,7 +91,7 @@ function listPersonaIds(directory: string): string[] {
     return readdirSync(directory, { withFileTypes: true })
       .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
       .map((entry) => entry.name.slice(0, -3))
-      .filter(validPersonaId);
+      .filter((id) => validPersonaId(id.toLowerCase()));
   } catch {
     return [];
   }
@@ -166,7 +166,7 @@ export function registerPersonaRoutes(app: Hono, root: string, options: PersonaR
 
   app.get('/api/personas/:id', (context) => {
     const id = context.req.param('id');
-    if (!validPersonaId(id)) return context.json({ error: 'Invalid persona ID' }, 400);
+    if (!validPersonaId(id.toLowerCase())) return context.json({ error: 'Invalid persona ID' }, 400);
     const userPath = personaPath(root, 'data/personas', id);
     const builtInPath = personaPath(root, 'personas', id);
     const selectedPath = existsSync(userPath) ? userPath : builtInPath;
@@ -181,7 +181,7 @@ export function registerPersonaRoutes(app: Hono, root: string, options: PersonaR
 
   app.put('/api/personas/:id', async (context) => {
     const id = context.req.param('id');
-    if (!validPersonaId(id)) return context.json({ error: 'Invalid persona ID' }, 400);
+    if (!validPersonaId(id.toLowerCase())) return context.json({ error: 'Invalid persona ID' }, 400);
     let rawBody: unknown;
     try { rawBody = await context.req.json(); } catch { return context.json({ error: 'Invalid JSON' }, 400); }
     const body = parseBody(rawBody, personaBodySchema);
