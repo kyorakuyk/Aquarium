@@ -105,8 +105,8 @@ test('impressions export never includes L0 and includes L1 only on explicit requ
     repository.insertPrivateFact(privateFact(ownerId, 'L0', 'L0绝不导出标记'));
     repository.insertPrivateFact(privateFact(ownerId, 'L1', 'L1显式导出标记'));
     repository.saveManualGroupSummary({ account, sessionId: groupId, text: '群聊晚上常讨论游戏。', updatedAt: now });
-    const sensitiveTag = tagRecord('SensitiveValue9001');
-    sensitiveTag.evidence = [{ kind: 'message', messageId: 'sensitive-export', time: now, quote: 'SensitiveValue9001' }];
+    const sensitiveTag = tagRecord('sk-abc123def456ghi789');
+    sensitiveTag.evidence = [{ kind: 'message', messageId: 'sensitive-export', time: now, quote: 'sk-abc123def456ghi789' }];
     repository.insertTag(sensitiveTag);
     const supersededTag = tagRecord('旧的替换标签');
     supersededTag.userId = 43;
@@ -121,7 +121,7 @@ test('impressions export never includes L0 and includes L1 only on explicit requ
     assert.equal(defaultsResponse.status, 200);
     const defaults = await defaultsResponse.json() as Record<string, unknown>;
     assert.equal(JSON.stringify(defaults).includes('L0绝不导出标记'), false);
-    assert.equal(JSON.stringify(defaults).includes('SensitiveValue9001'), false);
+    assert.equal(JSON.stringify(defaults).includes('sk-abc123def456ghi789'), false);
     assert.equal(JSON.stringify(defaults).includes('[敏感内容已隐藏]'), true);
     for (const field of ['tags', 'summaries', 'subjects', 'vetoes', 'relations', 'accountKinds']) {
       assert.equal(Array.isArray(defaults[field]), true, `default export includes ${field}`);

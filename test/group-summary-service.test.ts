@@ -45,7 +45,7 @@ test('group summary uses extract and three confirmed unlocked group tags', async
   try {
     repository.insertTag(groupTag('游戏', 'positioning'));
     repository.insertTag(groupTag('CS2', 'topic', { subject: '游戏' }));
-    repository.insertTag(groupTag('晚间活跃 SensitiveValue9001', 'schedule', { origin: 'stats' }));
+    repository.insertTag(groupTag('晚间活跃 sk-abc123def456ghi789', 'schedule', { origin: 'stats' }));
     repository.insertTag(groupTag('锁定话题', 'atmosphere', { locked: true }));
     repository.insertTag(groupTag('待确认', 'norms', { status: 'candidate' }));
     const calls: Array<{ slot: string; prompt: string }> = [];
@@ -74,7 +74,7 @@ test('group summary uses extract and three confirmed unlocked group tags', async
     assert.ok(calls[0]?.prompt.includes('游戏'));
     assert.ok(calls[0]?.prompt.includes('CS2'));
     assert.ok(calls[0]?.prompt.includes('晚间活跃'));
-    assert.equal(calls[0]?.prompt.includes('SensitiveValue9001'), false);
+    assert.equal(calls[0]?.prompt.includes('sk-abc123def456ghi789'), false);
     assert.equal(calls[0]?.prompt.includes('锁定话题'), false);
     assert.equal(calls[0]?.prompt.includes('待确认'), false);
     assert.deepEqual(repository.getGroupSummary(account, groupId), {

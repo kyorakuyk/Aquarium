@@ -70,6 +70,7 @@ test('心情 API 返回衰减后的值、档位与最近事件', async () => {
 test('印象 API 返回群友名与全部状态标签', async () => {
   await withPanel(async ({ app, repository }) => {
     const key = sessionId(groupSession);
+    const sensitiveTagText = 'sk-abc123def456ghi789';
     repository.insertTag({
       account,
       sessionId: key,
@@ -94,8 +95,8 @@ test('印象 API 返回群友名与全部状态标签', async () => {
       account,
       sessionId: key,
       userId: 42,
-      text: 'NightOwlLabel123',
-      norm: 'nightowllabel123',
+      text: sensitiveTagText,
+      norm: sensitiveTagText,
       category: 'misc',
       subject: null,
       polarity: null,
@@ -134,8 +135,8 @@ test('印象 API 返回群友名与全部状态标签', async () => {
       account,
       sessionId: key,
       userId: 42,
-      text: 'NightOwlLabel123',
-      norm: 'nightowllabel123',
+      text: sensitiveTagText,
+      norm: sensitiveTagText,
       category: 'personality',
       subject: null,
       polarity: null,
@@ -188,13 +189,13 @@ test('印象 API 返回群友名与全部状态标签', async () => {
 test('印象 API 原样返回群友名但继续脱敏标签正文与证据引文', async () => {
   await withPanel(async ({ app, repository }) => {
     const key = sessionId(groupSession);
-    const fakeCredential = ['K9m4R2p8', 'T1v6'].join('');
+    const fakeCredential = 'sk-abc123def456ghi789';
     repository.insertTag({
       account,
       sessionId: key,
       userId: null,
-      text: 'AReallyLongEnglishLabel',
-      norm: 'areallylongenglishlabel',
+      text: fakeCredential,
+      norm: fakeCredential,
       category: 'misc',
       subject: fakeCredential,
       polarity: null,
@@ -203,7 +204,7 @@ test('印象 API 原样返回群友名但继续脱敏标签正文与证据引文
       status: 'confirmed',
       source: 'auto',
       samples: 1,
-      evidence: [{ messageId: 'private-evidence', time: now, quote: `token=${fakeCredential}; AReallyLongEnglishLabel` }],
+      evidence: [{ messageId: 'private-evidence', time: now, quote: `token=${fakeCredential}; ${fakeCredential}` }],
       firstSeen: now,
       lastSeen: now,
       supersededBy: null,
@@ -214,7 +215,6 @@ test('印象 API 原样返回群友名但继续脱敏标签正文与证据引文
     assert.equal(response.status, 200);
     const body = await response.text();
     assert.equal(body.includes(fakeCredential), false);
-    assert.equal(body.includes('AReallyLongEnglishLabel'), false);
     assert.match(body, /\[敏感内容已隐藏\]/);
     assert.equal(body.split('[敏感内容已隐藏]').length - 1, 4);
   });

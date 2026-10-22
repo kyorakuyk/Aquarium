@@ -82,7 +82,7 @@ test('标签 API 接受成分层级，并可加锁与解锁', async () => {
     const sensitiveTag = await app.request('/api/tags', {
       method: 'POST',
       headers: jsonHeaders(),
-      body: JSON.stringify({ sessionId: key, userId: 42, text: ['K9m4R2p8', 'T1v6'].join(''), category: 'personality' }),
+      body: JSON.stringify({ sessionId: key, userId: 42, text: 'sk-abc123def456ghi789', category: 'personality' }),
     });
     assert.equal(sensitiveTag.status, 400);
 

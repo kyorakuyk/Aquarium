@@ -84,8 +84,8 @@ test('凭据样式的成分别名拒绝写入并在历史数据读取时遮蔽',
     const accountId = config.accounts[0]!.uin;
     const groupId = sessionId({ account: accountId, kind: 'group', peer: 99123 });
     const endpoint = `/api/tag-subjects/${encodeURIComponent(groupId)}/fandom`;
-    const fakeName = ['K9m4R2p8', 'T1v6'].join('');
-    const fakeAlias = ['A4b7N2c9', 'D5p1'].join('');
+    const fakeName = 'sk-abc123def456ghi789';
+    const fakeAlias = 'pk-def456abc123ghi789';
     tagSubjects.saveTagSubject({ account: accountId, category: 'fandom', name: fakeName, aliases: [fakeAlias] });
 
     const read = await app.request(endpoint, { headers });

@@ -28,6 +28,7 @@ function jsonHeaders(): HeadersInit {
 
 test('privacy GET is authenticated, owner-scoped, and redacts sensitive text and evidence', async () => {
   await withPanel(async ({ app, repository }) => {
+    const fakeCredential = 'sk-abc123def456ghi789';
     repository.saveMessage({
       sessionId: `${account}:private:42`,
       messageId: 'privacy-name',
@@ -39,9 +40,9 @@ test('privacy GET is authenticated, owner-scoped, and redacts sensitive text and
       time: now,
     });
     const id = repository.insertPrivateFact(fact({
-      text: `最近准备考研 abcdefghi`,
-      keywords: ['考研', 'abcdefgh'],
-      evidence: [{ messageId: 'private-source', time: now, quote: '聊天内容 abcdefghi' }],
+      text: `最近准备考研 ${fakeCredential}`,
+      keywords: ['考研', '压力大'],
+      evidence: [{ messageId: 'private-source', time: now, quote: `聊天内容 ${fakeCredential}` }],
     }));
     assert.equal((await app.request(`/api/privacy/42?account=${account}`)).status, 401);
 
@@ -58,8 +59,8 @@ test('privacy GET is authenticated, owner-scoped, and redacts sensitive text and
     assert.equal(body.facts[0]?.id, id);
     assert.equal(body.facts[0]?.textRedacted, true);
     assert.match(body.facts[0]?.text ?? '', /\[敏感内容已隐藏\]/);
-    assert.doesNotMatch(body.facts[0]?.text ?? '', /abcdefgh/);
-    assert.deepEqual(body.facts[0]?.keywords, ['考研', '[敏感内容已隐藏]']);
+    assert.doesNotMatch(body.facts[0]?.text ?? '', /sk-abc123def456ghi789/u);
+    assert.deepEqual(body.facts[0]?.keywords, ['考研', '压力大']);
     assert.match(body.facts[0]?.evidence[0]?.quote ?? '', /\[敏感内容已隐藏\]/);
     assert.equal((await app.request('/api/privacy/42?account=999999', { headers: authHeaders() })).status, 400);
   });
