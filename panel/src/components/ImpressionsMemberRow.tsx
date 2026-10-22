@@ -1,7 +1,7 @@
 import type { ImpressionsView } from '../api.ts';
 import { MemberAffinity } from './AffinityPanel.tsx';
 import { memberPreviewTags, memberRowPresentation } from '../impressions-model.ts';
-import { redactSensitiveText } from '../sensitive-text.ts';
+import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 
 type Member = ImpressionsView['members'][number];
 

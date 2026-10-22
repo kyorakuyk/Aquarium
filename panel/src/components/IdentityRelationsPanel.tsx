@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { apiRequest, patch, post, type AccountKind, type MemberRelationView, type QqMemberTargetView, type RelationType } from '../api.ts';
-import { containsSensitiveText, redactSensitiveText } from '../sensitive-text.ts';
+import { containsSensitiveText, redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 
 const KIND_LABELS: Record<AccountKind, string> = {
   human: '普通成员',

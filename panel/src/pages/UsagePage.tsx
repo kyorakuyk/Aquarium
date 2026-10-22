@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { apiRequest, type PanelStatus, type UsageRange, type UsageRangeView, type UsageRowView } from '../api.ts';
-import { redactSensitiveText } from '../sensitive-text.ts';
+import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 import { usageAccountLabels, usageCostLabel } from '../usage-view.ts';
 
 const RANGE_OPTIONS: Array<{ value: UsageRange; label: string }> = [

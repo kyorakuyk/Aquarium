@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiRequest, type PersonaTraits, type PersonaVersionDocument, type PersonaVersionSummary } from '../api.ts';
 import { PERSONA_TRAIT_LABELS } from '../persona-sections.ts';
-import { redactSensitiveText } from '../sensitive-text.ts';
+import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 import { PersonaEvolutionCharts, PERSONA_TRAIT_COLORS, type PersonaEvolutionView } from './PersonaEvolutionCharts.tsx';
 import { PersonaVersionDiffDialog } from './PersonaVersionDiffDialog.tsx';
 

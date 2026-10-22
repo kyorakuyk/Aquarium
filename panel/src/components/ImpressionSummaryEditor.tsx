@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiRequest, type GroupSummaryView, type MemberSummaryView } from '../api.ts';
 import { memberSummaryErrorMessage } from '../member-summary-errors.ts';
-import { containsSensitiveText, redactSensitiveText } from '../sensitive-text.ts';
+import { containsSensitiveText, redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 
 type SummaryView = Pick<GroupSummaryView | MemberSummaryView, 'text' | 'manual'>;
 

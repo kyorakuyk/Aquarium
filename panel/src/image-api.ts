@@ -1,5 +1,5 @@
 import { clearAuthentication, PASSWORD_KEY, UNAUTHORIZED_EVENT } from './api.ts';
-import { redactSensitiveText } from './sensitive-text.ts';
+import { redactSensitiveText } from '../../src/core/impressions/sensitive-text.ts';
 
 export async function apiBlob(path: string): Promise<Blob> {
   const headers = new Headers();

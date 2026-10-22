@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest, type TagSubjectView } from '../api.ts';
-import { containsSensitiveText, redactSensitiveText } from '../sensitive-text.ts';
+import { containsSensitiveText, redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 
 function aliasList(value: string): string[] {
   return value.split(/[,，\n]/u).map((alias) => alias.trim()).filter(Boolean);

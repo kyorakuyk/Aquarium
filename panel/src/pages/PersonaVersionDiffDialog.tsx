@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { PersonaTraits } from '../api.ts';
 import { PERSONA_SECTION_HEADINGS, PERSONA_TRAIT_LABELS, parseSections } from '../persona-sections.ts';
-import { redactSensitiveText } from '../sensitive-text.ts';
+import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 
 interface SectionRow {
   key: string;

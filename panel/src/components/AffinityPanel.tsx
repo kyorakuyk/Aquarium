@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { apiRequest, patch, type AffinityDetailView, type AffinityEventView, type AffinityLevel, type AffinityView } from '../api.ts';
-import { redactSensitiveText } from '../sensitive-text.ts';
+import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 
 const LEVEL_LABELS: Record<AffinityLevel, string> = {
   cold: '疏远',

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { ImpressionTag } from './ImpressionTag.tsx';
 import { TagSubjectManagerDialog } from './TagSubjectManagerDialog.tsx';
-import { containsSensitiveText } from '../sensitive-text.ts';
+import { containsSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 import {
   memberIdentityInjectionLabel,
   memberIdentityMbti,

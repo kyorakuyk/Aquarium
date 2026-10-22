@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { apiRequest, type PanelStatus } from '../api.ts';
 import type { PageId } from '../components/Sidebar.tsx';
-import { redactSensitiveText } from '../sensitive-text.ts';
+import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 import {
   buildSections,
   emptyPersonaSections,

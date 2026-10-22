@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiRequest, type ActivityDistributionView, type ImpressionsView, type SessionView } from '../api.ts';
 import { activityLevel, peakActivityWindow } from '../impressions-model.ts';
-import { redactSensitiveText } from '../sensitive-text.ts';
+import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 
 export function ImpressionsGroupCard({ group, view, selected, onSelect }: {
   group: SessionView;

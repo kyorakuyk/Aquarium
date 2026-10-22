@@ -1,4 +1,4 @@
-import { redactSensitiveText } from './sensitive-text.ts';
+import { redactSensitiveText } from '../../src/core/impressions/sensitive-text.ts';
 
 export const PASSWORD_KEY = 'aquarium-panel-password';
 export const UNAUTHORIZED_EVENT = 'aquarium-panel-unauthorized';

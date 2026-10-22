@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { redactSensitiveText } from '../sensitive-text.ts';
+import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 import {
   PERSONA_SECTION_HEADINGS,
   personaSourceForEditor,

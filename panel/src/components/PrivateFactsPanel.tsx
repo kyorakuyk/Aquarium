@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { apiRequest, patch, type PrivacyFactLevel, type PrivacyFactView, type PrivacyFactsView, type SessionView } from '../api.ts';
-import { redactSensitiveText } from '../sensitive-text.ts';
+import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 
 type PrivateFriend = { session: SessionView; account: number; userId: number };
 type FactPatch = { text?: string; level?: PrivacyFactLevel; auto?: boolean };

@@ -1,5 +1,5 @@
 import type { PersonaSectionBlock } from '../persona-sections.ts';
-import { redactSensitiveText } from '../sensitive-text.ts';
+import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 import { PersonaEvolution } from './PersonaEvolution.tsx';
 
 export interface PersonaPreviewResult {

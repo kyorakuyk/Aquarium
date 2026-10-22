@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TagStatus, TagView } from '../api.ts';
-import { containsSensitiveText, redactSensitiveText } from '../sensitive-text.ts';
+import { containsSensitiveText, redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 import { memberIdentityInjectionLabel } from '../impressions-model.ts';
 
 const STATUS_LABELS: Record<TagStatus, string> = {

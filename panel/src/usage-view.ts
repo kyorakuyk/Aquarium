@@ -1,5 +1,5 @@
 import type { PanelAccount } from './api.ts';
-import { redactSensitiveText } from './sensitive-text.ts';
+import { redactSensitiveText } from '../../src/core/impressions/sensitive-text.ts';
 
 export interface UsageAccountLabels {
   primary: string;
