@@ -15,8 +15,8 @@
 .persona-editor-heading h2 { margin: 0 0 4px; }
 .persona-editor-heading p { margin: 0; font-size: 11px; }
 .persona-save-actions { display: flex; align-items: center; gap: 12px; }
-.persona-save-actions > span { color: var(--muted); font-size: 11px; }
-.persona-save-actions > span.is-dirty { color: var(--warn-ink); }
+.persona-save-actions > span { color: var(--muted); font-size: 12px; }
+.persona-save-actions > span.is-dirty { color: var(--warn-ink); font-weight: 700; }
 .persona-workspace-v2 { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px; }
 .persona-form-grid { display: flex; min-width: 0; flex: 1 1 560px; flex-direction: column; gap: 16px; }
 .persona-form-card, .persona-preview-card { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }

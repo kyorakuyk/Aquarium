@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { DefaultsView, SessionSettings, SessionView } from '../api.ts';
 import { PersistedDetails } from '../components/PersistedDetails.tsx';
 import { SESSION_MODE_OPTIONS } from '../session-mode.ts';
+import { formatSavedAt } from '../panel-feedback.ts';
 import { SessionFieldHeading } from './SessionFieldHeading.tsx';
 import { SessionScheduleEditor } from './SessionScheduleEditor.tsx';
 
@@ -85,7 +86,7 @@ export function SessionSettingsPanel({
     try {
       await onPatch(target, values);
       await onRefresh(target);
-      setSavedAt(new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date()));
+      setSavedAt(formatSavedAt(new Date()));
       return true;
     } catch (error) {
       onError(error);
@@ -228,7 +229,7 @@ export function SessionSettingsPanel({
               onError={onError}
               onRestore={() => restore(['modeSchedule'])}
               onDirtyChange={setScheduleIsDirty}
-              onSaved={() => setSavedAt(new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date()))}
+              onSaved={() => setSavedAt(formatSavedAt(new Date()))}
             />
           </SettingGroup>
 

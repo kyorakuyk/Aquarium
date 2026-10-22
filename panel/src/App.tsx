@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { apiRequest, clearAuthentication, UNAUTHORIZED_EVENT } from './api.ts';
 import { Sidebar, type PageId } from './components/Sidebar.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
@@ -18,6 +18,7 @@ export function App() {
     () => Boolean(sessionStorage.getItem('aquarium-panel-password')),
   );
   const [page, setPage] = useState<PageId>(() => parseAppHash(window.location.hash)?.page ?? 'overview');
+  const [focusSleepSettings, setFocusSleepSettings] = useState(false);
 
   useEffect(() => {
     const syncPage = () => {
@@ -58,6 +59,13 @@ export function App() {
     setPage(nextPage);
   }
 
+  function openSleepSettings(): void {
+    navigateTo('sessions');
+    setFocusSleepSettings(true);
+  }
+
+  const finishSleepSettingsRequest = useCallback(() => setFocusSleepSettings(false), []);
+
   if (!authenticated) {
     return <LoginPage onAuthenticated={() => setAuthenticated(true)} />;
   }
@@ -66,8 +74,11 @@ export function App() {
     <div className="app-shell">
       <Sidebar page={page} onSelect={navigateTo} onLogout={logout} />
       <main className="main-content">
-        {page === 'overview' && <OverviewPage onNavigate={navigateTo} />}
-        {page === 'sessions' && <SessionsPage />}
+        {page === 'overview' && <OverviewPage onNavigate={navigateTo} onOpenSleepSettings={openSleepSettings} />}
+        {page === 'sessions' && <SessionsPage
+          focusSleepSettings={focusSleepSettings}
+          onSleepSettingsOpened={finishSleepSettingsRequest}
+        />}
         {page === 'personas' && <PersonasPage onNavigate={navigateTo} />}
         {page === 'models' && <ModelsPage />}
         {page === 'sandbox' && <DecisionsPage />}

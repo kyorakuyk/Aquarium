@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest, patch, type DefaultsView, type SessionView } from '../api.ts';
 import { SleepSettingsPanel } from './SleepSettingsPanel.tsx';
 import {
@@ -49,7 +49,13 @@ function compareSessions(first: SessionView, second: SessionView): number {
   return first.name.localeCompare(second.name, 'zh-CN');
 }
 
-export function SessionsPage() {
+export function SessionsPage({
+  focusSleepSettings = false,
+  onSleepSettingsOpened,
+}: {
+  focusSleepSettings?: boolean;
+  onSleepSettingsOpened?: () => void;
+}) {
   const [savedSelection] = useState(readSavedSessionSelection);
   const [sessions, setSessions] = useState<SessionView[]>([]);
   const [defaults, setDefaults] = useState<DefaultsView | null>(null);
@@ -95,6 +101,19 @@ export function SessionsPage() {
   useEffect(() => {
     writeSavedSessionSelection(selectedId, kind);
   }, [selectedId, kind]);
+
+  useEffect(() => {
+    if (focusSleepSettings) setSelectedId(GLOBAL_DEFAULT_ID);
+  }, [focusSleepSettings]);
+
+  useEffect(() => {
+    if (!focusSleepSettings || selectedId !== GLOBAL_DEFAULT_ID || !defaults) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('sleep-settings-title')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      onSleepSettingsOpened?.();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusSleepSettings, selectedId, defaults, onSleepSettingsOpened]);
 
   function selectKind(nextKind: SavedSessionSelection['kind']) {
     setKind(nextKind);

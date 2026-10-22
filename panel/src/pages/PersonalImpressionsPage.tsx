@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiRequest, type PanelStatus, type ViewImpression } from '../api.ts';
 import { factPromotionUnavailableReason } from '../../../src/core/impressions/tag-model.ts';
 import { tagOriginLabel } from '../impressions-model.ts';
+import { personalImpressionsErrorText, showEmptyPersonalImpressions } from '../panel-feedback.ts';
 
 const CATEGORY_LABELS: Record<ViewImpression['category'], string> = {
   positioning: '立场',
@@ -103,7 +104,7 @@ export function PersonalImpressionsPage() {
     ).then((result) => {
       if (active) setTags(result.tags);
     }).catch((reason: unknown) => {
-      if (active) setError(reason instanceof Error ? reason.message : '读取印象失败');
+      if (active) setError(personalImpressionsErrorText(reason instanceof Error ? reason.message : '读取印象失败'));
     }).finally(() => {
       if (active) setLoadingTags(false);
     });
@@ -143,7 +144,12 @@ export function PersonalImpressionsPage() {
           <select
             aria-label="选择人格账号"
             value={selectedAccount ?? ''}
-            onChange={(event) => setSelectedAccount(Number(event.currentTarget.value))}
+            onChange={(event) => {
+              setTags([]);
+              setLoadingTags(true);
+              setError('');
+              setSelectedAccount(Number(event.currentTarget.value));
+            }}
           >
             {status?.accounts.map((account) => <option value={account.account} key={account.account}>
               {account.name} · {account.persona}
@@ -155,7 +161,7 @@ export function PersonalImpressionsPage() {
       {loadingAccounts && <div className="empty-state" role="status">正在读取账号…</div>}
       {!loadingAccounts && !status?.accounts.length && <div className="empty-state">尚无可查看的人格账号。</div>}
       {!loadingAccounts && selectedAccount !== undefined && loadingTags && <div className="empty-state" role="status">正在读取印象…</div>}
-      {!loadingAccounts && selectedAccount !== undefined && !loadingTags && groups.length === 0
+      {selectedAccount !== undefined && showEmptyPersonalImpressions(loadingAccounts || loadingTags, error, groups.length)
         && <div className="empty-state">还没有整理出的个人印象。</div>}
       {!loadingTags && groups.length > 0 && <div className="personal-impressions-groups">
         {groups.map((group) => <section className="panel-card personal-impression-group" key={group.key}>

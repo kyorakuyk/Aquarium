@@ -51,7 +51,10 @@ function connectionLabel(status: PanelStatus['accounts'][number]['connectionStat
   return '等待重连';
 }
 
-export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => void }) {
+export function OverviewPage({ onNavigate, onOpenSleepSettings }: {
+  onNavigate: (page: PageId) => void;
+  onOpenSleepSettings: () => void;
+}) {
   const [status, setStatus] = useState<PanelStatus>();
   const [sessions, setSessions] = useState<SessionView[]>([]);
   const [decisions, setDecisions] = useState<DecisionView[]>([]);
@@ -183,7 +186,7 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
         </article>
       </section>
 
-      <MoodNowCard />
+      <MoodNowCard onOpenSleepSettings={onOpenSleepSettings} />
 
       <div className="overview-state-grid section-block">
       <section className="panel-card mood-card">

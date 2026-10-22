@@ -362,7 +362,7 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   }
 
   const selected = personas.find((persona) => persona.id === selectedId);
-  const saveLabel = busy ? '处理中…' : dirty ? '未保存更改' : saved ? '已保存' : '已同步';
+  const saveLabel = busy ? '处理中…' : dirty ? '有未保存更改' : saved ? '已保存' : '已同步';
 
   return (
     <div className="page personas-page">

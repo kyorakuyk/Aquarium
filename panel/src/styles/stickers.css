@@ -17,8 +17,7 @@
 .stickers-settings-grid label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
 .stickers-settings-grid input { width: 100%; min-height: 44px; padding: 0 10px; font-family: var(--mono); }
 .stickers-switch-row { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 4px; color: var(--ink-2); font-size: 12px; white-space: nowrap; }
-.stickers-settings-actions { display: flex; grid-column: 1 / -1; align-items: end; justify-content: flex-end; }
-.stickers-settings-actions .button { min-width: 88px; }
+.stickers-settings-grid .save-state { grid-column: 1 / -1; }
 .stickers-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 18px 0; padding: 4px; border-radius: 12px; background: var(--surface-2); }
 .stickers-filters button { min-width: 74px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); cursor: pointer; }
 .stickers-filters button.is-current { background: var(--surface); color: var(--accent); font-weight: 700; }
@@ -52,7 +51,6 @@
   .stickers-top { grid-template-columns: 1fr; gap: 4px; }
   .stickers-sync-time { padding: 4px 0; }
   .stickers-settings-grid { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
-  .stickers-settings-actions { grid-column: 1 / -1; justify-content: flex-end; }
 }
 @media (max-width: 600px) {
   .stickers-page .page-header { align-items: flex-start; flex-direction: column; }

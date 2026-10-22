@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiRequest, patch } from '../api.ts';
+import { formatSavedAt } from '../panel-feedback.ts';
 import type { StickerSettings } from '../sticker-types.ts';
 
 interface StickerSettingsCardProps {
@@ -37,17 +38,27 @@ export function StickerSettingsCard({ onNotice, onError }: StickerSettingsCardPr
     return () => { active = false; };
   }, [onError]);
 
-  async function save(): Promise<void> {
+  async function saveField<K extends keyof StickerSettings>(field: K, value: StickerSettings[K]): Promise<void> {
     if (!draft || saving) return;
+    setDraft((current) => current ? { ...current, [field]: value } : current);
     setSaving(true);
+    onNotice('');
+    onError('');
     try {
-      const next = await patch<StickerSettings>('/api/stickers/settings', draft);
+      const next = await patch<StickerSettings>('/api/stickers/settings', { [field]: value });
       setSettings(next);
       setDraft(next);
       onError('');
-      onNotice('表情设置已保存并热重载。');
+      onNotice(`改动立刻生效 · ${formatSavedAt(new Date())} 已保存`);
     } catch (reason) {
       onError(reason instanceof Error ? reason.message : '保存表情设置失败');
+      try {
+        const current = await apiRequest<StickerSettings>('/api/stickers/settings');
+        setSettings(current);
+        setDraft(current);
+      } catch {
+        // Keep the draft visible if the server is unavailable; the error remains actionable.
+      }
     } finally {
       setSaving(false);
     }
@@ -68,7 +79,8 @@ export function StickerSettingsCard({ onNotice, onError }: StickerSettingsCardPr
             type="button"
             role="switch"
             aria-checked={draft.enabled}
-            onClick={() => setDraft({ ...draft, enabled: !draft.enabled })}
+            disabled={saving}
+            onClick={() => void saveField('enabled', !draft.enabled)}
           ><span /></button>
         </div>
         {fields.map((field) => (
@@ -80,18 +92,28 @@ export function StickerSettingsCard({ onNotice, onError }: StickerSettingsCardPr
               max={field.max}
               step={field.step}
               value={draft[field.key]}
-              onChange={(event) => setDraft({ ...draft, [field.key]: Number(event.target.value) })}
+              disabled={saving}
+              onChange={(event) => {
+                setDraft({ ...draft, [field.key]: Number(event.currentTarget.value) });
+                onError('');
+                onNotice('');
+              }}
+              onBlur={(event) => {
+                const input = event.currentTarget;
+                const rawValue = input.value.trim();
+                const value = Number(rawValue);
+                if (!rawValue || !input.validity.valid || !Number.isFinite(value)) {
+                  setDraft(settings);
+                  onError('请输入有效范围内的数值。');
+                  return;
+                }
+                if (value !== settings[field.key]) void saveField(field.key, value);
+              }}
+              onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
             />
           </label>
         ))}
-        <div className="stickers-settings-actions">
-          <button
-            className="button button-primary"
-            type="button"
-            disabled={saving || JSON.stringify(draft) === JSON.stringify(settings)}
-            onClick={() => void save()}
-          >保存</button>
-        </div>
+        <p className="save-state" aria-live="polite">{saving ? '正在保存…' : '改动立刻生效；数值输入完成后自动保存'}</p>
       </div>
     </section>
   );

@@ -108,7 +108,7 @@ function energyStatus(status: MoodSeriesView['energy']['status']): string {
   return '醒着';
 }
 
-export function MoodNowCard() {
+export function MoodNowCard({ onOpenSleepSettings }: { onOpenSleepSettings: () => void }) {
   const [series, setSeries] = useState<MoodSeriesView>();
   const [error, setError] = useState('');
 
@@ -145,7 +145,10 @@ export function MoodNowCard() {
     <section className="panel-card mood-now-card section-block" aria-labelledby="mood-now-title">
       <div className="section-heading">
         <div><h2 id="mood-now-title">此刻</h2><p className="muted">情绪、精力与最近一次回复实际注入的内容</p></div>
-        {series && <span className="muted mono">更新于 {fullTime(series.to)} · 30 秒刷新</span>}
+        <div className="mood-now-heading-actions">
+          {series && <span className="muted mono">更新于 {fullTime(series.to)} · 30 秒刷新</span>}
+          <button className="text-button" type="button" onClick={onOpenSleepSettings}>设置作息 →</button>
+        </div>
       </div>
       {error && <div className="notice notice-warn" role="status">{error}{series ? '；保留上次数据。' : ''}</div>}
       {!series && !error && <p className="muted">正在读取此刻状态…</p>}

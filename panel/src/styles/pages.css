@@ -242,7 +242,8 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .sleep-settings-grid > label:not(.sleep-setting-toggle) { display: grid; gap: 6px; color: var(--ink-2); font-size: 12px; }
 .sleep-setting-toggle { display: flex; align-items: center; gap: 9px; min-height: 44px; color: var(--ink-2); font-size: 12px; }
 .sleep-setting-toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
-.sleep-settings-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sleep-settings-actions { display: flex; align-items: center; gap: 12px; }
+.save-state { margin: 0; color: var(--muted); font-size: 12px; }
 
 .impressions-controls { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
 .impressions-controls .page-tabs { flex: 0 0 240px; margin: 0; }
@@ -319,6 +320,7 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .mood-now-card { padding: 20px; }
 .mood-now-card .section-heading { margin-bottom: 12px; }
 .mood-now-card .section-heading p { margin: 3px 0 0; font-size: 12px; }
+.mood-now-heading-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 10px 16px; }
 .mood-now-current { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .mood-now-current > div:first-child { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
 .mood-now-current > div:first-child strong { color: var(--accent); font-family: var(--serif); font-size: 19px; }
