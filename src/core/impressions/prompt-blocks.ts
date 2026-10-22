@@ -5,7 +5,7 @@ import { sessionId, type SessionKey } from '../shared/events.ts';
 import { decide } from '../privacy/policy.ts';
 import type { ReplySystemTemplate } from '../prompt/templates.ts';
 import { buildMemberTagPrompt } from './member-tags.ts';
-import { GROUP_TAGS_LIMIT, selectInjectableTags } from './tags.ts';
+import { GROUP_TAGS_LIMIT, selectInjectableTags, type TagPromptStateUpdate } from './tags.ts';
 import { redactSensitiveText } from './sensitive-text.ts';
 import { accountUserName, resolveAccountIdentity } from '../profiles/account-identity.ts';
 
@@ -72,6 +72,7 @@ function displayTagText(tag: Pick<StoredTag, 'category' | 'text'>): string {
 export function buildImpressionsPromptBlocks(
   repository: StoreRepository,
   input: PromptBlocksInput,
+  onTagPromptStates?: (updates: readonly TagPromptStateUpdate[]) => void,
 ): { groupTags?: string; memberTags?: string; droppedTags: number } {
   if (input.session.kind !== 'group') return { droppedTags: 0 };
   const account = input.session.account;
@@ -90,15 +91,17 @@ export function buildImpressionsPromptBlocks(
   }) === 'allow';
   const groupSelection = groupAllowed
     ? selectInjectableTags(repository.listTagsForSubject(account, input.sessionId, null)
-      .filter((tag) => tag.kind === 'fact'), input.now, GROUP_TAGS_LIMIT)
-    : { tags: [] as StoredTag[], dropped: 0 };
+      .filter((tag) => tag.kind === 'fact'), input.now, GROUP_TAGS_LIMIT, {
+        renderText: (tags) => tags.map(displayTagText).join('、'),
+      })
+    : { tags: [] as StoredTag[], dropped: 0, stateUpdates: [] };
   const memberAllowed = identity.userId !== account && decide({
     info: { origin: 'group', sessionId: input.sessionId, ownerId: identity.userId },
     target,
     purpose: 'prompt',
   }) === 'allow';
   const memberSelection = !memberAllowed
-    ? { text: '', dropped: 0, profileText: '' }
+    ? { text: '', dropped: 0, profileText: '', stateUpdates: [] }
     : buildMemberTagPrompt(
       repository.listTagsForSubject(account, input.sessionId, identity.userId)
         .filter((tag) => tag.kind === 'fact'),
@@ -108,6 +111,7 @@ export function buildImpressionsPromptBlocks(
         relationships: relationPromptLines(repository, account, input.sessionId, identity.userId),
       },
     );
+  onTagPromptStates?.([...groupSelection.stateUpdates, ...memberSelection.stateUpdates]);
   const blocks: { groupTags?: string; memberTags?: string; droppedTags: number } = {
     droppedTags: groupSelection.dropped + memberSelection.dropped,
   };

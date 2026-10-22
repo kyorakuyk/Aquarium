@@ -6,7 +6,7 @@ import { FishIcon } from './FishIcon.tsx';
 export type PageId = 'overview' | 'sessions' | 'impressions' | 'personas' | 'stickers' | 'models' | 'usage' | 'sandbox';
 
 const navGroups: Array<{ label: string; items: Array<{ id: PageId; label: string }> }> = [
-  { label: '日常', items: [{ id: 'overview', label: '总览' }, { id: 'sessions', label: '会话' }, { id: 'impressions', label: '印象' }] },
+  { label: '日常', items: [{ id: 'overview', label: '总览' }, { id: 'sessions', label: '会话' }, { id: 'impressions', label: '知识' }] },
   { label: '塑造', items: [{ id: 'personas', label: '人设' }, { id: 'stickers', label: '表情包' }] },
   { label: '系统', items: [{ id: 'models', label: '模型' }, { id: 'usage', label: '用量' }, { id: 'sandbox', label: '试聊与决策' }] },
 ];

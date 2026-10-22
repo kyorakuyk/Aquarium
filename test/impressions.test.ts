@@ -31,6 +31,7 @@ function tag(overrides: Partial<StoredTag> = {}): StoredTag {
     origin: 'inferred',
     locked: false,
     kind: 'view',
+    inPrompt: false,
     status: 'candidate',
     source: 'auto',
     samples: 1,
@@ -166,7 +167,7 @@ test('画像类别决定半衰期；schedule 不衰减', () => {
   assert.equal(tagActivation(schedule, now), 1);
 });
 
-test('注入选择只取已确认且激活度达标的标签，按 manual、samples、last_seen 排序', () => {
+test('注入选择跨过迟滞阈值后按 category 与 norm 稳定排序', () => {
   const now = 100 * dayMs;
   const tags = [
     tag({ id: 1, category: 'personality', status: 'candidate', samples: 5, lastSeen: now }),
@@ -178,7 +179,7 @@ test('注入选择只取已确认且激活度达标的标签，按 manual、samp
 
   const selected = selectInjectableTags(tags, now, GROUP_TAGS_LIMIT);
 
-  assert.deepEqual(selected.tags.map((item) => item.id), [4, 5, 3]);
+  assert.deepEqual(selected.tags.map((item) => item.id), [3, 4, 5]);
   assert.equal(selected.dropped, 0);
   assert.ok(tagActivation(tags[1] as StoredTag, now) < ACTIVATION_MIN);
 });
@@ -218,5 +219,5 @@ test('注入选择不返回 locked 或 misc 标签', () => {
     tag({ id: 2, category: 'misc', status: 'confirmed', lastSeen: now }),
   ], now, GROUP_TAGS_LIMIT);
 
-  assert.deepEqual(selected, { tags: [], dropped: 0 });
+  assert.deepEqual(selected, { tags: [], dropped: 0, stateUpdates: [] });
 });

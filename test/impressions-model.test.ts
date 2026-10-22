@@ -72,17 +72,38 @@ test('inferred identity label distinguishes unconfirmed from manual confirmation
   assert.equal(memberIdentityInjectionLabel({ category: 'identity', origin: 'self_report', status: 'confirmed' }), undefined);
 });
 
-test('member preview excludes locked, candidate, inferred identity and misc tags', () => {
+test('member preview hides view tags and excludes locked, candidate, inferred identity and misc tags', () => {
   const tags = [
-    { id: 1, text: '幽默', category: 'personality', origin: 'inferred', locked: false, status: 'confirmed', activation: 1, samples: 3, lastSeen: 3 },
-    { id: 2, text: '不喜欢外号', category: 'dislike', origin: 'inferred', locked: false, status: 'confirmed', activation: 1, samples: 2, lastSeen: 2 },
-    { id: 3, text: '锁定', category: 'personality', origin: 'inferred', locked: true, status: 'confirmed', activation: 1, samples: 4, lastSeen: 5 },
-    { id: 4, text: '观察中', category: 'recent', origin: 'inferred', locked: false, status: 'candidate', activation: 1, samples: 1, lastSeen: 5 },
-    { id: 5, text: 'INTP', category: 'identity', origin: 'inferred', locked: false, status: 'confirmed', activation: 1, samples: 4, lastSeen: 5 },
-    { id: 6, text: '旧标签', category: 'misc', origin: 'manual', locked: false, status: 'confirmed', activation: 1, samples: 2, lastSeen: 5 },
+    { id: 1, text: '幽默', category: 'personality', kind: 'view', origin: 'inferred', locked: false, status: 'confirmed', activation: 1, samples: 3, lastSeen: 3 },
+    { id: 2, text: '不喜欢外号', category: 'dislike', kind: 'view', origin: 'inferred', locked: false, status: 'confirmed', activation: 1, samples: 2, lastSeen: 2 },
+    { id: 3, text: '锁定', category: 'identity', kind: 'fact', origin: 'inferred', locked: true, status: 'confirmed', activation: 1, samples: 4, lastSeen: 5 },
+    { id: 4, text: '观察中', category: 'recent', kind: 'fact', origin: 'inferred', locked: false, status: 'candidate', activation: 1, samples: 1, lastSeen: 5 },
+    { id: 5, text: 'INTP', category: 'identity', kind: 'fact', origin: 'inferred', locked: false, status: 'confirmed', activation: 1, samples: 4, lastSeen: 5 },
+    { id: 6, text: '旧标签', category: 'misc', kind: 'view', origin: 'manual', locked: false, status: 'confirmed', activation: 1, samples: 2, lastSeen: 5 },
+    { id: 7, text: 'CS2', category: 'fandom', kind: 'fact', origin: 'self_report', locked: false, status: 'confirmed', activation: 1, samples: 1, lastSeen: 5 },
+    { id: 8, text: '准备搬家', category: 'recent', kind: 'fact', origin: 'inferred', locked: false, status: 'confirmed', activation: 0.8, samples: 2, lastSeen: 4 },
   ];
 
-  assert.deepEqual(memberPreviewTags(tags).map(({ text }) => text), ['不喜欢外号', '幽默']);
+  assert.deepEqual(memberPreviewTags(tags).map(({ text }) => text), ['CS2', '准备搬家']);
+});
+
+test('knowledge tag columns filter to facts and format confidence and source labels', () => {
+  const knowledgeTags = Reflect.get(impressionsModel, 'knowledgeTags') as
+    ((tags: readonly { kind: 'fact' | 'view'; text: string }[]) => Array<{ kind: 'fact' | 'view'; text: string }>) | undefined;
+  const formatTagConfidence = Reflect.get(impressionsModel, 'formatTagConfidence') as ((value: number) => string) | undefined;
+  const tagOriginLabel = Reflect.get(impressionsModel, 'tagOriginLabel') as ((origin: string) => string) | undefined;
+
+  assert.equal(typeof knowledgeTags, 'function');
+  assert.equal(typeof formatTagConfidence, 'function');
+  assert.equal(typeof tagOriginLabel, 'function');
+  if (!knowledgeTags || !formatTagConfidence || !tagOriginLabel) return;
+  assert.deepEqual(knowledgeTags([{ kind: 'view', text: '主观看法' }, { kind: 'fact', text: '客观事实' }]), [
+    { kind: 'fact', text: '客观事实' },
+  ]);
+  assert.equal(formatTagConfidence(0.5), '0.50');
+  assert.deepEqual(['self_report', 'stats', 'inferred', 'manual'].map(tagOriginLabel), [
+    '自述', '统计', '推断', '手动',
+  ]);
 });
 
 test('member list shows a message count instead of empty tag copy and repeated neutral affinity', () => {
@@ -132,9 +153,28 @@ test('group member search matches name, group card, and tag text', () => {
 
   assert.equal(typeof searchAndSortMembers, 'function');
   if (typeof searchAndSortMembers !== 'function') return;
-  assert.deepEqual(searchAndSortMembers(members, '小明', 'recent').map(({ userId }) => userId), [42]);
-  assert.deepEqual(searchAndSortMembers(members, '小雨', 'recent').map(({ userId }) => userId), [43]);
-  assert.deepEqual(searchAndSortMembers(members, 'cs2', 'recent').map(({ userId }) => userId), [42]);
+  assert.deepEqual(searchAndSortMembers(members, '小明', 'recent')?.map(({ userId }) => userId), [42]);
+  assert.deepEqual(searchAndSortMembers(members, '小雨', 'recent')?.map(({ userId }) => userId), [43]);
+  assert.deepEqual(searchAndSortMembers(members, 'cs2', 'recent')?.map(({ userId }) => userId), [42]);
+});
+
+test('group member search does not reveal hidden view tags', () => {
+  const members = [{
+    userId: 45,
+    name: '小红',
+    qqProfile: null,
+    tags: [{ text: '主观看法', subject: null, kind: 'view' }],
+    messageCount: 1,
+    lastMessageTime: 1,
+    affinity: { value: 0 },
+  }] as const;
+  const searchAndSortMembers = Reflect.get(impressionsModel, 'searchAndSortMembers') as (
+    items: typeof members,
+    query: string,
+    sort: 'recent' | 'messages' | 'affinity',
+  ) => typeof members[number][] | undefined;
+
+  assert.deepEqual(searchAndSortMembers(members, '主观看法', 'recent'), []);
 });
 
 test('group member sorting uses recent messages, message volume, or affinity without mutating input', () => {
@@ -151,9 +191,9 @@ test('group member sorting uses recent messages, message volume, or affinity wit
 
   assert.equal(typeof searchAndSortMembers, 'function');
   if (typeof searchAndSortMembers !== 'function') return;
-  assert.deepEqual(searchAndSortMembers(members, '', 'recent').map(({ userId }) => userId), [44, 42, 43]);
-  assert.deepEqual(searchAndSortMembers(members, '', 'messages').map(({ userId }) => userId), [43, 42, 44]);
-  assert.deepEqual(searchAndSortMembers(members, '', 'affinity').map(({ userId }) => userId), [43, 44, 42]);
+  assert.deepEqual(searchAndSortMembers(members, '', 'recent')?.map(({ userId }) => userId), [44, 42, 43]);
+  assert.deepEqual(searchAndSortMembers(members, '', 'messages')?.map(({ userId }) => userId), [43, 42, 44]);
+  assert.deepEqual(searchAndSortMembers(members, '', 'affinity')?.map(({ userId }) => userId), [43, 44, 42]);
   assert.deepEqual(members.map(({ userId }) => userId), [42, 43, 44]);
 });
 

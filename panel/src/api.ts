@@ -150,6 +150,7 @@ export interface SleepView {
 }
 
 export type TagStatus = 'candidate' | 'confirmed' | 'rejected' | 'superseded';
+export type TagKind = 'fact' | 'view';
 export type TagCategory = 'positioning' | 'topic' | 'atmosphere' | 'meme' | 'norms' | 'identity' | 'personality' | 'fandom' | 'speech' | 'catchphrase' | 'social' | 'recent' | 'dislike' | 'schedule' | 'misc';
 export type TagOrigin = 'self_report' | 'inferred' | 'stats' | 'manual';
 export type TagPolarity = 'like' | 'dislike' | null;
@@ -169,6 +170,7 @@ export interface TagView {
   id: number;
   text: string;
   category: TagCategory;
+  kind: TagKind;
   subject: string | null;
   polarity: TagPolarity;
   origin: TagOrigin;

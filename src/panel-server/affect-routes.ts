@@ -71,6 +71,7 @@ function tagView(tag: StoredTag, at: number) {
     id: tag.id,
     text: redactSensitiveText(tag.text),
     category: tag.category,
+    kind: tag.kind,
     subject: tag.subject === null ? null : redactSensitiveText(tag.subject),
     polarity: tag.polarity,
     origin: tag.origin,

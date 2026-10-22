@@ -54,6 +54,7 @@ export interface TagRecord {
 export interface StoredTag extends TagRecord {
   id: number;
   kind: TagKind;
+  inPrompt: boolean;
 }
 
 export interface TagUpdate {
@@ -71,6 +72,7 @@ export interface TagUpdate {
   lastSeen?: number;
   supersededBy?: number | null;
   updatedAt?: number;
+  inPrompt?: boolean;
 }
 
 export interface TagRunRecord {
@@ -98,7 +100,7 @@ export interface TagRepositoryQueries {
 }
 
 const TAG_COLUMNS = [
-  'id', 'account', 'session_id', 'user_id', 'text', 'norm', 'category', 'kind', 'subject', 'polarity', 'origin', 'locked',
+  'id', 'account', 'session_id', 'user_id', 'text', 'norm', 'category', 'kind', 'in_prompt', 'subject', 'polarity', 'origin', 'locked',
   'status', 'source', 'samples', 'evidence_json', 'first_seen', 'last_seen', 'superseded_by', 'updated_at',
 ].join(', ');
 
@@ -129,11 +131,13 @@ function tagRecord(row: Record<string, unknown>): StoredTag {
   const origin = stringValue(row.origin, 'origin');
   const polarityValue = nullableString(row.polarity, 'polarity');
   const lockedValue = numberValue(row.locked, 'locked');
+  const inPromptValue = numberValue(row.in_prompt, 'in_prompt');
   if (!isTagCategory(category)) throw new Error('数据库字段 category 无效');
   if (!isTagKind(kind)) throw new Error('数据库字段 kind 无效');
   if (!isTagOrigin(origin)) throw new Error('数据库字段 origin 无效');
   if (polarityValue !== null && !isTagPolarity(polarityValue)) throw new Error('数据库字段 polarity 无效');
   if (lockedValue !== 0 && lockedValue !== 1) throw new Error('数据库字段 locked 无效');
+  if (inPromptValue !== 0 && inPromptValue !== 1) throw new Error('数据库字段 in_prompt 无效');
   return {
     id: numberValue(row.id, 'id'),
     account: numberValue(row.account, 'account'),
@@ -143,6 +147,7 @@ function tagRecord(row: Record<string, unknown>): StoredTag {
     norm: stringValue(row.norm, 'norm'),
     category,
     kind,
+    inPrompt: inPromptValue === 1,
     subject: nullableString(row.subject, 'subject'),
     polarity: polarityValue,
     origin,
@@ -173,6 +178,7 @@ const tagUpdateColumns: Record<keyof TagUpdate, string> = {
   lastSeen: 'last_seen',
   supersededBy: 'superseded_by',
   updatedAt: 'updated_at',
+  inPrompt: 'in_prompt',
 };
 
 export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
@@ -327,15 +333,20 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
       const assignments = entries.map(([field]) => `${tagUpdateColumns[field]} = ?`);
       const values = entries.map(([field, value]) => {
         if (field === 'evidence') return JSON.stringify(value);
-        if (field === 'locked') return value ? 1 : 0;
+        if (field === 'locked' || field === 'inPrompt') return value ? 1 : 0;
         if (field === 'subject' && typeof value === 'string') {
           return subjects.canonicalTagSubject(account, category, value);
         }
         return value;
       });
       if (updatesKind) {
+        const nextKind = tagKindFor(category, polarityValue);
         assignments.push('kind = ?');
-        values.push(tagKindFor(category, polarityValue));
+        values.push(nextKind);
+        if (nextKind !== row.kind && !entries.some(([field]) => field === 'inPrompt')) {
+          assignments.push('in_prompt = ?');
+          values.push(0);
+        }
       }
       database.prepare(`UPDATE tags SET ${assignments.join(', ')} WHERE id = ?`)
         .run(...values as Array<string | number | null>, id);

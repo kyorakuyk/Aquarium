@@ -132,7 +132,7 @@ export function ImpressionsPage() {
       setError('');
       return true;
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '读取印象失败');
+      setError(reason instanceof Error ? reason.message : '读取知识失败');
       return false;
     }
   }, []);
@@ -282,7 +282,7 @@ export function ImpressionsPage() {
     try {
       await retryTagClassification();
     } catch {
-      setError('旧标签整理重试失败，请稍后再试。');
+      setError('旧标签分类重试失败，请稍后再试。');
     } finally {
       setTagClassificationRetrying(false);
     }
@@ -359,8 +359,8 @@ export function ImpressionsPage() {
   return (
     <div className="page">
       <header className="page-header">
-        <h1>印象</h1>
-        <p className="page-description">它对群友的了解，也是你了解朋友的一本册子。</p>
+        <h1>知识</h1>
+        <p className="page-description">记录群聊与成员的客观事实，并查看置信度和来源。</p>
       </header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
       {tab === 'groups' && tagClassificationStatus?.state === 'running' && tagClassificationMessage
@@ -372,12 +372,12 @@ export function ImpressionsPage() {
             {tagClassificationRetrying ? '正在重试…' : '重试'}
           </button>
         </div>}
-      {tab === 'groups' && extractionRunning && <p className="muted" role="status">正在整理当前群的印象…</p>}
+      {tab === 'groups' && extractionRunning && <p className="muted" role="status">正在整理当前群的知识…</p>}
       {historyImportActive && historyJob && <p className="muted" role="status">
-        {historyJob.phase === 'fetching' ? '正在拉取群聊历史…' : historyJob.phase === 'extracting' ? '正在整理历史印象…' : '历史整理等待确认。'}
+        {historyJob.phase === 'fetching' ? '正在拉取群聊历史…' : historyJob.phase === 'extracting' ? '正在整理历史知识…' : '历史整理等待确认。'}
       </p>}
       <div className="impressions-controls">
-        <div className="page-tabs" role="tablist" aria-label="印象视图">
+        <div className="page-tabs" role="tablist" aria-label="知识视图">
           <button className={tab === 'groups' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'groups'} onClick={() => setTab('groups')}>群聊</button>
           <button className={tab === 'privacy' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'privacy'} onClick={() => setTab('privacy')}>私聊</button>
           <button className={tab === 'people' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'people'} onClick={() => setTab('people')}>所有人</button>
@@ -416,7 +416,7 @@ export function ImpressionsPage() {
         <PrivateFactsPanel sessions={privateSessions} loadingFriends={sessionsLoading} />
       </Suspense>}
       {tab === 'groups' && <>
-      {!selectedView && <div className="empty-state">{selectedGroup ? '正在读取群印象…' : '选择一个群，查看它攒下的印象。'}</div>}
+      {!selectedView && <div className="empty-state">{selectedGroup ? '正在读取群知识…' : '选择一个群，查看已整理的知识。'}</div>}
       {selectedView && selectedGroup && <div className="impressions-workspace">
         <ImpressionsSidebar
           group={selectedGroup}
@@ -453,10 +453,10 @@ export function ImpressionsPage() {
         <div className="history-import-heading">
           <div>
             <h2 id="history-import-title">拉取群聊历史</h2>
-            <p className="muted">只读取记录、整理印象，不会在群里发言。</p>
+            <p className="muted">只读取记录、整理知识，不会在群里发言。</p>
           </div>
         </div>
-        {historyGroup && !historyGroup.enabled && <p className="notice history-import-disabled-notice">这个群还没启用：会整理印象，但它不会在群里说话。</p>}
+        {historyGroup && !historyGroup.enabled && <p className="notice history-import-disabled-notice">这个群还没启用：会整理知识，但它不会在群里说话。</p>}
         {!historyJobId && !historyStarting && <div className="history-import-form">
           <p className="history-import-waterline">上次整理到：<strong>{historyWaterline === null ? '尚未整理' : new Date(historyWaterline).toLocaleString('zh-CN')}</strong></p>
           <fieldset className="history-import-modes">

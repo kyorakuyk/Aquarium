@@ -8,6 +8,7 @@ export const MEMBER_TAG_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000;
 export const GROUP_TAG_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const ACTIVATION_MIN = 0.25;
+const TAG_PROMPT_THRESHOLD_EPSILON = Number.EPSILON;
 
 export const GROUP_TAGS_LIMIT = { max: 6, maxChars: 120 } as const;
 export const MEMBER_TAGS_LIMIT = { max: 5, maxChars: 160 } as const;
@@ -15,6 +16,16 @@ export const MEMBER_TAGS_LIMIT = { max: 5, maxChars: 160 } as const;
 export interface TagSelectionLimit {
   max: number;
   maxChars: number;
+}
+
+export interface TagPromptStateUpdate {
+  id: number;
+  inPrompt: boolean;
+}
+
+export interface TagSelectionOptions {
+  isEligible?: (tag: StoredTag) => boolean;
+  renderText?: (tags: readonly StoredTag[]) => string;
 }
 
 export interface TagCandidateInput {
@@ -118,36 +129,64 @@ export function applyTagContradiction(
   };
 }
 
-// 注入选择：confirmed 且激活度 ≥ 0.25；manual 优先 → samples 降序 → last_seen 降序；受数量与总长上限。
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function compareTagOrder(left: StoredTag, right: StoredTag): number {
+  return compareText(left.category, right.category)
+    || compareText(left.norm, right.norm)
+    || left.id - right.id;
+}
+
+function selectionText(tags: readonly StoredTag[], options: TagSelectionOptions): string {
+  return options.renderText?.(tags) ?? tags.map(({ text }) => text).join('、');
+}
+
+function textLength(value: string): number {
+  return Array.from(value).length;
+}
+
+// 入选状态使用迟滞；容量裁剪只移除置信度最低的条目，最终文本按 category/norm 固定排序。
 export function selectInjectableTags(
   tags: readonly StoredTag[],
   now: number,
   limit: TagSelectionLimit,
-): { tags: StoredTag[]; dropped: number } {
-  const eligible = tags
-    .filter((tag) => !tag.locked && tag.category !== 'misc'
-      && tag.status === 'confirmed' && tagActivation(tag, now) >= ACTIVATION_MIN)
-    .sort((left, right) => {
-      if (left.source !== right.source) return left.source === 'manual' ? -1 : 1;
-      if (left.samples !== right.samples) return right.samples - left.samples;
-      return right.lastSeen - left.lastSeen;
-    });
-
-  const picked: StoredTag[] = [];
-  let chars = 0;
-  let dropped = 0;
-  for (const tag of eligible) {
-    if (picked.length >= limit.max) {
-      dropped += 1;
-      continue;
-    }
-    const length = Array.from(tag.text).length + (picked.length > 0 ? 1 : 0);
-    if (chars + length > limit.maxChars) {
-      dropped += 1;
-      continue;
-    }
-    chars += length;
-    picked.push(tag);
+  options: TagSelectionOptions = {},
+): { tags: StoredTag[]; dropped: number; stateUpdates: TagPromptStateUpdate[] } {
+  const candidates: Array<{ tag: StoredTag; confidence: number; manual: boolean }> = [];
+  for (const tag of tags) {
+    const eligible = !tag.locked && tag.category !== 'misc' && tag.status === 'confirmed'
+      && (options.isEligible?.(tag) ?? true);
+    const manual = tag.origin === 'manual' || tag.source === 'manual';
+    const activation = tagActivation(tag, now);
+    const inPrompt = eligible && (manual || (tag.inPrompt
+      ? activation - 0.35 > TAG_PROMPT_THRESHOLD_EPSILON
+      : activation >= 0.5 - TAG_PROMPT_THRESHOLD_EPSILON));
+    if (inPrompt) candidates.push({ tag, confidence: manual ? 1 : activation, manual });
   }
-  return { tags: picked, dropped };
+
+  const retained = new Map(candidates.map(({ tag }) => [tag.id, tag]));
+  const removalOrder = [...candidates].sort((left, right) => left.confidence - right.confidence
+    || Number(left.manual) - Number(right.manual)
+    || compareTagOrder(left.tag, right.tag));
+  let dropped = 0;
+  const sortedTags = () => [...retained.values()].sort(compareTagOrder);
+  while (retained.size > limit.max || textLength(selectionText(sortedTags(), options)) > limit.maxChars) {
+    const lowest = removalOrder.find(({ tag }) => retained.has(tag.id));
+    if (!lowest) break;
+    retained.delete(lowest.tag.id);
+    dropped += 1;
+  }
+  const candidateIds = new Set(candidates.map(({ tag }) => tag.id));
+  const selectedIds = new Set(retained.keys());
+  const stateUpdates = tags.flatMap((tag) => {
+    const inPrompt = candidateIds.has(tag.id) && selectedIds.has(tag.id);
+    return tag.inPrompt !== inPrompt ? [{ id: tag.id, inPrompt }] : [];
+  }).sort((left, right) => left.id - right.id);
+  return {
+    tags: sortedTags(),
+    dropped,
+    stateUpdates,
+  };
 }

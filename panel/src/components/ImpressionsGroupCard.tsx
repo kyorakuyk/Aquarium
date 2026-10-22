@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiRequest, type ActivityDistributionView, type ImpressionsView, type SessionView } from '../api.ts';
-import { activityLevel, peakActivityWindow } from '../impressions-model.ts';
+import { activityLevel, knowledgeTags, peakActivityWindow } from '../impressions-model.ts';
 import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 
 export function ImpressionsGroupCard({ group, view, selected, onSelect }: {
@@ -12,7 +12,7 @@ export function ImpressionsGroupCard({ group, view, selected, onSelect }: {
   const [activity, setActivity] = useState<ActivityDistributionView>();
   const speakingMembers = view.members.filter((member) => member.messageCount > 0).length;
   const memberCount = group.memberCount ?? view.qqGroupProfile?.groupInfo?.memberCount;
-  const positioning = view.groupTags.filter((tag) => tag.category === 'positioning'
+  const positioning = knowledgeTags(view.groupTags).filter((tag) => tag.category === 'positioning'
     && tag.status === 'confirmed' && !tag.locked && tag.activation >= 0.25)
     .slice(0, 3);
 

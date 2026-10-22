@@ -97,6 +97,14 @@
 .profile-tag-content { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 5px; }
 .profile-tag-content .tag-chip { min-height: 44px; padding: 0 10px; font-size: 11px; }
 .profile-tag-content .tag-lock-toggle { width: 44px; min-height: 44px; }
+.profile-tag-entry { display: grid; flex: 1 1 100%; min-width: 0; grid-template-columns: minmax(0, 1fr) 5rem 4.25rem; align-items: center; gap: 8px; }
+.profile-tag-entry .tag-chip-set { width: 100%; min-width: 0; }
+.profile-tag-entry .tag-popover-anchor { flex: 1; }
+.profile-tag-entry .tag-chip { width: 100%; justify-content: flex-start; }
+.profile-tag-meta { display: grid; min-width: 0; gap: 2px; }
+.profile-tag-meta-label { color: var(--muted); font-size: 9px; }
+.profile-tag-meta-value { color: var(--ink-2); font-size: 11px; }
+.profile-tag-meta-value.mono { font-size: 11px; }
 .profile-mbti { color: var(--accent); font-family: var(--mono); font-size: 18px; letter-spacing: .08em; }
 .profile-tag-empty { padding: 8px 0; font-size: 11px; }
 .profile-tag-add { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 5px; }
@@ -188,6 +196,7 @@
   .member-profile-affinity { grid-column: 2; justify-self: start; }
   .profile-tag-row { grid-template-columns: 1fr; gap: 3px; }
   .profile-tag-label { padding-top: 3px; }
+  .profile-tag-entry { grid-template-columns: minmax(0, 1fr) 4.25rem 3.75rem; gap: 5px; }
   .tag-subject-row { grid-template-columns: minmax(0, 1fr); }
   .tag-subject-row > .button, .tag-subject-aliases { grid-column: 1; }
   .tag-subject-new { grid-template-columns: 1fr; }

@@ -1,4 +1,4 @@
-import type { AffinityLevel, QqMemberProfileView } from './api.ts';
+import type { AffinityLevel, QqMemberProfileView, TagKind } from './api.ts';
 
 export interface ActivityDay {
   date: string;
@@ -22,6 +22,7 @@ export interface MemberPreviewTag {
   id: number;
   text: string;
   category: string;
+  kind: TagKind;
   subject?: string | null;
   origin: string;
   locked: boolean;
@@ -40,7 +41,7 @@ export interface SearchableImpressionsMember {
   lastMessageTime: number | null;
   affinity: { value: number };
   qqProfile: { card?: string } | null;
-  tags: ReadonlyArray<{ text: string; subject?: string | null }>;
+  tags: ReadonlyArray<{ text: string; subject?: string | null; kind?: TagKind }>;
 }
 
 export interface ActivityPeakWindow {
@@ -63,7 +64,8 @@ export function activityLevel(value: number, maximum: number): 0 | 1 | 2 | 3 | 4
 
 export function memberPreviewTags(tags: readonly MemberPreviewTag[], limit = 3): MemberPreviewTag[] {
   const order = ['dislike', 'personality', 'fandom', 'identity', 'recent', 'schedule', 'speech', 'catchphrase', 'social'];
-  return tags.filter((tag) => tag.status === 'confirmed'
+  return tags.filter((tag) => tag.kind === 'fact'
+      && tag.status === 'confirmed'
       && !tag.locked
       && tag.activation >= 0.25
       && tag.category !== 'misc'
@@ -74,6 +76,24 @@ export function memberPreviewTags(tags: readonly MemberPreviewTag[], limit = 3):
       || right.lastSeen - left.lastSeen
       || left.id - right.id)
     .slice(0, Math.max(0, limit));
+}
+
+export function knowledgeTags<T extends { kind: TagKind }>(tags: readonly T[]): T[] {
+  return tags.filter((tag) => tag.kind === 'fact');
+}
+
+export function formatTagConfidence(value: number): string {
+  return value.toFixed(2);
+}
+
+export function tagOriginLabel(origin: string): string {
+  const labels: Record<string, string> = {
+    self_report: '自述',
+    stats: '统计',
+    inferred: '推断',
+    manual: '手动',
+  };
+  return labels[origin] ?? origin;
 }
 
 export function memberRowPresentation(
@@ -104,7 +124,8 @@ export function searchAndSortMembers<T extends SearchableImpressionsMember>(
   return members.filter((member) => needle.length === 0
     || member.name.toLocaleLowerCase().includes(needle)
     || (member.qqProfile?.card ?? '').toLocaleLowerCase().includes(needle)
-    || member.tags.some((tag) => `${tag.subject ?? ''} ${tag.text}`.toLocaleLowerCase().includes(needle)))
+    || member.tags.some((tag) => tag.kind !== 'view'
+      && `${tag.subject ?? ''} ${tag.text}`.toLocaleLowerCase().includes(needle)))
     .slice()
     .sort((left, right) => {
       const score = sort === 'recent'

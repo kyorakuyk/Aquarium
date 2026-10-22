@@ -158,9 +158,9 @@ export function ImpressionsDataMenu({ sessionId, groupName, groupTagCount, membe
       anchor.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
       setExportOpen(false);
-      setStatus('印象数据已导出。');
+      setStatus('群数据已导出。');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '导出印象数据失败');
+      setError(reason instanceof Error ? reason.message : '导出群数据失败');
     } finally {
       setBusy(false);
     }
@@ -174,9 +174,9 @@ export function ImpressionsDataMenu({ sessionId, groupName, groupTagCount, membe
       await post('/api/impressions/import', { ...importDocument, mode });
       await onChanged();
       setImportOpen(false);
-      setStatus('印象数据已导入。');
+      setStatus('群数据已导入。');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '导入印象数据失败');
+      setError(reason instanceof Error ? reason.message : '导入群数据失败');
     } finally {
       setBusy(false);
     }
@@ -222,9 +222,9 @@ export function ImpressionsDataMenu({ sessionId, groupName, groupTagCount, membe
       await post('/api/impressions/reset', { sessionId, confirm: confirmation });
       await onChanged();
       setResetOpen(false);
-      setStatus('已备份并初始化当前群的印象数据。');
+      setStatus('已备份并初始化当前群数据。');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '初始化印象数据失败');
+      setError(reason instanceof Error ? reason.message : '初始化群数据失败');
     } finally {
       setBusy(false);
     }
@@ -237,7 +237,7 @@ export function ImpressionsDataMenu({ sessionId, groupName, groupTagCount, membe
         <button className="text-button" type="button" role="menuitem" disabled={disabled || busy || !sessionId} onClick={openExport}>导出这个群…</button>
         <button className="text-button" type="button" role="menuitem" disabled={disabled || busy || !sessionId} onClick={openImport}>导入…</button>
         <button className="text-button" type="button" role="menuitem" disabled={disabled || busy || !sessionId} onClick={() => { closeMenu(); setVetoOpenRequest((value) => value + 1); }}>已否决的标签…</button>
-        <button className="text-button impressions-data-reset-item" type="button" role="menuitem" disabled={disabled || busy || !sessionId} onClick={openReset}>初始化这个群的印象…</button>
+        <button className="text-button impressions-data-reset-item" type="button" role="menuitem" disabled={disabled || busy || !sessionId} onClick={openReset}>初始化这个群的数据…</button>
       </div>
     </details>
     {status && <p className="impressions-data-status" role="status">{status}</p>}
@@ -245,13 +245,13 @@ export function ImpressionsDataMenu({ sessionId, groupName, groupTagCount, membe
 
     <dialog className="impressions-data-dialog" ref={exportDialogRef} aria-labelledby="impressions-export-title" onClose={() => setExportOpen(false)} onCancel={() => setExportOpen(false)}>
       <header className="impressions-data-dialog-heading">
-        <div><span className="eyebrow">{groupName}</span><h2 id="impressions-export-title">导出印象</h2></div>
+        <div><span className="eyebrow">{groupName}</span><h2 id="impressions-export-title">导出群数据</h2></div>
         <button className="button button-secondary" type="button" onClick={() => setExportOpen(false)}>关闭</button>
       </header>
       <p className="muted">生成一个 JSON 文件，可用于迁移或留存。</p>
       <div className="impressions-data-options">
-        <label><input type="checkbox" checked={labelsIncluded} onChange={(event) => setLabelsIncluded(event.currentTarget.checked)} /><span><strong>标签与一句话印象</strong><small>包含群标签、群友标签和已有摘要。</small></span></label>
-        <label><input type="checkbox" checked={subjectsIncluded} onChange={(event) => setSubjectsIncluded(event.currentTarget.checked)} /><span><strong>主题与别名</strong><small>带上印象中使用的主题词典。</small></span></label>
+        <label><input type="checkbox" checked={labelsIncluded} onChange={(event) => setLabelsIncluded(event.currentTarget.checked)} /><span><strong>标签与群摘要</strong><small>包含群标签、群友标签和已有摘要。</small></span></label>
+        <label><input type="checkbox" checked={subjectsIncluded} onChange={(event) => setSubjectsIncluded(event.currentTarget.checked)} /><span><strong>主题与别名</strong><small>带上群数据中使用的主题词典。</small></span></label>
         <label><input type="checkbox" checked={vetoesIncluded} onChange={(event) => setVetoesIncluded(event.currentTarget.checked)} /><span><strong>否决记录</strong><small>导入到别处后，删掉的标签也不会被重新学回来。</small></span></label>
         <label><input type="checkbox" checked={activityIncluded} onChange={(event) => setActivityIncluded(event.currentTarget.checked)} /><span><strong>出没统计</strong><small>可以从聊天记录重新算，一般不用带。</small></span></label>
         <label><input type="checkbox" checked={l1Included} onChange={(event) => setL1Included(event.currentTarget.checked)} /><span><strong>私聊里了解到的事（L1）</strong><small>只在确认文件不会转发时勾选；L0 永远不导出。</small></span></label>
@@ -269,18 +269,18 @@ export function ImpressionsDataMenu({ sessionId, groupName, groupTagCount, membe
         <button className="button button-secondary" type="button" onClick={() => setImportOpen(false)}>关闭</button>
       </header>
       <label className="impressions-data-file">
-        <span>选择 Aquarium 印象 JSON</span>
+        <span>选择 Aquarium 群数据 JSON</span>
         <input ref={fileInputRef} type="file" accept="application/json,.json" onChange={onFileChange} disabled={busy} />
       </label>
       {fileName && <p className="impressions-data-file-name mono">{fileName}</p>}
       {busy && <p className="muted" aria-live="polite">正在读取并检查文件…</p>}
       {preview && <>
-        {isRecord(importDocument?.groupSummary) && <p className="muted">文件还包含群的一句话印象；{mode === 'merge' ? '合并时保留已有摘要。' : '覆盖时以文件为准。'}</p>}
+        {isRecord(importDocument?.groupSummary) && <p className="muted">文件还包含群摘要；{mode === 'merge' ? '合并时保留已有摘要。' : '覆盖时以文件为准。'}</p>}
         <dl className="impressions-import-counts">
           <div><dt>新增标签</dt><dd>{preview.added}</dd></div>
           <div><dt>与现有冲突</dt><dd>{preview.conflicts}</dd></div>
           <div><dt>否决记录</dt><dd>{preview.vetoes}</dd></div>
-          <div><dt>一句话印象</dt><dd>{preview.summaries} 人</dd></div>
+          <div><dt>成员摘要</dt><dd>{preview.summaries} 人</dd></div>
         </dl>
         <fieldset className="impressions-import-modes">
           <legend>标签冲突处理</legend>
@@ -297,7 +297,7 @@ export function ImpressionsDataMenu({ sessionId, groupName, groupTagCount, membe
 
     <dialog className="impressions-data-dialog impressions-reset-dialog" ref={resetDialogRef} aria-labelledby="impressions-reset-title" onClose={() => setResetOpen(false)} onCancel={() => setResetOpen(false)}>
       <header className="impressions-data-dialog-heading">
-        <div><span className="eyebrow">{groupName}</span><h2 id="impressions-reset-title">初始化这个群的印象</h2></div>
+        <div><span className="eyebrow">{groupName}</span><h2 id="impressions-reset-title">初始化这个群的数据</h2></div>
         <button className="button button-secondary" type="button" onClick={() => setResetOpen(false)}>关闭</button>
       </header>
       <p>会清空：群标签 <span className="mono">{resetCounts?.groupTags ?? '—'}</span> 条、群友标签 <span className="mono">{resetCounts?.memberTags ?? '—'}</span> 条、群级一句话印象 <span className="mono">{resetCounts ? (resetCounts.hasGroupSummary ? '1' : '0') : '—'}</span> 条、否决记录 <span className="mono">{resetCounts?.vetoes ?? '—'}</span> 条、整理水位线和该群近期模型作息丢弃提示。</p>

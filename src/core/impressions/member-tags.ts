@@ -1,13 +1,9 @@
 import type { StoredTag } from '../../store/affect-repo.ts';
-import type { TagCategory } from './tag-model.ts';
-import { ACTIVATION_MIN, MEMBER_TAGS_LIMIT, tagActivation } from './tags.ts';
+import { TAG_CATEGORY_KEYS, type TagCategory } from './tag-model.ts';
+import { MEMBER_TAGS_LIMIT, selectInjectableTags, type TagPromptStateUpdate } from './tags.ts';
 import { redactSensitiveText } from './sensitive-text.ts';
 
 type MemberGroup = 'dislike' | 'personality' | 'fandom' | 'identity' | 'recent' | 'schedule' | 'communication';
-
-const MEMBER_GROUP_ORDER: readonly MemberGroup[] = [
-  'dislike', 'personality', 'fandom', 'identity', 'recent', 'schedule', 'communication',
-];
 
 export interface MemberPromptProfile {
   card?: string;
@@ -54,20 +50,11 @@ function memberGroup(category: TagCategory): MemberGroup | undefined {
 }
 
 function compareTags(left: StoredTag, right: StoredTag): number {
-  const leftGroup = memberGroup(left.category);
-  const rightGroup = memberGroup(right.category);
-  const groupOrder = MEMBER_GROUP_ORDER.indexOf(leftGroup ?? 'communication')
-    - MEMBER_GROUP_ORDER.indexOf(rightGroup ?? 'communication');
-  if (groupOrder !== 0) return groupOrder;
-  if (leftGroup === 'communication' && left.category !== right.category) {
-    const communicationOrder = { speech: 0, catchphrase: 1, social: 2 } as const;
-    return communicationOrder[left.category as keyof typeof communicationOrder]
-      - communicationOrder[right.category as keyof typeof communicationOrder];
-  }
-  if (left.source !== right.source) return left.source === 'manual' ? -1 : 1;
-  if (left.samples !== right.samples) return right.samples - left.samples;
-  if (left.lastSeen !== right.lastSeen) return right.lastSeen - left.lastSeen;
-  return left.id - right.id;
+  const leftOrder = TAG_CATEGORY_KEYS.indexOf(left.category as typeof TAG_CATEGORY_KEYS[number]);
+  const rightOrder = TAG_CATEGORY_KEYS.indexOf(right.category as typeof TAG_CATEGORY_KEYS[number]);
+  return leftOrder - rightOrder
+    || (left.norm < right.norm ? -1 : left.norm > right.norm ? 1 : 0)
+    || left.id - right.id;
 }
 
 function uniqueTexts(tags: readonly StoredTag[]): string[] {
@@ -117,9 +104,7 @@ function fandomText(tags: readonly StoredTag[]): string {
 }
 
 function identityText(tags: readonly StoredTag[]): string | undefined {
-  const selfReports = uniqueTexts(tags
-    .filter((tag) => tag.origin === 'self_report')
-    .sort((left, right) => left.firstSeen - right.firstSeen || left.id - right.id));
+  const selfReports = uniqueTexts(tags.filter((tag) => tag.origin === 'self_report'));
   const inferred = uniqueTexts(tags.filter((tag) => tag.origin === 'inferred'));
   const parts = [
     ...(selfReports.length === 1 ? [`自称 ${selfReports[0]}`] : []),
@@ -129,22 +114,15 @@ function identityText(tags: readonly StoredTag[]): string | undefined {
   return parts.length > 0 ? parts.join('、') : undefined;
 }
 
-function textLength(value: string): number {
-  return Array.from(value).length;
-}
-
 export function formatMemberTags(tags: readonly StoredTag[]): string {
   const ordered = [...tags].filter((tag) => memberGroup(tag.category)).sort(compareTags);
   const groups = [
-    labeledGroup('雷点', ordered.filter((tag) => tag.category === 'dislike')),
+    identityText(ordered.filter((tag) => tag.category === 'identity')),
     labeledGroup('性格', ordered.filter((tag) => tag.category === 'personality')),
     (() => {
       const fandom = ordered.filter((tag) => tag.category === 'fandom');
       return fandom.length > 0 ? `成分：${fandomText(fandom)}` : undefined;
     })(),
-    identityText(ordered.filter((tag) => tag.category === 'identity')),
-    labeledGroup('近况', ordered.filter((tag) => tag.category === 'recent')),
-    labeledGroup('作息', ordered.filter((tag) => tag.category === 'schedule')),
     (() => {
       const communication = [
         labeledGroup('说话风格', ordered.filter((tag) => tag.category === 'speech')),
@@ -158,6 +136,9 @@ export function formatMemberTags(tags: readonly StoredTag[]): string {
       ].filter((group): group is string => group !== undefined);
       return communication.length > 0 ? communication.join('、') : undefined;
     })(),
+    labeledGroup('近况', ordered.filter((tag) => tag.category === 'recent')),
+    labeledGroup('雷点', ordered.filter((tag) => tag.category === 'dislike')),
+    labeledGroup('作息', ordered.filter((tag) => tag.category === 'schedule')),
   ];
   return groups.filter((group): group is string => group !== undefined).join('；');
 }
@@ -166,46 +147,16 @@ export function buildMemberTagPrompt(
   tags: readonly StoredTag[],
   now: number,
   profile?: MemberPromptProfile,
-): { text: string; dropped: number; profileText: string } {
-  const eligible = tags
-    .filter((tag) => !tag.locked
-      && memberGroup(tag.category) !== undefined
-      && tag.category !== 'misc'
-      && tag.category !== 'atmosphere'
-      && tag.status === 'confirmed'
-      && tagActivation(tag, now) >= ACTIVATION_MIN
-      && (tag.category !== 'identity' || tag.origin === 'self_report' || tag.origin === 'inferred'))
-    .sort(compareTags);
-  const selected: StoredTag[] = [];
-  let chars = 0;
-  let dropped = 0;
-  for (const tag of eligible) {
-    if (selected.length >= MEMBER_TAGS_LIMIT.max) {
-      dropped += 1;
-      continue;
-    }
-    const length = textLength(tag.text) + (selected.length > 0 ? 1 : 0);
-    if (chars + length > MEMBER_TAGS_LIMIT.maxChars) {
-      dropped += 1;
-      continue;
-    }
-    chars += length;
-    selected.push(tag);
-  }
-
-  let retained = selected;
-  let text = formatMemberTags(retained);
-  while (textLength(text) > MEMBER_TAGS_LIMIT.maxChars && retained.length > 0) {
-    const groups = [...new Set(retained.map((tag) => memberGroup(tag.category)))]
-      .filter((group): group is MemberGroup => group !== undefined)
-      .sort((left, right) => MEMBER_GROUP_ORDER.indexOf(left) - MEMBER_GROUP_ORDER.indexOf(right));
-    const lastGroup = groups.at(-1);
-    if (!lastGroup) break;
-    const removable = retained.filter((tag) => memberGroup(tag.category) === lastGroup);
-    const removeIds = new Set((groups.length === 1 ? removable.slice(-1) : removable).map((tag) => tag.id));
-    retained = retained.filter((tag) => !removeIds.has(tag.id));
-    dropped += removeIds.size;
-    text = formatMemberTags(retained);
-  }
-  return { text, dropped, profileText: formatMemberProfileContext(profile) };
+): { text: string; dropped: number; profileText: string; stateUpdates: TagPromptStateUpdate[] } {
+  const selection = selectInjectableTags(tags, now, MEMBER_TAGS_LIMIT, {
+    isEligible: (tag) => memberGroup(tag.category) !== undefined
+      && (tag.category !== 'identity' || tag.origin === 'self_report' || tag.origin === 'inferred'),
+    renderText: formatMemberTags,
+  });
+  return {
+    text: formatMemberTags(selection.tags),
+    dropped: selection.dropped,
+    profileText: formatMemberProfileContext(profile),
+    stateUpdates: selection.stateUpdates,
+  };
 }

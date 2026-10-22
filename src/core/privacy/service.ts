@@ -4,6 +4,7 @@ import { callSlot } from '../../llm/slots.ts';
 import type { StoreRepository } from '../../store/repository.ts';
 import type { NewPrivateFactRecord, PrivateFactEvidence, PrivateFactRecord } from '../../store/privacy-repo.ts';
 import type { ExtractPrivatePromptTemplate, ReplySystemTemplate } from '../prompt/templates.ts';
+import { persistTagPromptStates } from '../impressions/prompt-state.ts';
 import { buildPrivateExtractionMessages, parsePrivateFactResponse } from './extract.ts';
 import { buildPrivateFactsBlock } from './prompt.ts';
 import { decide } from './policy.ts';
@@ -339,6 +340,7 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
           ...input,
           facts: options.repository.listPrivateFactsForOwner(input.session.account, input.session.peer),
           groupTags: options.repository.listGroupTagsForUser(input.session.account, input.session.peer),
+          onTagPromptStates: (updates) => persistTagPromptStates(options.repository, updates),
         });
       } catch {
         reportError(input.session.account, sessionIdValue);

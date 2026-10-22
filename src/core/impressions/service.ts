@@ -27,6 +27,7 @@ import {
 import { isTagCategoryForScope, prepareTagText, tagKindFor, type TagCategory, type TagDropReason } from './tag-model.ts';
 import { mapMessageToMainIdentity } from '../profiles/account-identity.ts';
 import { buildImpressionsPromptBlocks } from './prompt-blocks.ts';
+import { persistTagPromptStates } from './prompt-state.ts';
 import type { TagSubjectRepository } from '../../store/tag-subject-repo.ts';
 import { recordScheduleTagDrop } from './record-tag-drop.ts';
 import {
@@ -297,6 +298,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
           text: outcome.text,
           norm: outcome.norm,
           ...profile,
+          inPrompt: false,
           status: 'candidate',
           source: 'auto',
           samples: 1,
@@ -387,6 +389,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         text: outcome.text,
         norm: outcome.norm,
         ...profile,
+        inPrompt: false,
         status: 'candidate',
         source: 'auto',
         samples: 1,
@@ -587,7 +590,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     },
 
     promptBlocks(input) {
-      return buildImpressionsPromptBlocks(options.repository, input);
+      return buildImpressionsPromptBlocks(options.repository, input, (updates) => persistTagPromptStates(options.repository, updates));
     },
 
     async idle() {

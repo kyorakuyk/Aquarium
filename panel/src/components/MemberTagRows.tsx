@@ -3,9 +3,12 @@ import { ImpressionTag } from './ImpressionTag.tsx';
 import { TagSubjectManagerDialog } from './TagSubjectManagerDialog.tsx';
 import { containsSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 import {
+  formatTagConfidence,
+  knowledgeTags,
   memberIdentityInjectionLabel,
   memberIdentityMbti,
   recentTagFadeLabel,
+  tagOriginLabel,
 } from '../impressions-model.ts';
 import type { TagCategory, TagPolarity, TagStatus, TagView } from '../api.ts';
 
@@ -54,6 +57,37 @@ function displayText(tag: TagView): string {
     tag.category === 'recent' ? recentTagFadeLabel(tag, Date.now()) ?? '' : '',
   ].filter(Boolean);
   return badges.length > 0 ? `${base} · ${badges.join(' · ')}` : base;
+}
+
+function KnowledgeTagEntry({ tag, busy, onAction, onRename, onLock, onDelete }: {
+  tag: TagView;
+  busy: boolean;
+  onAction: TagAction;
+  onRename: TagRename;
+  onLock: TagLock;
+  onDelete: TagDelete;
+}) {
+  const confidence = formatTagConfidence(tag.activation);
+  const origin = tagOriginLabel(tag.origin);
+  return <div className="profile-tag-entry">
+    <ImpressionTag
+      tag={tag}
+      displayText={displayText(tag)}
+      busy={busy}
+      onAction={onAction}
+      onRename={onRename}
+      onLock={onLock}
+      onDelete={onDelete}
+    />
+    <span className="profile-tag-meta" aria-label={`置信度 ${confidence}`}>
+      <span className="profile-tag-meta-label">置信度</span>
+      <span className="profile-tag-meta-value mono">{confidence}</span>
+    </span>
+    <span className="profile-tag-meta" aria-label={`来源 ${origin}`}>
+      <span className="profile-tag-meta-label">来源</span>
+      <span className="profile-tag-meta-value">{origin}</span>
+    </span>
+  </div>;
 }
 
 function ProfileTagAdd({ label, category, busy, onSubmit }: {
@@ -160,10 +194,9 @@ function TagRow({ label, category, tags, sessionId, busy, onAction, onRename, on
         const identity = memberIdentityMbti(tags);
         return identity && <span className="profile-mbti" title={identity.title}>{identity.text}</span>;
       })()}
-      {active.map((tag) => <ImpressionTag
+      {active.map((tag) => <KnowledgeTagEntry
         key={tag.id}
         tag={tag}
-        displayText={displayText(tag)}
         busy={busy}
         onAction={onAction}
         onRename={onRename}
@@ -191,10 +224,9 @@ function TagRow({ label, category, tags, sessionId, busy, onAction, onRename, on
         aria-expanded={showRejected}
         onClick={() => setShowRejected((value) => !value)}
       >{showRejected ? '收起已否决' : `+${rejected.length} 已否决`}</button>}
-      {showRejected && rejected.map((tag) => <ImpressionTag
+      {showRejected && rejected.map((tag) => <KnowledgeTagEntry
         key={tag.id}
         tag={tag}
-        displayText={displayText(tag)}
         busy={busy}
         onAction={onAction}
         onRename={onRename}
@@ -221,7 +253,8 @@ export function MemberTagRows({ sessionId, tags, busy, onAction, onRename, onLoc
   onAdd: MemberTagAdd;
   scope?: 'member' | 'group';
 }) {
-  const scheduleTags = tags.filter((tag) => tag.category === 'schedule');
+  const visibleTags = knowledgeTags(tags);
+  const scheduleTags = visibleTags.filter((tag) => tag.category === 'schedule');
   const rows = scope === 'group' ? GROUP_ROWS : PROFILE_ROWS;
   return <div className="profile-tag-rows">
     <TagRow
@@ -240,7 +273,7 @@ export function MemberTagRows({ sessionId, tags, busy, onAction, onRename, onLoc
       key={category}
       label={label}
       category={category}
-      tags={tags.filter((tag) => tag.category === category)}
+      tags={visibleTags.filter((tag) => tag.category === category)}
       sessionId={sessionId}
       busy={busy}
       onAction={onAction}

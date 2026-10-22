@@ -58,7 +58,11 @@ test('画像卡实际注入行与提示词一致，并只包含 fact 标签', as
 
     const response = await app.request(`/api/impressions/${key}`, { headers: authHeaders() });
     const body = await response.json() as {
-      members: Array<{ memberTagsAllowed: boolean; memberTagsText: string | null }>;
+      members: Array<{
+        memberTagsAllowed: boolean;
+        memberTagsText: string | null;
+        tags: Array<{ text: string; kind: 'fact' | 'view' }>;
+      }>;
     };
     const member = body.members[0]!;
     const storedTags = repository.listTagsForSubject(account, key, 42);
@@ -70,6 +74,8 @@ test('画像卡实际注入行与提示词一致，并只包含 fact 标签', as
 
     assert.equal(response.status, 200);
     assert.equal(member.memberTagsAllowed, true);
+    assert.equal(member.tags.find((tag) => tag.text === '幽默')?.kind, 'view');
+    assert.equal(member.tags.find((tag) => tag.text === 'INTJ')?.kind, 'fact');
     assert.equal(member.memberTagsText, expected);
     assert.equal(member.memberTagsText?.includes('幽默'), false);
     assert.equal(member.memberTagsText?.includes('CS2'), false);

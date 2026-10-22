@@ -13,13 +13,14 @@ function tag(overrides: Partial<StoredTag> = {}): StoredTag {
     sessionId: '900000001:group:123456',
     userId: 42,
     text: '标签',
-    norm: '标签',
+    norm: overrides.norm ?? overrides.text ?? '标签',
     category: 'personality',
     subject: null,
     polarity: null,
     origin: 'inferred',
     locked: false,
     kind: 'view',
+    inPrompt: false,
     status: 'confirmed',
     source: 'auto',
     samples: 2,
@@ -51,9 +52,9 @@ test('群友标签按规定分组顺序格式化为快照文本', () => {
 
   assert.equal(
     rendered,
-    '雷点：讨厌被催；性格：慢热；成分：游戏（守望先锋/CS2，不喜欢原神）；'
-      + '自称在 INTJ/INFJ 间摇摆、（推测，仅供参考，别据此下结论）INTP；'
-      + '近况：准备搬家；作息：夜猫子；说话风格：简短、社交方式：熟人慢热',
+    '自称在 INFJ/INTJ 间摇摆、（推测，仅供参考，别据此下结论）INTP；'
+      + '性格：慢热；成分：游戏（CS2/守望先锋，不喜欢原神）；'
+      + '说话风格：简短、社交方式：熟人慢热；近况：准备搬家；雷点：讨厌被催；作息：夜猫子',
   );
 });
 
@@ -81,20 +82,25 @@ test('成员提示筛除 locked、misc 与未确认的 inferred identity', () =>
     tag({ id: 4, category: 'schedule', text: '夜猫子' }),
   ], now);
 
-  assert.deepEqual(result, { text: '作息：夜猫子', dropped: 0, profileText: '' });
+  assert.deepEqual(result, {
+    text: '作息：夜猫子',
+    dropped: 0,
+    profileText: '',
+    stateUpdates: [{ id: 4, inPrompt: true }],
+  });
 });
 
-test('超过 160 字时从末尾的组开始丢弃并计数', () => {
+test('成员提示超限时优先丢弃置信度最低的条目', () => {
   const long = '夜'.repeat(30);
   const result = buildMemberTagPrompt([
     tag({ id: 1, category: 'dislike', text: long }),
-    tag({ id: 2, category: 'personality', text: long }),
+    tag({ id: 2, category: 'personality', text: long, lastSeen: now - 22 * 24 * 60 * 60 * 1000 }),
     tag({ id: 3, category: 'recent', text: long }),
     tag({ id: 4, category: 'schedule', text: long }),
     tag({ id: 5, category: 'speech', text: long }),
   ], now);
 
   assert.ok(Array.from(result.text).length <= 160);
-  assert.equal(result.text.includes('说话风格'), false);
+  assert.equal(result.text.includes('性格'), false);
   assert.equal(result.dropped, 1);
 });

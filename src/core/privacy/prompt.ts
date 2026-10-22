@@ -1,6 +1,6 @@
 import type { StoredTag } from '../../store/affect-repo.ts';
 import type { PrivateFactRecord } from '../../store/privacy-repo.ts';
-import { selectInjectableTags } from '../impressions/tags.ts';
+import { selectInjectableTags, type TagPromptStateUpdate } from '../impressions/tags.ts';
 import { formatMemberTags } from '../impressions/member-tags.ts';
 import { sessionId, type SessionKey } from '../shared/events.ts';
 import type { ReplySystemTemplate } from '../prompt/templates.ts';
@@ -19,6 +19,7 @@ export function buildPrivateFactsBlock(input: {
   template: ReplySystemTemplate;
   facts: readonly PrivateFactRecord[];
   groupTags: readonly StoredTag[];
+  onTagPromptStates?: (updates: readonly TagPromptStateUpdate[]) => void;
 }): string | undefined {
   if (input.session.kind !== 'private') return undefined;
 
@@ -40,6 +41,7 @@ export function buildPrivateFactsBlock(input: {
     .sort((left, right) => right.updatedAt - left.updatedAt || right.id - left.id);
   const groupTags = input.groupTags.filter((tag) => tag.account === input.session.account
     && tag.userId === ownerId
+    && tag.kind === 'fact'
     && decide({
       info: { origin: 'group', sessionId: tag.sessionId, ownerId: tag.userId },
       target,
@@ -57,17 +59,12 @@ export function buildPrivateFactsBlock(input: {
 
   const remainingCount = privateFactLimit.max - selectedFacts.length;
   const remainingCharacters = Math.max(0, privateFactLimit.maxChars - characters - (selectedFacts.length > 0 ? 1 : 0));
-  const tagCandidates = selectInjectableTags(groupTags, input.now, {
+  const tagSelection = selectInjectableTags(groupTags, input.now, {
     max: remainingCount,
     maxChars: remainingCharacters,
-  }).tags;
-  const selectedTags: StoredTag[] = [];
-  for (const tag of tagCandidates) {
-    const formattedTags = formatMemberTags([...selectedTags, tag]);
-    const combined = [...selectedFacts, formattedTags].join('；');
-    if (textLength(combined) <= privateFactLimit.maxChars) selectedTags.push(tag);
-  }
-  const formattedTags = selectedTags.length > 0 ? formatMemberTags(selectedTags) : undefined;
+  }, { renderText: formatMemberTags });
+  input.onTagPromptStates?.(tagSelection.stateUpdates);
+  const formattedTags = tagSelection.tags.length > 0 ? formatMemberTags(tagSelection.tags) : undefined;
   const factsText = [...selectedFacts, ...(formattedTags ? [formattedTags] : [])].join('；');
   if (factsText.length === 0) return undefined;
 

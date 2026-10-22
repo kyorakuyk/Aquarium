@@ -39,7 +39,7 @@ function fact(input: {
   };
 }
 
-function promptBlockMethod(service: unknown): (input: {
+function promptBlockMethod(service: object): (input: {
   session: SessionKey;
   name: string;
   now: number;
@@ -47,6 +47,7 @@ function promptBlockMethod(service: unknown): (input: {
 }) => string | undefined {
   const method = Reflect.get(service, 'promptBlock');
   assert.equal(typeof method, 'function');
+  if (typeof method !== 'function') throw new TypeError('Expected promptBlock to be callable');
   return method as (input: {
     session: SessionKey;
     name: string;
@@ -248,5 +249,41 @@ test('context injects the privateFacts block into a real private reply prompt', 
       promptBlocks?: Array<{ id: string }>;
     };
     assert.ok(detail.promptBlocks?.some(({ id }) => id === 'privateFacts'));
+  });
+});
+
+test('private prompt injects only fact tags and persists their threshold state', async () => {
+  await withRepository(async (repository) => {
+    const insertTag = (category: 'schedule' | 'personality', text: string) => repository.insertTag({
+      account: groupSession.account,
+      sessionId: `${groupSession.account}:group:1001`,
+      userId: ownerId,
+      text,
+      norm: text,
+      category,
+      subject: null,
+      polarity: null,
+      origin: 'inferred',
+      locked: false,
+      status: 'confirmed',
+      source: 'auto',
+      samples: 4,
+      evidence: [],
+      firstSeen: now,
+      lastSeen: now,
+      supersededBy: null,
+      updatedAt: now,
+    });
+    const factTagId = insertTag('schedule', '夜猫子');
+    const viewTagId = insertTag('personality', '主观性格');
+    const service = createPrivateFactsService({ repository, getConfig: makeConfig });
+    const block = promptBlockMethod(service)({ session: privateSession, name: '小明', now, template });
+    const storedFact = repository.tagById(factTagId);
+    const storedView = repository.tagById(viewTagId);
+
+    assert.ok(block?.includes('夜猫子'), block);
+    assert.equal(block?.includes('主观性格'), false);
+    assert.equal(storedFact && Reflect.get(storedFact, 'inPrompt'), true);
+    assert.equal(storedView && Reflect.get(storedView, 'inPrompt'), false);
   });
 });
