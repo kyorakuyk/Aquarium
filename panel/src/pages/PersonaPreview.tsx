@@ -53,14 +53,14 @@ export function PersonaPreview({
             <h2 id="persona-preview-title">实际注入</h2>
             <p className="muted">
               {previewAccounts.length === 0
-                ? '未绑定账号，昵称占位符使用默认值。'
-                : `按 QQ ${previewAccountId} 的昵称“${previewAccounts.find((item) => item.account === previewAccountId)?.name ?? '水族箱'}”预览。`}
+                ? '没有可选账号，昵称占位符使用默认值。'
+                : `按 QQ ${previewAccountId} 的昵称“${previewAccounts.find((item) => item.account === previewAccountId)?.name ?? '水族箱'}”预览；切换操作作用于此账号。`}
             </p>
           </div>
           <div className="persona-preview-controls">
             {previewAccounts.length > 1 && (
               <label className="persona-preview-account">
-                <span>预览账号</span>
+                <span>当前账号</span>
                 <select value={previewAccountId ?? ''} onChange={(event) => onPreviewAccountChange(Number(event.currentTarget.value))}>
                   {previewAccounts.map((account) => <option key={account.account} value={account.account}>QQ {account.account} · {account.name}</option>)}
                 </select>

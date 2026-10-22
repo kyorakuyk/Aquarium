@@ -53,6 +53,7 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const [saved, setSaved] = useState(false);
   const [versionRefreshKey, setVersionRefreshKey] = useState(0);
   const [error, setError] = useState('');
+  const [bindingMessage, setBindingMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [newId, setNewId] = useState('');
@@ -75,11 +76,14 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   }, []);
 
   const boundAccounts = accounts.filter((account) => account.persona === selectedId);
-  const previewAccount = boundAccounts.find((account) => account.account === previewAccountId) ?? boundAccounts[0];
+  const previewAccount = accounts.find((account) => account.account === previewAccountId)
+    ?? boundAccounts[0]
+    ?? accounts[0];
   const previewName = previewAccount?.name.trim() || '水族箱';
 
   useEffect(() => {
     setPreviewAccountId(null);
+    setBindingMessage('');
   }, [selectedId]);
 
   useEffect(() => {
@@ -329,6 +333,28 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
     }
   }
 
+  async function bindSelectedAccountPersona() {
+    if (!selectedId || !previewAccount || busy) return;
+    if (dirty && !window.confirm('当前人设有未保存更改；切换账号绑定不会保存这些更改，仍要继续吗？')) return;
+    setBusy(true);
+    setError('');
+    setBindingMessage('');
+    try {
+      const updated = await apiRequest<{ account: number; persona: string }>(
+        `/api/accounts/${previewAccount.account}/persona`,
+        { method: 'PUT', body: JSON.stringify({ persona: selectedId }) },
+      );
+      setAccounts((current) => current.map((account) => account.account === updated.account
+        ? { ...account, persona: updated.persona }
+        : account));
+      setBindingMessage('重启机器人后生效');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '切换人设失败');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function onDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     const file = event.dataTransfer.files[0];
@@ -391,8 +417,13 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
         <>
           <div className="persona-editor-heading">
             <div><h2>{selected.id}</h2><p className="muted">{selected.source === 'built-in' ? '内置人设副本' : selected.filename} · {boundAccounts.length ? `绑定 QQ ${boundAccounts.map((account) => account.account).join('、')}` : '尚无账号绑定'}</p></div>
-            <div className="persona-save-actions"><span className={dirty ? 'is-dirty' : ''}>{saveLabel}</span><button className="button button-primary" type="button" disabled={busy || !dirty || Boolean(sourceError)} onClick={() => void save()}>保存</button></div>
+            <div className="persona-save-actions">
+              <span className={dirty ? 'is-dirty' : ''}>{saveLabel}</span>
+              <button className="button button-secondary" type="button" disabled={busy || !previewAccount} onClick={() => void bindSelectedAccountPersona()}>切换为此人格</button>
+              <button className="button button-primary" type="button" disabled={busy || !dirty || Boolean(sourceError)} onClick={() => void save()}>保存</button>
+            </div>
           </div>
+          {bindingMessage && <p className="muted" role="status">{bindingMessage}</p>}
           <div className="persona-workspace-v2">
             <PersonaFields form={form} onChange={updateForm} onFocus={setActiveBlockId} disabled={busy || Boolean(sourceError)} />
             <PersonaPreview
@@ -405,9 +436,9 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
               sourceText={personaSourceForEditor(sourceText)}
               sourceError={sourceError}
               onSourceChange={changeSource}
-              previewAccounts={boundAccounts}
+              previewAccounts={accounts}
               previewAccountId={previewAccount?.account ?? null}
-              onPreviewAccountChange={setPreviewAccountId}
+              onPreviewAccountChange={(account) => { setPreviewAccountId(account); setBindingMessage(''); }}
               disabled={busy}
               onTryChat={() => onNavigate('sandbox')}
               personaId={selected.id}

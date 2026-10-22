@@ -51,6 +51,7 @@ const personaBodySchema = z.object({
   markdown: z.string().max(100_000),
   traits: personaTraitsSchema.optional(),
 }).strict();
+const accountPersonaSchema = z.object({ persona: z.string() }).strict();
 const personaImportSchema = z.object({
   filename: z.string().min(1).max(255),
   text: z.string().min(1).max(100_000),
@@ -82,6 +83,8 @@ const personaImportResultSchema = z.object({
 
 interface PersonaRouteOptions {
   getConfig: () => AquariumConfig;
+  saveConfig: (config: AquariumConfig) => void | Promise<void>;
+  serializeConfigWrite: <T>(task: () => Promise<T>) => Promise<T>;
   repository: StoreRepository;
   callModel?: PipelineModelCall;
 }
@@ -116,6 +119,45 @@ function parseBody<T>(body: unknown, schema: z.ZodType<T>): T | undefined {
 }
 
 export function registerPersonaRoutes(app: Hono, root: string, options: PersonaRouteOptions): void {
+  app.put('/api/accounts/:uin/persona', async (context) => {
+    const uinText = context.req.param('uin');
+    if (!/^[1-9]\d*$/u.test(uinText)) return context.json({ error: 'Invalid account UIN' }, 400);
+    const uin = Number(uinText);
+    if (!Number.isSafeInteger(uin)) return context.json({ error: 'Invalid account UIN' }, 400);
+
+    let rawBody: unknown;
+    try { rawBody = await context.req.json(); } catch { return context.json({ error: 'Invalid JSON' }, 400); }
+    const body = parseBody(rawBody, accountPersonaSchema);
+    if (!body) return context.json({ error: 'Invalid persona binding' }, 400);
+    if (!validPersonaId(body.persona.toLowerCase())) return context.json({ error: 'Invalid persona ID' }, 400);
+
+    const personaFile = [
+      personaPath(root, 'data/personas', body.persona),
+      personaPath(root, 'personas', body.persona),
+    ].find((candidate) => existsSync(candidate));
+    if (!personaFile) return context.json({ error: 'Persona not found' }, 404);
+
+    return options.serializeConfigWrite(async () => {
+      const config = options.getConfig();
+      const account = config.accounts.find((candidate) => candidate.uin === uin);
+      if (!account) return context.json({ error: 'Account not found' }, 404);
+      if (account.persona === body.persona) {
+        return context.json({ account: account.uin, persona: account.persona });
+      }
+
+      const nextConfig: AquariumConfig = {
+        ...config,
+        accounts: config.accounts.map((candidate) => candidate.uin === uin
+          ? { ...candidate, persona: body.persona }
+          : candidate),
+      };
+      await options.saveConfig(nextConfig);
+      const updatedAccount = nextConfig.accounts.find((candidate) => candidate.uin === uin);
+      if (!updatedAccount) return context.json({ error: 'Account not found' }, 404);
+      return context.json({ account: updatedAccount.uin, persona: updatedAccount.persona });
+    });
+  });
+
   app.get('/api/personas', (context) => {
     const ids = new Set([
       ...listPersonaIds(path.join(root, 'personas')),
