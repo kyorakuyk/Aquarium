@@ -13,6 +13,8 @@ import { writeImpressionsBackup } from './impressions-data-backup.ts';
 import { applyImpressionsImport, previewImpressionsImport } from './impressions-data-import.ts';
 import { importFileSchema, impressionsResetSchema } from './impressions-data-schema.ts';
 import type { ContactSnapshot, PanelAccountRuntime } from './types.ts';
+import { registerKinGroupRoutes } from './kin-group-routes.ts';
+import { registerViewImpressionsRoutes } from './view-impressions-routes.ts';
 
 const DEFAULT_INCLUDES = ['tags', 'summaries', 'subjects', 'vetoes', 'relations'] as const;
 const ALLOWED_INCLUDES = new Set([...DEFAULT_INCLUDES, 'activity', 'l1']);
@@ -174,6 +176,20 @@ function exportDocument(options: ImpressionsDataRouteOptions, input: {
 }
 
 export function registerImpressionsDataRoutes(app: Hono, options: ImpressionsDataRouteOptions): void {
+  registerKinGroupRoutes(app, {
+    repository: options.repository,
+    accounts: () => options.accounts().map((runtime) => ({
+      account: runtime.adapter.account,
+      name: runtime.getNickname(),
+    })),
+    now: options.now,
+  });
+  registerViewImpressionsRoutes(app, {
+    repository: options.repository,
+    accounts: options.accounts,
+    now: options.now,
+  });
+
   app.post('/api/impressions/import/preview', async (context) => {
     let rawBody: unknown;
     try { rawBody = await context.req.json(); } catch { return context.json({ error: 'Invalid JSON' }, 400); }

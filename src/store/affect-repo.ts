@@ -75,7 +75,8 @@ export interface StoredAffinityEvent extends AffinityEventRecord {
 export type AffectRepositoryQueries = Pick<StoreRepository,
   'getMoodState' | 'saveMoodState' | 'recordMoodEvent' | 'recentMoodEvents' | 'moodEventsSince' | 'latestMoodEventAtOrBefore'
   | 'getAffinityState' | 'listAffinityStates' | 'saveAffinityState' | 'recordAffinityEvent' | 'recentAffinityEvents' | 'affinityEventsSince' | 'latestSenderNameForAccount'
-  | 'insertTag' | 'tagById' | 'deleteTag' | 'listTagsForSubject' | 'listTagsForSession' | 'listGroupTagsForUser' | 'listViewTagsForAccount' | 'senderNameFor'
+  | 'insertTag' | 'tagById' | 'deleteTag' | 'listTagsForSubject' | 'listTagsForSession' | 'listGroupTagsForUser' | 'listViewTagsForAccount'
+  | 'listFactTagsForAccounts' | 'listRelayTagsForAccount' | 'senderNameFor'
   | 'updateTag' | 'deleteActivityTag' | 'getTagRun' | 'saveTagRun'
   | 'deleteTagAndCreateVeto' | 'insertTagVeto' | 'deleteTagVetoesForSession' | 'listTagVetoes' | 'isTagVetoed' | 'deleteTagVeto'
   | 'countMessagesAfter'

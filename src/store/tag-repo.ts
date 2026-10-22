@@ -44,6 +44,8 @@ export interface TagRecord {
   locked: boolean;
   status: TagStatus;
   source: TagSource;
+  sourceAccount?: number | null;
+  sourceFactId?: number | null;
   samples: number;
   evidence: TagEvidence[];
   firstSeen: number;
@@ -68,6 +70,8 @@ export interface TagUpdate {
   polarity?: TagPolarity;
   origin?: TagOrigin;
   source?: TagSource;
+  sourceAccount?: number | null;
+  sourceFactId?: number | null;
   locked?: boolean;
   status?: TagStatus;
   samples?: number;
@@ -93,6 +97,8 @@ export interface TagRepositoryQueries {
   listTagsForSession(account: number, sessionId: string): StoredTag[];
   listGroupTagsForUser(account: number, userId: number): StoredTag[];
   listViewTagsForAccount(account: number): StoredTag[];
+  listFactTagsForAccounts(accounts: readonly number[]): StoredTag[];
+  listRelayTagsForAccount(account: number): StoredTag[];
   listUnlockedMiscTags(): StoredTag[];
   countLockedMiscTags(): number;
   senderNameFor(sessionId: string, senderId: number): string | undefined;
@@ -105,7 +111,7 @@ export interface TagRepositoryQueries {
 
 const TAG_COLUMNS = [
   'id', 'account', 'session_id', 'user_id', 'text', 'norm', 'category', 'kind', 'in_prompt', 'subject', 'polarity', 'origin', 'locked',
-  'status', 'source', 'samples', 'evidence_json', 'first_seen', 'last_seen', 'superseded_by', 'updated_at', 'certain',
+  'status', 'source', 'source_account', 'source_fact_id', 'samples', 'evidence_json', 'first_seen', 'last_seen', 'superseded_by', 'updated_at', 'certain',
 ].join(', ');
 
 function numberValue(value: unknown, field: string): number {
@@ -161,6 +167,8 @@ function tagRecord(row: Record<string, unknown>): StoredTag {
     locked: lockedValue === 1,
     status: stringValue(row.status, 'status') as TagStatus,
     source: stringValue(row.source, 'source') as TagSource,
+    sourceAccount: nullableNumber(row.source_account, 'source_account'),
+    sourceFactId: nullableNumber(row.source_fact_id, 'source_fact_id'),
     samples: numberValue(row.samples, 'samples'),
     evidence: JSON.parse(stringValue(row.evidence_json, 'evidence_json')) as TagEvidence[],
     firstSeen: numberValue(row.first_seen, 'first_seen'),
@@ -179,6 +187,8 @@ const tagUpdateColumns: Record<keyof TagUpdate, string> = {
   polarity: 'polarity',
   origin: 'origin',
   source: 'source',
+  sourceAccount: 'source_account',
+  sourceFactId: 'source_fact_id',
   locked: 'locked',
   status: 'status',
   samples: 'samples',
@@ -194,8 +204,8 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
   const insertTag = database.prepare(`
     INSERT INTO tags
       (account, session_id, user_id, text, norm, category, kind, subject, polarity, origin, locked,
-       status, source, samples, evidence_json, first_seen, last_seen, superseded_by, updated_at, certain)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       status, source, source_account, source_fact_id, samples, evidence_json, first_seen, last_seen, superseded_by, updated_at, certain)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const selectTagById = database.prepare(`SELECT ${TAG_COLUMNS} FROM tags WHERE id = ?`);
   const deleteTagById = database.prepare('DELETE FROM tags WHERE id = ?');
@@ -217,6 +227,12 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
     FROM tags
     WHERE account = ? AND kind = 'view'
     ORDER BY user_id, category, norm, id
+  `);
+  const selectRelayTagsForAccount = database.prepare(`
+    SELECT ${TAG_COLUMNS}
+    FROM tags
+    WHERE account = ? AND source_fact_id IS NOT NULL
+    ORDER BY source_account, source_fact_id, id
   `);
   const selectGroupTagsForUser = database.prepare(`
     SELECT ${TAG_COLUMNS}
@@ -262,6 +278,13 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
 
   return {
     insertTag(tag) {
+      const sourceAccount = tag.sourceAccount ?? null;
+      const sourceFactId = tag.sourceFactId ?? null;
+      if ((sourceAccount === null) !== (sourceFactId === null)
+        || (sourceAccount !== null && (!Number.isSafeInteger(sourceAccount) || sourceAccount <= 0))
+        || (sourceFactId !== null && (!Number.isSafeInteger(sourceFactId) || sourceFactId <= 0))) {
+        throw new RangeError('转述标签来源无效');
+      }
       const subject = tag.subject === null
         ? null
         : subjects.canonicalTagSubject(tag.account, tag.category, tag.subject);
@@ -280,6 +303,8 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
         tag.locked ? 1 : 0,
         tag.status,
         tag.source,
+        sourceAccount,
+        sourceFactId,
         tag.samples,
         JSON.stringify(tag.evidence),
         tag.firstSeen,
@@ -322,6 +347,28 @@ export function createTagQueries(database: DatabaseSync): TagRepositoryQueries {
 
     listViewTagsForAccount(account) {
       const rows = selectViewTagsForAccount.all(account) as Array<Record<string, unknown>>;
+      return rows.map(tagRecord);
+    },
+
+    listFactTagsForAccounts(accounts) {
+      const validAccounts = [...new Set(accounts)];
+      if (validAccounts.some((account) => !Number.isSafeInteger(account) || account <= 0)) {
+        throw new RangeError('眷属账号无效');
+      }
+      if (validAccounts.length === 0) return [];
+      const placeholders = validAccounts.map(() => '?').join(', ');
+      const rows = database.prepare(`
+        SELECT ${TAG_COLUMNS}
+        FROM tags
+        WHERE account IN (${placeholders}) AND kind = 'fact'
+        ORDER BY account, session_id, user_id, category, norm, id
+      `).all(...validAccounts) as Array<Record<string, unknown>>;
+      return rows.map(tagRecord);
+    },
+
+    listRelayTagsForAccount(account) {
+      if (!Number.isSafeInteger(account) || account <= 0) return [];
+      const rows = selectRelayTagsForAccount.all(account) as Array<Record<string, unknown>>;
       return rows.map(tagRecord);
     },
 

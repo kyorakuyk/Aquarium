@@ -14,13 +14,14 @@ import {
   TAG_CATEGORY_KEYS,
 } from '../src/core/impressions/tag-model.ts';
 import { migration as migration16 } from '../src/store/migrations/v16.ts';
+import { CURRENT_SCHEMA_VERSION } from './schema-version.ts';
 
 const legacyTagColumns = [
   'id', 'account', 'session_id', 'user_id', 'text', 'norm', 'status', 'source',
   'samples', 'evidence_json', 'first_seen', 'last_seen', 'superseded_by', 'updated_at',
 ];
 
-test('v11 数据库升级到 v24 时保留画像字段默认值并标记旧群标签', () => {
+test('v11 数据库升级到当前版本时保留画像字段默认值并标记旧群标签', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-tag-profile-'));
   const databasePath = path.join(root, 'aquarium.db');
   let legacy: DatabaseSync | undefined;
@@ -62,9 +63,10 @@ test('v11 数据库升级到 v24 时保留画像字段默认值并标记旧群�
     const tag = upgraded.prepare('SELECT * FROM tags WHERE id = 1').get() as Record<string, unknown>;
     const subjects = upgraded.prepare("PRAGMA table_info('tag_subjects')").all() as Array<{ name: string }>;
 
-    assert.equal(version.version, 24);
+    assert.equal(version.version, CURRENT_SCHEMA_VERSION);
     assert.deepEqual(columns.map((column) => column.name), [
-      ...legacyTagColumns, 'category', 'subject', 'polarity', 'origin', 'locked', 'needs_reclassification', 'kind', 'in_prompt', 'certain',
+      ...legacyTagColumns, 'category', 'subject', 'polarity', 'origin', 'locked', 'needs_reclassification',
+      'kind', 'in_prompt', 'certain', 'source_account', 'source_fact_id',
     ]);
     assert.equal(tag.text, '爱游戏');
     assert.equal(tag.category, 'misc');

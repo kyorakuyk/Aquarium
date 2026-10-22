@@ -8,6 +8,7 @@ import { persistTagPromptStates } from '../impressions/prompt-state.ts';
 import { buildPrivateExtractionMessages, parsePrivateFactResponse } from './extract.ts';
 import { buildPrivateFactsBlock } from './prompt.ts';
 import { decide } from './policy.ts';
+import { syncKinRelays } from './kin-relay.ts';
 import type { PipelineModelCall } from '../conversation/steps/types.ts';
 import { sessionId, type SessionKey } from '../shared/events.ts';
 
@@ -277,6 +278,11 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
 
     try {
       const applied = applyResult(input, sessionIdValue, records, existingFacts, responseText);
+      try {
+        syncKinRelays(options.repository, input.now);
+      } catch {
+        reportError(input.session.account, sessionIdValue);
+      }
       saveRun(input, sessionIdValue, newestMessageTime);
       report(applied);
       return applied.status;

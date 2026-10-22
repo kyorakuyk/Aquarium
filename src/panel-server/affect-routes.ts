@@ -26,6 +26,7 @@ import {
   TAG_CATEGORY_KEYS,
 } from '../core/impressions/tag-model.ts';
 import { buildImpressionsLayoutContext } from './impressions-layout-context.ts';
+import { listAuthorizedKinRelays } from '../core/privacy/kin-relay.ts';
 
 export interface AffectRouteOptions {
   getConfig: () => AquariumConfig;
@@ -81,6 +82,7 @@ function tagView(tag: StoredTag, at: number) {
       : null,
     status: tag.status,
     source: tag.source,
+    sourceAccount: tag.sourceAccount ?? null,
     samples: tag.samples,
     activation: tagActivation(tag, at),
     evidence: tag.evidence.map((item) => item.kind === 'signature'
@@ -347,6 +349,9 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     } : null;
     const tags = options.repository.listTagsForSession(key.account, id);
     const groupTags = tags.filter((tag) => tag.userId === null).map((tag) => tagView(tag, at));
+    const kinRelayTags = key.kind === 'group'
+      ? listAuthorizedKinRelays(options.repository, key.account).map((tag) => tagView(tag, at))
+      : [];
     const layout = buildImpressionsLayoutContext({
       repository: options.repository,
       session: key,
@@ -436,6 +441,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     return context.json({
       sessionId: id,
       groupTags,
+      kinRelayTags,
       groupTagsText,
       groupScheduleDrop: groupScheduleDrop ?? null,
       members,

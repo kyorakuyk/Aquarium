@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRepository } from '../src/store/repository.ts';
 import { openDatabase } from '../src/store/db.ts';
+import { CURRENT_SCHEMA_VERSION } from './schema-version.ts';
 
-test('schema v24 persists group summaries and recent schedule drops', () => {
+test('current schema persists group summaries and recent schedule drops', () => {
   const database = openDatabase(':memory:');
   try {
     const version = database.prepare('SELECT version FROM schema_version WHERE id = 1').get() as { version: number };
@@ -12,7 +13,7 @@ test('schema v24 persists group summaries and recent schedule drops', () => {
     const dropColumns = (database.prepare("PRAGMA table_info('tag_drop_events')").all() as Array<{ name: string }>)
       .map(({ name }) => name);
 
-    assert.equal(version.version, 24);
+    assert.equal(version.version, CURRENT_SCHEMA_VERSION);
     assert.deepEqual(groupSummaryColumns, ['account', 'session_id', 'text', 'manual', 'updated_at']);
     assert.deepEqual(dropColumns, ['id', 'account', 'session_id', 'user_id', 'category', 'text', 'reason', 'time']);
   } finally {

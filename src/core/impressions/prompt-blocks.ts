@@ -9,6 +9,7 @@ import { buildMemberTagPrompt } from './member-tags.ts';
 import { GROUP_TAGS_LIMIT, selectInjectableTags, type TagPromptStateUpdate } from './tags.ts';
 import { redactSensitiveText } from './sensitive-text.ts';
 import { accountUserName, resolveAccountIdentity } from '../profiles/account-identity.ts';
+import { listAuthorizedKinRelays } from '../privacy/kin-relay.ts';
 
 const RELATION_LABELS = {
   lover: '恋人',
@@ -98,6 +99,52 @@ function viewTagAllowed(
   return decision === 'allow';
 }
 
+interface KinGroupFactCandidate {
+  tag: StoredTag;
+  source: StoredTag;
+}
+
+function sessionScopedKinTag(
+  repository: StoreRepository,
+  account: number,
+  targetSessionId: string,
+  source: StoredTag,
+): KinGroupFactCandidate {
+  const state = repository.kinTagPromptState(account, targetSessionId, source.id);
+  return { tag: { ...source, id: -state.id, inPrompt: state.inPrompt }, source };
+}
+
+function kinGroupFactTags(repository: StoreRepository, account: number, targetSessionId: string): KinGroupFactCandidate[] {
+  const groupIds = repository.kinGroupIdsForAccount(account);
+  const accounts = [...new Set(groupIds.flatMap((groupId) => repository.kinGroupAccounts(groupId)))];
+  if (accounts.length === 0) return [];
+  return repository.listFactTagsForAccounts(accounts).flatMap((tag) => {
+    if (tag.account === account) return [];
+    const source = parseSessionId(tag.sessionId);
+    if (!source || source.account !== tag.account || source.kind !== 'group') return [];
+    const groupId = groupIds.find((id) => repository.kinGroupAccounts(id).includes(tag.account));
+    if (groupId === undefined) return [];
+    if (decide({
+      info: { origin: 'group', sessionId: tag.sessionId, ownerId: tag.userId },
+      target: { kind: 'kin', groupId },
+      purpose: 'prompt',
+    }) !== 'allow') return [];
+    return [sessionScopedKinTag(repository, account, targetSessionId, tag)];
+  });
+}
+
+function groupTagText(repository: StoreRepository, account: number, tag: StoredTag): string {
+  const isRelay = tag.sourceFactId !== null && tag.sourceFactId !== undefined
+    && tag.sourceAccount !== null && tag.sourceAccount !== undefined;
+  const text = displayTagText(tag);
+  const safeText = tag.account !== account || isRelay ? redactSensitiveText(text) : text;
+  if (isRelay) return `听账号 ${tag.sourceAccount} 转述：${safeText}`;
+  if (tag.account !== account && tag.userId !== null) {
+    return `${JSON.stringify(accountUserName(repository, tag.account, tag.sessionId, tag.userId))}：${safeText}`;
+  }
+  return safeText;
+}
+
 export function buildImpressionsPromptBlocks(
   repository: StoreRepository,
   input: PromptBlocksInput,
@@ -115,6 +162,12 @@ export function buildImpressionsPromptBlocks(
   const target = input.session.kind === 'private'
     ? { kind: 'private' as const, sessionId: input.sessionId, peerId: input.session.peer }
     : { kind: 'group' as const, sessionId: input.sessionId };
+  const sharedTagSources = new Map<number, StoredTag>();
+  const renderGroupTag = (tag: StoredTag) => groupTagText(
+    repository,
+    account,
+    sharedTagSources.get(tag.id) ?? tag,
+  );
   let groupSelection: ReturnType<typeof selectInjectableTags> = {
     tags: [], dropped: 0, stateUpdates: [],
   };
@@ -128,10 +181,21 @@ export function buildImpressionsPromptBlocks(
       purpose: 'prompt',
     }) === 'allow';
     if (groupAllowed) {
-      groupSelection = selectInjectableTags(repository.listTagsForSubject(account, input.sessionId, null)
-        .filter((tag) => tag.kind === 'fact'), input.now, GROUP_TAGS_LIMIT, {
-          renderText: (tags) => tags.map(displayTagText).join('、'),
-        });
+      const currentGroupTags = repository.listTagsForSubject(account, input.sessionId, null)
+        .filter((tag) => tag.kind === 'fact');
+      const sharedGroupFacts = kinGroupFactTags(repository, account, input.sessionId);
+      const sharedRelays = listAuthorizedKinRelays(repository, account)
+        .map((tag) => sessionScopedKinTag(repository, account, input.sessionId, tag));
+      for (const candidate of [...sharedGroupFacts, ...sharedRelays]) {
+        sharedTagSources.set(candidate.tag.id, candidate.source);
+      }
+      groupSelection = selectInjectableTags([
+        ...currentGroupTags,
+        ...sharedGroupFacts.map(({ tag }) => tag),
+        ...sharedRelays.map(({ tag }) => tag),
+      ], input.now, GROUP_TAGS_LIMIT, {
+        renderText: (tags) => tags.map(renderGroupTag).join('、'),
+      });
     }
     const memberAllowed = identity.userId !== account && decide({
       info: { origin: 'group', sessionId: input.sessionId, ownerId: identity.userId },
@@ -167,7 +231,7 @@ export function buildImpressionsPromptBlocks(
   };
   if (groupSelection.tags.length > 0) {
     blocks.groupTags = input.template.groupTags
-      .replaceAll('{{tags}}', groupSelection.tags.map(displayTagText).join('、'));
+      .replaceAll('{{tags}}', groupSelection.tags.map(renderGroupTag).join('、'));
   }
   if (identity && (memberSelection.text.length > 0 || memberSelection.profileText.length > 0 || identity.kind === 'bot')) {
     blocks.memberTags = input.template.memberTags

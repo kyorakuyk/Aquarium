@@ -7,6 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { TagRecord } from '../src/store/affect-repo.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
+import { CURRENT_SCHEMA_VERSION } from './schema-version.ts';
 
 function tag(overrides: Partial<TagRecord> = {}): TagRecord {
   const base: TagRecord = {
@@ -106,7 +107,7 @@ test('v24 回填 view 标签确定性并保留标签行', () => {
       dflt_value: string | null;
     }>;
     const certainColumn = tagColumns.find(({ name }) => name === 'certain');
-    assert.equal(version.version, 24);
+    assert.equal(version.version, CURRENT_SCHEMA_VERSION);
     assert.ok(certainColumn);
     const migrated = database.prepare('SELECT text, kind, certain FROM tags ORDER BY id').all() as Array<{
       text: string;

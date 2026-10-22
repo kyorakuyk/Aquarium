@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AquariumConfig } from '../config/schema.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
+import { syncKinRelays } from '../core/privacy/kin-relay.ts';
 import type { PrivateFactRecord } from '../store/privacy-repo.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import type { PanelAccountRuntime } from './types.ts';
@@ -102,6 +103,7 @@ export function registerPrivacyRoutes(app: Hono, options: PrivacyRouteOptions): 
       updatedAt: now(),
     });
     if (!updated) return context.json({ error: 'Private fact not found' }, 404);
+    syncKinRelays(options.repository, now());
     return context.json({ fact: privacyFactView(updated) });
   });
 
@@ -115,6 +117,7 @@ export function registerPrivacyRoutes(app: Hono, options: PrivacyRouteOptions): 
       return context.json({ error: 'Private fact not found' }, 404);
     }
     options.repository.markPrivateFactDeleted(id, now());
+    syncKinRelays(options.repository, now());
     const deleted = options.repository.privateFactById(id);
     if (!deleted || deleted.account !== account || deleted.status !== 'deleted') {
       return context.json({ error: 'Private fact could not be deleted' }, 500);

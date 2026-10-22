@@ -36,6 +36,20 @@ test('privacy policy applies the ordered scope rules to every purpose', () => {
     { name: 'private L0 to group prompt', input: scenario(), expected: 'deny' },
     { name: 'private L1 to group prompt', input: scenario({ info: { ...privateInfo, level: 'L1' } }), expected: 'allow' },
     { name: 'private L2 to group prompt', input: scenario({ info: { ...privateInfo, level: 'L2' } }), expected: 'allow' },
+    { name: 'private L0 to kin prompt', input: scenario({ target: { kind: 'kin', groupId: 1 } as PrivacyTarget }), expected: 'deny' },
+    { name: 'private L1 to kin prompt', input: scenario({
+      info: { ...privateInfo, level: 'L1' }, target: { kind: 'kin', groupId: 1 } as PrivacyTarget,
+    }), expected: 'allow' },
+    { name: 'private L2 to kin prompt', input: scenario({
+      info: { ...privateInfo, level: 'L2' }, target: { kind: 'kin', groupId: 1 } as PrivacyTarget,
+    }), expected: 'allow' },
+    { name: 'private L2 to kin third party', input: scenario({
+      info: { ...privateInfo, level: 'L2' }, target: { kind: 'kin', groupId: 1 } as PrivacyTarget,
+      purpose: 'third_party',
+    }), expected: 'deny' },
+    { name: 'group fact to kin prompt', input: scenario({
+      info: groupInfo, target: { kind: 'kin', groupId: 1 } as PrivacyTarget,
+    }), expected: 'allow' },
     { name: 'private-to-group third-party', input: scenario({ purpose: 'third_party' }), expected: 'deny' },
     { name: 'private-to-other-private prompt', input: scenario({ target: privateTarget }), expected: 'deny' },
     { name: 'private-to-other-private gate', input: scenario({ target: privateTarget, purpose: 'gate' }), expected: 'deny' },

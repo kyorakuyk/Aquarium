@@ -9,11 +9,9 @@ export interface PrivacyInfo {
   level?: PrivacyLevel;
 }
 
-export interface PrivacyTarget {
-  kind: 'private' | 'group';
-  sessionId: string;
-  peerId?: number;
-}
+export type PrivacyTarget =
+  | { kind: 'private' | 'group'; sessionId: string; peerId?: number }
+  | { kind: 'kin'; groupId: number };
 
 export interface PrivacyDecisionInput {
   info: PrivacyInfo;
@@ -33,14 +31,17 @@ function validInput(value: unknown): value is PrivacyDecisionInput {
   if (!isRecord(value) || !isRecord(value.info) || !isRecord(value.target)) return false;
   const info = value.info;
   const target = value.target;
+  const validTarget = target.kind === 'kin'
+    ? isPositiveId(target.groupId)
+    : (target.kind === 'private' || target.kind === 'group')
+      && typeof target.sessionId === 'string' && target.sessionId.length > 0
+      && (target.peerId === undefined || isPositiveId(target.peerId));
   if ((info.origin !== 'private' && info.origin !== 'group')
     || typeof info.sessionId !== 'string' || info.sessionId.length === 0
     || (info.ownerId !== null && !isPositiveId(info.ownerId))
     || (info.origin === 'private' && !isPositiveId(info.ownerId))
-    || (target.kind !== 'private' && target.kind !== 'group')
-    || typeof target.sessionId !== 'string' || target.sessionId.length === 0
+    || !validTarget
     || !['prompt', 'gate', 'third_party'].includes(String(value.purpose))) return false;
-  if (target.peerId !== undefined && !isPositiveId(target.peerId)) return false;
   if (info.level !== undefined && !['L0', 'L1', 'L2'].includes(String(info.level))) return false;
   return true;
 }
@@ -48,6 +49,12 @@ function validInput(value: unknown): value is PrivacyDecisionInput {
 export function decide(input: PrivacyDecisionInput): PrivacyDecision {
   if (!validInput(input)) return 'deny';
   const { info, target, purpose } = input;
+
+  if (target.kind === 'kin') {
+    if (purpose !== 'prompt') return 'deny';
+    if (info.origin === 'group') return 'allow';
+    return info.level === 'L1' || info.level === 'L2' ? 'allow' : 'deny';
+  }
 
   if (info.sessionId === target.sessionId) return purpose === 'third_party' ? 'deny' : 'allow';
 

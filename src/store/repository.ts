@@ -13,6 +13,7 @@ import { createTagQueries } from './tag-repo.ts';
 import { createTagVetoQueries } from './tag-veto-repo.ts';
 import { createGroupSummaryRepository } from './group-summary-repo.ts';
 import { createTagDropRepository } from './tag-drop-repo.ts';
+import { createKinGroupRepository } from './kin-group-repo.ts';
 import type { ImageCaptionKind, StoreRepository } from './repository-types.ts';
 
 export type {
@@ -213,6 +214,7 @@ export function createRepository(
   const identityVetoes = createTagVetoQueries(database, identityTags);
   const groupSummaries = createGroupSummaryRepository(database);
   const tagDrops = createTagDropRepository(database);
+  const kinGroups = createKinGroupRepository(database);
   const transaction = <T>(task: () => T): T => {
     database.exec('BEGIN IMMEDIATE');
     let transactionOpen = true;
@@ -246,6 +248,7 @@ export function createRepository(
     ...createQqProfileQueries(database),
     ...createIdentityQueries(database, identityTags, identityVetoes),
     ...groupSummaries,
+    ...kinGroups,
     ...tagDrops,
     ...createAffectQueries(database),
     ...createPersonaVersionRepository(database, clock),

@@ -6,6 +6,7 @@ import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository, type ImageCaptionRecord } from '../src/store/repository.ts';
+import { CURRENT_SCHEMA_VERSION } from './schema-version.ts';
 
 function tempDatabase() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-image-caption-'));
@@ -58,7 +59,7 @@ test('版本 9 图片缓存升级保留旧描述并增加认知元数据列', ()
     const columns = database.prepare("PRAGMA table_info('image_captions')")
       .all() as Array<{ name: string }>;
 
-    assert.equal(version.version, 24);
+    assert.equal(version.version, CURRENT_SCHEMA_VERSION);
     assert.equal(retained.caption, '[图片：旧缓存]');
     assert.equal(retained.time, 77);
     assert.ok(columns.some(({ name }) => name === 'md5'));

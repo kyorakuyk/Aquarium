@@ -9,12 +9,13 @@ type TagRename = (id: number, text: string) => Promise<boolean>;
 type TagLock = (id: number, locked: boolean) => Promise<boolean>;
 type TagDelete = (id: number) => Promise<boolean>;
 
-export function GroupProfileCard({ sessionId, groupName, enabled, profile, tags, injectedText, scheduleDrop, refreshVersion, onReload, busy, onAction, onRename, onLock, onDelete, onAdd }: {
+export function GroupProfileCard({ sessionId, groupName, enabled, profile, tags, kinRelayTags = [], injectedText, scheduleDrop, refreshVersion, onReload, busy, onAction, onRename, onLock, onDelete, onAdd }: {
   sessionId: string;
   groupName: string;
   enabled: boolean;
   profile: QqGroupProfileView | null;
   tags: TagView[];
+  kinRelayTags?: TagView[];
   injectedText: string | null;
   scheduleDrop: { text: string } | null;
   refreshVersion: number;
@@ -53,6 +54,18 @@ export function GroupProfileCard({ sessionId, groupName, enabled, profile, tags,
         scope="group"
       />
     </section>
+    {kinRelayTags.length > 0 && <section className="kin-relay-tags" aria-labelledby="kin-relay-tags-title">
+      <h3 id="kin-relay-tags-title">眷属转述</h3>
+      <div className="kin-relay-tags-list">
+        {kinRelayTags.map((tag) => <div className="kin-relay-tag-row" key={tag.id}>
+          <span>{tag.text}</span>
+          <span className="profile-tag-meta" aria-label={`来源 转述 · 账号 ${tag.sourceAccount ?? '未知'}`}>
+            <span className="profile-tag-meta-label">来源</span>
+            <span className="profile-tag-meta-value">转述 · 账号 {tag.sourceAccount ?? '未知'}</span>
+          </span>
+        </div>)}
+      </div>
+    </section>}
     <details className="member-injected-tags" open>
       <summary>它眼里的这个群（实际注入的一行）</summary>
       <p>{injectedText ?? '没有符合条件的已确认标签。'}</p>

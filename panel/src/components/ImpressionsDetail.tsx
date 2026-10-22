@@ -33,6 +33,7 @@ export function ImpressionsDetail({ sessionId, groupName, enabled, view, refresh
     enabled={enabled}
     profile={view.qqGroupProfile}
     tags={view.groupTags}
+    kinRelayTags={view.kinRelayTags ?? []}
     refreshVersion={refreshVersion}
     injectedText={view.groupTagsText}
     scheduleDrop={view.groupScheduleDrop}

@@ -1,0 +1,24 @@
+.kin-groups-panel { display: grid; gap: 16px; }
+.kin-groups-heading h2, .kin-group-card h3 { margin: 0; }
+.kin-groups-heading p { margin: 5px 0 0; }
+.kin-groups-create { display: grid; grid-template-columns: minmax(180px, 1fr) auto; align-items: end; gap: 12px; }
+.kin-groups-create label { display: grid; gap: 6px; color: var(--ink-2); font-size: 12px; }
+.kin-groups-create input { min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--ink); }
+.kin-groups-list { display: grid; gap: 12px; }
+.kin-group-card { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.kin-group-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.kin-group-account-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px 12px; }
+.kin-group-account-list label { display: flex; min-height: 44px; align-items: center; gap: 9px; padding: 5px 8px; border-radius: 8px; color: var(--ink-2); }
+.kin-group-account-list label:hover { background: var(--surface-2); }
+.kin-group-account-list input { width: 18px; height: 18px; accent-color: var(--accent); }
+.kin-group-account-list .mono { margin-left: auto; }
+.kin-relay-tags { display: grid; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.kin-relay-tags h3 { margin: 0; font-size: 13px; }
+.kin-relay-tags-list { display: grid; gap: 6px; }
+.kin-relay-tag-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 44px; padding: 6px 8px; border-radius: 8px; background: var(--surface-2); color: var(--ink-2); font-size: 12px; }
+
+@media (max-width: 760px) {
+  .kin-groups-create { grid-template-columns: 1fr; }
+  .kin-groups-create > .button { width: 100%; }
+  .kin-relay-tag-row { grid-template-columns: 1fr; }
+}

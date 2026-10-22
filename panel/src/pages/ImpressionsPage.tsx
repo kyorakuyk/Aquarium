@@ -15,6 +15,7 @@ import { AffinityPanel } from '../components/AffinityPanel.tsx';
 import { ImpressionsDataMenu } from '../components/ImpressionsDataMenu.tsx';
 import { ImpressionsDetail } from '../components/ImpressionsDetail.tsx';
 import { ImpressionsSidebar } from '../components/ImpressionsSidebar.tsx';
+import { KinGroupsPanel } from '../components/KinGroupsPanel.tsx';
 import { parseAppHash, serializeAppHash } from '../hash-navigation.ts';
 import { buildIdentityTargets } from '../identity-targets.ts';
 import { shouldRefreshHistoryImport, tagClassificationStatusText } from '../impressions-refresh-model.ts';
@@ -56,7 +57,7 @@ export function ImpressionsPage() {
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState(() => currentImpressionsRoute()?.sessionId ?? '');
-  const [tab, setTab] = useState<'groups' | 'people' | 'privacy'>('groups');
+  const [tab, setTab] = useState<'groups' | 'people' | 'privacy' | 'kin-groups'>('groups');
   const [view, setView] = useState<ImpressionsView>();
   const [selectedUserId, setSelectedUserId] = useState<number | undefined>(() => currentImpressionsRoute()?.userId);
   const [error, setError] = useState('');
@@ -381,6 +382,7 @@ export function ImpressionsPage() {
           <button className={tab === 'groups' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'groups'} onClick={() => setTab('groups')}>群聊</button>
           <button className={tab === 'privacy' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'privacy'} onClick={() => setTab('privacy')}>私聊</button>
           <button className={tab === 'people' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'people'} onClick={() => setTab('people')}>所有人</button>
+          <button className={tab === 'kin-groups' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'kin-groups'} onClick={() => setTab('kin-groups')}>眷属组</button>
         </div>
         {tab === 'groups' && <div className="impressions-group-tools">
           <label className="impressions-group-select">
@@ -412,6 +414,7 @@ export function ImpressionsPage() {
         </div>}
       </div>
       {tab === 'people' && <AffinityPanel />}
+      {tab === 'kin-groups' && <KinGroupsPanel />}
       {tab === 'privacy' && <Suspense fallback={<div className="empty-state">正在载入私聊记忆…</div>}>
         <PrivateFactsPanel sessions={privateSessions} loadingFriends={sessionsLoading} />
       </Suspense>}

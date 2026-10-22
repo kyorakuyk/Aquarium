@@ -3,6 +3,7 @@ import test from 'node:test';
 import { sessionId, type SessionKey } from '../src/core/shared/events.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
+import { CURRENT_SCHEMA_VERSION } from './schema-version.ts';
 
 const session: SessionKey = { account: 12001, kind: 'group', peer: 12002 };
 const groupSessionId = sessionId(session);
@@ -39,13 +40,13 @@ function tag(input: {
   };
 }
 
-test('v19 identity tables remain available in schema v24', () => {
+test('v19 identity tables remain available in the current schema', () => {
   const database = openDatabase(':memory:');
   try {
     const version = database.prepare('SELECT version FROM schema_version WHERE id = 1').get() as { version: number };
     const kinds = database.prepare("PRAGMA table_info('account_kinds')").all() as Array<{ name: string }>;
     const relations = database.prepare("PRAGMA table_info('relations')").all() as Array<{ name: string }>;
-    assert.equal(version.version, 24);
+    assert.equal(version.version, CURRENT_SCHEMA_VERSION);
     assert.deepEqual(kinds.map(({ name }) => name), ['account', 'user_id', 'kind', 'created_at']);
     assert.deepEqual(relations.map(({ name }) => name), [
       'id', 'account', 'a_user_id', 'b_user_id', 'type', 'label', 'locked', 'created_at',

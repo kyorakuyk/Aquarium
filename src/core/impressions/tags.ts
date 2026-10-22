@@ -69,13 +69,15 @@ export function tagHalfLifeMs(tag: Pick<StoredTag, 'category' | 'userId' | 'samp
 
 // 激活度 = 2^(−(now − last_seen) / 半衰期)；manual 标签恒为 1。
 export function tagActivation(
-  tag: Pick<StoredTag, 'source' | 'category' | 'userId' | 'samples' | 'lastSeen'>,
+  tag: Pick<StoredTag, 'source' | 'category' | 'userId' | 'samples' | 'lastSeen'>
+    & Partial<Pick<StoredTag, 'sourceAccount'>>,
   now: number,
 ): number {
   if (tag.source === 'manual') return 1;
   const halfLife = tagHalfLifeMs(tag);
   if (halfLife === null) return 1;
-  return 2 ** (-(now - tag.lastSeen) / halfLife);
+  const activation = 2 ** (-(now - tag.lastSeen) / halfLife);
+  return tag.sourceAccount != null && tag.samples < 2 ? Math.min(activation, 0.49) : activation;
 }
 
 function evidenceOf(input: TagCandidateInput): TagEvidence {

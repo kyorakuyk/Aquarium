@@ -178,6 +178,7 @@ export interface TagView {
   fadeAt: number | null;
   status: TagStatus;
   source: 'auto' | 'manual';
+  sourceAccount?: number | null;
   samples: number;
   activation: number;
   evidence: TagEvidenceView[];
@@ -268,6 +269,7 @@ export interface ImpressionsView {
   sessionId: string;
   lastMessageTime: number | null;
   groupTags: TagView[];
+  kinRelayTags?: TagView[];
   groupTagsText: string | null;
   groupScheduleDrop: { text: string; time: number } | null;
   qqGroupProfile: QqGroupProfileView | null;

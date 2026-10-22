@@ -6,8 +6,9 @@ import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { createMemberSummaryRepository } from '../src/store/member-summary-repo.ts';
 import { openDatabase } from '../src/store/db.ts';
+import { CURRENT_SCHEMA_VERSION } from './schema-version.ts';
 
-test('schema v24 still creates the member summary table', () => {
+test('current schema still creates the member summary table', () => {
   const database = openDatabase(':memory:');
   try {
     const version = database.prepare('SELECT version FROM schema_version WHERE id = 1').get() as {
@@ -16,7 +17,7 @@ test('schema v24 still creates the member summary table', () => {
     const columns = (database.prepare("PRAGMA table_info('member_summaries')").all() as Array<{ name: string }>)
       .map(({ name }) => name);
 
-    assert.equal(version.version, 24);
+    assert.equal(version.version, CURRENT_SCHEMA_VERSION);
     assert.deepEqual(columns, ['account', 'user_id', 'text', 'manual', 'updated_at']);
   } finally {
     database.close();
@@ -42,7 +43,7 @@ test('v14 migration creates member summaries and preserves existing messages', (
       .get('kept-message') as { plain_text: string };
     const columns = database.prepare("PRAGMA table_info('member_summaries')").all() as Array<{ name: string }>;
 
-    assert.equal(version.version, 24);
+    assert.equal(version.version, CURRENT_SCHEMA_VERSION);
     assert.equal(retained.plain_text, '保留消息');
     assert.deepEqual(columns.map(({ name }) => name), ['account', 'user_id', 'text', 'manual', 'updated_at']);
   } finally {

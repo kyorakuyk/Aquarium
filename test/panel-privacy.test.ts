@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { sessionId, type SessionKey } from '../src/core/shared/events.ts';
+import { syncKinRelays } from '../src/core/privacy/kin-relay.ts';
+import { tagActivation } from '../src/core/impressions/tags.ts';
 import type { PrivateFactRecord } from '../src/store/privacy-repo.ts';
 import { account, authHeaders, now, withPanel } from './panel-test-helpers.ts';
 
@@ -119,6 +122,81 @@ test('privacy PATCH supports text, manual level, automatic restoration, and reje
       body: JSON.stringify({ level: 'L2' }),
     });
     assert.equal(crossAccount.status, 404);
+  });
+});
+
+test('privacy level changes create only low-confidence relays for explicit kin members', async () => {
+  await withPanel(async ({ app, repository }) => {
+    const recipientAccount = account + 1;
+    const groupId = repository.createKinGroup('隐私转述');
+    repository.setKinGroupMembers(groupId, [account, recipientAccount]);
+    const id = repository.insertPrivateFact(fact({ level: 'L0' }));
+
+    const response = await app.request(`/api/privacy/facts/${id}?account=${account}`, {
+      method: 'PATCH',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ level: 'L1' }),
+    });
+    assert.equal(response.status, 200);
+
+    const relays = repository.listRelayTagsForAccount(recipientAccount);
+    assert.equal(relays.length, 1);
+    assert.equal(relays[0]?.sourceFactId, id);
+    assert.equal(relays[0]?.sourceAccount, account);
+    assert.ok(tagActivation(relays[0]!, now) < 0.5);
+  });
+});
+
+test('knowledge view labels a referred tag with its source account', async () => {
+  await withPanel(async ({ app, repository }) => {
+    const sourceAccount = account + 1;
+    const groupId = repository.createKinGroup('知识来源');
+    repository.setKinGroupMembers(groupId, [account, sourceAccount]);
+    repository.insertPrivateFact(fact({
+      account: sourceAccount,
+      sessionId: `${sourceAccount}:private:42`,
+      level: 'L1',
+    }));
+    syncKinRelays(repository, now);
+    const session: SessionKey = { account, kind: 'group', peer: 77 };
+
+    const response = await app.request(`/api/impressions/${sessionId(session)}`, { headers: authHeaders() });
+    assert.equal(response.status, 200);
+    const body = await response.json() as {
+      kinRelayTags: Array<{ sourceAccount: number | null; source: string }>;
+    };
+    assert.equal(body.kinRelayTags.length, 1);
+    assert.equal(body.kinRelayTags[0]?.sourceAccount, sourceAccount);
+    assert.equal(body.kinRelayTags[0]?.source, 'auto');
+  });
+});
+
+test('knowledge view hides stale relays after the source privacy level is revoked', async () => {
+  await withPanel(async ({ app, repository }) => {
+    const sourceAccount = account + 1;
+    const groupId = repository.createKinGroup('撤销转述');
+    repository.setKinGroupMembers(groupId, [account, sourceAccount]);
+    const factId = repository.insertPrivateFact(fact({
+      account: sourceAccount,
+      sessionId: `${sourceAccount}:private:42`,
+      level: 'L1',
+    }));
+    syncKinRelays(repository, now);
+    const session: SessionKey = { account, kind: 'group', peer: 78 };
+    const path = `/api/impressions/${sessionId(session)}`;
+    const allowed = await app.request(path, { headers: authHeaders() });
+    assert.equal((await allowed.json() as { kinRelayTags: unknown[] }).kinRelayTags.length, 1);
+
+    repository.updatePrivateFactControls({
+      account: sourceAccount,
+      ownerId: 42,
+      id: factId,
+      level: 'L0',
+      promoteMentions: 3,
+      updatedAt: now + 1,
+    });
+    const revoked = await app.request(path, { headers: authHeaders() });
+    assert.equal((await revoked.json() as { kinRelayTags: unknown[] }).kinRelayTags.length, 0);
   });
 });
 

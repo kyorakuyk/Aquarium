@@ -24,6 +24,7 @@ import type { TagVetoRepository } from './tag-veto-repo.ts';
 import type { IdentityRepository } from './identity-repo.ts';
 import type { GroupSummaryRepository } from './group-summary-repo.ts';
 import type { TagDropRepository } from './tag-drop-repo.ts';
+import type { KinGroupRepository } from './kin-group-repo.ts';
 
 export interface MessageStorageRecord {
   sessionId: string;
@@ -151,7 +152,7 @@ export interface StoredPipelineTrace extends PipelineTraceRecord {
   id: number;
 }
 
-export interface StoreRepository extends RecentExtractUsageRepository, PersonaVersionRepository, PrivacyRepository, PrivateFactMentionRepository, PrivateFactControlsRepository, StickerRepository, TagVetoRepository, QqProfileRepository, IdentityRepository, GroupSummaryRepository, TagDropRepository {
+export interface StoreRepository extends RecentExtractUsageRepository, PersonaVersionRepository, PrivacyRepository, PrivateFactMentionRepository, PrivateFactControlsRepository, StickerRepository, TagVetoRepository, QqProfileRepository, IdentityRepository, GroupSummaryRepository, TagDropRepository, KinGroupRepository {
   transaction<T>(task: () => T): T;
   resetImpressionsSession(account: number, sessionId: string): { tags: number; vetoes: number };
   saveMessage(message: MessageStorageRecord): boolean;
@@ -212,6 +213,8 @@ export interface StoreRepository extends RecentExtractUsageRepository, PersonaVe
   listTagsForSession(account: number, sessionId: string): StoredTag[];
   listGroupTagsForUser(account: number, userId: number): StoredTag[];
   listViewTagsForAccount(account: number): StoredTag[];
+  listFactTagsForAccounts(accounts: readonly number[]): StoredTag[];
+  listRelayTagsForAccount(account: number): StoredTag[];
   senderNameFor(sessionId: string, senderId: number): string | undefined;
   updateTag(id: number, update: TagUpdate): void;
   deleteActivityTag(id: number): void;

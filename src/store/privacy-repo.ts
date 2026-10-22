@@ -86,6 +86,7 @@ export interface PrivateFactControlsRepository {
 
 export interface PrivacyRepository {
   listPrivateFactsForOwner(account: number, ownerId: number, status?: PrivateFactStatus): PrivateFactRecord[];
+  listPrivateFactsForAccount(account: number, status?: PrivateFactStatus): PrivateFactRecord[];
   listPrivateFactsForGroup(account: number, groupSessionId: string): PrivateFactRecord[];
   countPrivateOwnerMessagesAfter(sessionId: string, ownerId: number, afterTime: number): number;
   privateFactById(id: number): PrivateFactRecord | undefined;
@@ -222,6 +223,13 @@ export function createPrivacyQueries(database: DatabaseSync): PrivacyRepository 
     WHERE account = ? AND owner_id = ? AND status = ?
     ORDER BY updated_at DESC, id DESC
   `);
+  const selectAccountFacts = database.prepare(`
+    SELECT id, account, owner_id, session_id, text, keywords_json, level, level_source, mentions,
+      mention_evidence_json, evidence_json, status, created_at, updated_at
+    FROM private_facts
+    WHERE account = ? AND status = ?
+    ORDER BY updated_at DESC, id DESC
+  `);
   const selectGroupFacts = database.prepare(`
     SELECT id, account, owner_id, session_id, text, keywords_json, level, level_source, mentions,
       mention_evidence_json, evidence_json, status, created_at, updated_at
@@ -272,6 +280,15 @@ export function createPrivacyQueries(database: DatabaseSync): PrivacyRepository 
     listPrivateFactsForOwner(account, ownerId, status = 'active') {
       validateIdentity(account, ownerId);
       const rows = selectOwnerFacts.all(account, ownerId, status) as Array<Record<string, unknown>>;
+      return rows.map(privateFactFromRow);
+    },
+
+    listPrivateFactsForAccount(account, status = 'active') {
+      if (!Number.isSafeInteger(account) || account <= 0
+        || (status !== 'active' && status !== 'deleted')) {
+        throw new RangeError('私聊事实账号或状态无效');
+      }
+      const rows = selectAccountFacts.all(account, status) as Array<Record<string, unknown>>;
       return rows.map(privateFactFromRow);
     },
 
