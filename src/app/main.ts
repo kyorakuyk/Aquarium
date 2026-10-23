@@ -20,6 +20,7 @@ import { createSleepGoodnightScheduler } from '../core/sleep/goodnight.ts';
 import { getCliRuntime } from '../llm/cli.ts';
 import { openDatabase } from '../store/db.ts';
 import { createRepository } from '../store/repository.ts';
+import { createInteractionLogRepository } from '../store/interaction-log-repo.ts';
 import { createActivitySuggestionRepository } from '../store/activity-suggestion-repo.ts';
 import { createMemberSummaryRepository } from '../store/member-summary-repo.ts';
 import { createTagSubjectRepository } from '../store/tag-subject-repo.ts';
@@ -77,6 +78,7 @@ if (await isPanelPortOccupied(initialConfig.panel.host, initialConfig.panel.port
 }
 const database = openDatabase();
 const repository = createRepository(database);
+const interactionLogRepository = createInteractionLogRepository(database);
 const memberSummaryRepository = createMemberSummaryRepository(database);
 const tagSubjects = createTagSubjectRepository(database);
 const configWatcher = watchConfig({ initialConfig, configPath });
@@ -527,6 +529,7 @@ await startPanelWhileAccountStartupRuns(accountStartup, () => {
             configWatcher.replaceConfig(config);
           },
           repository,
+          interactionLogRepository,
           accounts: () => panelAccounts,
           stickerServices: () => stickerServices,
           historyImports,

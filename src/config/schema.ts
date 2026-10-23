@@ -41,7 +41,65 @@ const sessionOverrideSchema = z.object({
   contextMessages: z.number().int().positive().optional(),
   rate: rateSchema.partial().optional(),
   groupNote: z.string().optional(),
+  interactions: z.object({
+    react: z.object({
+      enabled: z.boolean().optional(),
+      prob_scale: z.number().min(0).max(1).optional(),
+      per_hour_max: z.number().int().min(1).max(12).optional(),
+      per_sender_gap_s: z.number().int().min(60).max(86_400).optional(),
+    }).strict().optional(),
+    poke: z.object({
+      enabled: z.boolean().optional(),
+      poke_back: z.boolean().optional(),
+      proactive: z.boolean().optional(),
+      per_hour_max: z.number().int().min(1).max(6).optional(),
+      per_user_gap_s: z.number().int().min(600).max(86_400).optional(),
+    }).strict().optional(),
+    recall: z.object({
+      enabled: z.boolean().optional(),
+      self_auto: z.boolean().optional(),
+      others: z.boolean().optional(),
+    }).strict().optional(),
+    admin: z.object({
+      enabled: z.boolean().optional(),
+      mute_max_s: z.number().int().min(1).max(600).optional(),
+      dry_run: z.boolean().optional(),
+    }).strict().optional(),
+  }).strict().optional(),
 }).strict();
+
+const interactionsSchema = z.object({
+  master_ids: z.array(z.number().int().positive()).default([]),
+  react: z.object({
+    enabled: z.boolean().default(false),
+    prob_scale: z.number().min(0).max(1).default(1),
+    per_hour_max: z.number().int().min(1).max(12).default(12),
+    per_sender_gap_s: z.number().int().min(60).max(86_400).default(60),
+  }).strict().default({ enabled: false, prob_scale: 1, per_hour_max: 12, per_sender_gap_s: 60 }),
+  poke: z.object({
+    enabled: z.boolean().default(false),
+    poke_back: z.boolean().default(true),
+    proactive: z.boolean().default(false),
+    per_hour_max: z.number().int().min(1).max(6).default(6),
+    per_user_gap_s: z.number().int().min(600).max(86_400).default(600),
+  }).strict().default({ enabled: false, poke_back: true, proactive: false, per_hour_max: 6, per_user_gap_s: 600 }),
+  recall: z.object({
+    enabled: z.boolean().default(false),
+    self_auto: z.boolean().default(true),
+    others: z.boolean().default(false),
+  }).strict().default({ enabled: false, self_auto: true, others: false }),
+  admin: z.object({
+    enabled: z.boolean().default(false),
+    mute_max_s: z.number().int().min(1).max(600).default(600),
+    dry_run: z.boolean().default(true),
+  }).strict().default({ enabled: false, mute_max_s: 600, dry_run: true }),
+}).strict().default({
+  master_ids: [],
+  react: { enabled: false, prob_scale: 1, per_hour_max: 12, per_sender_gap_s: 60 },
+  poke: { enabled: false, poke_back: true, proactive: false, per_hour_max: 6, per_user_gap_s: 600 },
+  recall: { enabled: false, self_auto: true, others: false },
+  admin: { enabled: false, mute_max_s: 600, dry_run: true },
+});
 
 const reservedReasoningFields = new Set([
   'model', 'messages', 'temperature', 'max_tokens', 'max_completion_tokens', 'stream', 'n',
@@ -249,6 +307,7 @@ export const AquariumConfigSchema = z.object({
   send: sendSchema,
   stickers: stickersSchema,
   privacy: privacySchema,
+  interactions: interactionsSchema,
   panel: z.object({
     host: z.string().min(1),
     port: z.number().int().min(1).max(65535),

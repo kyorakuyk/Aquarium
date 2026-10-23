@@ -39,6 +39,20 @@ function formatTime(value: number): string {
   return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(value);
 }
 
+function interactionLabel(actionKind: string): string {
+  const labels: Record<string, string> = { react: '贴表情', poke: '戳一戳', recall: '撤回', mute: '禁言', essence: '精华' };
+  return labels[actionKind] ?? actionKind;
+}
+
+function interactionVerdictLabel(verdict: string): string {
+  const labels: Record<string, string> = { executed: '已执行', dry_run: '演练', blocked: '已拦截', failed: '失败' };
+  return labels[verdict] ?? verdict;
+}
+
+function hasInteractionAlert(entries: DecisionView['interactionTrace']): boolean {
+  return entries.some((entry) => entry.verdict === 'failed' || entry.reason === 'failure_cooldown');
+}
+
 function ReplayTraceList({ entries, emptyText }: { entries: PipelineStepTraceView[]; emptyText: string }) {
   if (!entries.length) return <p className="muted">{emptyText}</p>;
   return <ol className="decision-timeline pipeline-timeline">
@@ -234,6 +248,11 @@ export function DecisionsPage() {
               <span>{decision.sessionName}</span>
               <span className="decision-message" title={decision.messageText ?? undefined}>{decision.messageText ?? '—'}</span>
               <span className="mono muted">{decision.costCny === null ? '—' : `¥${decision.costCny.toFixed(4)}`}</span>
+              <span className={`interaction-record-count mono ${hasInteractionAlert(decision.interactionTrace) ? 'interaction-alert' : 'muted'}`}>
+                {hasInteractionAlert(decision.interactionTrace)
+                  ? `告警 ${decision.interactionTrace.length}`
+                  : decision.interactionTrace.length ? `交互 ${decision.interactionTrace.length}` : '—'}
+              </span>
               <span className="mono muted">{formatTime(decision.time)}</span>
             </button>)}
             {!decisions.length && <div className="empty-state">尚无决策记录。</div>}
@@ -250,6 +269,23 @@ export function DecisionsPage() {
                 <dd>{metric.display}</dd>
               </div>)}
             </dl>
+          </section>}
+          {selectedDecision && selectedDecision.interactionTrace.length > 0 && <section className="interaction-trace" aria-labelledby="interaction-trace-title">
+            <h3 id="interaction-trace-title">交互记录</h3>
+            <ol className="decision-timeline">
+              {selectedDecision.interactionTrace.map((entry) => <li key={entry.id}>
+                <span className="timeline-marker mono">{formatTime(entry.time)}</span>
+                <div className="timeline-content">
+                  <div className="timeline-title"><strong>{interactionLabel(entry.actionKind)}</strong><span>{interactionVerdictLabel(entry.verdict)}</span></div>
+                  <p>{[
+                    entry.target ? `目标 ${entry.target}` : '',
+                    entry.details?.emojiId ? `表情 ID ${entry.details.emojiId}` : '',
+                    `来源 ${entry.source}`,
+                    entry.reason,
+                  ].filter(Boolean).join(' · ')}</p>
+                </div>
+              </li>)}
+            </ol>
           </section>}
           {selectedDecision && <div className="replay-toolbar">
             <button className="button button-secondary" type="button" onClick={() => void replaySelectedDecision()} disabled={replayBusy}>

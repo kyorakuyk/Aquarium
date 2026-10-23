@@ -36,3 +36,28 @@ export function resolveSession(config: AquariumConfig, key: SessionKey): Session
   const overrides: SessionOverride = config.sessions[sessionId(key)] ?? {};
   return deepMerge(config.defaults, overrides);
 }
+
+export function resolveInteractions(config: AquariumConfig, key: SessionKey): AquariumConfig['interactions'] {
+  const overrides = config.sessions[sessionId(key)]?.interactions;
+  const resolved = deepMerge(config.interactions, overrides);
+  const defaults = config.interactions;
+  return {
+    ...resolved,
+    react: {
+      ...resolved.react,
+      prob_scale: Math.min(defaults.react.prob_scale, resolved.react.prob_scale),
+      per_hour_max: Math.min(defaults.react.per_hour_max, resolved.react.per_hour_max),
+      per_sender_gap_s: Math.max(defaults.react.per_sender_gap_s, resolved.react.per_sender_gap_s),
+    },
+    poke: {
+      ...resolved.poke,
+      per_hour_max: Math.min(defaults.poke.per_hour_max, resolved.poke.per_hour_max),
+      per_user_gap_s: Math.max(defaults.poke.per_user_gap_s, resolved.poke.per_user_gap_s),
+    },
+    recall: resolved.recall,
+    admin: {
+      ...resolved.admin,
+      mute_max_s: Math.min(defaults.admin.mute_max_s, resolved.admin.mute_max_s),
+    },
+  };
+}

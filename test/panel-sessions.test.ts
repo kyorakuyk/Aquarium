@@ -251,3 +251,40 @@ test('联系人读取失败时仍隐藏配置中的本账号私聊', async () =>
     assert.equal(getConfig().sessions[selfId]?.groupNote, '保留的自身会话覆盖');
   });
 });
+
+test('交互开关按会话继承根配置并可独立恢复', async () => {
+  await withPanel(async ({ app, getConfig }) => {
+    const id = sessionId(groupSession);
+    getConfig().interactions.react.enabled = true;
+
+    const readSessions = async () => {
+      const response = await app.request('/api/sessions', { headers: authHeaders() });
+      assert.equal(response.status, 200);
+      return response.json() as Promise<Array<{
+        sessionId: string;
+        interactions: { react: { enabled: boolean }; poke: { enabled: boolean } };
+      }>>;
+    };
+    const inherited = (await readSessions()).find((session) => session.sessionId === id);
+    assert.equal(inherited?.interactions.react.enabled, true);
+    assert.equal(inherited?.interactions.poke.enabled, false);
+
+    const patched = await app.request(`/api/sessions/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ interactions: { react: { enabled: false } } }),
+    });
+    assert.equal(patched.status, 200);
+    const overridden = (await readSessions()).find((session) => session.sessionId === id);
+    assert.equal(overridden?.interactions.react.enabled, false);
+    assert.equal(overridden?.interactions.poke.enabled, false);
+
+    const restored = await app.request(`/api/sessions/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ interactions: { react: { enabled: null } } }),
+    });
+    assert.equal(restored.status, 200);
+    assert.equal((await readSessions()).find((session) => session.sessionId === id)?.interactions.react.enabled, true);
+  });
+});

@@ -12,6 +12,7 @@ import { createManagementCommands } from '../src/core/conversation/management.ts
 import { createPanelApp } from '../src/panel-server/app.ts';
 import { assertLoopbackHost } from '../src/panel-server/server.ts';
 import { openDatabase } from '../src/store/db.ts';
+import { createInteractionLogRepository } from '../src/store/interaction-log-repo.ts';
 import { createRepository } from '../src/store/repository.ts';
 import {
   account,
@@ -175,7 +176,7 @@ test('pipeline trace API 受保护并返回决策的步骤时间线', async () =
 });
 
 test('决策 API 提供可读会话名、截断消息文本和可选费用', async () => {
-  await withPanel(async ({ app, repository }) => {
+  await withPanel(async ({ app, database, repository }) => {
     const longText = '鱼'.repeat(65);
     repository.saveMessage({
       sessionId: sessionId(groupSession),
@@ -194,6 +195,19 @@ test('决策 API 提供可读会话名、截断消息文本和可选费用', asy
       replied: true,
       reason: 'replied',
       detail: { costCny: 0.01234 },
+    });
+    const interactions = createInteractionLogRepository(database);
+    interactions.recordInteractionLog({
+      account,
+      time: now,
+      sessionId: sessionId(groupSession),
+      messageId: 'readable-group-message',
+      actionKind: 'react',
+      target: '42',
+      details: { emojiId: '49' },
+      source: 'rule',
+      verdict: 'executed',
+      reason: 'executed',
     });
 
     repository.saveMessage({
@@ -231,17 +245,23 @@ test('决策 API 提供可读会话名、截断消息文本和可选费用', asy
       sessionName: string;
       messageText: string | null;
       costCny: number | null;
+      interactionTrace: Array<{ actionKind: string; target: string; verdict: string; details?: Record<string, unknown> }>;
     }>;
     const groupDecision = decisions.find((decision) => decision.messageId === 'readable-group-message');
     assert.equal(groupDecision?.sessionName, '测试群');
     assert.equal(groupDecision?.messageText, '鱼'.repeat(60));
     assert.equal(Array.from(groupDecision?.messageText ?? '').length, 60);
     assert.equal(groupDecision?.costCny, 0.01234);
+    assert.deepEqual(groupDecision?.interactionTrace, [{
+      id: 1, time: now, actionKind: 'react', target: '42', details: { emojiId: '49' },
+      source: 'rule', verdict: 'executed', reason: 'executed',
+    }]);
 
     const friendDecision = decisions.find((decision) => decision.messageId === 'friend-message');
     assert.equal(friendDecision?.sessionName, '好友备注');
     assert.equal(friendDecision?.messageText, null);
     assert.equal(friendDecision?.costCny, 0);
+    assert.deepEqual(friendDecision?.interactionTrace, []);
 
     const unknownDecision = decisions.find((decision) => decision.messageId === 'missing-message');
     assert.equal(unknownDecision?.sessionName, sessionId(unknownSession));

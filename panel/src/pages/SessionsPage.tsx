@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest, patch, type DefaultsView, type SessionView } from '../api.ts';
 import { SleepSettingsPanel } from './SleepSettingsPanel.tsx';
+import { InteractionSettingsPanel } from './InteractionSettingsPanel.tsx';
 import {
   createDefaultsSettingsTarget,
   createSessionSettingsTarget,
@@ -220,6 +221,14 @@ export function SessionsPage({
               onError={reportError}
             />
             : <div className="empty-state">{selectedId === GLOBAL_DEFAULT_ID ? '正在读取全局默认设置…' : '选择一个会话查看设置。'}</div>}
+          {selectedSession && <InteractionSettingsPanel
+            key={selectedSession.sessionId}
+            session={selectedSession}
+            busy={busy}
+            onPatch={patchSettings}
+            onRefresh={refreshSettings}
+            onError={reportError}
+          />}
           {selected?.kind === 'global' && <SleepSettingsPanel />}
         </section>
       </div>

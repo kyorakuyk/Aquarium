@@ -50,6 +50,24 @@ export interface SessionSettings {
   groupNote: string;
 }
 
+export interface InteractionSettingsView {
+  react: { enabled: boolean; prob_scale: number; per_hour_max: number; per_sender_gap_s: number };
+  poke: { enabled: boolean; poke_back: boolean; proactive: boolean; per_hour_max: number; per_user_gap_s: number };
+  recall: { enabled: boolean; self_auto: boolean; others: boolean };
+  admin: { enabled: boolean; mute_max_s: number; dry_run: boolean };
+}
+
+export interface InteractionTraceView {
+  id: number;
+  time: number;
+  actionKind: 'react' | 'poke' | 'recall' | 'mute' | 'essence';
+  target?: string;
+  details?: Record<string, string | number | boolean>;
+  source: 'rule' | 'llm' | 'owner_command';
+  verdict: 'executed' | 'dry_run' | 'blocked' | 'failed';
+  reason: string;
+}
+
 export interface PersonaTraits {
   order: number;
   morality: number;
@@ -89,6 +107,8 @@ export interface SessionView {
   enabled: boolean;
   lastMessageAt: number | null;
   overrides: string[];
+  interactionOverrides: string[];
+  interactions: InteractionSettingsView;
   effective: SessionSettings;
 }
 
@@ -103,6 +123,7 @@ export interface DecisionView {
   replied: boolean;
   reason: string;
   detail: unknown;
+  interactionTrace: InteractionTraceView[];
   hasDebugTrace: boolean;
   hasPipelineTrace: boolean;
 }

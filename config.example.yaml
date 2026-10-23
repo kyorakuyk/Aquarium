@@ -40,4 +40,10 @@ debug: { enabled: false, sessions: {}, retainDays: 7 } # 默认关闭；会话�
 send: { dedupeWindowMs: 8000 } # 同会话内相同文本的发送去重窗口；0 表示关闭
 stickers: { enabled: false, maxRatio: 0.3, onlyStickerRatio: 0.1, cooldownSec: 300, candidates: 8 }
 privacy: { enabled: true, promoteMentions: 3, avoidMinutes: 10 }
+interactions:
+  master_ids: []
+  react: { enabled: false, prob_scale: 1, per_hour_max: 12, per_sender_gap_s: 60 }
+  poke: { enabled: false, poke_back: true, proactive: false, per_hour_max: 6, per_user_gap_s: 600 }
+  recall: { enabled: false, self_auto: true, others: false }
+  admin: { enabled: false, mute_max_s: 600, dry_run: true }
 panel: { host: 127.0.0.1, port: 5180, passwordEnv: AQUARIUM_PANEL_PASSWORD }

@@ -12,6 +12,7 @@ import { createImpressionsService } from '../src/core/impressions/service.ts';
 import type { ExtractTagsPromptTemplate } from '../src/core/prompt/templates.ts';
 import { createPanelApp, type PanelServerOptions } from '../src/panel-server/app.ts';
 import { openDatabase } from '../src/store/db.ts';
+import { createInteractionLogRepository } from '../src/store/interaction-log-repo.ts';
 import { createRepository } from '../src/store/repository.ts';
 import { createTagSubjectRepository } from '../src/store/tag-subject-repo.ts';
 import { createMemberSummaryRepository } from '../src/store/member-summary-repo.ts';
@@ -116,6 +117,7 @@ export async function withPanel<T>(
   fs.writeFileSync(path.join(root, 'personas', 'default.md'), '# Aquarium\n默认人设。', 'utf8');
   const database = openDatabase(path.join(root, 'aquarium.db'));
   const repository = createRepository(database, () => new Date(now));
+  const interactionLogRepository = createInteractionLogRepository(database);
   const tagSubjects = createTagSubjectRepository(database);
   const memberSummaryRepository = createMemberSummaryRepository(database);
   let config = AquariumConfigSchema.parse({
@@ -167,6 +169,7 @@ export async function withPanel<T>(
     getConfig: () => config,
     saveConfig: (next) => { config = next; savedConfig = next; },
     repository,
+    interactionLogRepository,
     tagSubjects,
     memberSummaryRepository,
     accounts: () => [{

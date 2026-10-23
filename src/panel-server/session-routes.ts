@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { ProtocolAdapter } from '../adapters/types.ts';
 import type { AquariumConfig } from '../config/schema.ts';
 import { AquariumConfigSchema, ModeScheduleSchema } from '../config/schema.ts';
-import { resolveSession } from '../config/resolve.ts';
+import { resolveInteractions, resolveSession } from '../config/resolve.ts';
 import { parseSessionId } from '../core/conversation/sessions.ts';
 import { sessionId, type SessionKey } from '../core/shared/events.ts';
 import type { StoreRepository } from '../store/repository.ts';
@@ -15,6 +15,17 @@ const ratePatchSchema = z.object({
   minIntervalSec: z.number().positive().nullable().optional(),
 }).strict();
 
+const interactionFeaturePatchSchema = z.object({
+  enabled: z.boolean().nullable().optional(),
+}).strict().nullable().optional();
+
+const interactionsPatchSchema = z.object({
+  react: interactionFeaturePatchSchema,
+  poke: interactionFeaturePatchSchema,
+  recall: interactionFeaturePatchSchema,
+  admin: interactionFeaturePatchSchema,
+}).strict().nullable().optional();
+
 const sessionPatchSchema = z.object({
   enabled: z.boolean().nullable().optional(),
   mode: z.enum(['mention_only', 'active', 'natural', 'busy']).nullable().optional(),
@@ -25,6 +36,7 @@ const sessionPatchSchema = z.object({
   contextMessages: z.number().int().positive().nullable().optional(),
   rate: ratePatchSchema.nullable().optional(),
   groupNote: z.string().nullable().optional(),
+  interactions: interactionsPatchSchema,
 }).strict();
 
 const defaultsPatchSchema = z.object({
@@ -49,6 +61,11 @@ const DEVICE_CONTACT_NAMES = new Set(['我的电脑', '我的手机', '我的Pad
 function parseJsonBody<T>(body: unknown, schema: z.ZodType<T>): T | undefined {
   const result = schema.safeParse(body);
   return result.success ? result.data : undefined;
+}
+
+function interactionSettingsForPanel(config: AquariumConfig, key: SessionKey) {
+  const settings = resolveInteractions(config, key);
+  return { react: settings.react, poke: settings.poke, recall: settings.recall, admin: settings.admin };
 }
 
 export interface SessionRouteOptions {
@@ -134,6 +151,8 @@ export function registerSessionRoutes(app: Hono, options: SessionRouteOptions): 
         enabled: effective.enabled,
         lastMessageAt: options.repository.lastMessageTime(id),
         overrides: Object.keys(config.sessions[id] ?? {}),
+        interactionOverrides: Object.keys(config.sessions[id]?.interactions ?? {}),
+        interactions: interactionSettingsForPanel(config, row.key),
         effective: {
           mode: effective.mode,
           modeSchedule: effective.modeSchedule,
@@ -174,6 +193,33 @@ export function registerSessionRoutes(app: Hono, options: SessionRouteOptions): 
       const config = options.getConfig();
       const updated = { ...(config.sessions[id] ?? {}) } as Record<string, unknown>;
       for (const [field, value] of Object.entries(patch)) {
+        if (field === 'interactions') {
+          if (value === null) {
+            delete updated.interactions;
+            continue;
+          }
+          if (value && typeof value === 'object') {
+            const interactions = { ...((updated.interactions as Record<string, unknown> | undefined) ?? {}) };
+            for (const [feature, featureValue] of Object.entries(value)) {
+              if (featureValue === null) {
+                delete interactions[feature];
+                continue;
+              }
+              if (featureValue && typeof featureValue === 'object') {
+                const settings = { ...((interactions[feature] as Record<string, unknown> | undefined) ?? {}) };
+                for (const [setting, settingValue] of Object.entries(featureValue)) {
+                  if (settingValue === null) delete settings[setting];
+                  else if (settingValue !== undefined) settings[setting] = settingValue;
+                }
+                if (Object.keys(settings).length === 0) delete interactions[feature];
+                else interactions[feature] = settings;
+              }
+            }
+            if (Object.keys(interactions).length === 0) delete updated.interactions;
+            else updated.interactions = interactions;
+          }
+          continue;
+        }
         if (field !== 'rate') {
           if (value === null) delete updated[field];
           else if (value !== undefined) updated[field] = value;
@@ -202,6 +248,8 @@ export function registerSessionRoutes(app: Hono, options: SessionRouteOptions): 
         sessionId: id,
         enabled: resolveSession(nextConfig, key).enabled,
         overrides: Object.keys(nextConfig.sessions[id] ?? {}),
+        interactionOverrides: Object.keys(nextConfig.sessions[id]?.interactions ?? {}),
+        interactions: interactionSettingsForPanel(nextConfig, key),
       });
     });
   });
