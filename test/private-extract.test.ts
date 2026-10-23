@@ -63,7 +63,7 @@ test('private extraction puts fixed instructions before changing records and fac
     existing: [{ id: 7, text: '正在准备考试', keywords: ['考试', '学习'] }],
     template,
   });
-  const fixedInstruction = '请只输出 new、update、obsolete 三个数组组成的 JSON。每个 text 必须有窗口内对方消息作为依据。';
+  const fixedInstruction = '请只输出 new、update、obsolete、eventNotes 四个数组组成的 JSON。每个事实或注解都必须有窗口内对方消息作为依据。';
 
   assert.equal(first[0]?.content, second[0]?.content);
   assert.ok(String(first[1]?.content).startsWith(fixedInstruction));
@@ -114,11 +114,15 @@ test('private extraction parser requires all result arrays and preserves item fi
     new: [{ text: '喜欢周末爬山', keywords: ['周末', '爬山'], messageId: 'private-2' }],
     update: [{ id: 7, text: '开始每周末爬山', keywords: ['周末', '爬山'], messageId: 'private-3' }],
     obsolete: [{ id: 8 }],
+    eventNotes: [{ eventId: 9, text: '已经说明', intent: 'clarify', messageIds: ['private-3'] }],
   }));
 
   assert.equal(parsed?.new.length, 1);
   assert.equal(parsed?.update.length, 1);
   assert.equal(parsed?.obsolete.length, 1);
+  assert.equal(parsed?.eventNotes.length, 1);
+  assert.equal(parsePrivateFactResponse('{"new":[],"update":[],"obsolete":[]}')?.eventNotes.length, 0);
+  assert.equal(parsePrivateFactResponse('{"new":[],"update":[],"obsolete":[],"eventNotes":"invalid"}')?.eventNotes.length, 0);
   assert.equal(parsePrivateFactResponse('{"new":[]}'), undefined);
   assert.equal(parsePrivateFactResponse('not JSON'), undefined);
 });

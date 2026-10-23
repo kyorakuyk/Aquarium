@@ -303,7 +303,7 @@ function parseExtractPrivateTemplate(template: PromptTemplate): ExtractPrivatePr
   }
   const extractPrivate = { ...template, system: fields.system, user: fields.user };
   validatePlaceholders('extract-private.md', extractPrivate.system, [], []);
-  validatePlaceholders('extract-private.md', extractPrivate.user, ['context', 'existing'], ['context', 'existing']);
+  validatePlaceholders('extract-private.md', extractPrivate.user, ['context', 'existing', 'events'], ['context', 'existing', 'events']);
   return extractPrivate;
 }
 

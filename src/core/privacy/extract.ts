@@ -1,4 +1,6 @@
 import type OpenAI from 'openai';
+import type { PrivateGroupEventCandidate } from '../impressions/group-events-prompt.ts';
+import { redactSensitiveText } from '../impressions/sensitive-text.ts';
 import type { MessageStorageRecord } from '../../store/repository.ts';
 import type { ExtractPrivatePromptTemplate } from '../prompt/templates.ts';
 
@@ -12,6 +14,15 @@ export interface ParsedPrivateFactResponse {
   new: unknown[];
   update: unknown[];
   obsolete: unknown[];
+  eventNotes: unknown[];
+}
+
+export interface ExistingEventNoteSummary {
+  eventId: number;
+  text: string;
+  intent: 'confide' | 'clarify' | 'advocate';
+  level: 'L0' | 'L1' | 'L2';
+  status: 'active' | 'retracted';
 }
 
 function formatTime(timestamp: number): string {
@@ -42,20 +53,44 @@ function formatExisting(facts: readonly ExistingPrivateFactSummary[]): string {
   return serializePromptData(facts.map(({ id, text, keywords }) => ({ id, text, keywords })));
 }
 
+function formatEvents(
+  events: readonly PrivateGroupEventCandidate[],
+  notes: readonly ExistingEventNoteSummary[],
+): string {
+  return serializePromptData({
+    candidates: events.map((event) => ({
+      eventId: event.id,
+      time: event.occurredAt,
+      title: redactSensitiveText(event.title),
+      summary: redactSensitiveText(event.summary),
+    })),
+    existingNotes: notes.map((note) => ({
+      eventId: note.eventId,
+      text: redactSensitiveText(note.text),
+      intent: note.intent,
+      level: note.level,
+      status: note.status,
+    })),
+  });
+}
+
 export function buildPrivateExtractionMessages(input: {
   records: readonly MessageStorageRecord[];
   ownerId: number;
   existing: readonly ExistingPrivateFactSummary[];
+  events?: readonly PrivateGroupEventCandidate[];
+  existingEventNotes?: readonly ExistingEventNoteSummary[];
   template: ExtractPrivatePromptTemplate;
 }): OpenAI.ChatCompletionMessageParam[] {
   return [
     { role: 'system', content: input.template.system },
     {
       role: 'user',
-      content: input.template.user.replace(/\{\{context\}\}|\{\{existing\}\}/gu, (placeholder) =>
-        placeholder === '{{context}}'
-          ? formatContext(input.records, input.ownerId)
-          : formatExisting(input.existing)),
+      content: input.template.user.replace(/\{\{context\}\}|\{\{existing\}\}|\{\{events\}\}/gu, (placeholder) => {
+        if (placeholder === '{{context}}') return formatContext(input.records, input.ownerId);
+        if (placeholder === '{{existing}}') return formatExisting(input.existing);
+        return formatEvents(input.events ?? [], input.existingEventNotes ?? []);
+      }),
     },
   ];
 }
@@ -73,5 +108,10 @@ export function parsePrivateFactResponse(text: string): ParsedPrivateFactRespons
   }
   if (!isRecord(value) || !Array.isArray(value.new)
     || !Array.isArray(value.update) || !Array.isArray(value.obsolete)) return undefined;
-  return { new: value.new, update: value.update, obsolete: value.obsolete };
+  return {
+    new: value.new,
+    update: value.update,
+    obsolete: value.obsolete,
+    eventNotes: Array.isArray(value.eventNotes) ? value.eventNotes : [],
+  };
 }

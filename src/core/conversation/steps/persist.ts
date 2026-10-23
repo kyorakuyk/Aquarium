@@ -5,6 +5,14 @@ export const persistStep: PipelineStep = async (ctx) => traceStep(ctx, 'persist'
   const inserted = ctx.processOptions.replay === true
     || ctx.processOptions.alreadySaved === true
     || ctx.options.repository.saveMessage(messageRecord(ctx.message, ctx.currentSessionId));
+  if (!ctx.processOptions.replay && ctx.message.session.kind === 'private') {
+    ctx.options.privateFactsService?.revokeEventNotesIfRequested({
+      session: ctx.message.session,
+      messageId: ctx.message.messageId,
+      senderId: ctx.message.senderId,
+      now: ctx.now(),
+    });
+  }
   if (!inserted) {
     if (!ctx.processOptions.replay) ctx.options.personaMemoryService?.recordMemo(ctx.message);
     return { next: false, reason: 'duplicate' };

@@ -98,6 +98,7 @@ test('extract-private 模板按原始文件哈希加载并保留私聊提取指�
   assert.ok(template.system.includes('同一件事优先用 update 更新'));
   assert.ok(template.user.includes('{{context}}'));
   assert.ok(template.user.includes('{{existing}}'));
+  assert.ok(template.user.includes('{{events}}'));
 });
 
 test('reply-system 模板提供带 name 和 facts 占位符的 privateFacts 块', () => {

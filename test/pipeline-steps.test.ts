@@ -55,6 +55,7 @@ function makeContext(
     saveMessage: (_record: unknown) => true,
     recordDecision: () => {},
     recentMessages: () => [],
+    listGroupEvents: () => [],
     getCaption: () => undefined,
     setCaption: () => {},
     costToday: () => 0,

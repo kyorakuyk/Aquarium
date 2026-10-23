@@ -131,6 +131,7 @@ test('daytime pipeline records memos instead of extracting knowledge or promotin
         promptBlocks() { return { droppedTags: 0 }; },
       } as unknown as Parameters<typeof createMessagePipeline>[0]['impressionsService'],
       privateFactsService: {
+        revokeEventNotesIfRequested() { return 0; },
         maybeExtract() { privateExtractions += 1; },
         promptBlock() { return undefined; },
       } as unknown as Parameters<typeof createMessagePipeline>[0]['privateFactsService'],

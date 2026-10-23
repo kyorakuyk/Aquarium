@@ -9,6 +9,12 @@ import { buildPrivateExtractionMessages, parsePrivateFactResponse } from './extr
 import { buildPrivateFactsBlock } from './prompt.ts';
 import { decide } from './policy.ts';
 import { syncKinRelays } from './kin-relay.ts';
+import {
+  applyPrivateEventNoteExtraction,
+  privateEventNoteExtractionContext,
+  revokeEventNotesFromPrivateMessage,
+  type PrivateEventNoteExtractionContext,
+} from './event-notes.ts';
 import type { PipelineModelCall } from '../conversation/steps/types.ts';
 import { sessionId, type SessionKey } from '../shared/events.ts';
 import { linkedAccountUserIds } from '../profiles/account-identity.ts';
@@ -35,6 +41,12 @@ export interface PrivateFactsService {
     now: number;
     template: ReplySystemTemplate;
   }): string | undefined;
+  revokeEventNotesIfRequested(input: {
+    session: SessionKey;
+    messageId: string;
+    senderId: number;
+    now: number;
+  }): number;
   maybeExtract(input: {
     session: SessionKey;
     messageId: string;
@@ -158,7 +170,14 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
     });
   }
 
-  function applyResult(input: ExtractInput, sessionIdValue: string, records: ReturnType<StoreRepository['recentMessages']>, existingFacts: PrivateFactRecord[], result: unknown): PrivateFactsSummary {
+  function applyResult(
+    input: ExtractInput,
+    sessionIdValue: string,
+    records: ReturnType<StoreRepository['recentMessages']>,
+    existingFacts: PrivateFactRecord[],
+    eventNoteContext: PrivateEventNoteExtractionContext,
+    result: unknown,
+  ): PrivateFactsSummary {
     const summary = emptySummary(input.session.account, sessionIdValue, 'done');
     const parsed = parsePrivateFactResponse(typeof result === 'string' ? result : '');
     if (!parsed) {
@@ -240,6 +259,18 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
       summary.deleted += 1;
     }
 
+    summary.dropped += applyPrivateEventNoteExtraction({
+      repository: options.repository,
+      session: input.session,
+      targetSessionId: sessionIdValue,
+      ownerId: eventNoteContext.ownerId,
+      records,
+      events: eventNoteContext.events,
+      existingNotes: eventNoteContext.existingNotes,
+      notes: parsed.eventNotes,
+      now: input.now,
+    });
+
     return summary;
   }
 
@@ -265,10 +296,30 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
     const existingFacts = options.repository
       .listPrivateFactsForOwner(input.session.account, target.peerId)
       .filter((fact) => allowedForPrivateSession(fact, sessionIdValue, target.peerId));
+    let eventNoteContext: PrivateEventNoteExtractionContext;
+    try {
+      eventNoteContext = privateEventNoteExtractionContext({
+        repository: options.repository,
+        session: input.session,
+        targetSessionId: sessionIdValue,
+        records: allowedRecords,
+        now: input.now,
+      });
+    } catch {
+      reportError(input.session.account, sessionIdValue);
+      eventNoteContext = {
+        ownerId: options.repository.mainUserIdFor(input.session.account, target.peerId),
+        events: [],
+        existingNotes: [],
+        existingNoteSummaries: [],
+      };
+    }
     const messages = buildPrivateExtractionMessages({
       records: allowedRecords,
       ownerId: target.peerId,
       existing: existingFacts.map(({ id, text, keywords }) => ({ id, text, keywords })),
+      events: eventNoteContext.events,
+      existingEventNotes: eventNoteContext.existingNoteSummaries,
       template: input.template,
     });
 
@@ -289,7 +340,7 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
     }
 
     try {
-      const applied = applyResult(input, sessionIdValue, records, existingFacts, responseText);
+      const applied = applyResult(input, sessionIdValue, records, existingFacts, eventNoteContext, responseText);
       try {
         syncKinRelays(options.repository, input.now);
       } catch {
@@ -365,6 +416,22 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
       } catch {
         reportError(input.session.account, sessionIdValue);
         return undefined;
+      }
+    },
+
+    revokeEventNotesIfRequested(input) {
+      if (input.session.kind !== 'private') return 0;
+      try {
+        return revokeEventNotesFromPrivateMessage({
+          repository: options.repository,
+          session: input.session,
+          messageId: input.messageId,
+          senderId: input.senderId,
+          now: input.now,
+        });
+      } catch {
+        reportError(input.session.account, sessionId(input.session));
+        return 0;
       }
     },
 

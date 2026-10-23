@@ -37,7 +37,17 @@ export type {
   UsageSummary,
 } from './repository-types.ts';
 export type { AccountKind, AccountKindRecord, RelationRecord, RelationType, StoredRelation } from './identity-repo.ts';
-export type { EventRepository, GroupEventInput, StoredGroupEvent } from './event-repo.ts';
+export type {
+  EventNoteIntent,
+  EventNoteLevel,
+  EventNoteStatus,
+  EventRepository,
+  GroupEventInput,
+  GroupEventNoteInput,
+  GroupEventNoteUpdate,
+  StoredGroupEvent,
+  StoredGroupEventNote,
+} from './event-repo.ts';
 
 function limitValue(count: number): number {
   if (!Number.isSafeInteger(count) || count < 0) {

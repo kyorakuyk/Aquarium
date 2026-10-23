@@ -94,6 +94,48 @@ function makeContext(
   } as StepContext;
 }
 
+function makeGroupContext(
+  repository: StoreRepository,
+  personaRoot: string,
+  senderId: number,
+  plainText: string,
+): StepContext {
+  const config = makeConfig({ nicknames: [] });
+  const modelCall = async (): Promise<SlotResult> => ({
+    text: '回复',
+    provider: 'fake',
+    model: 'fake-model',
+    usage: { inputTokens: 0, cachedTokens: 0, outputTokens: 0, costCny: 0 },
+  });
+  const adapter = new FakeAdapter();
+  return {
+    message: makeIncoming({ session: groupSession, senderId, plainText, time: baseTime }),
+    processOptions: {},
+    currentSessionId: sessionId(groupSession),
+    options: {
+      getConfig: () => config,
+      repository,
+      adapter,
+      getNickname: () => adapter.nickname,
+      personaRoot,
+    },
+    contextWindow: createAnchoredContextWindow(),
+    now: () => baseTime,
+    wait: async () => {},
+    random: () => 0.5,
+    modelCall,
+    rateLimiter: createRateLimiter(() => baseTime),
+    trace: [],
+    state: {
+      config,
+      settings: resolveSession(config, groupSession),
+      sentMessageIds: [],
+      promptTemplates: promptTemplateStore.get(),
+      promptFingerprints: [],
+    },
+  } as StepContext;
+}
+
 test('private context injects up to three fresh, member-visible group events with keyword priority', async () => {
   await withRepository(async (repository, personaRoot) => {
     await loadMemberCaches(repository);
@@ -128,5 +170,60 @@ test('private context injects up to three fresh, member-visible group events wit
     const outsiderPrompt = String(outsiderContext.state.prompt?.[1]?.content);
     assert.ok(!outsiderPrompt.includes('漫展集合'));
     assert.ok(!outsiderPrompt.includes('群外秘密'));
+  });
+});
+
+test('group context injects only policy-authorized event notes and may attribute approved intents', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const eventId = repository.upsertGroupEvent({
+      account: groupSession.account,
+      sourceGroupId: groupSession.peer,
+      anchorMessageId: 'group-note-event',
+      title: '漫展集合',
+      summary: '群友约好周末一同参加漫展',
+      participantIds: [MEMBER_A],
+      evidenceMessageIds: ['group-note-event'],
+      occurredAt: baseTime - 60_000,
+      createdAt: baseTime - 60_000,
+      updatedAt: baseTime - 60_000,
+    });
+    repository.upsertGroupEventNote({
+      account: groupSession.account,
+      eventId,
+      ownerId: MEMBER_A,
+      sourceSessionId: `${groupSession.account}:private:${MEMBER_A}`,
+      text: '当天只是集合时间沟通有误',
+      intent: 'clarify',
+      level: 'L1',
+      status: 'active',
+      sourceMessageIds: ['private-clarification'],
+      createdAt: baseTime - 30_000,
+      updatedAt: baseTime - 30_000,
+    });
+    repository.upsertGroupEventNote({
+      account: groupSession.account,
+      eventId,
+      ownerId: MEMBER_B,
+      sourceSessionId: `${groupSession.account}:private:${MEMBER_B}`,
+      text: '私密解释不应进群',
+      intent: 'confide',
+      level: 'L2',
+      status: 'active',
+      sourceMessageIds: ['private-confide'],
+      createdAt: baseTime - 20_000,
+      updatedAt: baseTime - 20_000,
+    });
+
+    const context = makeGroupContext(repository, personaRoot, MEMBER_A, '后来漫展集合怎么样了？');
+    assert.deepEqual(await contextStep(context), { next: true });
+    const system = String(context.state.prompt?.[0]?.content);
+    const prompt = String(context.state.prompt?.[1]?.content);
+    assert.ok(system.includes('群事件注解不得暴露其私聊来源'));
+    assert.ok(prompt.includes('漫展集合'));
+    assert.ok(prompt.includes('当天只是集合时间沟通有误'));
+    assert.ok(prompt.includes('"speaker":"小明"'));
+    assert.ok(!prompt.includes('私密解释不应进群'));
+    assert.ok(!prompt.includes('private-clarification'));
+    assert.ok(!prompt.includes(`${groupSession.account}:private:${MEMBER_A}`));
   });
 });

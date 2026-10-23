@@ -9,11 +9,15 @@ const PRIVATE_EVENT_LOOKBACK_MS = 48 * 60 * 60_000;
 const EVENT_SCAN_LIMIT = Number.MAX_SAFE_INTEGER;
 const MAX_PRIVATE_GROUP_EVENTS = 3;
 
-interface GroupEventCandidate {
+export interface PrivateGroupEventCandidate {
   id: number;
+  sourceGroupId: number;
   occurredAt: number;
   title: string;
   summary: string;
+}
+
+interface GroupEventCandidate extends PrivateGroupEventCandidate {
   keywordOverlap: number;
 }
 
@@ -26,7 +30,7 @@ interface BuildPrivateGroupEventsBlockInput {
   template: ReplySystemTemplate;
 }
 
-function keywords(value: string): Set<string> {
+export function groupEventKeywords(value: string): Set<string> {
   const normalized = value.normalize('NFKC').toLocaleLowerCase();
   const result = new Set<string>();
   for (const match of normalized.matchAll(/[a-z0-9]{2,}/giu)) result.add(match[0]);
@@ -41,7 +45,7 @@ function keywords(value: string): Set<string> {
 
 function keywordOverlap(messageKeywords: Set<string>, eventText: string): number {
   let count = 0;
-  for (const keyword of keywords(eventText)) {
+  for (const keyword of groupEventKeywords(eventText)) {
     if (messageKeywords.has(keyword)) count += 1;
   }
   return count;
@@ -57,19 +61,19 @@ function compareRecency(first: GroupEventCandidate, second: GroupEventCandidate)
   return second.occurredAt - first.occurredAt || second.id - first.id;
 }
 
-export function buildPrivateGroupEventsBlock(
-  input: BuildPrivateGroupEventsBlockInput,
-): string | undefined {
+export function selectMemberVisibleGroupEvents(
+  input: Omit<BuildPrivateGroupEventsBlockInput, 'template'>,
+): PrivateGroupEventCandidate[] {
   const { session } = input;
   if (session.kind !== 'private' || !Number.isSafeInteger(input.now) || input.now < 0
-    || input.targetSessionId !== sessionId(session)) return undefined;
+    || input.targetSessionId !== sessionId(session)) return [];
 
   const since = Math.max(0, input.now - PRIVATE_EVENT_LOOKBACK_MS);
   const profileService = createQqProfileService({
     repository: input.repository,
     now: () => input.now,
   });
-  const messageKeywords = keywords(input.messageText);
+  const messageKeywords = groupEventKeywords(input.messageText);
   const candidates: GroupEventCandidate[] = [];
 
   for (const groupId of input.repository.listRecentGroupEventGroupIds(session.account, since)) {
@@ -97,6 +101,7 @@ export function buildPrivateGroupEventsBlock(
       const summary = redactSensitiveText(event.summary);
       candidates.push({
         id: event.id,
+        sourceGroupId: event.sourceGroupId,
         occurredAt: event.occurredAt,
         title,
         summary,
@@ -106,6 +111,13 @@ export function buildPrivateGroupEventsBlock(
   }
 
   const selected = candidates.sort(compareRelevance).slice(0, MAX_PRIVATE_GROUP_EVENTS).sort(compareRecency);
+  return selected.map(({ keywordOverlap: _keywordOverlap, ...event }) => event);
+}
+
+export function buildPrivateGroupEventsBlock(
+  input: BuildPrivateGroupEventsBlockInput,
+): string | undefined {
+  const selected = selectMemberVisibleGroupEvents(input);
   if (selected.length === 0) return undefined;
 
   const payload = JSON.stringify(selected.map((event) => ({

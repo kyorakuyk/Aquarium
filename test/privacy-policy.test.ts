@@ -111,6 +111,31 @@ test('group events reach only a source-group member in a private prompt', () => 
   }), 'deny');
 });
 
+test('event-note intent is enforced by the shared privacy decision', () => {
+  const target: PrivacyTarget = { kind: 'group', sessionId: '900000001:group:123456' };
+  const privateNote = {
+    origin: 'private',
+    sessionId: '900000001:private:99',
+    ownerId: 99,
+    level: 'L1',
+    eventIntent: 'clarify',
+  } as PrivacyInfo;
+
+  assert.equal(decide({ info: privateNote, target, purpose: 'prompt' }), 'allow');
+  assert.equal(decide({ info: privateNote, target, purpose: 'gate' }), 'gate_only');
+  assert.equal(decide({
+    info: { ...privateNote, eventIntent: 'advocate', level: 'L2' }, target, purpose: 'prompt',
+  }), 'allow');
+  assert.equal(decide({
+    info: { ...privateNote, eventIntent: 'confide', level: 'L2' }, target, purpose: 'prompt',
+  }), 'deny');
+  assert.equal(decide({
+    info: { ...privateNote, eventIntent: 'private' } as unknown as PrivacyInfo,
+    target,
+    purpose: 'prompt',
+  }), 'deny');
+});
+
 test('privacy policy denies malformed inputs and missing required fields', () => {
   const malformed: unknown[] = [
     null,

@@ -7,6 +7,7 @@ import { redactSensitiveText } from '../../impressions/sensitive-text.ts';
 import { mapMessageToMainIdentity, resolveAccountIdentity } from '../../profiles/account-identity.ts';
 import { buildAltRecentBlock } from '../../privacy/alt-recent.ts';
 import { buildPrivateGroupEventsBlock } from '../../impressions/group-events-prompt.ts';
+import { buildGroupEventContextBlock } from '../../privacy/event-notes.ts';
 import { createSlotCallOptions } from './call-options.ts';
 import { errorDetails } from './errors.ts';
 import { getPersonaForMessage } from './persona.ts';
@@ -99,14 +100,29 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     now: ctx.now(),
     template: ctx.state.promptTemplates.replySystem,
   });
-  const groupEventsBlock = buildPrivateGroupEventsBlock({
-    session: ctx.message.session,
-    targetSessionId: ctx.currentSessionId,
-    messageText: ctx.message.plainText,
-    now: ctx.now(),
-    repository: ctx.options.repository,
-    template: ctx.state.promptTemplates.replySystem,
-  });
+  const groupEventsBlock = ctx.message.session.kind === 'private'
+    ? buildPrivateGroupEventsBlock({
+      session: ctx.message.session,
+      targetSessionId: ctx.currentSessionId,
+      messageText: ctx.message.plainText,
+      now: ctx.now(),
+      repository: ctx.options.repository,
+      template: ctx.state.promptTemplates.replySystem,
+    })
+    : buildGroupEventContextBlock({
+      repository: ctx.options.repository,
+      session: ctx.message.session,
+      targetSessionId: ctx.currentSessionId,
+      now: ctx.now(),
+      template: ctx.state.promptTemplates.replySystem,
+      speakerNames: new Map([
+        ...context.filter((record) => !record.isSelf).map((record) => [
+          record.senderId,
+          redactSensitiveText(record.senderName),
+        ] as const),
+        [identity.userId, redactSensitiveText(identity.name)] as const,
+      ]),
+    });
   const altRecentBlock = buildAltRecentBlock(ctx.options.repository, {
     session: ctx.message.session,
     now: ctx.now(),

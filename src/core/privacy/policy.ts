@@ -8,6 +8,7 @@ export interface PrivacyInfo {
   ownerId: number | null;
   level?: PrivacyLevel;
   eventGroupMemberIds?: number[];
+  eventIntent?: 'confide' | 'clarify' | 'advocate';
 }
 
 export type PrivacyTarget =
@@ -33,6 +34,7 @@ function validInput(value: unknown): value is PrivacyDecisionInput {
   const info = value.info;
   const target = value.target;
   const eventGroupMemberIds = info.eventGroupMemberIds;
+  const eventIntent = info.eventIntent;
   const validTarget = target.kind === 'kin'
     ? isPositiveId(target.groupId)
     : (target.kind === 'private' || target.kind === 'group')
@@ -44,6 +46,8 @@ function validInput(value: unknown): value is PrivacyDecisionInput {
     || (info.origin === 'private' && !isPositiveId(info.ownerId))
     || (eventGroupMemberIds !== undefined && (info.origin !== 'group' || info.ownerId !== null
       || !Array.isArray(eventGroupMemberIds) || eventGroupMemberIds.some((id) => !isPositiveId(id))))
+    || (eventIntent !== undefined && (info.origin !== 'private'
+      || !['confide', 'clarify', 'advocate'].includes(String(eventIntent))))
     || !validTarget
     || !['prompt', 'gate', 'third_party'].includes(String(value.purpose))) return false;
   if (info.level !== undefined && !['L0', 'L1', 'L2'].includes(String(info.level))) return false;
@@ -53,6 +57,8 @@ function validInput(value: unknown): value is PrivacyDecisionInput {
 export function decide(input: PrivacyDecisionInput): PrivacyDecision {
   if (!validInput(input)) return 'deny';
   const { info, target, purpose } = input;
+
+  if (info.eventIntent === 'confide' && target.kind !== 'private') return 'deny';
 
   if (target.kind === 'kin') {
     if (purpose !== 'prompt') return 'deny';
