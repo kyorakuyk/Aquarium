@@ -10,12 +10,18 @@ import { runAppraise } from './appraise.ts';
 import { renderFloatBlock, renderMoodBlocks, type MoodPromptBlocks } from './render.ts';
 import {
   bandOf,
+  applyArousalDelta,
+  bufferNegativeDelta,
+  capSenderReserveDelta,
   capSenderValenceDelta,
-  clampMood,
-  decayValue,
+  isSuccessfulAppraisal,
   nextBand,
+  nextReserveBand,
   SENDER_VALENCE_WINDOW_MS,
+  type EnergySource,
+  type ReserveHistoryEntry,
 } from './core.ts';
+import { resolveMoodState, type ResolvedMoodState } from './state.ts';
 
 // 同一会话两次评估至少间隔 90 秒，间隔内不评估、不排队。
 export const APPRAISE_MIN_INTERVAL_MS = 90 * 1000;
@@ -25,6 +31,7 @@ export const CALLED_AROUSAL_BUMP = 0.05;
 export interface MoodServiceOptions {
   repository: StoreRepository;
   getConfig: () => AquariumConfig;
+  getEnergySource?: (account: number) => EnergySource;
   callModel?: PipelineModelCall;
   affinityService?: AffinityService;
   now?: () => number;
@@ -37,9 +44,10 @@ export interface MoodService {
     now: number;
     template: AffectPromptTemplate;
     energy?: number;
+    energySource?: EnergySource;
     record: boolean;
   }): MoodPromptBlocks;
-  currentBand(input: { account: number; now: number }): MoodBand;
+  currentBand(input: { account: number; now: number; energySource?: EnergySource }): MoodBand;
   recordCalled(input: { account: number; sessionId: string; now: number }): void;
   afterReply(input: {
     account: number;
@@ -47,63 +55,69 @@ export interface MoodService {
     senderId: number | null;
     now: number;
     template: AppraisePromptTemplate;
+    energySource?: EnergySource;
   }): Promise<void>;
   idle(): Promise<void>;
-}
-
-interface ResolvedMoodState {
-  valence: number;
-  arousal: number;
-  band: MoodBand;
-  bandSince: number;
-  lastBandChangeAt: number;
 }
 
 export function createMoodService(options: MoodServiceOptions): MoodService {
   const now = options.now ?? Date.now;
   const callModel = options.callModel ?? callSlot;
+  const getEnergySource = options.getEnergySource ?? (() => 'mixed' as const);
   const lastAppraiseAt = new Map<string, number>();
+  const lastCalledAt = new Map<string, number>();
   const pending = new Set<Promise<void>>();
 
-  function loadState(account: number, at: number): ResolvedMoodState {
+  function loadState(account: number, at: number, energySource: EnergySource): ResolvedMoodState {
     const mood = options.getConfig().mood;
     const stored = options.repository.getMoodState(account);
-    if (!stored) {
-      return {
-        valence: mood.baseline.valence,
-        arousal: mood.baseline.arousal,
-        band: bandOf(mood.baseline.valence),
-        bandSince: at,
-        lastBandChangeAt: at,
-      };
-    }
-    return {
-      valence: decayValue(stored.valence, mood.baseline.valence, at - stored.updatedAt, mood.halfLifeMin),
-      arousal: decayValue(stored.arousal, mood.baseline.arousal, at - stored.updatedAt, mood.halfLifeMin),
-      band: stored.band,
-      bandSince: stored.bandSince,
-      lastBandChangeAt: stored.lastBandChangeAt,
-    };
+    const resolvedAt = Math.max(at, stored?.updatedAt ?? at);
+    const historyFrom = stored ? stored.updatedAt - 15 * 60_000 : resolvedAt - 15 * 60_000;
+    return resolveMoodState({
+      stored,
+      at,
+      settings: mood,
+      energySource,
+      appraisalEvents: stored ? options.repository.moodEventsSince(account, historyFrom) : [],
+      replyTimes: stored ? options.repository.replyTimesForAccount(account, historyFrom, resolvedAt) : [],
+    });
   }
 
-  function saveState(account: number, at: number, state: ResolvedMoodState): void {
+  function saveState(account: number, state: ResolvedMoodState): void {
     options.repository.saveMoodState({
       account,
       valence: state.valence,
       arousal: state.arousal,
-      updatedAt: at,
+      updatedAt: state.updatedAt,
       band: state.band,
       bandSince: state.bandSince,
       lastBandChangeAt: state.lastBandChangeAt,
+      reserve: state.reserve,
+      reserveBand: state.reserveBand,
+      reserveBandSince: state.reserveBandSince,
+      reserveLastChangeAt: state.reserveLastChangeAt,
+      lastReplyAt: state.lastReplyAt,
     });
   }
+
+  type EventWriteFields = Omit<MoodEventRecord, 'account' | 'time' | 'dr' | 'appliedDr' | 'absorbed' | 'reserveAfter' | 'appraisalValid'>
+    & Partial<Pick<MoodEventRecord, 'dr' | 'appliedDr' | 'absorbed' | 'reserveAfter' | 'appraisalValid'>>;
 
   function recordEvent(
     account: number,
     time: number,
-    fields: Omit<MoodEventRecord, 'account' | 'time'>,
+    fields: EventWriteFields,
   ): void {
-    options.repository.recordMoodEvent({ account, time, ...fields });
+    options.repository.recordMoodEvent({
+      account,
+      time,
+      dr: 0,
+      appliedDr: 0,
+      absorbed: 0,
+      reserveAfter: null,
+      appraisalValid: null,
+      ...fields,
+    });
   }
 
   function reportError(error: unknown): void {
@@ -117,47 +131,56 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
   return {
     promptBlocks(input) {
       const moodConfig = options.getConfig().mood;
+      const energySource = input.energySource ?? 'mixed';
       if (!moodConfig.enabled) {
         const float = renderFloatBlock(input.template, 0.5, input.energy ?? 1);
         return float ? { float } : {};
       }
-      const current = loadState(input.account, input.now);
+      const current = loadState(input.account, input.now, energySource);
       const band = nextBand(current, current.valence, input.now, 'decay');
-      if (band !== current.band && input.record) {
-        recordEvent(input.account, input.now, {
-          source: 'band',
-          sessionId: null,
-          senderId: null,
-          dv: 0,
-          da: 0,
-          appliedDv: 0,
-          appliedDa: 0,
-          reason: 'decay',
-          bandBefore: current.band,
-          bandAfter: band,
-          valenceAfter: current.valence,
-          arousalAfter: current.arousal,
-        });
-        saveState(input.account, input.now, {
-          ...current,
-          band,
-          bandSince: input.now,
-          lastBandChangeAt: input.now,
-        });
+      const reserveBand = nextReserveBand({ band: current.reserveBand, bandSince: current.reserveBandSince, lastBandChangeAt: current.reserveLastChangeAt }, current.reserve, input.now, 'decay');
+      let next = current;
+      if (band !== current.band) {
+        next = { ...next, band, bandSince: input.now, lastBandChangeAt: input.now };
+        if (input.record) {
+          recordEvent(input.account, input.now, {
+            source: 'band', sessionId: null, senderId: null, dv: 0, da: 0,
+            appliedDv: 0, appliedDa: 0, reason: 'decay',
+            bandBefore: current.band, bandAfter: band,
+            valenceAfter: current.valence, arousalAfter: current.arousal, reserveAfter: current.reserve,
+          });
+        }
       }
-      return renderMoodBlocks(input.template, band, current.arousal, input.energy ?? 1);
+      if (reserveBand !== current.reserveBand) {
+        next = { ...next, reserveBand, reserveBandSince: input.now, reserveLastChangeAt: input.now };
+        if (input.record) {
+          recordEvent(input.account, input.now, {
+            source: 'band', sessionId: null, senderId: null, dv: 0, da: 0,
+            appliedDv: 0, appliedDa: 0, reason: 'reserve_decay',
+            bandBefore: null, bandAfter: null,
+            valenceAfter: current.valence, arousalAfter: current.arousal, reserveAfter: current.reserve,
+          });
+        }
+      }
+      if (input.record && next !== current) saveState(input.account, { ...next, updatedAt: input.now });
+      return renderMoodBlocks(input.template, band, current.arousal, input.energy ?? 1, reserveBand, energySource);
     },
 
     currentBand(input) {
-      if (!options.getConfig().mood.enabled) return bandOf(options.getConfig().mood.baseline.valence);
-      return loadState(input.account, input.now).band;
+      const moodConfig = options.getConfig().mood;
+      if (!moodConfig.enabled) return bandOf(moodConfig.baseline.valence);
+      const current = loadState(input.account, input.now, input.energySource ?? 'mixed');
+      return nextBand(current, current.valence, input.now, 'decay');
     },
 
     recordCalled(input) {
       if (!options.getConfig().mood.enabled) return;
-      const current = loadState(input.account, input.now);
-      const arousal = clampMood(current.valence, current.arousal + CALLED_AROUSAL_BUMP).arousal;
-      saveState(input.account, input.now, { ...current, arousal });
+      const last = lastCalledAt.get(input.sessionId);
+      if (last !== undefined && input.now - last < 10 * 60_000) return;
+      lastCalledAt.set(input.sessionId, input.now);
+      const current = loadState(input.account, input.now, getEnergySource(input.account));
+      const arousal = applyArousalDelta(current.arousal, CALLED_AROUSAL_BUMP);
+      saveState(input.account, { ...current, arousal, updatedAt: input.now });
       recordEvent(input.account, input.now, {
         source: 'rule',
         sessionId: input.sessionId,
@@ -171,18 +194,45 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
         bandAfter: null,
         valenceAfter: current.valence,
         arousalAfter: arousal,
+        reserveAfter: current.reserve,
       });
     },
 
     async afterReply(input) {
       const config = options.getConfig();
       if (!config.mood.enabled) return;
-
+      const energySource = input.energySource ?? 'mixed';
+      const current = loadState(input.account, input.now, energySource);
+      const socialCost = energySource === 'inner' ? -0.01 : 0;
+      const afterReply = {
+        ...current,
+        reserve: Math.max(0, Math.min(1, current.reserve + socialCost)),
+        lastReplyAt: input.now,
+        updatedAt: input.now,
+      };
+      if (socialCost !== 0) {
+        recordEvent(input.account, input.now, {
+          source: 'rule',
+          sessionId: input.sessionId,
+          senderId: null,
+          dv: 0,
+          da: 0,
+          appliedDv: 0,
+          appliedDa: 0,
+          reason: 'social_cost',
+          bandBefore: null,
+          bandAfter: null,
+          valenceAfter: afterReply.valence,
+          arousalAfter: afterReply.arousal,
+          appliedDr: socialCost,
+          reserveAfter: afterReply.reserve,
+        });
+      }
+      saveState(input.account, afterReply);
       const last = lastAppraiseAt.get(input.sessionId);
       if (last !== undefined && input.now - last < APPRAISE_MIN_INTERVAL_MS) return;
 
       if (budgetState(config, options.repository.costToday()) === 'exceeded') {
-        const current = loadState(input.account, input.now);
         recordEvent(input.account, input.now, {
           source: 'appraise',
           sessionId: input.sessionId,
@@ -192,10 +242,12 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
           appliedDv: 0,
           appliedDa: 0,
           reason: 'budget',
+          appraisalValid: false,
           bandBefore: null,
           bandAfter: null,
-          valenceAfter: current.valence,
-          arousalAfter: current.arousal,
+          valenceAfter: afterReply.valence,
+          arousalAfter: afterReply.arousal,
+          reserveAfter: afterReply.reserve,
         });
         return;
       }
@@ -218,7 +270,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
         const completedAt = now();
 
         if (!result.ok) {
-          const current = loadState(input.account, completedAt);
+          const current = loadState(input.account, completedAt, energySource);
           recordEvent(input.account, completedAt, {
             source: 'appraise',
             sessionId: input.sessionId,
@@ -228,21 +280,35 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
             appliedDv: 0,
             appliedDa: 0,
             reason: result.reason,
+            appraisalValid: false,
             bandBefore: null,
             bandAfter: null,
             valenceAfter: current.valence,
             arousalAfter: current.arousal,
+            reserveAfter: current.reserve,
           });
           return;
         }
 
-        const current = loadState(input.account, completedAt);
+        const current = loadState(input.account, completedAt, energySource);
         const history = options.repository
           .moodEventsSince(input.account, completedAt - SENDER_VALENCE_WINDOW_MS)
+          .filter(isSuccessfulAppraisal)
           .map((event) => ({ time: event.time, senderId: event.senderId, appliedDv: event.appliedDv }));
+        const reserveHistory: ReserveHistoryEntry[] = options.repository
+          .moodEventsSince(input.account, completedAt - SENDER_VALENCE_WINDOW_MS)
+          .filter(isSuccessfulAppraisal)
+          .map((event) => ({ time: event.time, senderId: event.senderId, appliedDr: event.appliedDr }));
         const appliedDv = capSenderValenceDelta(result.valence, input.senderId, history, completedAt);
-        const clamped = clampMood(current.valence + appliedDv, current.arousal + result.arousal);
-        const band = nextBand(current, clamped.valence, completedAt, 'event');
+        const appliedReserveDelta = capSenderReserveDelta(result.reserve * 2, input.senderId, reserveHistory, completedAt);
+        const positiveEnergyBonus = energySource === 'outer' ? Math.max(0, result.valence) * 0.5 : 0;
+        const appliedDr = appliedReserveDelta + positiveEnergyBonus;
+        const buffered = bufferNegativeDelta(appliedDv, current.reserve);
+        const reserve = Math.max(0, Math.min(1, buffered.reserve + appliedDr));
+        const valence = Math.max(-1, Math.min(1, current.valence + buffered.surfaceDelta));
+        const arousal = applyArousalDelta(current.arousal, result.arousal);
+        const band = nextBand(current, valence, completedAt, 'event');
+        const reserveBand = nextReserveBand({ band: current.reserveBand, bandSince: current.reserveBandSince, lastBandChangeAt: current.reserveLastChangeAt }, reserve, completedAt, 'event');
 
         recordEvent(input.account, completedAt, {
           source: 'appraise',
@@ -253,10 +319,15 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
           appliedDv,
           appliedDa: result.arousal,
           reason: result.reason,
+          appraisalValid: true,
           bandBefore: null,
           bandAfter: null,
-          valenceAfter: clamped.valence,
-          arousalAfter: clamped.arousal,
+          valenceAfter: valence,
+          arousalAfter: arousal,
+          dr: result.reserve,
+          appliedDr,
+          absorbed: buffered.absorbed,
+          reserveAfter: reserve,
         });
         options.affinityService?.recordAppraise({
           account: input.account,
@@ -267,7 +338,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
           reason: result.reason,
         });
 
-        let { bandSince, lastBandChangeAt } = current;
+        let { bandSince, lastBandChangeAt, reserveBandSince, reserveLastChangeAt } = current;
         if (band !== current.band) {
           recordEvent(input.account, completedAt, {
             source: 'band',
@@ -280,18 +351,44 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
             reason: 'event',
             bandBefore: current.band,
             bandAfter: band,
-            valenceAfter: clamped.valence,
-            arousalAfter: clamped.arousal,
+            valenceAfter: valence,
+            arousalAfter: arousal,
+            reserveAfter: reserve,
           });
           bandSince = completedAt;
           lastBandChangeAt = completedAt;
         }
-        saveState(input.account, completedAt, {
-          valence: clamped.valence,
-          arousal: clamped.arousal,
+        if (reserveBand !== current.reserveBand) {
+          recordEvent(input.account, completedAt, {
+            source: 'band',
+            sessionId: input.sessionId,
+            senderId: null,
+            dv: 0,
+            da: 0,
+            appliedDv: 0,
+            appliedDa: 0,
+            reason: 'reserve_event',
+            bandBefore: null,
+            bandAfter: null,
+            valenceAfter: valence,
+            arousalAfter: arousal,
+            reserveAfter: reserve,
+          });
+          reserveBandSince = completedAt;
+          reserveLastChangeAt = completedAt;
+        }
+        saveState(input.account, {
+          ...current,
+          valence,
+          arousal,
+          reserve,
           band,
           bandSince,
           lastBandChangeAt,
+          reserveBand,
+          reserveBandSince,
+          reserveLastChangeAt,
+          updatedAt: completedAt,
         });
       })().catch(reportError);
 

@@ -7,6 +7,7 @@ export type { StoredTag, TagEvidence, TagRecord, TagRunRecord, TagSource, TagSta
 export type { TagKind } from '../core/impressions/tag-model.ts';
 
 export type MoodBand = 'low' | 'annoyed' | 'calm' | 'happy' | 'excited';
+export type ReserveBand = 'full' | 'tired' | 'drained';
 export type MoodEventSource = 'appraise' | 'rule' | 'band';
 export type AffinityLevel = 'cold' | 'cool' | 'neutral' | 'warm' | 'close';
 export type AffinityEventSource = 'appraise' | 'called' | 'manual' | 'band';
@@ -19,6 +20,11 @@ export interface MoodStateRecord {
   band: MoodBand;
   bandSince: number;
   lastBandChangeAt: number;
+  reserve: number;
+  reserveBand: ReserveBand;
+  reserveBandSince: number | null;
+  reserveLastChangeAt: number | null;
+  lastReplyAt: number | null;
 }
 
 export interface MoodEventRecord {
@@ -36,6 +42,11 @@ export interface MoodEventRecord {
   bandAfter: MoodBand | null;
   valenceAfter: number;
   arousalAfter: number;
+  dr: number;
+  appliedDr: number;
+  absorbed: number;
+  reserveAfter: number | null;
+  appraisalValid: boolean | null;
 }
 
 export interface StoredMoodEvent extends Omit<MoodEventRecord, 'valenceAfter' | 'arousalAfter'> {
@@ -98,6 +109,14 @@ function nullableNumber(value: unknown, field: string): number | null {
   return numberValue(value, field);
 }
 
+function nullableBoolean(value: unknown, field: string): boolean | null {
+  const parsed = nullableNumber(value, field);
+  if (parsed === null) return null;
+  if (parsed === 0) return false;
+  if (parsed === 1) return true;
+  throw new Error(`数据库字段 ${field} 不是布尔值`);
+}
+
 function nullableString(value: unknown, field: string): string | null {
   if (value === null || value === undefined) return null;
   return stringValue(value, field);
@@ -112,6 +131,11 @@ function moodStateRecord(row: Record<string, unknown>): MoodStateRecord {
     band: stringValue(row.band, 'band') as MoodBand,
     bandSince: numberValue(row.band_since, 'band_since'),
     lastBandChangeAt: numberValue(row.last_band_change_at, 'last_band_change_at'),
+    reserve: numberValue(row.reserve, 'reserve'),
+    reserveBand: stringValue(row.reserve_band, 'reserve_band') as ReserveBand,
+    reserveBandSince: nullableNumber(row.reserve_band_since, 'reserve_band_since'),
+    reserveLastChangeAt: nullableNumber(row.reserve_last_change_at, 'reserve_last_change_at'),
+    lastReplyAt: nullableNumber(row.last_reply_at, 'last_reply_at'),
   };
 }
 
@@ -132,6 +156,11 @@ function moodEventRecord(row: Record<string, unknown>): StoredMoodEvent {
     bandAfter: nullableString(row.band_after, 'band_after') as MoodBand | null,
     valenceAfter: nullableNumber(row.valence_after, 'valence_after'),
     arousalAfter: nullableNumber(row.arousal_after, 'arousal_after'),
+    dr: numberValue(row.dr, 'dr'),
+    appliedDr: numberValue(row.applied_dr, 'applied_dr'),
+    absorbed: numberValue(row.absorbed, 'absorbed'),
+    reserveAfter: nullableNumber(row.reserve_after, 'reserve_after'),
+    appraisalValid: nullableBoolean(row.appraisal_valid, 'appraisal_valid'),
   };
 }
 
@@ -168,42 +197,54 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
   const tags = createTagQueries(database);
   const tagVetoes = createTagVetoQueries(database, tags);
   const selectMoodState = database.prepare(`
-    SELECT account, valence, arousal, updated_at, band, band_since, last_band_change_at
+    SELECT account, valence, arousal, updated_at, band, band_since, last_band_change_at,
+      reserve, reserve_band, reserve_band_since, reserve_last_change_at, last_reply_at
     FROM mood_state
     WHERE account = ?
   `);
   const upsertMoodState = database.prepare(`
-    INSERT INTO mood_state (account, valence, arousal, updated_at, band, band_since, last_band_change_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO mood_state (
+      account, valence, arousal, updated_at, band, band_since, last_band_change_at,
+      reserve, reserve_band, reserve_band_since, reserve_last_change_at, last_reply_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(account) DO UPDATE SET
       valence = excluded.valence,
       arousal = excluded.arousal,
       updated_at = excluded.updated_at,
       band = excluded.band,
       band_since = excluded.band_since,
-      last_band_change_at = excluded.last_band_change_at
+      last_band_change_at = excluded.last_band_change_at,
+      reserve = excluded.reserve,
+      reserve_band = excluded.reserve_band,
+      reserve_band_since = excluded.reserve_band_since,
+      reserve_last_change_at = excluded.reserve_last_change_at,
+      last_reply_at = excluded.last_reply_at
   `);
   const insertMoodEvent = database.prepare(`
     INSERT INTO mood_events
-      (account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da, reason, band_before, band_after, valence_after, arousal_after)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da, reason,
+        band_before, band_after, valence_after, arousal_after, dr, applied_dr, absorbed, reserve_after, appraisal_valid)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const selectRecentMoodEvents = database.prepare(`
-    SELECT id, account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da, reason, band_before, band_after, valence_after, arousal_after
+    SELECT id, account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da, reason,
+      band_before, band_after, valence_after, arousal_after, dr, applied_dr, absorbed, reserve_after, appraisal_valid
     FROM mood_events
     WHERE account = ?
     ORDER BY time DESC, id DESC
     LIMIT ?
   `);
   const selectMoodEventsSince = database.prepare(`
-    SELECT id, account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da, reason, band_before, band_after, valence_after, arousal_after
+    SELECT id, account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da, reason,
+      band_before, band_after, valence_after, arousal_after, dr, applied_dr, absorbed, reserve_after, appraisal_valid
     FROM mood_events
     WHERE account = ? AND time >= ?
     ORDER BY time, id
   `);
   const selectLatestMoodEventAtOrBefore = database.prepare(`
     SELECT id, account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da,
-      reason, band_before, band_after, valence_after, arousal_after
+      reason, band_before, band_after, valence_after, arousal_after, dr, applied_dr, absorbed, reserve_after, appraisal_valid
     FROM mood_events
     WHERE account = ? AND time <= ? AND valence_after IS NOT NULL AND arousal_after IS NOT NULL
     ORDER BY time DESC, id DESC
@@ -275,6 +316,11 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
         state.band,
         state.bandSince,
         state.lastBandChangeAt,
+        state.reserve ?? 0.8,
+        state.reserveBand ?? 'full',
+        state.reserveBandSince ?? null,
+        state.reserveLastChangeAt ?? null,
+        state.lastReplyAt ?? null,
       );
     },
 
@@ -294,6 +340,11 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
         event.bandAfter,
         event.valenceAfter,
         event.arousalAfter,
+        event.dr ?? 0,
+        event.appliedDr ?? 0,
+        event.absorbed ?? 0,
+        event.reserveAfter ?? null,
+        event.appraisalValid === null ? null : event.appraisalValid ? 1 : 0,
       );
     },
 

@@ -20,6 +20,7 @@ test('loadPersona 优先读取 data/personas 并替换 {{name}}', () => {
     assert.deepEqual(loadPersona('default', '小鱼', { root }), {
       text: '用户人设：小鱼',
       traits: { order: 0, morality: 0, talk: 0, mind: 0, humor: 0, openness: 0, imitation: 0 },
+      energySource: 'mixed',
     });
     const exactSource = '\r\n  原样保留  \r\n';
     fs.writeFileSync(path.join(root, 'data', 'personas', 'plain.md'), exactSource, 'utf8');
@@ -86,6 +87,7 @@ test('parsePersonaMarkdown 解析结构化字段并将四维档位映射为数�
     '---',
     'name: 小鲸鱼妈妈精简版',
     'aliases: [小鲸鱼, 鲸鱼妈妈]',
+    'energySource: inner',
     'identity:',
     '  kind: AI 网络角色',
     '  selfAwareness: 清楚自己是 AI',
@@ -139,6 +141,7 @@ test('parsePersonaMarkdown 解析结构化字段并将四维档位映射为数�
   });
   assert.equal(loaded.text, '正文背景。');
   assert.equal(loaded.profile?.name, '小鲸鱼妈妈精简版');
+  assert.equal(loaded.profile?.energySource, 'inner');
   assert.deepEqual(loaded.profile?.aliases, ['小鲸鱼', '鲸鱼妈妈']);
   assert.equal(loaded.profile?.identity.kind, 'AI 网络角色');
   assert.equal(loaded.profile?.speech.segmenting, 'one_message');
@@ -147,6 +150,9 @@ test('parsePersonaMarkdown 解析结构化字段并将四维档位映射为数�
   assert.deepEqual(loaded.profile?.reply.mustReply, ['被@', '身体不适']);
   assert.deepEqual(loaded.profile?.boundaries.hard, ['不编造查询结果']);
   assert.equal(loaded.profile?.background, '熟人群里的妈妈\n\n正文背景。');
+  const defaultEnergy = parsePersonaMarkdown(source.replace('energySource: inner\n', '')).profile?.energySource;
+  assert.equal(defaultEnergy, 'mixed');
+  assert.throws(() => parsePersonaMarkdown(source.replace('energySource: inner', 'energySource: sideways')), /energySource/u);
 });
 
 test('旧角色卡正文中的横线分隔符不会被误当成 YAML 文件头', () => {

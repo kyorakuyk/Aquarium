@@ -18,7 +18,7 @@ import type { ImpressionsService } from '../../impressions/service.ts';
 import type { PrivateFactsService } from '../../privacy/service.ts';
 import type { PrivacyGateDecision, PrivacyGateDetail, PrivacyGateService } from '../../privacy/group-gate.ts';
 import type { PrivateMentionService } from '../../privacy/mentions.ts';
-import type { PersonaTraits, StructuredPersona } from '../../../persona/load.ts';
+import type { PersonaEnergySource, PersonaTraits, StructuredPersona } from '../../../persona/load.ts';
 import type { SleepWakeState } from '../../sleep/index.ts';
 import type { PersonaMemoryService } from '../../persona-memory.ts';
 import type { StickerService } from '../../stickers/service.ts';
@@ -104,11 +104,13 @@ export interface PipelineState {
   persona?: string;
   personaTraits?: PersonaTraits;
   personaProfile?: StructuredPersona;
+  personaEnergySource?: PersonaEnergySource;
   callOptions?: SlotCallOptions;
   prompt?: OpenAI.ChatCompletionMessageParam[];
   promptBlocks?: PromptBlockHash[];
   injectedAffectBlocks?: {
     mood?: string;
+    reserve?: string;
     float?: string;
     affinity?: string;
   };

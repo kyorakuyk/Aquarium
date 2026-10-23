@@ -17,6 +17,7 @@ export interface BuildPromptOptions {
     traits?: string;
     groupTags?: string;
     mood?: string;
+    reserve?: string;
     memberTags?: string;
     impressions?: string;
     recentMemory?: string;
@@ -65,6 +66,7 @@ function resolvePromptBlocks(options: BuildPromptOptions): RenderedPromptBlock[]
     { id: 'groupNote', text: groupNote },
     { id: 'groupTags', text: options.blocks?.groupTags ?? '' },
     { id: 'mood', text: options.blocks?.mood ?? '' },
+    { id: 'reserve', text: options.blocks?.reserve ?? '' },
     { id: 'privateFacts', text: options.blocks?.privateFacts ?? '' },
     { id: 'memberTags', text: options.blocks?.memberTags ?? '' },
     { id: 'impressions', text: options.blocks?.impressions ?? '' },
@@ -90,7 +92,7 @@ export function buildPromptMessages(
   const blocksById = new Map(blocks.map(({ id, text }) => [id, text]));
   const dynamicBlocks = [
     options.modeHint ?? '',
-    ...['mood', 'affinity', 'float', 'privateFacts', 'memberTags', 'impressions', 'recentMemory', 'knownFacts', 'privacyRule', 'stickers']
+    ...['mood', 'reserve', 'affinity', 'float', 'privateFacts', 'memberTags', 'impressions', 'recentMemory', 'knownFacts', 'privacyRule', 'stickers']
       .map((id) => blocksById.get(id) ?? ''),
   ].filter((text) => text.length > 0);
   const request = options.request ?? template.request;

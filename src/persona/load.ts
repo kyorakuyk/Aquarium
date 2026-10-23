@@ -13,6 +13,8 @@ export interface PersonaTraits {
   imitation: number;
 }
 
+export type PersonaEnergySource = 'inner' | 'outer' | 'mixed';
+
 export type PersonaAudienceTier = 'stranger' | 'acquaintance' | 'close';
 export type PersonaSpeechMode = 'normal' | 'restricted';
 export type PersonaSegmenting = 'one_message' | 'multi';
@@ -44,6 +46,7 @@ export interface StructuredPersona {
     nameRule: 'self' | 'user-assigned' | 'fixed';
   };
   traits: PersonaTraits;
+  energySource: PersonaEnergySource;
   flavor?: Record<string, number>;
   speech: {
     firstPerson: string;
@@ -66,6 +69,7 @@ export interface StructuredPersona {
 export interface LoadedPersona {
   text: string;
   traits: PersonaTraits;
+  energySource: PersonaEnergySource;
   profile?: StructuredPersona;
 }
 
@@ -199,10 +203,19 @@ function parseFlavor(value: unknown): Record<string, number> | undefined {
   return result;
 }
 
+function parseEnergySource(value: unknown): PersonaEnergySource {
+  const energySource = value ?? 'mixed';
+  if (energySource !== 'inner' && energySource !== 'outer' && energySource !== 'mixed') {
+    throw new Error('人设字段 energySource 必须是 inner、outer 或 mixed');
+  }
+  return energySource;
+}
+
 function parseStructuredPersona(
   header: Record<string, unknown>,
   text: string,
   traits: PersonaTraits,
+  energySource: PersonaEnergySource,
 ): StructuredPersona | undefined {
   const structuredKeys = [
     'name', 'aliases', 'identity', 'speech', 'speechMode', 'audience', 'modes', 'reactions', 'reply', 'boundaries', 'examples', 'background',
@@ -248,6 +261,7 @@ function parseStructuredPersona(
       nameRule,
     },
     traits,
+    energySource,
     ...(flavor === undefined ? {} : { flavor }),
     speech: {
       firstPerson: requiredText(speech.firstPerson, 'speech.firstPerson'),
@@ -281,10 +295,12 @@ export function parsePersonaMarkdown(source: string): LoadedPersona {
   const header = match ? parseYamlHeader(match[1] ?? '') : {};
   const text = match ? source.slice(match[0].length) : source;
   const traits = match ? parseTraits(header.traits) : { ...zeroTraits };
-  const profile = match ? parseStructuredPersona(header, text, traits) : undefined;
+  const energySource = match ? parseEnergySource(header.energySource) : 'mixed';
+  const profile = match ? parseStructuredPersona(header, text, traits, energySource) : undefined;
   return {
     text,
     traits,
+    energySource,
     ...(profile === undefined ? {} : { profile }),
   };
 }
@@ -330,6 +346,7 @@ export function loadPersona(
   return {
     text: loaded.text.replaceAll('{{name}}', () => displayName),
     traits: loaded.traits,
+    energySource: loaded.energySource,
     ...(loaded.profile === undefined
       ? {}
       : { profile: replaceNameTokens(loaded.profile, displayName) as StructuredPersona }),

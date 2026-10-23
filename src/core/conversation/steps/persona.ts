@@ -6,6 +6,7 @@ export function getPersonaForMessage(ctx: StepContext): LoadedPersona {
     return {
       text: ctx.state.persona,
       traits: ctx.state.personaTraits,
+      energySource: ctx.state.personaEnergySource ?? 'mixed',
       ...(ctx.state.personaProfile === undefined ? {} : { profile: ctx.state.personaProfile }),
     };
   }
@@ -18,6 +19,7 @@ export function getPersonaForMessage(ctx: StepContext): LoadedPersona {
   });
   ctx.state.persona = loaded.text;
   ctx.state.personaTraits = loaded.traits;
+  ctx.state.personaEnergySource = loaded.energySource;
   if (loaded.profile === undefined) delete ctx.state.personaProfile;
   else ctx.state.personaProfile = loaded.profile;
   return loaded;

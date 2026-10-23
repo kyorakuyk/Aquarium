@@ -89,7 +89,15 @@ function MoodChart({ series }: { series: MoodSeriesView }) {
       ))}
       <polyline className="mood-now-valence-line" points={line} />
       {series.points.filter((point) => point.event).map((point) => (
-        <circle className="mood-now-event-point" key={point.time} cx={x(point.time)} cy={y(point.valence)} r="3" />
+        <circle
+          className={`mood-now-event-point${point.absorbed > 0 ? ' is-absorbed' : ''}`}
+          key={point.time}
+          cx={x(point.time)}
+          cy={y(point.valence)}
+          r="3"
+        >
+          <title>{point.absorbed > 0 ? `吸收了 ${point.absorbed.toFixed(2)}` : '情绪事件'}</title>
+        </circle>
       ))}
       <text className="mood-now-axis-label" x={left} y={height - 5}>24 小时前</text>
       <text className="mood-now-axis-label" x={left + innerWidth} y={height - 5} textAnchor="end">现在</text>
@@ -102,10 +110,27 @@ function spacedArousal(points: MoodSeriesPoint[]): number[] {
   return Array.from({ length: 7 }, (_, index) => points[Math.round(index * (points.length - 1) / 6)]?.arousal ?? 0);
 }
 
+function spacedReserve(points: MoodSeriesPoint[]): number[] {
+  if (points.length === 0) return [];
+  return Array.from({ length: 7 }, (_, index) => points[Math.round(index * (points.length - 1) / 6)]?.reserve ?? 0);
+}
+
 function energyStatus(status: MoodSeriesView['energy']['status']): string {
   if (status === 'asleep') return '睡着';
   if (status === 'woken') return '被叫醒';
   return '醒着';
+}
+
+function reserveStatus(status: MoodSeriesView['current']['reserveBand']): string {
+  if (status === 'drained') return '耗尽';
+  if (status === 'tired') return '有点累';
+  return '充沛';
+}
+
+function energySourceLabel(source: MoodSeriesView['current']['energySource']): string {
+  if (source === 'inner') return '向内（I）';
+  if (source === 'outer') return '向外（E）';
+  return '混合';
 }
 
 export function MoodNowCard({ onOpenSleepSettings }: { onOpenSleepSettings: () => void }) {
@@ -133,9 +158,10 @@ export function MoodNowCard({ onOpenSleepSettings }: { onOpenSleepSettings: () =
   }, []);
 
   const arousalTrend = series ? spacedArousal(series.points) : [];
+  const reserveTrend = series ? spacedReserve(series.points) : [];
   const latestBlocks = series?.latestReply?.blocks;
   const blockRows = latestBlocks
-    ? (['mood', 'float', 'affinity'] as const).flatMap((key) => {
+    ? (['mood', 'reserve', 'float', 'affinity'] as const).flatMap((key) => {
       const text = latestBlocks[key];
       return text === null ? [] : [{ key, text }];
     })
@@ -182,11 +208,18 @@ export function MoodNowCard({ onOpenSleepSettings }: { onOpenSleepSettings: () =
               </div>
               <Sparkline values={series.energy.points.map((point) => point.value)} label="精力七点趋势" />
             </div>
+            <div className="mood-now-metric">
+              <div className="metric-row"><span>心灵能量 · {reserveStatus(series.current.reserveBand)} · {energySourceLabel(series.current.energySource)}</span><strong className="mono">{Math.round(series.current.reserve * 100)}%</strong></div>
+              <div className="progress-track" role="progressbar" aria-label="当前心灵能量" aria-valuenow={Math.round(series.current.reserve * 100)} aria-valuemin={0} aria-valuemax={100}>
+                <span style={{ width: `${Math.round(series.current.reserve * 100)}%` }} />
+              </div>
+              <Sparkline values={reserveTrend} label="心灵能量七点趋势" />
+            </div>
           </div>
           <div className="mood-now-injections">
             <div className="small-heading">此刻追加注入的块</div>
             {!series.latestReply && <p className="muted">暂无成功回复记录。</p>}
-            {series.latestReply && blockRows.length === 0 && <p className="muted">最近一次回复没有注入 mood / float / affinity 块。</p>}
+            {series.latestReply && blockRows.length === 0 && <p className="muted">最近一次回复没有注入 mood / reserve / float / affinity 块。</p>}
             {blockRows.length > 0 && (
               <div className="mood-now-blocks">
                 {blockRows.map(({ key, text }) => (

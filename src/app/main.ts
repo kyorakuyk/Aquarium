@@ -37,6 +37,7 @@ import { createAccountStickerService, startStickerSyncTimer } from './stickers.t
 import { startAdapterForHost } from './adapter-start.ts';
 import { createProfileActivityService } from '../core/profiles/presence-service.ts';
 import { createPersonaMemoryService } from '../core/persona-memory.ts';
+import { loadPersona } from '../persona/load.ts';
 import { startProfileActivitySchedule } from './profile-activity.ts';
 import {
   createHostLifecycleQueue,
@@ -113,9 +114,19 @@ const affinityService = createAffinityService({
   repository,
   getConfig: () => configWatcher.getConfig(),
 });
+function energySourceForAccount(account: number) {
+  const config = configWatcher.getConfig();
+  const personaId = config.accounts.find((entry) => entry.uin === account)?.persona ?? 'default';
+  try {
+    return loadPersona(personaId, '').energySource;
+  } catch {
+    return 'mixed' as const;
+  }
+}
 const moodService = createMoodService({
   repository,
   getConfig: () => configWatcher.getConfig(),
+  getEnergySource: energySourceForAccount,
   affinityService,
   onError: (error) => {
     logger.error(`情绪后台任务失败：${describeError(error)}`);
@@ -495,6 +506,7 @@ await startPanelWhileAccountStartupRuns(accountStartup, () => {
           port: panelConfig.panel.port,
           password: panelPassword,
           getConfig: () => configWatcher.getConfig(),
+          getEnergySource: energySourceForAccount,
           saveConfig: (config) => {
             writeConfig(config, configPath);
             configWatcher.replaceConfig(config);

@@ -3,6 +3,7 @@ import test from 'node:test';
 import { createAffinityService } from '../src/core/affinity/service.ts';
 import { createMoodService } from '../src/core/mood/service.ts';
 import { createMessagePipeline } from '../src/core/conversation/pipeline.ts';
+import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { sessionId } from '../src/core/shared/events.ts';
 import {
   FakeAdapter,
@@ -32,7 +33,7 @@ function createMoodHarness(
       appraiseRequests.push(messages.map((message) => String(message.content)).join('\n'));
       clock.value += options.appraiseAdvanceMs ?? 0;
       return {
-        text: options.appraiseText ?? '{"valence":-0.15,"arousal":0.1,"reason":"被怼了"}',
+        text: options.appraiseText ?? '{"valence":-0.15,"reserve":0,"arousal":0.1,"reason":"被怼了"}',
         provider: 'fake',
         model: 'fake-model',
         usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
@@ -71,12 +72,17 @@ test('回复后异步评估并换档，下一次提示词带情绪块', async ()
     const fakeCredential = 'K9m4R2p8T1v6';
     repository.saveMoodState({
       account,
-      valence: -0.1,
+      valence: -0.15,
       arousal: 0.75,
       updatedAt: harness.clock.value,
       band: 'calm',
       bandSince: harness.clock.value - 20 * 60_000,
       lastBandChangeAt: harness.clock.value - 20 * 60_000,
+      reserve: 0.8,
+      reserveBand: 'full',
+      reserveBandSince: null,
+      reserveLastChangeAt: null,
+      lastReplyAt: null,
     });
 
     const first = await harness.pipeline(makeIncoming({
@@ -87,11 +93,18 @@ test('回复后异步评估并换档，下一次提示词带情绪块', async ()
     await harness.moodService.idle();
 
     const state = repository.getMoodState(account);
-    const decayedValence = 0.1 + (-0.1 - 0.1) * 2 ** (-5_000 / (30 * 60_000));
-    const decayedArousal = 0.4 + (0.8 - 0.4) * 2 ** (-5_000 / (30 * 60_000));
+    const decayMs = 5_000;
+    const surfaceHalfLife = 40 * 1.4 / (0.4 + 0.8);
+    const decayedValence = 0.1 + (-0.15 - 0.1) * 2 ** (-decayMs / (surfaceHalfLife * 60_000));
+    const decayedArousal = 0.4 + (0.75 + (1 - 0.75) * 0.05 - 0.4) * 2 ** (-decayMs / (40 * 60_000));
+    const absorption = Math.min(0.15 * 0.85 * Math.min(1, 0.8 / 0.5), 0.05);
+    const expectedValence = decayedValence - 0.15 + absorption;
+    const expectedArousal = decayedArousal + 0.1 * (1 - decayedArousal);
+    const expectedReserve = 0.8 - Math.max(0, decayedValence + 0.15) * 0.3 - absorption * 1.5;
     assert.equal(state?.band, 'annoyed');
-    assert.ok(Math.abs((state?.valence ?? 0) - (decayedValence - 0.15)) < 1e-9);
-    assert.ok(Math.abs((state?.arousal ?? 0) - (decayedArousal + 0.1)) < 1e-9);
+    assert.ok(Math.abs((state?.valence ?? 0) - expectedValence) < 1e-9);
+    assert.ok(Math.abs((state?.arousal ?? 0) - expectedArousal) < 1e-9);
+    assert.ok(Math.abs((state?.reserve ?? 0) - expectedReserve) < 1e-9);
     assert.equal(state?.updatedAt, harness.clock.value);
 
     const events = repository.recentMoodEvents(account, 10);
@@ -101,14 +114,16 @@ test('回复后异步评估并换档，下一次提示词带情绪块', async ()
     assert.equal(events[0]?.time, harness.clock.value);
     assert.equal(events[1]?.reason, '被怼了');
     assert.equal(events[1]?.appliedDv, -0.15);
+    assert.equal(events[1]?.absorbed, absorption);
+    assert.equal(events[1]?.reserveAfter, expectedReserve);
     assert.equal(events[1]?.time, harness.clock.value);
     assert.equal(events[2]?.reason, 'called');
     assert.equal(events[0]?.valenceAfter, state?.valence);
     assert.equal(events[0]?.arousalAfter, state?.arousal);
     assert.equal(events[1]?.valenceAfter, state?.valence);
     assert.equal(events[1]?.arousalAfter, state?.arousal);
-    assert.equal(events[2]?.valenceAfter, -0.1);
-    assert.equal(events[2]?.arousalAfter, 0.8);
+    assert.equal(events[2]?.valenceAfter, -0.15);
+    assert.equal(events[2]?.arousalAfter, 0.75 + (1 - 0.75) * 0.05);
     assert.ok(harness.appraiseRequests[0]?.includes('普通回复。'));
 
     harness.clock.value += 100_000;
@@ -182,7 +197,7 @@ test('评估解析失败时记录原因且不改变状态', async () => {
     const config = makeConfig();
     const harness = createMoodHarness(repository, config, personaRoot, {
       appraiseAdvanceMs: 5_000,
-      appraiseText: '{"valence":0.5,"arousal":0.2,"reason":"越界"}',
+      appraiseText: '{"valence":0.5,"reserve":0,"arousal":0.2,"reason":"越界"}',
     });
 
     await harness.pipeline(makeIncoming({ messageId: 'parse-1', time: harness.clock.value - 1_000 }));
@@ -190,7 +205,7 @@ test('评估解析失败时记录原因且不改变状态', async () => {
 
     const state = repository.getMoodState(groupSession.account);
     assert.equal(state?.valence, 0.1);
-    assert.equal(state?.arousal, 0.45);
+    assert.ok(Math.abs((state?.arousal ?? 0) - 0.43) < 1e-9);
     assert.equal(state?.band, 'calm');
     const events = repository.recentMoodEvents(groupSession.account, 10);
     assert.deepEqual(events.map((event) => event.reason), ['appraise_parse_error', 'called']);
@@ -223,7 +238,7 @@ test('情绪评估更新发送者好感，下一次提示词按顺序注入 affi
   await withRepository(async (repository, personaRoot) => {
     const config = makeConfig({ affinity: { enabled: true, initial: 50 } });
     const harness = createMoodHarness(repository, config, personaRoot, {
-      appraiseText: '{"valence":0.15,"arousal":0,"reason":"友好回应"}',
+      appraiseText: '{"valence":0.15,"reserve":0,"arousal":0,"reason":"友好回应"}',
     });
     const account = groupSession.account;
     repository.saveAffinityState({
@@ -258,7 +273,7 @@ test('affinity.enabled=false 时完全不记录好感且不注入提示词', asy
   await withRepository(async (repository, personaRoot) => {
     const config = makeConfig({ affinity: { enabled: false, initial: 50 } });
     const harness = createMoodHarness(repository, config, personaRoot, {
-      appraiseText: '{"valence":0.15,"arousal":0,"reason":"友好回应"}',
+      appraiseText: '{"valence":0.15,"reserve":0,"arousal":0,"reason":"友好回应"}',
     });
 
     await harness.pipeline(makeIncoming({ messageId: 'affinity-off', mentionsSelf: true }));
@@ -267,5 +282,105 @@ test('affinity.enabled=false 时完全不记录好感且不注入提示词', asy
     assert.equal(repository.listAffinityStates(groupSession.account).length, 0);
     assert.deepEqual(repository.recentAffinityEvents(groupSession.account, 42, 10), []);
     assert.equal(harness.replyPrompts[0]?.includes('挺熟'), false);
+  });
+});
+
+test('outer 正向评估额外补充一半 valence 到心灵能量', async () => {
+  await withRepository(async (repository) => {
+    const config = makeConfig();
+    const start = new Date(2026, 9, 12, 9, 0).getTime();
+    repository.saveMoodState({
+      account: groupSession.account,
+      valence: config.mood.baseline.valence,
+      arousal: config.mood.baseline.arousal,
+      updatedAt: start,
+      band: 'calm',
+      bandSince: start - 30 * 60_000,
+      lastBandChangeAt: start - 30 * 60_000,
+      reserve: 0.5,
+      reserveBand: 'tired',
+      reserveBandSince: start - 30 * 60_000,
+      reserveLastChangeAt: start - 30 * 60_000,
+      lastReplyAt: null,
+    });
+    const mood = createMoodService({
+      repository,
+      getConfig: () => config,
+      now: () => start,
+      callModel: async () => ({
+        text: '{"valence":0.1,"reserve":0,"arousal":0,"reason":"被关心"}',
+        provider: 'fake',
+        model: 'fake-model',
+        usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+      }),
+    });
+
+    await mood.afterReply({
+      account: groupSession.account,
+      sessionId: sessionId(groupSession),
+      senderId: 42,
+      now: start,
+      template: promptTemplateStore.get().appraise,
+      energySource: 'outer',
+    });
+
+    assert.equal(repository.getMoodState(groupSession.account)?.reserve, 0.55);
+    assert.equal(repository.recentMoodEvents(groupSession.account, 10).find((event) => event.source === 'appraise')?.appliedDr, 0.05);
+  });
+});
+
+test('inner 连续回复逐条消耗心灵能量且陪伴不回能', async () => {
+  await withRepository(async (repository) => {
+    const config = makeConfig();
+    const start = new Date(2026, 9, 12, 9, 0).getTime();
+    const mood = createMoodService({
+      repository,
+      getConfig: () => config,
+      now: () => start,
+      callModel: async () => ({
+        text: '{"valence":0,"reserve":0,"arousal":0,"reason":"日常"}',
+        provider: 'fake',
+        model: 'fake-model',
+        usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+      }),
+    });
+    const account = groupSession.account;
+    const session = sessionId(groupSession);
+
+    for (let index = 0; index < 6; index += 1) {
+      await mood.afterReply({
+        account,
+        sessionId: session,
+        senderId: 42,
+        now: start + index * 10_000,
+        template: promptTemplateStore.get().appraise,
+        energySource: 'inner',
+      });
+    }
+
+    const state = repository.getMoodState(account);
+    const socialCosts = repository.recentMoodEvents(account, 20).filter((event) => event.reason === 'social_cost');
+    assert.ok(Math.abs((state?.reserve ?? 0) - 0.74) < 1e-9);
+    assert.equal(socialCosts.length, 6);
+  });
+});
+
+test('同一会话十分钟内只加一次被叫兴奋度且正向增量饱和', async () => {
+  await withRepository(async (repository) => {
+    const config = makeConfig();
+    const clock = { value: 1_000_000 };
+    const mood = createMoodService({ repository, getConfig: () => config, now: () => clock.value });
+    const account = groupSession.account;
+    const session = sessionId(groupSession);
+
+    for (let index = 0; index < 20; index += 1) {
+      clock.value = 1_000_000 + index * 60_000;
+      mood.recordCalled({ account, sessionId: session, now: clock.value });
+    }
+
+    const state = repository.getMoodState(account);
+    const called = repository.recentMoodEvents(account, 30).filter((event) => event.reason === 'called');
+    assert.ok((state?.arousal ?? 1) < 1);
+    assert.equal(called.length, 2);
   });
 });

@@ -146,6 +146,7 @@ test('提示词块按固定顺序渲染并跳过空块', () => {
       traits: '块-性格底色',
       groupTags: '块-群标签',
       mood: '',
+      reserve: '块-心灵能量',
       memberTags: '块-群友标签',
       impressions: '块-个人印象',
       privateFacts: '块-私聊记忆',
@@ -173,7 +174,7 @@ test('提示词块按固定顺序渲染并跳过空块', () => {
   assert.equal(systemContent.includes('块-表情候选'), false);
   assert.deepEqual(
     describePromptBlocks(options).map(({ id }) => id),
-    ['persona', 'traits', 'rules', 'groupNote', 'groupTags', 'privateFacts', 'memberTags', 'impressions', 'knownFacts', 'privacyRule', 'affinity', 'float', 'stickers'],
+    ['persona', 'traits', 'rules', 'groupNote', 'groupTags', 'reserve', 'privateFacts', 'memberTags', 'impressions', 'knownFacts', 'privacyRule', 'affinity', 'float', 'stickers'],
   );
 });
 

@@ -174,6 +174,7 @@ export interface StoreRepository extends RecentExtractUsageRepository, PersonaVe
   replyCountToday(): number;
   replyCountTodayForAccount(account: number): number;
   replyCountLastHourForAccount(account: number, now: number): number;
+  replyTimesForAccount(account: number, fromTime: number, toTime: number): number[];
   usageToday(): UsageSummary;
   usageByRange(range: UsageRange, now: number): UsageRangeSummary;
   getCaption(key: string): string | undefined;

@@ -4,6 +4,7 @@ import {
   PERSONA_TRAIT_LABELS,
   personaNameFromTitle,
   personaTitleFromName,
+  type PersonaEnergySource,
   type PersonaSectionFields,
   type PersonaSectionsForm,
 } from '../persona-sections.ts';
@@ -175,6 +176,9 @@ export function PersonaFields({
   function setTrait(key: keyof PersonaTraits, value: number) {
     onChange({ ...form, traits: { ...form.traits, [key]: value } });
   }
+  function setEnergySource(value: PersonaEnergySource) {
+    onChange({ ...form, metadata: { ...form.metadata, energySource: value } });
+  }
   function setOther(index: number, change: Partial<PersonaSectionsForm['other'][number]>) {
     onChange({ ...form, other: form.other.map((section, itemIndex) => itemIndex === index ? { ...section, ...change } : section) });
   }
@@ -206,6 +210,22 @@ export function PersonaFields({
       <section className="persona-form-card">
         <h3>性格底色</h3>
         <p className="persona-form-hint">0 表示不额外强调；共五档。</p>
+        <div className="persona-field">
+          <FieldLabel id="persona-energy-source" title="心灵能量来源" />
+          <select
+            id="persona-energy-source"
+            className="persona-energy-source"
+            value={form.metadata.energySource === 'inner' || form.metadata.energySource === 'outer' ? form.metadata.energySource : 'mixed'}
+            disabled={disabled}
+            onFocus={() => onFocus('traits')}
+            onChange={(event) => setEnergySource(event.currentTarget.value as PersonaEnergySource)}
+          >
+            <option value="inner">向内（I）</option>
+            <option value="outer">向外（E）</option>
+            <option value="mixed">混合（默认）</option>
+          </select>
+          <p className="persona-field-hint">向内独处时回能，向外有人陪时回能；下一次读取状态时生效。</p>
+        </div>
         <div className="persona-trait-grid">
           {PERSONA_TRAIT_LABELS.map((field) => (
             <div className="persona-trait-field" key={field.key}>

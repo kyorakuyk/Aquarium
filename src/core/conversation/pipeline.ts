@@ -241,6 +241,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
           senderId: message.senderId,
           now: now(),
           template: promptTemplates.appraise,
+          energySource: ctx.state.personaEnergySource ?? 'mixed',
         });
         if (!moodTask) return;
         void moodTask.catch((error: unknown) => {

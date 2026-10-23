@@ -79,7 +79,21 @@ test('decisionsInRange 返回指定会话内的闭区间决策', () => {
   });
 });
 
- test('costToday 只累计本地自然日内的用量', () => {
+test('replyTimesForAccount returns only replied timestamps for that account and inclusive range', () => {
+  withRepository((repository) => {
+    repository.recordDecision({ time: 1000, sessionId: '900000001:group:123456', messageId: 'before', replied: true, reason: 'replied', detail: {} });
+    repository.recordDecision({ time: 1500, sessionId: '900000001:group:123456', messageId: 'start', replied: true, reason: 'replied', detail: {} });
+    repository.recordDecision({ time: 1800, sessionId: '900000001:private:42', messageId: 'same-account', replied: true, reason: 'replied', detail: {} });
+    repository.recordDecision({ time: 1900, sessionId: '900000001:group:123456', messageId: 'skipped', replied: false, reason: 'disabled', detail: {} });
+    repository.recordDecision({ time: 2000, sessionId: '900000002:group:123456', messageId: 'other-account', replied: true, reason: 'replied', detail: {} });
+    repository.recordDecision({ time: 2500, sessionId: '900000001:group:123456', messageId: 'after', replied: true, reason: 'replied', detail: {} });
+
+    assert.deepEqual(repository.replyTimesForAccount(900000001, 1500, 2000), [1500, 1800]);
+    assert.throws(() => repository.replyTimesForAccount(900000001, 2000, 1500), /时间范围/u);
+  });
+});
+
+test('costToday 只累计本地自然日内的用量', () => {
   withRepository((repository) => {
     const dayStart = new Date(2026, 9, 12).getTime();
     const nextDay = new Date(2026, 9, 13).getTime();
@@ -258,6 +272,11 @@ test('情绪状态与事件读写往返一致', () => {
       band: 'happy',
       bandSince: 4_000,
       lastBandChangeAt: 3_000,
+      reserve: 0.75,
+      reserveBand: 'tired',
+      reserveBandSince: 4_500,
+      reserveLastChangeAt: 4_400,
+      lastReplyAt: 4_200,
     });
     repository.saveMoodState({
       account: 900000001,
@@ -267,6 +286,11 @@ test('情绪状态与事件读写往返一致', () => {
       band: 'annoyed',
       bandSince: 6_000,
       lastBandChangeAt: 6_000,
+      reserve: 0.42,
+      reserveBand: 'drained',
+      reserveBandSince: 5_500,
+      reserveLastChangeAt: 5_500,
+      lastReplyAt: null,
     });
     assert.deepEqual(repository.getMoodState(900000001), {
       account: 900000001,
@@ -276,6 +300,11 @@ test('情绪状态与事件读写往返一致', () => {
       band: 'annoyed',
       bandSince: 6_000,
       lastBandChangeAt: 6_000,
+      reserve: 0.42,
+      reserveBand: 'drained',
+      reserveBandSince: 5_500,
+      reserveLastChangeAt: 5_500,
+      lastReplyAt: null,
     });
 
     repository.recordMoodEvent({
@@ -293,6 +322,11 @@ test('情绪状态与事件读写往返一致', () => {
       bandAfter: 'happy',
       valenceAfter: 0.16,
       arousalAfter: 0.66,
+      dr: 0.04,
+      appliedDr: 0.08,
+      absorbed: 0,
+      reserveAfter: 0.58,
+      appraisalValid: true,
     });
     repository.recordMoodEvent({
       account: 900000001,
@@ -309,6 +343,11 @@ test('情绪状态与事件读写往返一致', () => {
       bandAfter: null,
       valenceAfter: -0.28,
       arousalAfter: 0.76,
+      dr: 0,
+      appliedDr: -0.01,
+      absorbed: 0,
+      reserveAfter: 0.57,
+      appraisalValid: null,
     });
 
     const recent = repository.recentMoodEvents(900000001, 5);
@@ -319,6 +358,9 @@ test('情绪状态与事件读写往返一致', () => {
     assert.equal(recent[1]?.bandAfter, 'happy');
     assert.equal(recent[1]?.valenceAfter, 0.16);
     assert.equal(recent[1]?.arousalAfter, 0.66);
+    assert.equal(recent[1]?.appliedDr, 0.08);
+    assert.equal(recent[1]?.reserveAfter, 0.58);
+    assert.equal(recent[0]?.absorbed, 0);
     assert.equal(recent[0]?.sessionId, '900000001:private:42');
     assert.equal(repository.latestMoodEventAtOrBefore(900000001, 7_500)?.id, 1);
     assert.deepEqual(repository.recentMoodEvents(900000001, 0), []);

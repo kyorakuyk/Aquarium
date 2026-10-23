@@ -17,6 +17,18 @@ test('energy 低于 0.35 时浮动词把困意与 arousal 词用顿号连接', (
   assert.equal(boundary.float, template.float.wrap.replaceAll('{{floats}}', template.float.arousalLow));
 });
 
+test('心灵能量只按档位与人格来源注入文字，充沛时不输出', () => {
+  const template = promptTemplateStore.get().affect;
+  const innerTired = renderMoodBlocks(template, 'calm', 0.5, 1, 'tired', 'inner');
+  const outerDrained = renderMoodBlocks(template, 'calm', 0.5, 1, 'drained', 'outer');
+  const mixedFull = renderMoodBlocks(template, 'calm', 0.5, 1, 'full', 'mixed');
+
+  assert.equal(innerTired.reserve, '有点累，想一个人待会儿');
+  assert.equal(outerDrained.reserve, '很累，很需要有人陪');
+  assert.equal(mixedFull.reserve, undefined);
+  assert.equal(/\d/u.test(innerTired.reserve ?? ''), false);
+});
+
 test('低于 0.25 的 energy 加成在 talk 偏移之后、阈值限幅之前应用', () => {
   assert.equal(adjustThresholdForTalk(0.5, 0, 0.24), 0.6);
   assert.equal(adjustThresholdForTalk(0.5, 0, 0.25), 0.5);

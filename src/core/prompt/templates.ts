@@ -72,6 +72,7 @@ export interface AffectPromptTemplate extends PromptTemplate {
     warm: string;
     close: string;
   };
+  reserve: Record<'inner' | 'outer' | 'mixed', { tired: string; drained: string }>;
 }
 
 export type TraitPromptLevel = 'm2' | 'm1' | 'p1' | 'p2';
@@ -182,7 +183,8 @@ function parseAppraiseTemplate(template: PromptTemplate): AppraisePromptTemplate
     throw new Error('appraise.md 必须包含非空 system 和 user 文本');
   }
   const appraise = { ...template, system: fields.system, user: fields.user };
-  validatePlaceholders('appraise.md', appraise.system, [], []);
+  const deltaPlaceholders = ['MAX_VALENCE_DELTA', 'MAX_RESERVE_DELTA', 'MAX_AROUSAL_DELTA'];
+  validatePlaceholders('appraise.md', appraise.system, deltaPlaceholders, deltaPlaceholders);
   validatePlaceholders('appraise.md', appraise.user, ['context'], ['context']);
   return appraise;
 }
@@ -195,10 +197,12 @@ function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
   const moodField = fields.mood;
   const floatField = fields.float;
   const affinityField = fields.affinity;
+  const reserveField = fields.reserve;
   if (!moodField || typeof moodField !== 'object' || Array.isArray(moodField)
     || !floatField || typeof floatField !== 'object' || Array.isArray(floatField)
-    || !affinityField || typeof affinityField !== 'object' || Array.isArray(affinityField)) {
-    throw new Error('affect.md 必须包含 mood、float 与 affinity 字段');
+    || !affinityField || typeof affinityField !== 'object' || Array.isArray(affinityField)
+    || !reserveField || typeof reserveField !== 'object' || Array.isArray(reserveField)) {
+    throw new Error('affect.md 必须包含 mood、float、affinity 与 reserve 字段');
   }
   const moodRecord = moodField as Record<string, unknown>;
   const mood = {} as AffectPromptTemplate['mood'];
@@ -220,6 +224,19 @@ function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
     affinity[key] = value;
     validatePlaceholders('affect.md', value, ['name'], ['name']);
   }
+  const reserveRecord = reserveField as Record<string, unknown>;
+  const reserve = {} as AffectPromptTemplate['reserve'];
+  for (const source of ['inner', 'outer', 'mixed'] as const) {
+    const levels = reserveRecord[source];
+    if (!levels || typeof levels !== 'object' || Array.isArray(levels)) {
+      throw new Error(`affect.md 缺少 reserve.${source} 档位文本`);
+    }
+    const values = levels as Record<string, unknown>;
+    if (typeof values.tired !== 'string' || typeof values.drained !== 'string') {
+      throw new Error(`affect.md 缺少 reserve.${source}.tired 或 reserve.${source}.drained 文本`);
+    }
+    reserve[source] = { tired: values.tired, drained: values.drained };
+  }
   const affect = {
     ...template,
     mood,
@@ -229,6 +246,7 @@ function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
       wrap: floatRecord.wrap,
     },
     affinity,
+    reserve,
   };
   validatePlaceholders('affect.md', affect.float.wrap, ['floats'], ['floats']);
   return affect;

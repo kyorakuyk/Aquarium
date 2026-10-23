@@ -145,18 +145,39 @@ const privacySchema = z.object({
   avoidMinutes: 10,
 });
 
-const moodSchema = z.object({
+const moodSchema = z.preprocess((value: unknown) => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return value;
+  const input = value as Record<string, unknown>;
+  const legacyHalfLife = input.halfLifeMin;
+  const reserve = input.reserve;
+  const reserveInput = reserve === undefined
+    ? { initial: 0.8 }
+    : typeof reserve === 'object' && reserve !== null && !Array.isArray(reserve)
+      ? { initial: 0.8, ...(reserve as Record<string, unknown>) }
+      : reserve;
+  return {
+    ...input,
+    surfaceHalfLifeMin: input.surfaceHalfLifeMin ?? legacyHalfLife ?? 40,
+    arousalHalfLifeMin: input.arousalHalfLifeMin ?? legacyHalfLife ?? 40,
+    reserve: reserveInput,
+  };
+}, z.object({
   enabled: z.boolean().default(true),
   baseline: z.object({
     valence: z.number().min(-1).max(1).default(0.1),
     arousal: z.number().min(0).max(1).default(0.4),
   }).strict().default({ valence: 0.1, arousal: 0.4 }),
-  halfLifeMin: z.number().positive().default(30),
+  halfLifeMin: z.number().positive().optional(),
+  surfaceHalfLifeMin: z.number().positive(),
+  arousalHalfLifeMin: z.number().positive(),
+  reserve: z.object({ initial: z.number().min(0).max(1) }).strict(),
 }).strict().default({
   enabled: true,
   baseline: { valence: 0.1, arousal: 0.4 },
-  halfLifeMin: 30,
-});
+  surfaceHalfLifeMin: 40,
+  arousalHalfLifeMin: 40,
+  reserve: { initial: 0.8 },
+}));
 
 const affinitySchema = z.object({
   enabled: z.boolean().default(true),

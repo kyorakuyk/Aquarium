@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { StoreRepository, UsageRange, UsageRangeSummary } from './repository.ts';
 
 export type PanelRepositoryQueries = Pick<StoreRepository,
-  'latestSelfMessageForAccount' | 'selfMessagesById' | 'replyCountToday' | 'replyCountTodayForAccount' | 'replyCountLastHourForAccount' | 'usageToday' | 'usageByRange' | 'decisionMessageText' | 'decisionById' | 'latestReplyDecision' | 'hasDebugTrace' | 'hasPipelineTrace'
+  'latestSelfMessageForAccount' | 'selfMessagesById' | 'replyCountToday' | 'replyCountTodayForAccount' | 'replyCountLastHourForAccount' | 'replyTimesForAccount' | 'usageToday' | 'usageByRange' | 'decisionMessageText' | 'decisionById' | 'latestReplyDecision' | 'hasDebugTrace' | 'hasPipelineTrace'
 >;
 
 function numberValue(value: unknown, field: string): number {
@@ -126,6 +126,12 @@ export function createPanelQueries(
     FROM decisions
     WHERE replied = 1 AND session_id LIKE ? AND time >= ? AND time <= ?
   `);
+  const selectReplyTimesForAccount = database.prepare(`
+    SELECT time
+    FROM decisions
+    WHERE replied = 1 AND session_id LIKE ? AND time >= ? AND time <= ?
+    ORDER BY time, id
+  `);
   const selectDecisionById = database.prepare(`
     SELECT id, time, session_id, message_id, replied, reason, detail_json
     FROM decisions
@@ -187,6 +193,15 @@ export function createPanelQueries(
       if (!Number.isSafeInteger(account) || account <= 0 || !Number.isFinite(now)) return 0;
       const row = selectReplyCountLastHourForAccount.get(`${account}:%`, now - 60 * 60_000, now) as Record<string, unknown> | undefined;
       return numberValue(row?.total ?? 0, 'total');
+    },
+
+    replyTimesForAccount(account, fromTime, toTime) {
+      if (!Number.isFinite(fromTime) || !Number.isFinite(toTime) || toTime < fromTime) {
+        throw new RangeError('回复时间范围无效');
+      }
+      if (!Number.isSafeInteger(account) || account <= 0) return [];
+      const rows = selectReplyTimesForAccount.all(`${account}:%`, fromTime, toTime) as Array<Record<string, unknown>>;
+      return rows.map((row) => numberValue(row.time, 'time'));
     },
 
     usageToday() {

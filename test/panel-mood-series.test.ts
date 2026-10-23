@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { recoverReserve } from '../src/core/mood/core.ts';
 import { sessionId } from '../src/core/shared/events.ts';
 import { account, authHeaders, groupSession, now, withPanel } from './panel-test-helpers.ts';
 
@@ -16,6 +17,9 @@ function addMoodEvent(
     arousalAfter: number;
     bandBefore?: 'low' | 'annoyed' | 'calm' | 'happy' | 'excited' | null;
     bandAfter?: 'low' | 'annoyed' | 'calm' | 'happy' | 'excited' | null;
+    reserveAfter?: number | null;
+    absorbed?: number;
+    appraisalValid?: boolean | null;
   },
 ): void {
   repository.recordMoodEvent({
@@ -33,7 +37,12 @@ function addMoodEvent(
     bandAfter: input.bandAfter ?? null,
     valenceAfter: input.valenceAfter,
     arousalAfter: input.arousalAfter,
-  });
+    dr: 0,
+    appliedDr: 0,
+    absorbed: input.absorbed ?? 0,
+    reserveAfter: input.reserveAfter === undefined ? 0.8 : input.reserveAfter,
+    appraisalValid: input.appraisalValid ?? (input.source === 'appraise'),
+  } as Parameters<typeof repository.recordMoodEvent>[0] & { appraisalValid: boolean | null });
 }
 
 test('mood series samples decay, friction distance and the latest reply injection trace', async () => {
@@ -54,6 +63,8 @@ test('mood series samples decay, friction distance and the latest reply injectio
       reason: 'middle',
       valenceAfter: -0.5,
       arousalAfter: 0.2,
+      reserveAfter: 0.725,
+      absorbed: 0.05,
     });
     addMoodEvent(repository, {
       time: now - hourMs,
@@ -72,6 +83,11 @@ test('mood series samples decay, friction distance and the latest reply injectio
       band: 'annoyed',
       bandSince: now - 2 * hourMs,
       lastBandChangeAt: now - 2 * hourMs,
+      reserve: 0.8,
+      reserveBand: 'full',
+      reserveBandSince: null,
+      reserveLastChangeAt: null,
+      lastReplyAt: null,
     });
     repository.recordDecision({
       time: now - 10,
@@ -82,6 +98,7 @@ test('mood series samples decay, friction distance and the latest reply injectio
       detail: {
         injectedAffectBlocks: {
           mood: '当前心情：不太高兴。',
+          reserve: '有点累，想一个人待会儿。',
           float: '此刻有些疲惫。',
           affinity: '对小明保持温和。token=K9m4R2p8T1v6',
         },
@@ -96,6 +113,7 @@ test('mood series samples decay, friction distance and the latest reply injectio
         detail: {
           injectedAffectBlocks: {
             mood: '当前心情：不太高兴。',
+          reserve: '有点累，想一个人待会儿。',
             float: '此刻有些疲惫。',
             affinity: '对小明保持温和。token=K9m4R2p8T1v6',
           },
@@ -116,36 +134,49 @@ test('mood series samples decay, friction distance and the latest reply injectio
     const body = await response.json() as {
       from: number;
       to: number;
-      points: Array<{ time: number; valence: number; arousal: number; event: boolean }>;
+      points: Array<{ time: number; valence: number; arousal: number; reserve: number; absorbed: number; event: boolean }>;
       current: {
         valence: number;
         arousal: number;
+        reserve: number;
+        reserveBand: string;
+        energySource: string;
         band: string;
         bandSince: number | null;
         distanceToNextBand: { amount: number; direction: string; targetBand: string; margin: number; friction: string };
       };
       bandChanges: Array<{ time: number; from: string; to: string }>;
       energy: { value: number | null; status: string; points: Array<{ time: number; value: number | null }> };
-      latestReply: { id: number; blocks: { mood: string | null; float: string | null; affinity: string | null } } | null;
+      latestReply: { id: number; blocks: { mood: string | null; reserve: string | null; float: string | null; affinity: string | null } } | null;
     };
 
     assert.equal(body.from, from);
     assert.equal(body.to, now);
     assert.equal(body.points.length, 97);
     assert.equal(body.points[0]?.valence, 0.6);
+    assert.equal(body.points[0]?.reserve, 0.8);
     assert.equal(body.points.find((point) => point.time === now - 12 * hourMs)?.valence, -0.5);
+    assert.equal(body.points.find((point) => point.time === now - 12 * hourMs)?.reserve, 0.725);
+    assert.equal(body.points.find((point) => point.time === now - 12 * hourMs)?.absorbed, 0.05);
     const interpolated = body.points.find((point) => point.time === now - 12 * hourMs + 15 * 60_000);
-    assert.ok(Math.abs((interpolated?.valence ?? 0) - (0.1 + (-0.5 - 0.1) * 2 ** (-15 / 30))) < 1e-9);
+    const surfaceHalfLife = 40 * 1.4 / (0.4 + 0.725);
+    const interpolatedValence = 0.1 + (-0.5 - 0.1) * 2 ** (-15 / surfaceHalfLife);
+    const interpolatedReserve = 0.725 - (interpolatedValence + 0.5) * 0.3;
+    assert.ok(Math.abs((interpolated?.valence ?? 0) - interpolatedValence) < 1e-9);
+    assert.ok(Math.abs((interpolated?.reserve ?? 0) - interpolatedReserve) < 1e-9);
     assert.equal(body.points.find((point) => point.time === now - hourMs)?.event, true);
     assert.deepEqual(body.bandChanges, [{ time: now - hourMs, from: 'happy', to: 'annoyed' }]);
     assert.equal(body.current.valence, -0.4);
     assert.equal(body.current.arousal, 0.5);
+    assert.equal(body.current.reserve, 0.8);
+    assert.equal(body.current.reserveBand, 'full');
+    assert.equal(body.current.energySource, 'mixed');
     assert.equal(body.current.band, 'annoyed');
     assert.equal(body.current.bandSince, now - 2 * hourMs);
-    assert.ok(Math.abs(body.current.distanceToNextBand.amount - 0.18) < 1e-9);
+    assert.ok(Math.abs(body.current.distanceToNextBand.amount - 0.15) < 1e-9);
     assert.equal(body.current.distanceToNextBand.direction, 'down');
     assert.equal(body.current.distanceToNextBand.targetBand, 'low');
-    assert.equal(body.current.distanceToNextBand.margin, 0.08);
+    assert.equal(body.current.distanceToNextBand.margin, 0.05);
     assert.equal(body.current.distanceToNextBand.friction, 'static');
     assert.equal(body.energy.status, 'awake');
     assert.equal(body.energy.value, 1);
@@ -154,6 +185,7 @@ test('mood series samples decay, friction distance and the latest reply injectio
     assert.equal(body.latestReply?.id, repository.latestReplyDecision()?.id);
     assert.deepEqual(body.latestReply?.blocks, {
       mood: '当前心情：不太高兴。',
+          reserve: '有点累，想一个人待会儿。',
       float: '此刻有些疲惫。',
       affinity: '对小明保持温和。[敏感内容已隐藏]',
     });
@@ -166,6 +198,11 @@ test('mood series samples decay, friction distance and the latest reply injectio
       band: 'calm',
       bandSince: now - 4 * 60_000,
       lastBandChangeAt: now - 4 * 60_000,
+      reserve: 0.8,
+      reserveBand: 'full',
+      reserveBandSince: null,
+      reserveLastChangeAt: null,
+      lastReplyAt: null,
     });
     const slidingResponse = await app.request('/api/mood/series?hours=24', { headers: authHeaders() });
     const slidingBody = await slidingResponse.json() as typeof body;
@@ -175,4 +212,57 @@ test('mood series samples decay, friction distance and the latest reply injectio
     assert.ok(Math.abs(slidingBody.current.distanceToNextBand.amount - 0.07) < 1e-9);
     assert.equal((await app.request('/api/mood/series?hours=0', { headers: authHeaders() })).status, 400);
   });
+});
+
+test('mood series carries reply and appraisal history from before an old anchor', async () => {
+  await withPanel(async ({ app, repository }) => {
+    const from = now - hourMs;
+    const anchorTime = from - 20 * 60_000;
+    const replyTime = anchorTime - 5 * 60_000;
+    addMoodEvent(repository, {
+      time: replyTime,
+      source: 'appraise',
+      reason: '相处愉快',
+      valenceAfter: 0.1,
+      arousalAfter: 0.4,
+      reserveAfter: 0.2,
+      appraisalValid: true,
+    });
+    addMoodEvent(repository, {
+      time: anchorTime,
+      source: 'rule',
+      reason: 'anchor',
+      valenceAfter: 0.1,
+      arousalAfter: 0.4,
+      reserveAfter: 0.2,
+    });
+    repository.recordDecision({
+      time: replyTime,
+      sessionId: sessionId(groupSession),
+      messageId: 'pre-anchor-reply',
+      replied: true,
+      reason: 'replied',
+      detail: {},
+    });
+
+    const response = await app.request('/api/mood/series?hours=1', { headers: authHeaders() });
+    assert.equal(response.status, 200);
+    const body = await response.json() as { points: Array<{ time: number; reserve: number }> };
+    const first = body.points.find((point) => point.time === from);
+    const afterCompany = recoverReserve({
+      reserve: 0.2,
+      energySource: 'outer',
+      elapsedMs: 10 * 60_000,
+      company: true,
+      sad: false,
+    });
+    const expected = recoverReserve({
+      reserve: afterCompany,
+      energySource: 'outer',
+      elapsedMs: 10 * 60_000,
+      company: false,
+      sad: false,
+    });
+    assert.ok(Math.abs((first?.reserve ?? 0) - expected) < 1e-9);
+  }, undefined, { getEnergySource: () => 'outer' });
 });

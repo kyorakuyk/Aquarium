@@ -65,6 +65,11 @@ function createUnusedTemplates(): PromptTemplateSet {
       mood: { low: '', annoyed: '', calm: '', happy: '', excited: '' },
       float: { arousalLow: '', arousalHigh: '', wrap: '{{floats}}' },
       affinity: { cold: '', cool: '', warm: '', close: '' },
+      reserve: {
+        inner: { tired: '', drained: '' },
+        outer: { tired: '', drained: '' },
+        mixed: { tired: '', drained: '' },
+      },
     },
     traits: {
       source: '',

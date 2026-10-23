@@ -103,6 +103,7 @@ export async function withPanel<T>(
     testProvider?: (provider: string, model: string, config: ReturnType<typeof AquariumConfigSchema.parse>) => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
     cliRuntime?: CliRuntime;
     callModel?: PanelServerOptions['callModel'];
+    getEnergySource?: PanelServerOptions['getEnergySource'];
     stickerServices?: PanelServerOptions['stickerServices'];
     tagClassificationService?: PanelServerOptions['tagClassificationService'];
     onError?: PanelServerOptions['onError'];
@@ -183,6 +184,7 @@ export async function withPanel<T>(
     ...(panelOptions.envPath ? { envPath: panelOptions.envPath } : {}),
     ...(panelOptions.env ? { env: panelOptions.env } : {}),
     ...(panelOptions.fetch ? { fetch: panelOptions.fetch } : {}),
+    ...(panelOptions.getEnergySource ? { getEnergySource: panelOptions.getEnergySource } : {}),
     ...(panelOptions.testProvider ? { testProvider: panelOptions.testProvider } : {}),
     ...(panelOptions.cliRuntime ? { cliRuntime: panelOptions.cliRuntime } : {}),
     ...(panelOptions.stickerServices ? { stickerServices: panelOptions.stickerServices } : {}),

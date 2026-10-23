@@ -7,6 +7,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import type { ContactFriend, ContactGroup, ProtocolAdapter } from '../adapters/types.ts';
 import type { AquariumConfig } from '../config/schema.ts';
+import type { EnergySource } from '../core/mood/core.ts';
 import { resolveSession } from '../config/resolve.ts';
 import { parseSessionId, listEnabledSessions } from '../core/conversation/sessions.ts';
 import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../core/shared/events.ts';
@@ -22,6 +23,7 @@ import { callSlot } from '../llm/slots.ts';
 import { registerPersonaRoutes } from './personas.ts';
 import { registerSessionRoutes } from './session-routes.ts';
 import { registerAffectRoutes } from './affect-routes.ts';
+import { registerMoodRoutes } from './mood-routes.ts';
 import { registerPrivacyRoutes } from './privacy-routes.ts';
 import { registerSleepRoutes } from './sleep-routes.ts';
 import { registerUsageRoutes } from './usage-routes.ts';
@@ -51,6 +53,7 @@ import { registerImpressionsStatusRoutes } from './impressions-status-routes.ts'
 export interface PanelServerOptions {
   password: string;
   getConfig: () => AquariumConfig;
+  getEnergySource?: (account: number) => EnergySource;
   saveConfig: (config: AquariumConfig) => void | Promise<void>;
   repository: StoreRepository;
   accounts: () => PanelAccountRuntime[];
@@ -268,11 +271,18 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     ...(options.memberSummaryRepository ? { summaries: options.memberSummaryRepository } : {}),
     now,
   });
+  registerMoodRoutes(app, {
+    getConfig: options.getConfig,
+    getEnergySource: options.getEnergySource,
+    repository: options.repository,
+    accounts: options.accounts,
+    sleepWakeState: options.sleepWakeState,
+    now,
+  });
   registerAffectRoutes(app, {
     getConfig: options.getConfig,
     repository: options.repository,
     accounts: options.accounts,
-    sleepWakeState: options.sleepWakeState,
     historyImports: options.historyImports,
     now,
   });

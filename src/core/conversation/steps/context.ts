@@ -102,6 +102,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     now: ctx.now(),
     template: ctx.state.promptTemplates.affect,
     energy: ctx.state.energy ?? 1,
+    energySource: loadedPersona.energySource,
     record: !ctx.processOptions.replay,
   }) ?? {};
   if (!ctx.options.moodService && config.sleep.enabled && (ctx.state.energy ?? 1) < 0.35) {
@@ -126,6 +127,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
       moodBand: ctx.options.moodService?.currentBand({
         account: ctx.message.session.account,
         now: ctx.now(),
+        energySource: loadedPersona.energySource,
       }) ?? 'calm',
       now: ctx.now(),
     });
@@ -160,6 +162,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   };
   const injectedAffectBlocks = {
     ...(moodBlocks.mood ? { mood: redactSensitiveText(moodBlocks.mood) } : {}),
+    ...(moodBlocks.reserve ? { reserve: redactSensitiveText(moodBlocks.reserve) } : {}),
     ...(moodBlocks.float ? { float: redactSensitiveText(moodBlocks.float) } : {}),
     ...(affinityBlock ? { affinity: redactSensitiveText(affinityBlock) } : {}),
   };

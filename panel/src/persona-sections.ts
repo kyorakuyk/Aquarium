@@ -16,6 +16,7 @@ export const PERSONA_SECTION_HEADINGS = [
 ] as const;
 
 export type PersonaSectionHeading = typeof PERSONA_SECTION_HEADINGS[number];
+export type PersonaEnergySource = 'inner' | 'outer' | 'mixed';
 export type PersonaSectionFields = {
   身份: string;
   年龄: string;

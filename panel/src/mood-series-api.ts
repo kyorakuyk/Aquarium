@@ -4,6 +4,8 @@ export interface MoodSeriesPoint {
   time: number;
   valence: number;
   arousal: number;
+  reserve: number;
+  absorbed: number;
   event: boolean;
 }
 
@@ -14,6 +16,10 @@ export interface MoodSeriesView {
   current: {
     valence: number;
     arousal: number;
+    reserve: number;
+    reserveBand: 'full' | 'tired' | 'drained';
+    reserveBandSince: number | null;
+    energySource: 'inner' | 'outer' | 'mixed';
     band: MoodBand;
     bandSince: number | null;
     distanceToNextBand: {
@@ -32,6 +38,6 @@ export interface MoodSeriesView {
   };
   latestReply: {
     id: number;
-    blocks: { mood: string | null; float: string | null; affinity: string | null };
+    blocks: { mood: string | null; reserve: string | null; float: string | null; affinity: string | null };
   } | null;
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { resolveMoodState } from '../src/core/mood/state.ts';
 import { sessionId } from '../src/core/shared/events.ts';
 import { account, authHeaders, groupSession, now, withPanel } from './panel-test-helpers.ts';
 
@@ -8,7 +9,7 @@ function jsonHeaders(): HeadersInit {
 }
 
 test('心情 API 返回衰减后的值、档位与最近事件', async () => {
-  await withPanel(async ({ app, repository }) => {
+  await withPanel(async ({ app, repository, getConfig }) => {
     assert.equal((await app.request('/api/mood')).status, 401);
 
     const baseline = await (await app.request('/api/mood', { headers: authHeaders() })).json() as {
@@ -16,10 +17,16 @@ test('心情 API 返回衰减后的值、档位与最近事件', async () => {
       arousal: number;
       band: string;
       bandSince: number | null;
+      reserve: number;
+      reserveBand: string;
+      energySource: string;
       events: unknown[];
     };
     assert.equal(baseline.valence, 0.1);
     assert.equal(baseline.arousal, 0.4);
+    assert.equal(baseline.reserve, 0.8);
+    assert.equal(baseline.reserveBand, 'full');
+    assert.equal(baseline.energySource, 'mixed');
     assert.equal(baseline.band, 'calm');
     assert.equal(baseline.bandSince, null);
     assert.deepEqual(baseline.events, []);
@@ -32,6 +39,11 @@ test('心情 API 返回衰减后的值、档位与最近事件', async () => {
       band: 'happy',
       bandSince: now - 3_600_000,
       lastBandChangeAt: now - 1_800_000,
+      reserve: 0.8,
+      reserveBand: 'full',
+      reserveBandSince: null,
+      reserveLastChangeAt: null,
+      lastReplyAt: null,
     });
     repository.recordMoodEvent({
       account,
@@ -48,23 +60,92 @@ test('心情 API 返回衰减后的值、档位与最近事件', async () => {
       bandAfter: null,
       valenceAfter: 0.35,
       arousalAfter: 0.65,
+      dr: 0,
+      appliedDr: 0,
+      absorbed: 0,
+      reserveAfter: 0.8,
+      appraisalValid: true,
     });
 
     const body = await (await app.request('/api/mood', { headers: authHeaders() })).json() as {
       valence: number;
       arousal: number;
+      reserve: number;
+      reserveBand: string;
+      energySource: string;
       band: string;
       bandSince: number;
       events: Array<{ reason: string; source: string }>;
     };
-    assert.ok(Math.abs(body.valence - 0.35) < 1e-9);
-    assert.ok(Math.abs(body.arousal - 0.65) < 1e-9);
+    const stored = repository.getMoodState(account);
+    const historyFrom = stored ? stored.updatedAt - 15 * 60_000 : now - 15 * 60_000;
+    const expected = resolveMoodState({
+      stored,
+      at: now,
+      settings: getConfig().mood,
+      energySource: 'mixed',
+      appraisalEvents: repository.moodEventsSince(account, historyFrom),
+      replyTimes: repository.replyTimesForAccount(account, historyFrom, now),
+    });
+    assert.ok(Math.abs(body.valence - expected.valence) < 1e-9);
+    assert.ok(Math.abs(body.arousal - expected.arousal) < 1e-9);
+    assert.ok(Math.abs(body.reserve - expected.reserve) < 1e-9);
+    assert.equal(body.reserveBand, 'full');
+    assert.equal(body.energySource, 'mixed');
     assert.equal(body.band, 'happy');
     assert.equal(body.bandSince, now - 3_600_000);
     assert.equal(body.events.length, 1);
     assert.equal(body.events[0]?.reason, '被夸了');
     assert.equal(body.events[0]?.source, 'appraise');
   });
+});
+
+test('budget skipped appraisals do not trigger projected reserve recovery', async () => {
+  await withPanel(async ({ app, repository }) => {
+    const start = now - 14 * 60_000;
+    repository.saveMoodState({
+      account,
+      valence: 0.1,
+      arousal: 0.4,
+      updatedAt: start,
+      band: 'calm',
+      bandSince: start - 30 * 60_000,
+      lastBandChangeAt: start - 30 * 60_000,
+      reserve: 0.63,
+      reserveBand: 'tired',
+      reserveBandSince: start - 30 * 60_000,
+      reserveLastChangeAt: start - 30 * 60_000,
+      lastReplyAt: start,
+    });
+    repository.recordMoodEvent({
+      account,
+      time: start + 1_000,
+      source: 'appraise',
+      sessionId: sessionId(groupSession),
+      senderId: 42,
+      dv: 0,
+      da: 0,
+      appliedDv: 0,
+      appliedDa: 0,
+      reason: 'budget',
+      bandBefore: null,
+      bandAfter: null,
+      valenceAfter: 0.1,
+      arousalAfter: 0.4,
+      dr: 0,
+      appliedDr: 0,
+      absorbed: 0,
+      reserveAfter: 0.63,
+      appraisalValid: false,
+    });
+
+    const body = await (await app.request('/api/mood', { headers: authHeaders() })).json() as {
+      reserve: number;
+      reserveBand: string;
+    };
+    assert.equal(body.reserveBand, 'tired');
+    assert.ok(body.reserve < 0.65);
+  }, undefined, { getEnergySource: () => 'outer' });
 });
 
 test('印象 API 返回群友名与全部状态标签', async () => {

@@ -1,8 +1,10 @@
 import type { AffectPromptTemplate } from '../prompt/templates.ts';
-import type { MoodBand } from '../../store/affect-repo.ts';
+import type { MoodBand, ReserveBand } from '../../store/affect-repo.ts';
+import type { EnergySource } from './core.ts';
 
 export interface MoodPromptBlocks {
   mood?: string;
+  reserve?: string;
   float?: string;
 }
 
@@ -12,11 +14,15 @@ export function renderMoodBlocks(
   band: MoodBand,
   arousal: number,
   energy = 1,
+  reserveBand: ReserveBand = 'full',
+  energySource: EnergySource = 'mixed',
 ): MoodPromptBlocks {
   const mood = template.mood[band];
   const float = renderFloatBlock(template, arousal, energy);
+  const reserve = reserveBand === 'full' ? undefined : template.reserve[energySource][reserveBand];
   return {
     ...(mood ? { mood } : {}),
+    ...(reserve ? { reserve } : {}),
     ...(float ? { float } : {}),
   };
 }

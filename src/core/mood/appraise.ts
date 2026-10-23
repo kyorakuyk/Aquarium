@@ -1,5 +1,6 @@
 import type OpenAI from 'openai';
 import type { AppraisePromptTemplate } from '../prompt/templates.ts';
+import { MAX_AROUSAL_DELTA, MAX_RESERVE_DELTA, MAX_VALENCE_DELTA } from './core.ts';
 
 export interface AppraiseContextMessage {
   time: number;
@@ -10,12 +11,13 @@ export interface AppraiseContextMessage {
 
 export interface ParsedAppraiseResponse {
   valence: number;
+  reserve: number;
   arousal: number;
   reason: string;
 }
 
 export type AppraiseResult =
-  | { ok: true; valence: number; arousal: number; reason: string }
+  | { ok: true; valence: number; reserve: number; arousal: number; reason: string }
   | { ok: false; reason: 'appraise_parse_error' | 'appraise_error' };
 
 export type AppraiseSlotCall = (
@@ -38,9 +40,13 @@ export function buildAppraiseMessages(
     const speaker = message.isSelf ? '你' : JSON.stringify(message.senderName);
     return `[${formatTime(message.time)}] ${speaker}: ${message.plainText}`;
   }).join('\n');
+  const system = template.system
+    .replaceAll('{{MAX_VALENCE_DELTA}}', String(MAX_VALENCE_DELTA))
+    .replaceAll('{{MAX_RESERVE_DELTA}}', String(MAX_RESERVE_DELTA))
+    .replaceAll('{{MAX_AROUSAL_DELTA}}', String(MAX_AROUSAL_DELTA));
 
   return [
-    { role: 'system', content: template.system },
+    { role: 'system', content: system },
     { role: 'user', content: template.user.replaceAll('{{context}}', contextText) },
   ];
 }
@@ -57,19 +63,22 @@ export function parseAppraiseResponse(text: string): ParsedAppraiseResponse | un
 
   const record = parsed as Record<string, unknown>;
   const keys = Object.keys(record);
-  if (keys.length !== 3
+  if (keys.length !== 4
     || !Object.hasOwn(record, 'valence')
+    || !Object.hasOwn(record, 'reserve')
     || !Object.hasOwn(record, 'arousal')
     || !Object.hasOwn(record, 'reason')) {
     return undefined;
   }
-  const deltaInRange = (value: unknown): value is number => typeof value === 'number'
+  const deltaInRange = (value: unknown, maximum: number): value is number => typeof value === 'number'
     && Number.isFinite(value)
-    && value >= -0.15
-    && value <= 0.15;
-  if (!deltaInRange(record.valence) || !deltaInRange(record.arousal)) return undefined;
+    && value >= -maximum
+    && value <= maximum;
+  if (!deltaInRange(record.valence, MAX_VALENCE_DELTA)
+    || !deltaInRange(record.reserve, MAX_RESERVE_DELTA)
+    || !deltaInRange(record.arousal, MAX_AROUSAL_DELTA)) return undefined;
   if (typeof record.reason !== 'string' || Array.from(record.reason).length > 20) return undefined;
-  return { valence: record.valence, arousal: record.arousal, reason: record.reason };
+  return { valence: record.valence, reserve: record.reserve, arousal: record.arousal, reason: record.reason };
 }
 
 export async function runAppraise(

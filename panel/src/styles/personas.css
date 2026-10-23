@@ -32,6 +32,7 @@
 .persona-field-heading label { color: var(--ink-2); font-size: 11px; font-weight: 700; }
 .persona-field-heading span { color: var(--muted); font-family: var(--mono); font-size: 9px; }
 .persona-field input, .persona-field textarea { box-sizing: border-box; width: 100%; min-height: 42px; padding: 9px 10px; font-size: 11px; line-height: 1.55; }
+.persona-field .persona-energy-source { box-sizing: border-box; width: 100%; min-height: 44px; padding: 8px 10px; font-size: 12px; }
 .persona-field textarea { min-height: 62px; resize: vertical; }
 .persona-field-hint { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
 .persona-trait-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
