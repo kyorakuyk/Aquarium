@@ -9,6 +9,7 @@ import {
   memberPreviewTags,
   recentTagFadeLabel,
 } from '../panel/src/impressions-model.ts';
+import type { ViewImpression } from '../panel/src/api.ts';
 
 const day = 24 * 60 * 60 * 1_000;
 
@@ -216,4 +217,153 @@ test('recent-tag fade label follows the supplied local fade timestamp', () => {
   assert.equal(recentTagFadeLabel({ source: 'auto', fadeAt: 6 * day + 1 }, 0), '7 天后淡出');
   assert.equal(recentTagFadeLabel({ source: 'auto', fadeAt: 0 }, 0), '已淡出');
   assert.equal(recentTagFadeLabel({ source: 'manual', fadeAt: 6 * day }, 0), undefined);
+});
+
+function impression(overrides: Partial<ViewImpression> = {}): ViewImpression {
+  const id = overrides.id ?? 1;
+  return {
+    id,
+    sessionId: '900000001:group:1004200446',
+    sourceKind: 'group',
+    sessionLabel: '群 1004200446',
+    userId: null,
+    name: '群 1004200446',
+    text: `看法${id}`,
+    category: 'atmosphere',
+    kind: 'view',
+    certain: true,
+    polarity: null,
+    origin: 'inferred',
+    source: 'auto',
+    status: 'confirmed',
+    locked: false,
+    ...overrides,
+  };
+}
+
+test('confidence levels use the five documented lower-inclusive bands', () => {
+  const confidenceLevel = Reflect.get(impressionsModel, 'confidenceLevel') as
+    ((value: number) => 1 | 2 | 3 | 4 | 5) | undefined;
+
+  assert.equal(typeof confidenceLevel, 'function');
+  if (!confidenceLevel) return;
+  assert.deepEqual([0, 0.3999, 0.4, 0.5999, 0.6, 0.7999, 0.8, 0.8999, 0.9, 1]
+    .map(confidenceLevel), [1, 1, 2, 2, 3, 3, 4, 4, 5, 5]);
+});
+
+test('knowledge source details identify relayed account facts explicitly', () => {
+  const knowledgeSourceLabel = Reflect.get(impressionsModel, 'knowledgeSourceLabel') as
+    ((tag: Pick<ViewImpression, 'origin' | 'source' | 'sourceAccount'> & { samples: number }) => string) | undefined;
+
+  assert.equal(typeof knowledgeSourceLabel, 'function');
+  if (!knowledgeSourceLabel) return;
+  assert.equal(knowledgeSourceLabel({ origin: 'inferred', source: 'auto', sourceAccount: 900000002, samples: 1 }), '转述 · 账号 900000002');
+  assert.equal(knowledgeSourceLabel({ origin: 'stats', source: 'auto', sourceAccount: null, samples: 1 }), '统计 · 自动');
+  assert.equal(knowledgeSourceLabel({ origin: 'self_report', source: 'auto', sourceAccount: null, samples: 3 }), '自述 ×3');
+});
+
+test('view-impression promotion reasons localize category names for the panel', () => {
+  const localizePromotionReason = Reflect.get(impressionsModel, 'localizePromotionReason') as
+    ((reason: string, category: ViewImpression['category']) => string) | undefined;
+
+  assert.equal(typeof localizePromotionReason, 'function');
+  if (!localizePromotionReason) return;
+  assert.equal(
+    localizePromotionReason('「atmosphere」分类表示主观看法，不适合作为知识', 'atmosphere'),
+    '「氛围」分类表示主观看法，不适合作为知识',
+  );
+  assert.equal(localizePromotionReason('私聊来源的印象不能提升为共享知识', 'atmosphere'), '私聊来源的印象不能提升为共享知识');
+});
+
+test('personal impressions group by session and person without merging same users across sessions', () => {
+  const groupPersonalImpressions = Reflect.get(impressionsModel, 'groupPersonalImpressions') as (
+    tags: readonly ViewImpression[],
+  ) => Array<{
+    sessionId: string;
+    sourceKind: 'group' | 'private' | null;
+    group?: { tags: ViewImpression[] };
+    people: Array<{ userId: number | null; tags: ViewImpression[] }>;
+  }> | undefined;
+
+  assert.equal(typeof groupPersonalImpressions, 'function');
+  if (!groupPersonalImpressions) return;
+  const result = groupPersonalImpressions([
+    impression({ id: 1 }),
+    impression({ id: 2, userId: 42, name: '薯条', category: 'personality' }),
+    impression({ id: 3, sessionId: '900000001:group:2', sessionLabel: '群 2', userId: null, name: '群 2' }),
+    impression({
+      id: 4,
+      sessionId: '900000001:private:42',
+      sessionLabel: '私聊 薯条',
+      sourceKind: 'private',
+      userId: 42,
+      name: '薯条',
+    }),
+  ]);
+
+  assert.deepEqual(result.map((session) => ({
+    sessionId: session.sessionId,
+    sourceKind: session.sourceKind,
+    groupIds: session.group?.tags.map(({ id }) => id) ?? [],
+    people: session.people.map(({ userId, tags }) => [userId, tags.map(({ id }) => id)]),
+  })), [
+    { sessionId: '900000001:group:1004200446', sourceKind: 'group', groupIds: [1], people: [[42, [2]]] },
+    { sessionId: '900000001:group:2', sourceKind: 'group', groupIds: [3], people: [] },
+    { sessionId: '900000001:private:42', sourceKind: 'private', groupIds: [], people: [[42, [4]]] },
+  ]);
+});
+
+test('personal impression rows use view categories and fold unmatched tags into other', () => {
+  const personalImpressionRows = Reflect.get(impressionsModel, 'personalImpressionRows') as (
+    item: { sourceKind: 'group' | 'private' | null; userId: number | null; tags: readonly ViewImpression[] },
+  ) => Array<{ label: string; tags: ViewImpression[] }> | undefined;
+
+  assert.equal(typeof personalImpressionRows, 'function');
+  if (!personalImpressionRows) return;
+  const memberRows = personalImpressionRows({
+    sourceKind: 'group',
+    userId: 42,
+    tags: [
+      impression({ id: 1, category: 'personality', userId: 42, name: '薯条' }),
+      impression({ id: 2, category: 'speech', userId: 42, name: '薯条' }),
+      impression({ id: 3, category: 'social', userId: 42, name: '薯条' }),
+      impression({ id: 4, category: 'fandom', polarity: 'dislike', userId: 42, name: '薯条' }),
+      impression({ id: 5, category: 'recent', userId: 42, name: '薯条' }),
+      impression({ id: 6, category: 'misc', userId: 42, name: '薯条' }),
+    ],
+  });
+  const groupRows = personalImpressionRows({
+    sourceKind: 'group',
+    userId: null,
+    tags: [
+      impression({ id: 7, category: 'atmosphere' }),
+      impression({ id: 8, category: 'personality', userId: 42, name: '薯条' }),
+    ],
+  });
+
+  assert.deepEqual(memberRows.map(({ label, tags }) => [label, tags.map(({ id }) => id)]), [
+    ['性格', [1]],
+    ['说话风格', [2]],
+    ['社交方式', [3]],
+    ['喜恶', [4]],
+    ['其他', [5, 6]],
+  ]);
+  assert.deepEqual(groupRows.map(({ label, tags }) => [label, tags.map(({ id }) => id)]), [
+    ['氛围', [7]],
+    ['其他', [8]],
+  ]);
+});
+
+test('personal impression labels include polarity and avoid duplicating an existing question mark', () => {
+  const personalImpressionDisplayText = Reflect.get(impressionsModel, 'personalImpressionDisplayText') as
+    ((tag: Pick<ViewImpression, 'text' | 'certain' | 'polarity'>) => { text: string; showQuestion: boolean; title: string }) | undefined;
+
+  assert.equal(typeof personalImpressionDisplayText, 'function');
+  if (!personalImpressionDisplayText) return;
+  assert.deepEqual(personalImpressionDisplayText({ text: '靠得住', certain: false, polarity: 'dislike' }), {
+    text: '靠得住 · 不喜欢', showQuestion: true, title: '靠得住 · 不喜欢?',
+  });
+  assert.deepEqual(personalImpressionDisplayText({ text: '可能喜欢?', certain: false, polarity: 'like' }), {
+    text: '可能喜欢? · 喜欢', showQuestion: false, title: '可能喜欢? · 喜欢',
+  });
 });

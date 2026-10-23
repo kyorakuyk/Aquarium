@@ -1,4 +1,22 @@
-import type { AffinityLevel, QqMemberProfileView, TagKind } from './api.ts';
+import type { AffinityLevel, QqMemberProfileView, TagCategory, TagKind, TagView, ViewImpression } from './api.ts';
+
+export const TAG_CATEGORY_LABELS: Record<TagCategory, string> = {
+  positioning: '定位',
+  topic: '话题',
+  atmosphere: '氛围',
+  meme: '群梗',
+  norms: '规矩',
+  identity: '自我认同',
+  personality: '性格',
+  fandom: '成分',
+  speech: '说话风格',
+  catchphrase: '口头禅',
+  social: '社交方式',
+  recent: '近况',
+  dislike: '喜恶',
+  schedule: '作息',
+  misc: '其他',
+};
 
 export interface ActivityDay {
   date: string;
@@ -82,6 +100,119 @@ export function knowledgeTags<T extends { kind: TagKind }>(tags: readonly T[]): 
   return tags.filter((tag) => tag.kind === 'fact');
 }
 
+export type ConfidenceLevel = 1 | 2 | 3 | 4 | 5;
+
+export function confidenceLevel(value: number): ConfidenceLevel {
+  const confidence = Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
+  if (confidence < 0.4) return 1;
+  if (confidence < 0.6) return 2;
+  if (confidence < 0.8) return 3;
+  if (confidence < 0.9) return 4;
+  return 5;
+}
+
+export function localizePromotionReason(reason: string, category: TagCategory): string {
+  return reason.replace(`「${category}」`, `「${TAG_CATEGORY_LABELS[category]}」`);
+}
+
+export function personalImpressionDisplayText(tag: Pick<ViewImpression, 'text' | 'certain' | 'polarity'>): {
+  text: string;
+  showQuestion: boolean;
+  title: string;
+} {
+  const polarityLabel = tag.polarity === 'like' ? '喜欢' : tag.polarity === 'dislike' ? '不喜欢' : '';
+  const text = polarityLabel ? `${tag.text} · ${polarityLabel}` : tag.text;
+  const showQuestion = !tag.certain && !tag.text.trimEnd().endsWith('?');
+  return { text, showQuestion, title: `${text}${showQuestion ? '?' : ''}` };
+}
+
+export interface PersonalImpressionEntry {
+  key: string;
+  sessionId: string;
+  sourceKind: ViewImpression['sourceKind'];
+  sessionLabel: string;
+  userId: number | null;
+  name: string;
+  tags: ViewImpression[];
+}
+
+export interface PersonalImpressionSession {
+  key: string;
+  sessionId: string;
+  sourceKind: ViewImpression['sourceKind'];
+  sessionLabel: string;
+  group?: PersonalImpressionEntry;
+  people: PersonalImpressionEntry[];
+}
+
+export interface PersonalImpressionRow {
+  key: string;
+  label: string;
+  tags: ViewImpression[];
+}
+
+export function groupPersonalImpressions(tags: readonly ViewImpression[]): PersonalImpressionSession[] {
+  const sessions = new Map<string, PersonalImpressionSession>();
+  for (const tag of tags) {
+    const sessionKey = `${tag.sourceKind ?? 'unknown'}:${tag.sessionId}`;
+    const session = sessions.get(sessionKey) ?? {
+      key: sessionKey,
+      sessionId: tag.sessionId,
+      sourceKind: tag.sourceKind,
+      sessionLabel: tag.sessionLabel,
+      people: [],
+    };
+    const entryKey = tag.userId === null ? `${sessionKey}:group` : `${sessionKey}:user:${tag.userId}`;
+    const entry = tag.userId === null
+      ? session.group ?? {
+        key: entryKey,
+        sessionId: tag.sessionId,
+        sourceKind: tag.sourceKind,
+        sessionLabel: tag.sessionLabel,
+        userId: null,
+        name: tag.sessionLabel,
+        tags: [],
+      }
+      : session.people.find((item) => item.userId === tag.userId) ?? {
+        key: entryKey,
+        sessionId: tag.sessionId,
+        sourceKind: tag.sourceKind,
+        sessionLabel: tag.sessionLabel,
+        userId: tag.userId,
+        name: tag.name,
+        tags: [],
+      };
+    entry.tags.push(tag);
+    if (tag.userId === null) session.group = entry;
+    else if (!session.people.some((item) => item.userId === tag.userId)) session.people.push(entry);
+    sessions.set(sessionKey, session);
+  }
+  return [...sessions.values()];
+}
+
+export function personalImpressionRows(entry: Pick<PersonalImpressionEntry, 'sourceKind' | 'userId' | 'tags'>): PersonalImpressionRow[] {
+  const isGroup = entry.sourceKind === 'group' && entry.userId === null;
+  const rows = isGroup
+    ? [
+      { key: 'atmosphere', label: '氛围', matches: (tag: ViewImpression) => tag.category === 'atmosphere' },
+    ]
+    : [
+      { key: 'personality', label: '性格', matches: (tag: ViewImpression) => tag.category === 'personality' },
+      { key: 'speech', label: '说话风格', matches: (tag: ViewImpression) => tag.category === 'speech' },
+      { key: 'social', label: '社交方式', matches: (tag: ViewImpression) => tag.category === 'social' },
+      { key: 'dislike', label: '喜恶', matches: (tag: ViewImpression) => tag.category === 'dislike' || tag.polarity !== null },
+    ];
+  const assigned = new Set<number>();
+  const result = rows.flatMap(({ key, label, matches }) => {
+    const matched = entry.tags.filter((tag) => !assigned.has(tag.id) && matches(tag));
+    matched.forEach((tag) => assigned.add(tag.id));
+    return matched.length > 0 ? [{ key, label, tags: matched }] : [];
+  });
+  const other = entry.tags.filter((tag) => !assigned.has(tag.id));
+  if (other.length > 0) result.push({ key: 'misc', label: '其他', tags: other });
+  return result;
+}
+
 export function formatTagConfidence(value: number): string {
   return value.toFixed(2);
 }
@@ -94,6 +225,13 @@ export function tagOriginLabel(origin: string): string {
     manual: '手动',
   };
   return labels[origin] ?? origin;
+}
+
+export function knowledgeSourceLabel(tag: Pick<TagView, 'origin' | 'source' | 'sourceAccount' | 'samples'>): string {
+  if (tag.sourceAccount !== undefined && tag.sourceAccount !== null) return `转述 · 账号 ${tag.sourceAccount}`;
+  if (tag.origin === 'self_report') return `自述 ×${tag.samples}`;
+  if (tag.origin === 'manual' || tag.source === 'manual') return '手动';
+  return `${tagOriginLabel(tag.origin)} · ${tag.source === 'auto' ? '自动' : '手动'}`;
 }
 
 export function memberRowPresentation(

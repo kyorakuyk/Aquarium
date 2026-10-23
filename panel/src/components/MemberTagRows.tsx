@@ -3,12 +3,9 @@ import { ImpressionTag } from './ImpressionTag.tsx';
 import { TagSubjectManagerDialog } from './TagSubjectManagerDialog.tsx';
 import { containsSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 import {
-  formatTagConfidence,
   knowledgeTags,
-  memberIdentityInjectionLabel,
   memberIdentityMbti,
-  recentTagFadeLabel,
-  tagOriginLabel,
+  TAG_CATEGORY_LABELS,
 } from '../impressions-model.ts';
 import type { TagCategory, TagPolarity, TagStatus, TagView } from '../api.ts';
 
@@ -24,39 +21,14 @@ type TagRename = (id: number, text: string) => Promise<boolean>;
 type TagLock = (id: number, locked: boolean) => Promise<boolean>;
 type TagDelete = (id: number) => Promise<boolean>;
 
-const PROFILE_ROWS: ReadonlyArray<{ category: TagCategory; label: string }> = [
-  { category: 'identity', label: '自我认同' },
-  { category: 'personality', label: '性格' },
-  { category: 'fandom', label: '成分' },
-  { category: 'speech', label: '说话风格' },
-  { category: 'catchphrase', label: '口头禅' },
-  { category: 'social', label: '社交方式' },
-  { category: 'recent', label: '近况' },
-  { category: 'dislike', label: '雷点' },
-  { category: 'misc', label: '其他' },
-];
+const PROFILE_ROWS: ReadonlyArray<TagCategory> = ['schedule', 'identity', 'fandom', 'catchphrase', 'recent'];
 
-const GROUP_ROWS: ReadonlyArray<{ category: TagCategory; label: string }> = [
-  { category: 'positioning', label: '定位' },
-  { category: 'topic', label: '话题' },
-  { category: 'atmosphere', label: '氛围' },
-  { category: 'meme', label: '群梗' },
-  { category: 'norms', label: '规矩' },
-  { category: 'recent', label: '近况' },
-  { category: 'misc', label: '其他' },
-];
+const GROUP_ROWS: ReadonlyArray<TagCategory> = ['schedule', 'positioning', 'topic', 'meme', 'norms', 'recent'];
 
 function displayText(tag: TagView): string {
-  const base = tag.category === 'fandom' && tag.subject
-    ? `${tag.subject.replaceAll('/', ' › ')} › ${tag.text}${tag.polarity === 'dislike' ? ' · 不喜欢' : ''}`
+  return tag.category === 'fandom' && tag.subject
+    ? `${tag.subject.replaceAll('/', ' › ')} › ${tag.text}`
     : tag.text;
-  const badges = [
-    memberIdentityInjectionLabel(tag) ?? '',
-    tag.category === 'identity' && tag.origin === 'self_report' ? `自述 ×${tag.samples}` : '',
-    tag.category === 'schedule' && tag.source === 'auto' ? '自动' : '',
-    tag.category === 'recent' ? recentTagFadeLabel(tag, Date.now()) ?? '' : '',
-  ].filter(Boolean);
-  return badges.length > 0 ? `${base} · ${badges.join(' · ')}` : base;
 }
 
 function KnowledgeTagEntry({ tag, busy, onAction, onRename, onLock, onDelete }: {
@@ -67,39 +39,31 @@ function KnowledgeTagEntry({ tag, busy, onAction, onRename, onLock, onDelete }: 
   onLock: TagLock;
   onDelete: TagDelete;
 }) {
-  const confidence = formatTagConfidence(tag.activation);
-  const origin = tagOriginLabel(tag.origin);
-  return <div className="profile-tag-entry">
+  return <>
     <ImpressionTag
       tag={tag}
       displayText={displayText(tag)}
+      appearance="knowledge"
       busy={busy}
       onAction={onAction}
       onRename={onRename}
       onLock={onLock}
       onDelete={onDelete}
     />
-    <span className="profile-tag-meta" aria-label={`置信度 ${confidence}`}>
-      <span className="profile-tag-meta-label">置信度</span>
-      <span className="profile-tag-meta-value mono">{confidence}</span>
-    </span>
-    <span className="profile-tag-meta" aria-label={`来源 ${origin}`}>
-      <span className="profile-tag-meta-label">来源</span>
-      <span className="profile-tag-meta-value">{origin}</span>
-    </span>
-  </div>;
+  </>;
 }
 
-function ProfileTagAdd({ label, category, busy, onSubmit }: {
+function ProfileTagAdd({ label, category, busy, onSubmit, initialOpen = false, onDismiss }: {
   label: string;
   category: TagCategory;
   busy: boolean;
   onSubmit: MemberTagAdd;
+  initialOpen?: boolean;
+  onDismiss?: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [text, setText] = useState('');
   const [subject, setSubject] = useState('');
-  const [polarity, setPolarity] = useState<'' | 'like' | 'dislike'>('');
   const [sensitiveInput, setSensitiveInput] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -113,12 +77,12 @@ function ProfileTagAdd({ label, category, busy, onSubmit }: {
       setSensitiveInput(true);
       return;
     }
-    if (await onSubmit(cleanText, category, category === 'fandom' && cleanSubject ? cleanSubject : null, polarity || null)) {
+    if (await onSubmit(cleanText, category, category === 'fandom' && cleanSubject ? cleanSubject : null, null)) {
       setText('');
       setSubject('');
-      setPolarity('');
       setSensitiveInput(false);
       setOpen(false);
+      onDismiss?.();
     }
   }
 
@@ -158,14 +122,9 @@ function ProfileTagAdd({ label, category, busy, onSubmit }: {
           else { setSubject(value); setSensitiveInput(false); }
         }}
       />
-      <select aria-label={`${label}的极性`} value={polarity} disabled={busy} onChange={(event) => setPolarity(event.currentTarget.value as typeof polarity)}>
-        <option value="">未设置</option>
-        <option value="like">喜欢</option>
-        <option value="dislike">不喜欢</option>
-      </select>
     </>}
     <button className="button button-primary" type="submit" disabled={busy || !text.trim() || sensitiveInput}>添加</button>
-    <button className="text-button" type="button" disabled={busy} onClick={() => { setOpen(false); setText(''); setSubject(''); setPolarity(''); setSensitiveInput(false); }}>取消</button>
+    <button className="text-button" type="button" disabled={busy} onClick={() => { setOpen(false); setText(''); setSubject(''); setSensitiveInput(false); onDismiss?.(); }}>取消</button>
     {sensitiveInput && <span className="tag-sensitive-hint" role="status">疑似敏感凭据已清除，未发送。</span>}
   </form>;
 }
@@ -203,7 +162,6 @@ function TagRow({ label, category, tags, sessionId, busy, onAction, onRename, on
         onLock={onLock}
         onDelete={onDelete}
       />)}
-      {active.length === 0 && <span className="muted profile-tag-empty">暂无</span>}
       {category === 'fandom' && <button
         className="tag-more-button"
         type="button"
@@ -254,24 +212,14 @@ export function MemberTagRows({ sessionId, tags, busy, onAction, onRename, onLoc
   scope?: 'member' | 'group';
 }) {
   const visibleTags = knowledgeTags(tags);
-  const scheduleTags = visibleTags.filter((tag) => tag.category === 'schedule');
+  const [addingEmptyCategory, setAddingEmptyCategory] = useState<TagCategory>();
   const rows = scope === 'group' ? GROUP_ROWS : PROFILE_ROWS;
+  const visibleRows = rows.filter((category) => visibleTags.some((tag) => tag.category === category));
+  const emptyRows = rows.filter((category) => !visibleTags.some((tag) => tag.category === category));
   return <div className="profile-tag-rows">
-    <TagRow
-      label="作息"
-      category="schedule"
-      tags={scheduleTags}
-      sessionId={sessionId}
-      busy={busy}
-      onAction={onAction}
-      onRename={onRename}
-      onLock={onLock}
-      onDelete={onDelete}
-      onAdd={onAdd}
-    />
-    {rows.map(({ category, label }) => <TagRow
+    {visibleRows.map((category) => <TagRow
       key={category}
-      label={label}
+      label={TAG_CATEGORY_LABELS[category]}
       category={category}
       tags={visibleTags.filter((tag) => tag.category === category)}
       sessionId={sessionId}
@@ -282,5 +230,27 @@ export function MemberTagRows({ sessionId, tags, busy, onAction, onRename, onLoc
       onDelete={onDelete}
       onAdd={onAdd}
     />)}
+    {emptyRows.length > 0 && <div className="profile-tag-missing">
+      <span className="profile-tag-missing-label">还没有：</span>
+      {emptyRows.map((category) => <button
+        className={`profile-tag-missing-action${addingEmptyCategory === category ? ' is-selected' : ''}`}
+        key={category}
+        type="button"
+        disabled={busy}
+        onClick={() => setAddingEmptyCategory(category)}
+      >{TAG_CATEGORY_LABELS[category]} ＋</button>)}
+    </div>}
+    {addingEmptyCategory && <div className="profile-tag-empty-add">
+      <strong className="profile-tag-add-label">{TAG_CATEGORY_LABELS[addingEmptyCategory]}</strong>
+      <ProfileTagAdd
+        key={addingEmptyCategory}
+        label={`新增${TAG_CATEGORY_LABELS[addingEmptyCategory]}标签`}
+        category={addingEmptyCategory}
+        busy={busy}
+        onSubmit={onAdd}
+        initialOpen
+        onDismiss={() => setAddingEmptyCategory(undefined)}
+      />
+    </div>}
   </div>;
 }

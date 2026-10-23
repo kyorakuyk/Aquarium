@@ -1,19 +1,20 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TagStatus, TagView } from '../api.ts';
 import { containsSensitiveText, redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
-import { memberIdentityInjectionLabel } from '../impressions-model.ts';
+import {
+  confidenceLevel,
+  knowledgeSourceLabel,
+  memberIdentityInjectionLabel,
+  recentTagFadeLabel,
+  TAG_CATEGORY_LABELS,
+  tagOriginLabel,
+} from '../impressions-model.ts';
 
 const STATUS_LABELS: Record<TagStatus, string> = {
   candidate: '候选',
   confirmed: '已确认',
   rejected: '已否决',
   superseded: '被推翻',
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  positioning: '定位', topic: '话题', atmosphere: '群氛围', meme: '群梗', norms: '规矩',
-  identity: '自我认同', personality: '性格', fandom: '成分', speech: '说话风格', social: '社交方式',
-  catchphrase: '口头禅', recent: '近况', dislike: '雷点', schedule: '作息', misc: '其他',
 };
 
 function formatTime(value: number): string {
@@ -40,6 +41,7 @@ export function ImpressionTag({
   onRename,
   onLock,
   onDelete,
+  appearance = 'default',
 }: {
   tag: TagView;
   displayText?: string;
@@ -48,6 +50,7 @@ export function ImpressionTag({
   onRename: (id: number, text: string) => Promise<boolean>;
   onLock?: (id: number, locked: boolean) => Promise<boolean>;
   onDelete?: (id: number) => Promise<boolean>;
+  appearance?: 'default' | 'knowledge';
 }) {
   const safeTagText = redactSensitiveText(tag.text);
   const subjectDisplay = tag.subject?.replaceAll('/', ' › ');
@@ -61,6 +64,19 @@ export function ImpressionTag({
   const safeQuotedTagText = quotedText(safeTagText);
   const safeSubject = tag.subject === null ? null : redactSensitiveText(tag.subject.replaceAll('/', ' › '));
   const identityInjectionLabel = memberIdentityInjectionLabel(tag);
+  const isKnowledge = appearance === 'knowledge';
+  const confidence = Number.isFinite(tag.activation) ? Math.min(1, Math.max(0, tag.activation)) : 0;
+  const confidenceCaption = confidence >= 0.9 ? '很笃定'
+    : confidence >= 0.8 ? '比较笃定'
+      : confidence >= 0.6 ? '一般' : '还很弱';
+  const knowledgeChipClass = [
+    'k-chip',
+    `k-chip-${confidenceLevel(tag.activation)}`,
+    tag.status === 'candidate' ? 'is-candidate' : '',
+    tag.status === 'rejected' ? 'is-rejected' : '',
+    tag.source === 'manual' ? 'is-manual' : '',
+    tag.locked ? 'is-locked' : '',
+  ].filter(Boolean).join(' ');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(safeTagText);
@@ -116,21 +132,29 @@ export function ImpressionTag({
   }
 
   return (
-    <div className="tag-chip-set">
+    <div className={`tag-chip-set${isKnowledge ? ' k-chip-set' : ''}`}>
       <div className="tag-popover-anchor" ref={root}>
       <button
-        className={`tag-chip ${tagClass(tag)}`}
+        className={isKnowledge ? knowledgeChipClass : `tag-chip ${tagClass(tag)}`}
         type="button"
         disabled={busy}
+        aria-label={`${safeDisplayText}，点开查看详情`}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => { setDraft(safeTagText); setSensitiveInput(false); setEditing(false); setOpen((value) => !value); }}
       >
-        <span>{safeDisplayText}</span>
-        {tag.status === 'candidate' && <span className="tag-samples mono">{tag.samples}/2</span>}
-        {tag.locked && <span className="tag-lock-indicator" aria-hidden="true">锁</span>}
+        {isKnowledge ? <>
+          <span className="k-chip-label">{safeDisplayText}</span>
+          {tag.status === 'candidate' && <span className="k-chip-samples mono">{tag.samples}/2</span>}
+          {tag.source === 'manual' && <span className="k-chip-manual-dot" aria-label="手动" title="手动" />}
+          {tag.locked && <span className="tag-lock-indicator" aria-hidden="true">锁</span>}
+        </> : <>
+          <span>{safeDisplayText}</span>
+          {tag.status === 'candidate' && <span className="tag-samples mono">{tag.samples}/2</span>}
+          {tag.locked && <span className="tag-lock-indicator" aria-hidden="true">锁</span>}
+        </>}
       </button>
-      {open && <div className="tag-popover" role="dialog" aria-label={`${safePopoverTagText}标签详情`}>
+      {open && <div className={`tag-popover${isKnowledge ? ' k-chip-popover' : ''}`} role="dialog" aria-label={`${safePopoverTagText}标签详情`}>
         <div className="tag-popover-heading">
           {editing
             ? <form className="tag-rename-form" onSubmit={(event) => void rename(event)}>
@@ -146,13 +170,21 @@ export function ImpressionTag({
             : <strong>{safePopoverTagText}</strong>}
           <button className="tag-popover-close" type="button" aria-label="关闭标签详情" onClick={closePopover}>×</button>
         </div>
-        <div className="tag-popover-meta">
-          <span className={`status-pill ${tagClass(tag)}`}>{STATUS_LABELS[tag.status]}</span>
-          {tag.source === 'manual' && <span className="muted">手动</span>}
-          <span className="muted">{CATEGORY_LABELS[tag.category]}{safeSubject ? ` · ${safeSubject}` : ''}</span>
+        <div className={`tag-popover-meta${isKnowledge ? ' k-chip-popover-meta' : ''}`}>
+          <span className={`status-pill ${tagClass(tag)}`}>{STATUS_LABELS[tag.status]}{tag.locked && isKnowledge ? ' · 已锁定' : ''}</span>
+          {isKnowledge && <div className="k-confidence-detail">
+            <div><span>置信度</span><strong className="mono">{confidence.toFixed(2)} · {confidenceCaption}</strong></div>
+            <progress max={1} value={confidence} aria-label={`置信度 ${confidence.toFixed(2)}`} />
+          </div>}
+          <span className="muted">来源：{isKnowledge
+            ? knowledgeSourceLabel(tag)
+            : tag.source === 'manual' ? '手动' : tagOriginLabel(tag.origin)}</span>
+          {isKnowledge && <span className="mono muted">观察 {tag.samples} 次</span>}
+          <span className="muted">{TAG_CATEGORY_LABELS[tag.category]}{safeSubject ? ` · ${safeSubject}` : ''}</span>
           {tag.polarity && <span className="muted">{tag.polarity === 'like' ? '喜欢' : '不喜欢'}</span>}
           {identityInjectionLabel && <span className="muted">{identityInjectionLabel}</span>}
-          <span className="mono muted">观察 {tag.samples} 次 · 激活 {tag.activation.toFixed(2)}</span>
+          {isKnowledge && tag.category === 'recent' && recentTagFadeLabel(tag, Date.now())
+            && <span className="muted">{recentTagFadeLabel(tag, Date.now())}</span>}
         </div>
         <ul className="tag-popover-evidence">
           {tag.evidence.slice(0, 3).map((item, index) => item.kind === 'signature'
@@ -170,11 +202,12 @@ export function ImpressionTag({
           {tag.status !== 'rejected' && <button className="button button-secondary" type="button" disabled={busy} onClick={() => void changeStatus('rejected')}>否决</button>}
           {tag.status !== 'candidate' && <button className="button button-secondary" type="button" disabled={busy} onClick={() => void changeStatus('candidate')}>恢复为候选</button>}
           <button className="button button-secondary" type="button" disabled={busy} onClick={() => { setDraft(safeTagText); setSensitiveInput(false); setEditing(true); }}>改字</button>
+          {isKnowledge && onLock && <button className="button button-secondary" type="button" disabled={busy} onClick={() => void changeLock()}>{tag.locked ? '解锁' : '锁定'}</button>}
           {onDelete && <button className="button button-warn" type="button" disabled={busy} onClick={() => void deleteAndVeto()}>删除并不再学</button>}
         </div>}
       </div>}
       </div>
-      {onLock && <button
+      {!isKnowledge && onLock && <button
         className={`tag-lock-toggle${tag.locked ? ' is-locked' : ''}`}
         type="button"
         aria-label={`${tag.locked ? '解锁' : '加锁'}${safeQuotedTagText}`}
@@ -187,7 +220,7 @@ export function ImpressionTag({
           ? <path d="M8 10V7a4 4 0 0 1 8 0v3" />
           : <path d="M8 10V7a4 4 0 0 1 7.5-1.8" />}
       </svg></button>}
-      {onDelete && <button
+      {!isKnowledge && onDelete && <button
         className="tag-delete-toggle"
         type="button"
         aria-label={`删除并不再学${safeQuotedTagText}`}
