@@ -6,6 +6,7 @@ import { renderFloatBlock } from '../../mood/render.ts';
 import { redactSensitiveText } from '../../impressions/sensitive-text.ts';
 import { mapMessageToMainIdentity, resolveAccountIdentity } from '../../profiles/account-identity.ts';
 import { buildAltRecentBlock } from '../../privacy/alt-recent.ts';
+import { buildPrivateGroupEventsBlock } from '../../impressions/group-events-prompt.ts';
 import { createSlotCallOptions } from './call-options.ts';
 import { errorDetails } from './errors.ts';
 import { getPersonaForMessage } from './persona.ts';
@@ -98,6 +99,14 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     now: ctx.now(),
     template: ctx.state.promptTemplates.replySystem,
   });
+  const groupEventsBlock = buildPrivateGroupEventsBlock({
+    session: ctx.message.session,
+    targetSessionId: ctx.currentSessionId,
+    messageText: ctx.message.plainText,
+    now: ctx.now(),
+    repository: ctx.options.repository,
+    template: ctx.state.promptTemplates.replySystem,
+  });
   const altRecentBlock = buildAltRecentBlock(ctx.options.repository, {
     session: ctx.message.session,
     now: ctx.now(),
@@ -155,6 +164,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
       ...(tagBlocks.groupTags === undefined ? {} : { groupTags: tagBlocks.groupTags }),
       ...(privateFactsBlock === undefined ? {} : { privateFacts: privateFactsBlock }),
       ...(altRecentBlock === undefined ? {} : { altRecent: altRecentBlock }),
+      ...(groupEventsBlock === undefined ? {} : { groupEvents: groupEventsBlock }),
       ...(tagBlocks.memberTags === undefined ? {} : { memberTags: tagBlocks.memberTags }),
       ...(tagBlocks.impressions === undefined ? {} : { impressions: tagBlocks.impressions }),
       ...(recentMemoryBlock === undefined ? {} : { recentMemory: recentMemoryBlock }),

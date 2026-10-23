@@ -20,6 +20,7 @@ export interface StoredGroupEvent extends GroupEventInput {
 export interface EventRepository {
   upsertGroupEvent(event: GroupEventInput): number;
   listGroupEvents(account: number, sourceGroupId: number, since: number, limit: number): StoredGroupEvent[];
+  listRecentGroupEventGroupIds(account: number, since: number): number[];
 }
 
 function validId(value: number): boolean {
@@ -102,6 +103,12 @@ export function createEventRepository(database: DatabaseSync): EventRepository {
     ORDER BY occurred_at DESC, id DESC
     LIMIT ?
   `);
+  const selectRecentGroupEventGroupIds = database.prepare(`
+    SELECT DISTINCT source_group_id
+    FROM events
+    WHERE account = ? AND occurred_at >= ?
+    ORDER BY source_group_id
+  `);
 
   return {
     upsertGroupEvent(event) {
@@ -162,6 +169,13 @@ export function createEventRepository(database: DatabaseSync): EventRepository {
         createdAt: numberValue(row.created_at, 'created_at'),
         updatedAt: numberValue(row.updated_at, 'updated_at'),
       }));
+    },
+
+    listRecentGroupEventGroupIds(account, since) {
+      if (!validId(account)) throw new RangeError('群事件查询账号无效');
+      if (!Number.isSafeInteger(since) || since < 0) throw new RangeError('群事件查询时间无效');
+      const rows = selectRecentGroupEventGroupIds.all(account, since) as Array<Record<string, unknown>>;
+      return rows.map((row) => numberValue(row.source_group_id, 'source_group_id'));
     },
   };
 }

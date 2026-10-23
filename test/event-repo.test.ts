@@ -20,6 +20,7 @@ interface GroupEventRepository {
   listGroupEvents(account: number, sourceGroupId: number, since: number, limit: number): Array<
     GroupEventInput & { id: number }
   >;
+  listRecentGroupEventGroupIds(account: number, since: number): number[];
 }
 
 function event(overrides: Partial<GroupEventInput> = {}): GroupEventInput {
@@ -75,5 +76,8 @@ test('group events upsert idempotently and stay account/group scoped', async () 
     assert.equal(events.listGroupEvents(8, 80, 0, 10).length, 1);
     assert.equal(events.listGroupEvents(7, 81, 0, 10).length, 1);
     assert.equal(events.listGroupEvents(7, 80, 41, 10).length, 0);
+    assert.deepEqual(events.listRecentGroupEventGroupIds(7, 10), [80, 81]);
+    assert.deepEqual(events.listRecentGroupEventGroupIds(7, 20), [80]);
+    assert.deepEqual(events.listRecentGroupEventGroupIds(8, 10), [80]);
   });
 });

@@ -91,6 +91,26 @@ test('privacy policy applies the ordered scope rules to every purpose', () => {
   for (const { name, input, expected } of cases) assert.equal(decide(input), expected, name);
 });
 
+test('group events reach only a source-group member in a private prompt', () => {
+  const info = {
+    origin: 'group',
+    sessionId: '900000001:group:123456',
+    ownerId: null,
+    eventGroupMemberIds: [99],
+  } as PrivacyInfo;
+  const target: PrivacyTarget = { kind: 'private', sessionId: '900000001:private:99', peerId: 99 };
+  const input: PrivacyDecisionInput = { info, target, purpose: 'prompt' };
+
+  assert.equal(decide(input), 'allow');
+  assert.equal(decide({ ...input, target: { ...target, peerId: 100 } }), 'deny');
+  assert.equal(decide({ ...input, purpose: 'gate' }), 'deny');
+  assert.equal(decide({ ...input, purpose: 'third_party' }), 'deny');
+  assert.equal(decide({
+    ...input,
+    info: { ...info, eventGroupMemberIds: ['99'] } as unknown as PrivacyInfo,
+  }), 'deny');
+});
+
 test('privacy policy denies malformed inputs and missing required fields', () => {
   const malformed: unknown[] = [
     null,

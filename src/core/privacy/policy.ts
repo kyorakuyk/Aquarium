@@ -7,6 +7,7 @@ export interface PrivacyInfo {
   sessionId: string;
   ownerId: number | null;
   level?: PrivacyLevel;
+  eventGroupMemberIds?: number[];
 }
 
 export type PrivacyTarget =
@@ -31,6 +32,7 @@ function validInput(value: unknown): value is PrivacyDecisionInput {
   if (!isRecord(value) || !isRecord(value.info) || !isRecord(value.target)) return false;
   const info = value.info;
   const target = value.target;
+  const eventGroupMemberIds = info.eventGroupMemberIds;
   const validTarget = target.kind === 'kin'
     ? isPositiveId(target.groupId)
     : (target.kind === 'private' || target.kind === 'group')
@@ -40,6 +42,8 @@ function validInput(value: unknown): value is PrivacyDecisionInput {
     || typeof info.sessionId !== 'string' || info.sessionId.length === 0
     || (info.ownerId !== null && !isPositiveId(info.ownerId))
     || (info.origin === 'private' && !isPositiveId(info.ownerId))
+    || (eventGroupMemberIds !== undefined && (info.origin !== 'group' || info.ownerId !== null
+      || !Array.isArray(eventGroupMemberIds) || eventGroupMemberIds.some((id) => !isPositiveId(id))))
     || !validTarget
     || !['prompt', 'gate', 'third_party'].includes(String(value.purpose))) return false;
   if (info.level !== undefined && !['L0', 'L1', 'L2'].includes(String(info.level))) return false;
@@ -67,6 +71,12 @@ export function decide(input: PrivacyDecisionInput): PrivacyDecision {
   if (info.origin === 'private' && target.kind === 'private') {
     if (purpose === 'prompt' && target.peerId !== undefined && info.ownerId === target.peerId) return 'allow';
     return 'deny';
+  }
+
+  if (info.origin === 'group' && target.kind === 'private'
+    && target.peerId !== undefined && purpose === 'prompt'
+    && info.eventGroupMemberIds?.includes(target.peerId)) {
+    return 'allow';
   }
 
   if (info.origin === 'group' && target.kind === 'private'

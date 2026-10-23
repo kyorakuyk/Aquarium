@@ -9,6 +9,7 @@ export interface ReplySystemTemplate extends PromptTemplate {
   impressions: string;
   privateFacts: string;
   altRecent: string;
+  groupEvents: string;
   knownFacts: string;
   stickers: string;
 }
@@ -33,9 +34,10 @@ export function parseReplySystemTemplate(
     || typeof fields.impressions !== 'string' || fields.impressions.length === 0
     || typeof fields.privateFacts !== 'string' || fields.privateFacts.length === 0
     || typeof fields.altRecent !== 'string' || fields.altRecent.length === 0
+    || typeof fields.groupEvents !== 'string' || fields.groupEvents.length === 0
     || typeof fields.knownFacts !== 'string' || fields.knownFacts.length === 0
     || typeof fields.stickers !== 'string' || fields.stickers.length === 0) {
-    throw new Error('reply-system.md 必须包含非空 system、groupNote、request、groupTags、memberTags、impressions、privateFacts、altRecent、knownFacts 和 stickers 文本');
+    throw new Error('reply-system.md 必须包含非空 system、groupNote、request、groupTags、memberTags、impressions、privateFacts、altRecent、groupEvents、knownFacts 和 stickers 文本');
   }
   const replySystem = {
     ...template,
@@ -47,6 +49,7 @@ export function parseReplySystemTemplate(
     impressions: fields.impressions,
     privateFacts: fields.privateFacts,
     altRecent: fields.altRecent,
+    groupEvents: fields.groupEvents,
     knownFacts: fields.knownFacts,
     stickers: fields.stickers,
   };
@@ -58,6 +61,7 @@ export function parseReplySystemTemplate(
   validatePlaceholders('reply-system.md', replySystem.impressions, ['tags'], ['tags']);
   validatePlaceholders('reply-system.md', replySystem.privateFacts, ['name', 'facts'], ['name', 'facts']);
   validatePlaceholders('reply-system.md', replySystem.altRecent, ['messages'], ['messages']);
+  validatePlaceholders('reply-system.md', replySystem.groupEvents, ['events'], ['events']);
   validatePlaceholders('reply-system.md', replySystem.knownFacts, ['facts'], ['facts']);
   validatePlaceholders('reply-system.md', replySystem.stickers, ['list'], ['list']);
   return replySystem;
