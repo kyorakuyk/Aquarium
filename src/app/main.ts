@@ -37,6 +37,7 @@ import { createMemoryServices } from './memory-services.ts';
 import { createQueuedPersonaMemoryProcessor } from './persona-memory-processor.ts';
 import { createAccountStickerService, startStickerSyncTimer } from './stickers.ts';
 import { startAdapterForHost } from './adapter-start.ts';
+import { createAccountInteractionRuntime, createEmojiLikeFeedbackHandler } from './interactions.ts';
 import { createProfileActivityService } from '../core/profiles/presence-service.ts';
 import { createPersonaMemoryService } from '../core/persona-memory.ts';
 import { loadPersona } from '../persona/load.ts';
@@ -379,6 +380,16 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
       onConnectionError: (error) => {
         logger.error(`OneBot 连接异常，将继续重试：${describeError(error)}`);
       },
+      onInteractionNotice: createEmojiLikeFeedbackHandler({
+        account: accountConfig.uin,
+        repository,
+        affinityService,
+        now: Date.now,
+        onFeedback: (notice) => logger.info(
+          `账号 ${notice.session.account} 群 ${notice.session.peer} 的消息 ${notice.messageId} 收到用户 ${notice.userId} 的表情反馈。`,
+        ),
+      }),
+      onInteractionError: (error) => logger.error(`表情反馈处理失败：${describeError(error)}`),
     });
   } catch (error) {
     logger.error(`账号 ${accountConfig.uin} 的 OneBot 适配器初始化失败：${describeError(error)}`);
@@ -416,6 +427,20 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     collectSticker: (message) => stickerService.collect(message),
   });
   managementControllers.push(management);
+  const interactionRuntime = createAccountInteractionRuntime({
+    account: adapter.account,
+    adapter,
+    getConfig: () => configWatcher.getConfig(),
+    repository,
+    interactionLogRepository,
+    sleepWakeState,
+    isMuted: management.isMuted,
+    isOnline: () => currentStatus === 'online',
+    now: Date.now,
+    onError: (error, message) => logger.error(
+      `消息 ${message.messageId} 的交互处理失败：${describeError(error)}`,
+    ),
+  });
   const pipeline = createMessagePipeline({
     getConfig: () => configWatcher.getConfig(),
     getPromptTemplates: () => promptTemplateStore.get(),
@@ -431,6 +456,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     personaMemoryService,
     privacyGateService,
     stickerService,
+    reactionService: interactionRuntime.reactionService,
     sleepWakeState,
     isOnline: () => currentStatus === 'online',
     onEventAdvocacyConfirmed: () => {

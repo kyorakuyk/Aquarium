@@ -4,7 +4,7 @@ import { createInteractionGate } from '../src/core/interactions/gate.ts';
 import type { InteractionAction, InteractionSource } from '../src/core/interactions/model.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createInteractionLogRepository } from '../src/store/interaction-log-repo.ts';
-import type { SessionKey } from '../src/core/shared/events.ts';
+import { sessionId, type SessionKey } from '../src/core/shared/events.ts';
 import { groupSession, makeConfig } from './pipeline-test-helpers.ts';
 
 interface GateFacts {
@@ -31,6 +31,7 @@ function makeGate(repository: ReturnType<typeof createInteractionLogRepository>,
     isAsleep: () => facts.asleep === true,
     isOtherKin: (_account: number, targetId: number) => facts.otherKinId === targetId,
     isMarkedBot: (_account: number, targetId: number) => facts.botId === targetId,
+    isAllowedEmojiId: (emojiId: string) => emojiId === '49',
     getMessageSenderId: (_session: unknown, messageId: string) => {
       if (facts.messageSenderId === null) return undefined;
       if (typeof facts.messageSenderId === 'function') return facts.messageSenderId(messageId);
@@ -79,6 +80,11 @@ test('InteractionGate blocks every safety boundary and records blocked and dry-r
     recallConfig.interactions.admin.enabled = true;
     recallConfig.interactions.master_ids = [recallConfig.owner];
     const privateSession: SessionKey = { ...groupSession, kind: 'private', peer: 987654 };
+    const interactionEnabledButSessionDisabled = makeConfig({
+      sessions: {
+        [sessionId(groupSession)]: { enabled: false, interactions: { react: { enabled: true } } },
+      },
+    });
     type Scenario = {
       reason: string;
       config: ReturnType<typeof makeConfig>;
@@ -89,10 +95,17 @@ test('InteractionGate blocks every safety boundary and records blocked and dry-r
     };
     const scenarios: Scenario[] = [
       { reason: 'disabled', config: makeConfig(), action: message('disabled'), facts: {} },
+      { reason: 'disabled', config: interactionEnabledButSessionDisabled, action: message('session-disabled'), facts: {} },
       { reason: 'muted', config: enable(makeConfig(), 'react'), action: message('muted'), facts: { muted: true } },
       { reason: 'asleep', config: enable(makeConfig(), 'react'), action: message('asleep'), facts: { asleep: true } },
       { reason: 'offline', config: enable(makeConfig(), 'react'), action: message('offline'), facts: { online: false } },
       { reason: 'group_only', config: enable(makeConfig(), 'react'), action: message('private', privateSession), facts: {} },
+      {
+        reason: 'emoji_not_allowed',
+        config: enable(makeConfig(), 'react'),
+        action: { ...message('not-whitelisted'), emojiId: 'not-whitelisted' },
+        facts: {},
+      },
       { reason: 'self_target', config: enable(makeConfig(), 'poke'), action: poke(groupSession.account), facts: {} },
       { reason: 'target_is_bot', config: enable(makeConfig(), 'poke'), action: poke(701), facts: { botId: 701 } },
       { reason: 'target_is_kin', config: enable(makeConfig(), 'poke'), action: poke(702), facts: { otherKinId: 702 } },
@@ -155,6 +168,21 @@ test('InteractionGate blocks every safety boundary and records blocked and dry-r
       .check(poke(710), 'rule', { sourceMessageId: 'dry-run' });
     assert.equal(allowed.verdict, 'dry_run');
     assert.equal(repository.interactionLogsForMessage(`${groupSession.account}:group:${groupSession.peer}`, 'dry-run').length, 1);
+
+    let sharedRateChecks = 0;
+    const serious = await makeGate(repository, enable(makeConfig(), 'react'), {}, () => clock + 5)
+      .check(message('serious-policy'), 'rule', {
+        sourceMessageId: 'serious-policy',
+        policyBlockedReason: 'serious_topic',
+        sharedRateLimit: () => { sharedRateChecks += 1; return { allowed: true }; },
+      });
+    assert.equal(serious.reason, 'serious_topic');
+    assert.equal(sharedRateChecks, 0);
+    const sharedLimit = await makeGate(repository, enable(makeConfig(), 'react'), { execute: async () => {} }, () => clock + 6)
+      .check(message('shared-limit'), 'rule', {
+        sharedRateLimit: () => ({ allowed: false, reason: 'min_interval' }),
+      });
+    assert.equal(sharedLimit.reason, 'rate_limit:session:min_interval');
   } finally {
     database.close();
   }

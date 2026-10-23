@@ -1,7 +1,116 @@
 {
-  "low": [],
-  "annoyed": [],
-  "calm": [],
-  "happy": [],
-  "excited": []
+  "low": [
+    {
+      "emoji_id": "49",
+      "name": "拥抱"
+    },
+    {
+      "emoji_id": "212",
+      "name": "托腮"
+    },
+    {
+      "emoji_id": "106",
+      "name": "委屈"
+    },
+    {
+      "emoji_id": "111",
+      "name": "可怜"
+    }
+  ],
+  "annoyed": [
+    {
+      "emoji_id": "174",
+      "name": "无奈"
+    },
+    {
+      "emoji_id": "97",
+      "name": "擦汗"
+    },
+    {
+      "emoji_id": "270",
+      "name": "emm"
+    },
+    {
+      "emoji_id": "32",
+      "name": "疑问"
+    }
+  ],
+  "calm": [
+    {
+      "emoji_id": "14",
+      "name": "微笑"
+    },
+    {
+      "emoji_id": "124",
+      "name": "OK"
+    },
+    {
+      "emoji_id": "76",
+      "name": "赞"
+    },
+    {
+      "emoji_id": "428",
+      "name": "收到"
+    },
+    {
+      "emoji_id": "118",
+      "name": "抱拳"
+    },
+    {
+      "emoji_id": "282",
+      "name": "敬礼"
+    }
+  ],
+  "happy": [
+    {
+      "emoji_id": "13",
+      "name": "呲牙"
+    },
+    {
+      "emoji_id": "20",
+      "name": "偷笑"
+    },
+    {
+      "emoji_id": "66",
+      "name": "爱心"
+    },
+    {
+      "emoji_id": "99",
+      "name": "鼓掌"
+    },
+    {
+      "emoji_id": "182",
+      "name": "笑哭"
+    },
+    {
+      "emoji_id": "21",
+      "name": "可爱"
+    }
+  ],
+  "excited": [
+    {
+      "emoji_id": "144",
+      "name": "喝彩"
+    },
+    {
+      "emoji_id": "356",
+      "name": "666"
+    },
+    {
+      "emoji_id": "299",
+      "name": "牛啊"
+    },
+    {
+      "emoji_id": "355",
+      "name": "耶"
+    },
+    {
+      "emoji_id": "43",
+      "name": "跳跳"
+    },
+    {
+      "emoji_id": "125",
+      "name": "转圈"
+    }
+  ]
 }

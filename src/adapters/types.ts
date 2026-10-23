@@ -42,6 +42,15 @@ export type QqSex = 'male' | 'female' | 'unknown';
 export type QqGroupRole = 'owner' | 'admin' | 'member';
 export type QqGroupHonorKind = 'dragon_king' | 'performer' | 'legend' | 'emotion' | 'strong_newbie';
 
+export interface EmojiLikeNotice {
+  type: 'emoji_like';
+  session: SessionKey;
+  messageId: string;
+  userId: number;
+  subType: 'add' | 'remove';
+  likes: Array<{ emojiId: string; count: number }>;
+}
+
 export interface QqGroupInfo {
   groupName?: string;
   memberCount?: number;
@@ -99,4 +108,5 @@ export interface ProtocolAdapter extends QqProfileActions {
   markRead(session: SessionKey): Promise<void>;
   setTyping(session: SessionKey): Promise<void>;
   recall(messageId: string): Promise<void>;
+  react(session: SessionKey, messageId: string, emojiId: string, remove?: boolean): Promise<void>;
 }

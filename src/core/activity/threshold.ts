@@ -21,6 +21,10 @@ const TARGET_FREQUENCIES: Record<ProactiveMode, number> = {
   busy: 0.2,
 };
 
+export function initialThresholdForMode(mode: ProactiveMode): number {
+  return INITIAL_THRESHOLDS[mode];
+}
+
 interface SessionThresholdState {
   threshold: number;
   expectedAt: number[];

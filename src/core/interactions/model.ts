@@ -13,6 +13,8 @@ export type InteractionVerdict = 'executed' | 'dry_run' | 'blocked' | 'failed';
 export interface InteractionCheckContext {
   requesterId?: number;
   sourceMessageId?: string;
+  policyBlockedReason?: 'serious_topic' | 'sensitive_text' | 'probability_skip';
+  sharedRateLimit?: () => { allowed: boolean; reason?: string };
 }
 
 export interface InteractionDecision {

@@ -23,6 +23,7 @@ import type { SleepWakeState } from '../../sleep/index.ts';
 import type { PersonaMemoryService } from '../../persona-memory.ts';
 import type { StickerService } from '../../stickers/service.ts';
 import type { StickerOffer } from '../../stickers/selection.ts';
+import type { ReactionRuleService } from '../../interactions/reaction-rules.ts';
 
 export interface PipelineResult {
   replied: boolean;
@@ -79,6 +80,7 @@ export interface MessagePipelineOptions {
   personaMemoryService?: PersonaMemoryService;
   privacyGateService?: PrivacyGateService;
   stickerService?: StickerService;
+  reactionService?: ReactionRuleService;
   sleepWakeState?: SleepWakeState;
   isOnline?: () => boolean;
   onEventAdvocacyConfirmed?: (eventId: number) => void;
@@ -168,7 +170,7 @@ const safeTraceReasons: Record<PipelineStepName, readonly string[]> = {
   gate: [
     'muted', 'disabled', 'not_mentioned', 'mode_mention_only', 'from_bot', 'rate_limited',
     'budget', 'batched', 'backoff', 'asleep', 'persona_error', 'prefilter', 'judge_parse_error', 'judge_error',
-    'judge_skip', 'proactive_cooldown', 'privacy_avoid',
+    'judge_skip', 'proactive_cooldown', 'privacy_avoid', 'interaction_reacted',
   ],
   context: ['persona_error'],
   generate: ['llm_error', 'empty_reply', 'sticker_only_capped'],

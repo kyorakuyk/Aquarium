@@ -1,6 +1,6 @@
 import type { QqGroupRole } from '../../adapters/types.ts';
 import type { AquariumConfig } from '../../config/schema.ts';
-import { resolveInteractions } from '../../config/resolve.ts';
+import { resolveInteractions, resolveSession } from '../../config/resolve.ts';
 import { sessionId, type SessionKey } from '../shared/events.ts';
 import type {
   InteractionAction,
@@ -26,6 +26,7 @@ export interface InteractionGateOptions {
   isAsleep: (session: SessionKey, at: number) => boolean;
   isOtherKin: (account: number, targetId: number) => boolean;
   isMarkedBot: (account: number, targetId: number) => boolean;
+  isAllowedEmojiId: (emojiId: string) => boolean;
   getMessageSenderId: (session: SessionKey, messageId: string) => number | undefined;
   getMessageTime: (session: SessionKey, messageId: string) => number | undefined;
   getSelfRole: (session: SessionKey) => QqGroupRole | undefined;
@@ -41,6 +42,7 @@ function isManagementAction(action: InteractionAction): boolean {
 }
 
 function isFeatureEnabled(config: AquariumConfig, action: InteractionAction, source: InteractionSource): boolean {
+  if (!resolveSession(config, action.session).enabled) return false;
   const settings = resolveInteractions(config, action.session);
   if (action.kind === 'mute' || action.kind === 'essence') return settings.admin.enabled;
   if (action.kind === 'recall') {
@@ -158,6 +160,10 @@ export function createInteractionGate(options: InteractionGateOptions) {
     }
     const targetId = targetUserId(action);
 
+    if (action.kind === 'react' && !options.isAllowedEmojiId(action.emojiId)) {
+      return blocked(action, source, 'emoji_not_allowed', at, context, targetId);
+    }
+
     if (action.kind === 'mute') {
       const maxSeconds = Math.min(settings.admin.mute_max_s, MAX_MUTE_SECONDS);
       if (!Number.isSafeInteger(action.seconds) || action.seconds < 0 || action.seconds > maxSeconds) {
@@ -190,6 +196,9 @@ export function createInteractionGate(options: InteractionGateOptions) {
         if (role === undefined) return blocked(action, source, 'target_role_unknown', at, context, targetId);
         if (role === 'owner' || role === 'admin') return blocked(action, source, 'target_is_admin', at, context, targetId);
       }
+    }
+    if (context.policyBlockedReason) {
+      return blocked(action, source, context.policyBlockedReason, at, context, targetId);
     }
 
     const outcomes = options.log.recentOutcomesForAction(sessionId(action.session), action.kind, 3);
@@ -224,6 +233,13 @@ export function createInteractionGate(options: InteractionGateOptions) {
     if (!options.execute || (isManagementAction(action) && settings.admin.dry_run)) {
       const reason = isManagementAction(action) && settings.admin.dry_run ? 'dry_run' : 'executor_unavailable';
       return record(action, source, 'dry_run', reason, at, context, targetId);
+    }
+    const sharedRateLimit = context.sharedRateLimit?.();
+    if (sharedRateLimit && !sharedRateLimit.allowed) {
+      const reason = typeof sharedRateLimit.reason === 'string' && /^[a-z0-9_]+$/.test(sharedRateLimit.reason)
+        ? sharedRateLimit.reason
+        : 'unknown';
+      return blocked(action, source, `rate_limit:session:${reason}`, at, context, targetId);
     }
 
     try {

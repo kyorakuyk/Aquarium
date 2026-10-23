@@ -1,10 +1,10 @@
-import { resolveSession } from '../../../config/resolve.ts';
+import { resolveInteractions, resolveSession } from '../../../config/resolve.ts';
 import { budgetState } from '../../../llm/budget.ts';
 import { runJudge } from '../../activity/judge.ts';
 import { calculatePrefilterActivity, calculatePrefilterFeatures, evaluatePrefilter } from '../../activity/prefilter.ts';
 import { messageTrigger } from '../../activity/trigger.ts';
 import { createIdleBackoff } from '../../activity/backoff.ts';
-import { adjustThresholdForTalk, createActivityThreshold } from '../../activity/threshold.ts';
+import { adjustThresholdForTalk, createActivityThreshold, initialThresholdForMode } from '../../activity/threshold.ts';
 import { messageTextWithImageCaptions } from '../../images/index.ts';
 import { resolveMode } from '../../activity/mode.ts';
 import { matchesPersonaMustReply } from '../../../persona/injection.ts';
@@ -14,6 +14,7 @@ import { createSlotCallOptions } from './call-options.ts';
 import { errorDetails } from './errors.ts';
 import { getPersonaForMessage } from './persona.ts';
 import { traceStep, type PipelineStep } from './types.ts';
+import type { ReactionTrigger } from '../../interactions/reaction-rules.ts';
 
 const defaultIdleBackoff = createIdleBackoff();
 const defaultActivityThreshold = createActivityThreshold();
@@ -71,6 +72,31 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
       ctx.state.callOptions = safeOptions;
     }
     return result;
+  }
+
+  async function tryReaction(trigger: ReactionTrigger, rateAlreadyReserved = false) {
+    const service = ctx.options.reactionService;
+    if (!service || ctx.processOptions.replay) return undefined;
+    try {
+      const now = ctx.now();
+      const affinityLevel = trigger === 'positive_silence'
+        ? ctx.options.affinityService?.getCurrent(ctx.message.session.account, ctx.message.senderId, now).level
+        : undefined;
+      return await service.tryReact({
+        message: ctx.message,
+        trigger,
+        moodBand: ctx.options.moodService?.currentBand({ account: ctx.message.session.account, now }) ?? 'calm',
+        ...(affinityLevel === undefined ? {} : { affinityLevel }),
+        probabilityScale: resolveInteractions(config, ctx.message.session).react.prob_scale,
+        random: ctx.random,
+        rateLimiter: ctx.rateLimiter,
+        limits: settings.rate,
+        rateAlreadyReserved,
+      });
+    } catch (error) {
+      try { ctx.options.onError?.(error, ctx.message); } catch { /* 贴表情失败不能影响回复流程 */ }
+      return undefined;
+    }
   }
 
   if (ctx.processOptions.batched) {
@@ -157,6 +183,10 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
         now: ctx.now(),
       });
     }
+    const reaction = ctx.message.mentionsSelf && !ctx.processOptions.replay
+      ? await tryReaction('closing_mention', true)
+      : undefined;
+    if (reaction?.verdict === 'executed') return { next: false, reason: 'interaction_reacted' };
     return {
       next: true,
       ...(ctx.state.privacyDecisionDetail
@@ -245,6 +275,9 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
   const effectiveTalk = effectiveTalkLevel(ctx.state.personaTraits?.talk ?? 0, settings.talkOffset);
   const energy = ctx.state.energy ?? 1;
   const threshold = adjustThresholdForTalk(baseThreshold, effectiveTalk, energy);
+  const busyComparisonThreshold = settings.mode === 'busy'
+    ? adjustThresholdForTalk(initialThresholdForMode('active'), effectiveTalk, energy)
+    : undefined;
   if (!ctx.processOptions.replay) {
     thresholds.recordJudgment(ctx.currentSessionId, settings.mode, judge.probability, ctx.now());
   }
@@ -255,7 +288,12 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
     ...(config.sleep.enabled ? { energy } : {}),
   };
   if (judge.probability < threshold) {
-    if (!ctx.processOptions.replay) backoff.recordNoReply(ctx.currentSessionId, ctx.now());
+    if (!ctx.processOptions.replay) {
+      backoff.recordNoReply(ctx.currentSessionId, ctx.now());
+      const busySuppressed = busyComparisonThreshold !== undefined
+        && judge.probability >= busyComparisonThreshold;
+      await tryReaction(busySuppressed ? 'busy_suppressed' : 'positive_silence');
+    }
     return { next: false, reason: 'judge_skip', detail: decisionDetail };
   }
 

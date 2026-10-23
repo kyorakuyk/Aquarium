@@ -8,6 +8,7 @@ import type {
   ContactFriend,
   ContactGroup,
   CustomFaceActions,
+  EmojiLikeNotice,
   HistoryOptions,
   QqProfileActions,
   ProtocolAdapter,
@@ -26,6 +27,8 @@ import {
   toOneBotSegments,
 } from './convert.ts';
 import { createOneBotCustomFaceActions } from './custom-face-actions.ts';
+import { createOneBotEventHandler } from './interaction-notice.ts';
+import { createOneBotMessageActions, type OneBotMessageActions } from './message-actions.ts';
 import { OneBotConnectionHealth } from './connection-health.ts';
 import { createOneBotQqProfileActions } from './qq-profile-actions.ts';
 import {
@@ -73,7 +76,10 @@ export class OneBotAdapter implements ProtocolAdapter {
   private accountVerified = false;
   private readonly onConnectionError: ((error: unknown) => void) | undefined;
   private readonly onDebug: ((message: string) => void) | undefined;
+  private readonly onInteractionError: ((error: unknown) => void) | undefined;
+  private readonly onInteractionNotice: ((notice: EmojiLikeNotice) => void) | undefined;
   private readonly getSendDedupeWindowMs: () => number;
+  private readonly messageActions: OneBotMessageActions;
   private readonly now: () => number;
   private readonly recentTextSends = new Map<string, Map<string, TextSendRecord>>();
   private readonly messageListeners = new Set<(message: IncomingMessage) => void>();
@@ -102,6 +108,8 @@ export class OneBotAdapter implements ProtocolAdapter {
       onConnectionError?: (error: unknown) => void;
       onDebug?: (message: string) => void;
       getSendDedupeWindowMs?: () => number;
+      onInteractionNotice?: (notice: EmojiLikeNotice) => void;
+      onInteractionError?: (error: unknown) => void;
     },
     clientFactory: ClientFactory = createClient,
     runtimeOptions: OneBotAdapterRuntimeOptions = {},
@@ -110,6 +118,8 @@ export class OneBotAdapter implements ProtocolAdapter {
     this.clientFactory = clientFactory;
     this.onConnectionError = options.onConnectionError;
     this.onDebug = options.onDebug;
+    this.onInteractionError = options.onInteractionError;
+    this.onInteractionNotice = options.onInteractionNotice;
     this.getSendDedupeWindowMs = options.getSendDedupeWindowMs ?? (() => 8_000);
     this.now = runtimeOptions.now ?? Date.now;
     this.setActionTimer = runtimeOptions.setActionTimer
@@ -131,6 +141,13 @@ export class OneBotAdapter implements ProtocolAdapter {
       reconnect: false,
     };
     this.client = this.clientFactory(this.clientOptions);
+    this.messageActions = createOneBotMessageActions({
+      account: this.account,
+      getClient: () => this.client,
+      assertOnline: () => this.assertOnline(),
+      loadHistory: (session, count) => this.loadHistory(session, count),
+      withActionTimeout: (action, run) => this.withActionTimeout(action, run),
+    });
     this.customFaces = createOneBotCustomFaceActions(
       () => this.client,
       (action, run) => this.withActionTimeout(action, run),
@@ -175,9 +192,14 @@ export class OneBotAdapter implements ProtocolAdapter {
         this.connectionHealth.opened();
         this.setStatus('connecting');
       }),
-      client.onEvent((event) => {
-        if (client === this.client) this.connectionHealth.recordPacket(event);
-      }),
+      client.onEvent(createOneBotEventHandler({
+        account: this.account,
+        isCurrent: () => client === this.client,
+        isAccountVerified: () => this.accountVerified,
+        recordPacket: (event) => this.connectionHealth.recordPacket(event),
+        onInteractionNotice: this.onInteractionNotice,
+        onError: this.onInteractionError,
+      })),
       client.on('close', () => {
         if (client !== this.client) return;
         this.connectionHealth.reset();
@@ -529,36 +551,11 @@ export class OneBotAdapter implements ProtocolAdapter {
       .sort((left, right) => left.time - right.time);
   }
 
-  async markRead(session: SessionKey): Promise<void> {
-    this.assertSessionAccount(session);
-    this.assertOnline();
-    await this.withActionTimeout('mark_read', async () => {
-      const latest = await this.loadHistory(session, 1);
-      const lastMessage = latest.at(-1);
-      if (!lastMessage) return;
-
-      const messageId = numericMessageId(lastMessage.messageId);
-      if (session.kind === 'group') {
-        await this.client.markGroupMessageAsRead(messageId, session.peer);
-      } else {
-        await this.client.markPrivateMessageAsRead(messageId, session.peer);
-      }
-    });
-  }
-
-  async setTyping(session: SessionKey): Promise<void> {
-    this.assertSessionAccount(session);
-    this.assertOnline();
-    if (session.kind === 'group') return;
-    await this.withActionTimeout('set_input_status', () => this.client.raw('set_input_status', {
-      user_id: session.peer,
-      event_type: 1,
-    }));
-  }
-
-  async recall(messageId: string): Promise<void> {
-    this.assertOnline();
-    await this.withActionTimeout('delete_message', () => this.client.deleteMessage(numericMessageId(messageId)));
+  markRead(session: SessionKey): Promise<void> { return this.messageActions.markRead(session); }
+  setTyping(session: SessionKey): Promise<void> { return this.messageActions.setTyping(session); }
+  recall(messageId: string): Promise<void> { return this.messageActions.recall(messageId); }
+  react(session: SessionKey, messageId: string, emojiId: string, remove = false): Promise<void> {
+    return this.messageActions.react(session, messageId, emojiId, remove);
   }
 
   private assertSessionAccount(session: SessionKey): void {
