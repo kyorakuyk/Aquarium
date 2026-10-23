@@ -12,6 +12,7 @@ import type {
 import type { MessageStorageRecord } from '../../store/repository.ts';
 import type { ReplySystemTemplate } from '../prompt/templates.ts';
 import { redactSensitiveText } from '../impressions/sensitive-text.ts';
+import { syncEventAdvocacyForNote } from './event-advocacy.ts';
 import {
   groupEventKeywords,
   selectMemberVisibleGroupEvents,
@@ -250,7 +251,21 @@ export function applyPrivateEventNoteExtraction(input: {
   }
 
   input.repository.transaction(() => {
-    for (const note of updates) input.repository.upsertGroupEventNote(note);
+    for (const note of updates) {
+      const previous = currentByEvent.get(note.eventId);
+      input.repository.upsertGroupEventNote(note);
+      const requestedAt = note.sourceMessageIds.reduce(
+        (latest, messageId) => Math.max(latest, sourceMessages.get(messageId)?.time ?? 0),
+        0,
+      );
+      syncEventAdvocacyForNote({
+        repository: input.repository,
+        session: input.session,
+        note,
+        ...(previous ? { previous } : {}),
+        requestedAt: requestedAt || input.now,
+      });
+    }
   });
   return dropped;
 }
@@ -295,7 +310,17 @@ export function revokeEventNotesFromPrivateMessage(input: {
         sourceMessageIds,
         updatedAt: Math.max(input.now, note.updatedAt) + 1,
       });
-      if (updated) retracted += 1;
+      if (updated) {
+        if (note.intent === 'advocate') {
+          input.repository.cancelEventAdvocacy(
+            input.session.account,
+            note.eventId,
+            note.ownerId,
+            updated.updatedAt,
+          );
+        }
+        retracted += 1;
+      }
     }
   });
   return retracted;

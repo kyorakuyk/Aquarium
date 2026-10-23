@@ -8,6 +8,7 @@ import { mapMessageToMainIdentity, resolveAccountIdentity } from '../../profiles
 import { buildAltRecentBlock } from '../../privacy/alt-recent.ts';
 import { buildPrivateGroupEventsBlock } from '../../impressions/group-events-prompt.ts';
 import { buildGroupEventContextBlock } from '../../privacy/event-notes.ts';
+import { buildEventAdvocacyConfirmationRequest } from '../../privacy/event-advocacy.ts';
 import { createSlotCallOptions } from './call-options.ts';
 import { errorDetails } from './errors.ts';
 import { getPersonaForMessage } from './persona.ts';
@@ -123,6 +124,15 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
         [identity.userId, redactSensitiveText(identity.name)] as const,
       ]),
     });
+  const advocacyConfirmation = !ctx.processOptions.replay && ctx.message.session.kind === 'private'
+    ? buildEventAdvocacyConfirmationRequest({
+      repository: ctx.options.repository,
+      session: ctx.message.session,
+      targetSessionId: ctx.currentSessionId,
+      now: ctx.now(),
+    })
+    : undefined;
+  if (advocacyConfirmation) ctx.state.eventAdvocacyPromptEventId = advocacyConfirmation.eventId;
   const altRecentBlock = buildAltRecentBlock(ctx.options.repository, {
     session: ctx.message.session,
     now: ctx.now(),
@@ -167,12 +177,16 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     ctx.state.stickerOffered = offer.candidates.map((candidate) => candidate.id);
     return ctx.state.promptTemplates.replySystem.stickers.replaceAll('{{list}}', offer.promptList);
   })();
+  const request = [
+    ctx.state.proactiveMode ? '请自然回应最近的群聊，不要要求别人提到你。' : '',
+    advocacyConfirmation?.request ?? '',
+  ].filter((value) => value.length > 0).join('\n') || undefined;
   const promptOptions = {
     persona: personaPrompt,
     ownerId: config.owner,
     groupNote: settings.groupNote,
     modeHint: settings.mode === 'busy' ? '你现在有点忙，回得简短随意。' : '',
-    request: ctx.state.proactiveMode ? '请自然回应最近的群聊，不要要求别人提到你。' : undefined,
+    request,
     context,
     blocks: {
       traits: traitsBlock,

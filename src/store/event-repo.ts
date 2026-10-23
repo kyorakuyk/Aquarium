@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { createEventAdvocacyRepository, type EventAdvocacyRepository } from './event-advocacy-repo.ts';
 
 export interface GroupEventInput {
   account: number;
@@ -44,7 +45,7 @@ export type GroupEventNoteUpdate = Pick<
   'sourceSessionId' | 'text' | 'intent' | 'level' | 'status' | 'sourceMessageIds' | 'updatedAt'
 >;
 
-export interface EventRepository {
+export interface EventRepository extends EventAdvocacyRepository {
   upsertGroupEvent(event: GroupEventInput): number;
   getGroupEvent(account: number, id: number): StoredGroupEvent | undefined;
   listGroupEvents(account: number, sourceGroupId: number, since: number, limit: number): StoredGroupEvent[];
@@ -221,6 +222,7 @@ export function createEventRepository(database: DatabaseSync): EventRepository {
   }
 
   return {
+    ...createEventAdvocacyRepository(database),
     upsertGroupEvent(event) {
       if (!validId(event.account) || !validId(event.sourceGroupId)) {
         throw new RangeError('群事件账号与来源群必须是正整数');

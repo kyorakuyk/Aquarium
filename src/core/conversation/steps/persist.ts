@@ -1,5 +1,6 @@
 import { traceStep, type PipelineStep } from './types.ts';
 import { messageRecord } from './types.ts';
+import { processEventAdvocacyConfirmationMessage } from '../../privacy/event-advocacy.ts';
 
 export const persistStep: PipelineStep = async (ctx) => traceStep(ctx, 'persist', async () => {
   const inserted = ctx.processOptions.replay === true
@@ -12,6 +13,20 @@ export const persistStep: PipelineStep = async (ctx) => traceStep(ctx, 'persist'
       senderId: ctx.message.senderId,
       now: ctx.now(),
     });
+    const confirmation = processEventAdvocacyConfirmationMessage({
+      repository: ctx.options.repository,
+      session: ctx.message.session,
+      messageId: ctx.message.messageId,
+      senderId: ctx.message.senderId,
+      now: ctx.now(),
+    });
+    for (const eventId of confirmation.confirmedEventIds) {
+      try {
+        ctx.options.onEventAdvocacyConfirmed?.(eventId);
+      } catch {
+        // 确认已持久化；调度失败由周期任务继续处理。
+      }
+    }
   }
   if (!inserted) {
     if (!ctx.processOptions.replay) ctx.options.personaMemoryService?.recordMemo(ctx.message);

@@ -1,5 +1,5 @@
 export type PrivacyLevel = 'L0' | 'L1' | 'L2';
-export type PrivacyPurpose = 'prompt' | 'gate' | 'third_party';
+export type PrivacyPurpose = 'prompt' | 'gate' | 'third_party' | 'proactive';
 export type PrivacyDecision = 'allow' | 'gate_only' | 'deny';
 
 export interface PrivacyInfo {
@@ -9,6 +9,7 @@ export interface PrivacyInfo {
   level?: PrivacyLevel;
   eventGroupMemberIds?: number[];
   eventIntent?: 'confide' | 'clarify' | 'advocate';
+  eventAdvocacyConfirmed?: boolean;
 }
 
 export type PrivacyTarget =
@@ -35,6 +36,7 @@ function validInput(value: unknown): value is PrivacyDecisionInput {
   const target = value.target;
   const eventGroupMemberIds = info.eventGroupMemberIds;
   const eventIntent = info.eventIntent;
+  const eventAdvocacyConfirmed = info.eventAdvocacyConfirmed;
   const validTarget = target.kind === 'kin'
     ? isPositiveId(target.groupId)
     : (target.kind === 'private' || target.kind === 'group')
@@ -48,8 +50,10 @@ function validInput(value: unknown): value is PrivacyDecisionInput {
       || !Array.isArray(eventGroupMemberIds) || eventGroupMemberIds.some((id) => !isPositiveId(id))))
     || (eventIntent !== undefined && (info.origin !== 'private'
       || !['confide', 'clarify', 'advocate'].includes(String(eventIntent))))
+    || (eventAdvocacyConfirmed !== undefined && (eventIntent !== 'advocate'
+      || typeof eventAdvocacyConfirmed !== 'boolean'))
     || !validTarget
-    || !['prompt', 'gate', 'third_party'].includes(String(value.purpose))) return false;
+    || !['prompt', 'gate', 'third_party', 'proactive'].includes(String(value.purpose))) return false;
   if (info.level !== undefined && !['L0', 'L1', 'L2'].includes(String(info.level))) return false;
   return true;
 }
@@ -59,6 +63,16 @@ export function decide(input: PrivacyDecisionInput): PrivacyDecision {
   const { info, target, purpose } = input;
 
   if (info.eventIntent === 'confide' && target.kind !== 'private') return 'deny';
+  if (purpose === 'proactive') {
+    return target.kind === 'group'
+      && info.origin === 'private'
+      && info.eventIntent === 'advocate'
+      && info.level === 'L2'
+      && info.eventAdvocacyConfirmed === true
+      ? 'allow'
+      : 'deny';
+  }
+  if (info.eventIntent === 'advocate' && target.kind !== 'private') return 'deny';
 
   if (target.kind === 'kin') {
     if (purpose !== 'prompt') return 'deny';

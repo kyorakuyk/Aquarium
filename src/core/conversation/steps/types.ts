@@ -80,6 +80,8 @@ export interface MessagePipelineOptions {
   privacyGateService?: PrivacyGateService;
   stickerService?: StickerService;
   sleepWakeState?: SleepWakeState;
+  isOnline?: () => boolean;
+  onEventAdvocacyConfirmed?: (eventId: number) => void;
   onError?: (error: unknown, message: IncomingMessage) => void;
 }
 
@@ -128,6 +130,7 @@ export interface PipelineState {
   activityDecisionDetail?: Record<string, unknown>;
   energy?: number;
   proactiveMode?: ProactiveMode;
+  eventAdvocacyPromptEventId?: number;
   stickerOffer?: StickerOffer;
   stickerOffered?: number[];
   chosenSticker?: StickerOffer['candidates'][number];

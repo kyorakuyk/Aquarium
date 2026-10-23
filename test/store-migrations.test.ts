@@ -100,7 +100,7 @@ test('latest migration creates account-scoped event and annotation tables', () =
   }
 });
 
-test('reapplying the latest event migration preserves existing group messages', () => {
+test('reapplying the latest event advocacy migration preserves existing group messages', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-event-migration-'));
   const databasePath = path.join(root, 'aquarium.db');
   let database: ReturnType<typeof openDatabase> | undefined;
@@ -118,7 +118,7 @@ test('reapplying the latest event migration preserves existing group messages', 
       time: 10,
     });
     const latestVersion = migrations.at(-1)?.version ?? 0;
-    database.exec('DROP TABLE event_notes; DROP TABLE events;');
+    database.exec('DROP TABLE event_advocacies;');
     database.prepare('UPDATE schema_version SET version = ? WHERE id = 1').run(latestVersion - 1);
     database.close();
     database = undefined;

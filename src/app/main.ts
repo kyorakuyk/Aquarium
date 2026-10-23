@@ -31,6 +31,7 @@ import type { Host } from '../host/types.ts';
 import { bindHostTrayAfterLoad, createWindowsTray } from '../host/tray.ts';
 import { createWindowsHost } from '../host/windows/host.ts';
 import { createAccountActivityRouter } from './activity-routing.ts';
+import { createEventAdvocacyScheduler } from './event-advocacy-scheduler.ts';
 import { createMemoryServices } from './memory-services.ts';
 import { createQueuedPersonaMemoryProcessor } from './persona-memory-processor.ts';
 import { createAccountStickerService, startStickerSyncTimer } from './stickers.ts';
@@ -108,6 +109,14 @@ subscriptions.push(bindPromptTemplateReload(configWatcher, promptTemplateStore, 
 }));
 const adapterStatuses = new Map<number, AdapterStatus>();
 const sessionQueue = createSessionQueue();
+const eventAdvocacyScheduler = createEventAdvocacyScheduler({
+  getConfig: () => configWatcher.getConfig(),
+  repository,
+  getPipeline: (account) => pipelines.get(account),
+  enqueue: (key, task) => sessionQueue.run(key, task),
+  onError: () => logger.error('已确认的群事件出面调度失败；状态保留待后续检查。'),
+});
+subscriptions.push(eventAdvocacyScheduler.start());
 const sleepWakeState = createSleepWakeState();
 const sleepOrganizationTasks = new Set<Promise<void>>();
 const affinityService = createAffinityService({
@@ -421,6 +430,12 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     privacyGateService,
     stickerService,
     sleepWakeState,
+    isOnline: () => currentStatus === 'online',
+    onEventAdvocacyConfirmed: () => {
+      void eventAdvocacyScheduler.tick().catch(() => {
+        logger.error('私聊出面确认已保存，但即时调度失败；周期任务会继续检查。');
+      });
+    },
     onError: (error, message) => {
       logger.error(`消息 ${message.messageId} 的辅助操作失败：${describeError(error)}`);
     },

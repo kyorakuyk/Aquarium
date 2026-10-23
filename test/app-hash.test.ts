@@ -24,3 +24,8 @@ test('塑造下的个人印象页可直接由 hash 导航打开', () => {
   assert.equal(serializeAppHash(state), '#/personal-impressions');
   assert.deepEqual(parseAppHash('#/personal-impressions'), state);
 });
+
+test('事件簿页面可通过 URL hash 恢复', () => {
+  assert.deepEqual(parseAppHash('#/events'), { page: 'events' });
+  assert.equal(serializeAppHash({ page: 'events' }), '#/events');
+});

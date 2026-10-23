@@ -1,0 +1,31 @@
+.event-book-page { display: grid; gap: 16px; }
+.event-book-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.event-book-account { display: grid; width: min(280px, 40%); flex: none; gap: 6px; color: var(--ink-2); font-size: 12px; font-weight: 700; }
+.event-book-list { display: grid; gap: 16px; }
+.event-book-event { padding: 22px 24px; }
+.event-book-event-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.event-book-event-heading h2 { margin: 0; }
+.event-book-event-heading p { margin: 7px 0 0; color: var(--muted); }
+.event-book-event-meta { display: grid; flex: none; justify-items: end; gap: 5px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.event-book-notes { margin-top: 18px; }
+.event-book-notes > p { margin: 0; }
+.event-book-note { display: grid; gap: 11px; padding: 16px 0; border-top: 1px solid var(--line); }
+.event-book-note-heading, .event-book-note-badges { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.event-book-note-heading { justify-content: space-between; }
+.event-book-note-heading > div:first-child { color: var(--ink-2); }
+.event-book-note-text { margin: 0; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.event-book-note-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 12px; }
+.event-book-note-editor label { display: grid; min-width: 0; gap: 5px; color: var(--muted); font-size: 12px; }
+.event-book-note-editor select { min-width: 0; }
+.event-book-note-editor .button { min-width: 92px; }
+.event-book-note-current { margin: 0; font-size: 12px; }
+
+@media (max-width: 760px) {
+  .event-book-header { align-items: stretch; flex-direction: column; gap: 14px; }
+  .event-book-account { width: 100%; }
+  .event-book-event { padding: 18px; }
+  .event-book-event-heading { flex-direction: column; gap: 10px; }
+  .event-book-event-meta { justify-items: start; }
+  .event-book-note-editor { grid-template-columns: minmax(0, 1fr); }
+  .event-book-note-editor .button { width: 100%; }
+}

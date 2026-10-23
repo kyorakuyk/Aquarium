@@ -369,6 +369,37 @@ export interface PrivacyFactsView {
   facts: PrivacyFactView[];
 }
 
+export type EventNoteIntent = 'confide' | 'clarify' | 'advocate';
+export type EventNoteLevel = 'L0' | 'L1' | 'L2';
+export type EventAdvocacyStatus = 'awaiting_confirmation' | 'confirmed' | 'sending' | 'sent' | 'failed' | 'cancelled';
+
+export interface EventBookNote {
+  id: number;
+  ownerId: number;
+  ownerName: string;
+  text: string;
+  intent: EventNoteIntent;
+  level: EventNoteLevel;
+  status: 'active' | 'retracted';
+  createdAt: number;
+  updatedAt: number;
+  advocacyStatus?: EventAdvocacyStatus;
+}
+
+export interface EventBookEvent {
+  id: number;
+  sourceGroupId: number;
+  title: string;
+  summary: string;
+  occurredAt: number;
+  notes: EventBookNote[];
+}
+
+export interface EventBookResponse {
+  account: number;
+  events: EventBookEvent[];
+}
+
 export type HistoryImportMode = 'incremental' | 'full';
 export type HistoryImportPhase = 'fetching' | 'awaiting_confirmation' | 'extracting' | 'done' | 'cancelled' | 'expired' | 'error';
 

@@ -1,6 +1,6 @@
 import type { PageId } from './components/Sidebar.tsx';
 
-const PAGE_IDS: readonly PageId[] = ['overview', 'sessions', 'impressions', 'personas', 'personal-impressions', 'stickers', 'models', 'usage', 'sandbox'];
+const PAGE_IDS: readonly PageId[] = ['overview', 'sessions', 'impressions', 'events', 'personas', 'personal-impressions', 'stickers', 'models', 'usage', 'sandbox'];
 
 export interface AppHashState {
   page: PageId;

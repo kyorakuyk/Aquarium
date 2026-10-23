@@ -121,12 +121,19 @@ test('explicit private revocation retracts the owner’s event notes before nigh
       ownerId,
       sourceSessionId: privateSessionId,
       text: '集合时间曾经沟通有误',
-      intent: 'clarify',
-      level: 'L1',
+      intent: 'advocate',
+      level: 'L2',
       status: 'active',
       sourceMessageIds: ['private-explanation'],
       createdAt: baseTime - 30_000,
       updatedAt: baseTime - 30_000,
+    });
+    repository.ensureEventAdvocacyPending({
+      account,
+      eventId,
+      ownerId,
+      sourceSessionId: privateSessionId,
+      requestedAt: baseTime - 30_000,
     });
     repository.saveMessage({
       sessionId: privateSessionId,
@@ -153,6 +160,7 @@ test('explicit private revocation retracts the owner’s event notes before nigh
     assert.equal(note?.level, 'L0');
     assert.equal(note?.status, 'retracted');
     assert.ok(note?.updatedAt > baseTime);
+    assert.equal(repository.eventAdvocacyByEvent(account, eventId)?.status, 'cancelled');
   });
 });
 
@@ -251,5 +259,148 @@ test('event-specific revocation leaves another active note from the same owner u
     const notes = repository.listGroupEventNotesForOwner(account, ownerId);
     assert.equal(notes.find(({ id }) => id === mallNoteId)?.status, 'retracted');
     assert.equal(notes.find(({ id }) => id === pollNoteId)?.status, 'active');
+  });
+});
+
+test('private advocate extraction queues confirmation before any group send', async () => {
+  await withRepository(async (repository) => {
+    await cacheGroupMember(repository);
+    const eventTime = baseTime - 60_000;
+    const eventId = repository.upsertGroupEvent({
+      account,
+      sourceGroupId: groupId,
+      anchorMessageId: 'advocate-event',
+      title: '周末漫展',
+      summary: '群友约好周末一起逛漫展',
+      participantIds: [ownerId],
+      evidenceMessageIds: ['advocate-event'],
+      occurredAt: eventTime,
+      createdAt: eventTime,
+      updatedAt: eventTime,
+    });
+    repository.saveMessage({
+      sessionId: privateSessionId,
+      messageId: 'private-advocate',
+      senderId: ownerId,
+      senderName: '小明',
+      isSelf: false,
+      plainText: '你帮我在群里说一下，集合时间改成周日下午三点。',
+      segments: [],
+      time: baseTime,
+    });
+    const service = createPrivateFactsService({
+      repository,
+      getConfig: makeConfig,
+      callModel: async () => ({
+        text: JSON.stringify({
+          new: [],
+          update: [],
+          obsolete: [],
+          eventNotes: [{
+            eventId,
+            text: '集合时间改为周日下午三点',
+            intent: 'advocate',
+            messageIds: ['private-advocate'],
+          }],
+        }),
+        provider: 'fake',
+        model: 'fake-extract',
+        usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+      }),
+    });
+
+    const result = await service.extractWindowUnderSessionLock({
+      session: privateSession,
+      records: repository.recentMessages(privateSessionId, 60),
+      now: baseTime,
+      template: promptTemplateStore.get().extractPrivate,
+    });
+
+    assert.equal(result.status, 'done');
+    assert.equal(repository.eventAdvocacyByEvent(account, eventId)?.status, 'awaiting_confirmation');
+    assert.equal(repository.eventAdvocacyByEvent(account, eventId)?.confirmedAt, undefined);
+  });
+});
+
+test('late extraction recovers an explicit confirmation already stored in private history', async () => {
+  await withRepository(async (repository) => {
+    await cacheGroupMember(repository);
+    const eventTime = baseTime - 60_000;
+    const eventId = repository.upsertGroupEvent({
+      account,
+      sourceGroupId: groupId,
+      anchorMessageId: 'late-advocate-event',
+      title: '周末漫展',
+      summary: '群友约好周末一起逛漫展',
+      participantIds: [ownerId],
+      evidenceMessageIds: ['late-advocate-event'],
+      occurredAt: eventTime,
+      createdAt: eventTime,
+      updatedAt: eventTime,
+    });
+    repository.saveMessage({
+      sessionId: privateSessionId,
+      messageId: 'private-advocate-request',
+      senderId: ownerId,
+      senderName: '小明',
+      isSelf: false,
+      plainText: '你帮我在群里说一下，集合时间改成周日下午三点。',
+      segments: [],
+      time: baseTime - 3_000,
+    });
+    repository.saveMessage({
+      sessionId: privateSessionId,
+      messageId: 'private-advocate-prompt',
+      senderId: account,
+      senderName: 'Aquarium',
+      isSelf: true,
+      plainText: '那我去群里说一下「周末漫展」的事，可以吗？',
+      segments: [],
+      time: baseTime - 2_000,
+    });
+    repository.saveMessage({
+      sessionId: privateSessionId,
+      messageId: 'private-advocate-yes',
+      senderId: ownerId,
+      senderName: '小明',
+      isSelf: false,
+      plainText: '可以',
+      segments: [],
+      time: baseTime - 1_000,
+    });
+    const service = createPrivateFactsService({
+      repository,
+      getConfig: makeConfig,
+      callModel: async () => ({
+        text: JSON.stringify({
+          new: [], update: [], obsolete: [],
+          eventNotes: [{
+            eventId,
+            text: '集合时间改为周日下午三点',
+            intent: 'advocate',
+            messageIds: ['private-advocate-request'],
+          }],
+        }),
+        provider: 'fake',
+        model: 'fake-extract',
+        usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+      }),
+    });
+
+    const result = await service.extractWindowUnderSessionLock({
+      session: privateSession,
+      records: repository.recentMessages(privateSessionId, 60),
+      now: baseTime,
+      template: promptTemplateStore.get().extractPrivate,
+    });
+
+    assert.equal(result.status, 'done');
+    const storedAdvocacy = repository.eventAdvocacyByEvent(account, eventId);
+    assert.equal(storedAdvocacy?.requestedAt, baseTime - 3_000);
+    assert.deepEqual(repository.listGroupEventNotesForOwner(account, ownerId)[0]?.sourceMessageIds, ['private-advocate-request']);
+    assert.equal(repository.messageBySessionAndId(privateSessionId, 'private-advocate-prompt')?.isSelf, true);
+    assert.equal(repository.eventAdvocacyByEvent(account, eventId)?.promptMessageId, 'private-advocate-prompt');
+    assert.equal(repository.eventAdvocacyByEvent(account, eventId)?.status, 'confirmed');
+    assert.equal(repository.eventAdvocacyByEvent(account, eventId)?.confirmationMessageId, 'private-advocate-yes');
   });
 });

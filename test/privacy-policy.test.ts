@@ -124,8 +124,8 @@ test('event-note intent is enforced by the shared privacy decision', () => {
   assert.equal(decide({ info: privateNote, target, purpose: 'prompt' }), 'allow');
   assert.equal(decide({ info: privateNote, target, purpose: 'gate' }), 'gate_only');
   assert.equal(decide({
-    info: { ...privateNote, eventIntent: 'advocate', level: 'L2' }, target, purpose: 'prompt',
-  }), 'allow');
+    info: { ...privateNote, eventIntent: 'advocate', level: 'L2', eventAdvocacyConfirmed: true }, target, purpose: 'prompt',
+  }), 'deny');
   assert.equal(decide({
     info: { ...privateNote, eventIntent: 'confide', level: 'L2' }, target, purpose: 'prompt',
   }), 'deny');
@@ -133,6 +133,29 @@ test('event-note intent is enforced by the shared privacy decision', () => {
     info: { ...privateNote, eventIntent: 'private' } as unknown as PrivacyInfo,
     target,
     purpose: 'prompt',
+  }), 'deny');
+});
+
+test('advocate notes require confirmation and L2 for proactive group delivery', () => {
+  const target: PrivacyTarget = { kind: 'group', sessionId: '900000001:group:123456' };
+  const advocate: PrivacyInfo = {
+    origin: 'private',
+    sessionId: '900000001:private:99',
+    ownerId: 99,
+    level: 'L2',
+    eventIntent: 'advocate',
+  };
+
+  assert.equal(decide({ info: advocate, target, purpose: 'prompt' }), 'deny');
+  assert.equal(decide({ info: { ...advocate, eventAdvocacyConfirmed: true }, target, purpose: 'prompt' }), 'deny');
+  assert.equal(decide({
+    info: { ...advocate, eventAdvocacyConfirmed: true }, target, purpose: 'proactive',
+  }), 'allow');
+  assert.equal(decide({
+    info: { ...advocate, level: 'L1', eventAdvocacyConfirmed: true }, target, purpose: 'proactive',
+  }), 'deny');
+  assert.equal(decide({
+    info: { ...advocate, eventIntent: 'clarify', eventAdvocacyConfirmed: true }, target, purpose: 'proactive',
   }), 'deny');
 });
 
@@ -149,6 +172,7 @@ test('privacy policy denies malformed inputs and missing required fields', () =>
     { ...scenario(), info: { ...privateInfo, ownerId: null, level: 'L2' } },
     { ...scenario(), info: { ...privateInfo, level: 'L3' } },
     { ...scenario(), info: { ...privateInfo, level: undefined } },
+    { ...scenario(), info: { ...privateInfo, eventAdvocacyConfirmed: true } },
   ];
 
   for (const input of malformed) assert.equal(decide(input as PrivacyDecisionInput), 'deny');

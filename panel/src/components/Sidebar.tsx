@@ -3,10 +3,10 @@ import { apiRequest, post, type PanelStatus, type SleepView } from '../api.ts';
 import { sidebarEnergyLabel } from '../sidebar-energy.ts';
 import { FishIcon } from './FishIcon.tsx';
 
-export type PageId = 'overview' | 'sessions' | 'impressions' | 'personas' | 'personal-impressions' | 'stickers' | 'models' | 'usage' | 'sandbox';
+export type PageId = 'overview' | 'sessions' | 'impressions' | 'events' | 'personas' | 'personal-impressions' | 'stickers' | 'models' | 'usage' | 'sandbox';
 
 const navGroups: Array<{ label: string; items: Array<{ id: PageId; label: string }> }> = [
-  { label: '日常', items: [{ id: 'overview', label: '总览' }, { id: 'sessions', label: '会话' }, { id: 'impressions', label: '知识' }] },
+  { label: '日常', items: [{ id: 'overview', label: '总览' }, { id: 'sessions', label: '会话' }, { id: 'impressions', label: '知识' }, { id: 'events', label: '事件簿' }] },
   { label: '塑造', items: [{ id: 'personas', label: '人设' }, { id: 'personal-impressions', label: '印象' }, { id: 'stickers', label: '表情包' }] },
   { label: '系统', items: [{ id: 'models', label: '模型' }, { id: 'usage', label: '用量' }, { id: 'sandbox', label: '试聊与决策' }] },
 ];
@@ -15,6 +15,7 @@ function NavIcon({ page }: { page: PageId }) {
   const props = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true as const };
   switch (page) {
     case 'overview': return <svg {...props}><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></svg>;
+    case 'events': return <svg {...props}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M7 3v4M17 3v4M3 10h18M8 14h3M8 17h7" /></svg>;
     case 'sessions': return <svg {...props}><path d="M4 5h11a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" /></svg>;
     case 'impressions': return <svg {...props}><path d="M20 12l-8 8-9-9V3h8z" /><circle cx="7.5" cy="7.5" r="1.5" /></svg>;
     case 'personal-impressions': return <svg {...props}><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" /><circle cx="12" cy="12" r="2.5" /></svg>;

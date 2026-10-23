@@ -10,6 +10,7 @@ import { createAnchoredContextWindow } from './context-window.ts';
 import { callSlot } from '../../llm/slots.ts';
 import { resolveSession } from '../../config/resolve.ts';
 import { sessionId, type IncomingMessage, type SessionKey } from '../shared/events.ts';
+import { createEventAdvocacySender } from '../privacy/event-advocacy.ts';
 import { contextStep } from './steps/context.ts';
 import { deliverStep, replayDeliverStep } from './steps/deliver.ts';
 import { gateStep } from './steps/gate.ts';
@@ -60,6 +61,20 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
   const modelCall = options.callModel ?? callSlot;
   const rateLimiter = createRateLimiter(now);
   const contextWindow = createAnchoredContextWindow();
+  const sendEventAdvocacy = createEventAdvocacySender({
+    repository: pipelineOptions.repository,
+    adapter: pipelineOptions.adapter,
+    getConfig: pipelineOptions.getConfig,
+    getNickname: pipelineOptions.getNickname,
+    now,
+    activityThreshold: pipelineOptions.activityThreshold ?? createActivityThreshold(),
+    rateLimiter,
+    ...(pipelineOptions.isMuted === undefined ? {} : { isMuted: pipelineOptions.isMuted }),
+    ...(pipelineOptions.isOnline === undefined ? {} : { isOnline: pipelineOptions.isOnline }),
+    ...(pipelineOptions.sleepWakeState === undefined ? {} : { sleepWakeState: pipelineOptions.sleepWakeState }),
+    ...(pipelineOptions.privacyGateService === undefined ? {} : { privacyGateService: pipelineOptions.privacyGateService }),
+    ...(pipelineOptions.idleBackoff === undefined ? {} : { idleBackoff: pipelineOptions.idleBackoff }),
+  });
 
   async function sendSystemReply(session: SessionKey, text: string, cycleKey: string): Promise<boolean> {
     const config = pipelineOptions.getConfig();
@@ -299,5 +314,5 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
       }
     }
   }
-  return Object.assign(processMessage, { sendSystemReply });
+  return Object.assign(processMessage, { sendSystemReply, sendEventAdvocacy });
 }

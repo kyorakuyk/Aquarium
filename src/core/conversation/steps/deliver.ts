@@ -5,6 +5,7 @@ import { splitReply, type SplitReplyOptions } from '../../shared/split.ts';
 import { effectiveTalkLevel, replyPartLimitForTalk } from '../../../persona/traits.ts';
 import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep, type StepContext } from './types.ts';
+import { markEventAdvocacyConfirmationPrompt } from '../../privacy/event-advocacy.ts';
 
 function splitOptionsForContext(ctx: StepContext): { maxParts: 1 | 2 | 3; options: SplitReplyOptions } {
   const effectiveTalk = effectiveTalkLevel(
@@ -162,6 +163,20 @@ export const deliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'deliver'
       segments,
       time: ctx.now(),
     });
+    if (ctx.state.eventAdvocacyPromptEventId !== undefined) {
+      try {
+        markEventAdvocacyConfirmationPrompt({
+          repository: ctx.options.repository,
+          session: ctx.message.session,
+          eventId: ctx.state.eventAdvocacyPromptEventId,
+          messageId: sent.messageId,
+          replyText: text,
+          now: ctx.now(),
+        });
+      } catch (error) {
+        ctx.options.onError?.(error, ctx.message);
+      }
+    }
   }
 
   if (sticker) await sendSticker(ctx, sticker);

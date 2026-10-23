@@ -6,6 +6,7 @@ import { syncKinRelays } from '../core/privacy/kin-relay.ts';
 import type { PrivateFactRecord } from '../store/privacy-repo.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import type { PanelAccountRuntime } from './types.ts';
+import { registerEventRoutes } from './event-routes.ts';
 
 export interface PrivacyRouteOptions {
   getConfig: () => AquariumConfig;
@@ -60,6 +61,7 @@ function textLength(value: string): number {
 
 export function registerPrivacyRoutes(app: Hono, options: PrivacyRouteOptions): void {
   const now = options.now ?? Date.now;
+  registerEventRoutes(app, options);
 
   app.get('/api/privacy/:userId', (context) => {
     const userId = positiveInteger(context.req.param('userId'));

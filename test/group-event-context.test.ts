@@ -227,3 +227,47 @@ test('group context injects only policy-authorized event notes and may attribute
     assert.ok(!prompt.includes(`${groupSession.account}:private:${MEMBER_A}`));
   });
 });
+
+test('private context offers one-time advocacy confirmation without sending to the group', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const eventId = repository.upsertGroupEvent({
+      account: groupSession.account,
+      sourceGroupId: groupSession.peer,
+      anchorMessageId: 'private-advocate-event',
+      title: '漫展集合',
+      summary: '群友约好周末一同参加漫展',
+      participantIds: [MEMBER_A],
+      evidenceMessageIds: ['private-advocate-event'],
+      occurredAt: baseTime - 60_000,
+      createdAt: baseTime - 60_000,
+      updatedAt: baseTime - 60_000,
+    });
+    repository.upsertGroupEventNote({
+      account: groupSession.account,
+      eventId,
+      ownerId: MEMBER_A,
+      sourceSessionId: `${groupSession.account}:private:${MEMBER_A}`,
+      text: '集合时间改为周日下午三点',
+      intent: 'advocate',
+      level: 'L2',
+      status: 'active',
+      sourceMessageIds: ['private-advocate-request'],
+      createdAt: baseTime - 30_000,
+      updatedAt: baseTime - 30_000,
+    });
+    repository.ensureEventAdvocacyPending({
+      account: groupSession.account,
+      eventId,
+      ownerId: MEMBER_A,
+      sourceSessionId: `${groupSession.account}:private:${MEMBER_A}`,
+      requestedAt: baseTime - 30_000,
+    });
+
+    const context = makeContext(repository, personaRoot, MEMBER_A, '你能帮我在群里说一下吗？');
+    assert.deepEqual(await contextStep(context), { next: true });
+    const prompt = String(context.state.prompt?.[1]?.content);
+    assert.equal(context.state.eventAdvocacyPromptEventId, eventId);
+    assert.ok(prompt.includes('那我去群里说一下「漫展集合」的事，可以吗？'));
+    assert.ok(prompt.includes('集合时间改为周日下午三点'));
+  });
+});
