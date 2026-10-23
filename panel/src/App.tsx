@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiRequest, clearAuthentication, UNAUTHORIZED_EVENT } from './api.ts';
 import { Sidebar, type PageId } from './components/Sidebar.tsx';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { OverviewPage } from './pages/OverviewPage.tsx';
 import { SessionsPage } from './pages/SessionsPage.tsx';
@@ -74,18 +75,20 @@ export function App() {
     <div className="app-shell">
       <Sidebar page={page} onSelect={navigateTo} onLogout={logout} />
       <main className="main-content">
-        {page === 'overview' && <OverviewPage onNavigate={navigateTo} onOpenSleepSettings={openSleepSettings} />}
-        {page === 'sessions' && <SessionsPage
-          focusSleepSettings={focusSleepSettings}
-          onSleepSettingsOpened={finishSleepSettingsRequest}
-        />}
-        {page === 'personas' && <PersonasPage onNavigate={navigateTo} />}
-        {page === 'models' && <ModelsPage />}
-        {page === 'sandbox' && <DecisionsPage />}
-        {page === 'usage' && <UsagePage />}
-        {page === 'impressions' && <ImpressionsPage />}
-        {page === 'personal-impressions' && <PersonalImpressionsPage />}
-        {page === 'stickers' && <StickersPage />}
+        <ErrorBoundary key={page}>
+          {page === 'overview' && <OverviewPage onNavigate={navigateTo} onOpenSleepSettings={openSleepSettings} />}
+          {page === 'sessions' && <SessionsPage
+            focusSleepSettings={focusSleepSettings}
+            onSleepSettingsOpened={finishSleepSettingsRequest}
+          />}
+          {page === 'personas' && <PersonasPage onNavigate={navigateTo} />}
+          {page === 'models' && <ModelsPage />}
+          {page === 'sandbox' && <DecisionsPage />}
+          {page === 'usage' && <UsagePage />}
+          {page === 'impressions' && <ImpressionsPage />}
+          {page === 'personal-impressions' && <PersonalImpressionsPage />}
+          {page === 'stickers' && <StickersPage />}
+        </ErrorBoundary>
       </main>
     </div>
   );

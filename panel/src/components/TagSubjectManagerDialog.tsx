@@ -105,7 +105,10 @@ export function TagSubjectManagerDialog({ open, sessionId, onClose }: {
             value={drafts[subject.id] ?? ''}
             aria-label={`${subject.name}的别名`}
             disabled={busyId !== undefined}
-            onChange={(event) => setDrafts((current) => ({ ...current, [subject.id]: event.currentTarget.value }))}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              setDrafts((current) => ({ ...current, [subject.id]: value }));
+            }}
           />
         </label>
         <div className="tag-subject-aliases">{subject.aliases.map((alias) => <span className="status-pill" key={alias}>{redactSensitiveText(alias)}</span>)}</div>

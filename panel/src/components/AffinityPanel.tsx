@@ -149,7 +149,10 @@ export function AffinityPanel() {
                   value={drafts[person.userId] ?? String(person.value)}
                   aria-label={`设置${name}的好感度`}
                   disabled={busyUser !== undefined}
-                  onChange={(event) => setDrafts((current) => ({ ...current, [person.userId]: event.currentTarget.value }))}
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    setDrafts((current) => ({ ...current, [person.userId]: value }));
+                  }}
                 /></label>
                 <button className="button button-secondary" type="submit" disabled={busyUser !== undefined}>保存</button>
               </form>
