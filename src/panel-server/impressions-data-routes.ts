@@ -14,6 +14,7 @@ import { applyImpressionsImport, previewImpressionsImport } from './impressions-
 import { importFileSchema, impressionsResetSchema } from './impressions-data-schema.ts';
 import type { ContactSnapshot, PanelAccountRuntime } from './types.ts';
 import { registerKinGroupRoutes } from './kin-group-routes.ts';
+import { registerPersonaMemoryRoutes } from './persona-memory-routes.ts';
 import { registerViewImpressionsRoutes } from './view-impressions-routes.ts';
 
 const DEFAULT_INCLUDES = ['tags', 'summaries', 'subjects', 'vetoes', 'relations'] as const;
@@ -183,6 +184,11 @@ export function registerImpressionsDataRoutes(app: Hono, options: ImpressionsDat
       name: runtime.getNickname(),
     })),
     now: options.now,
+  });
+  registerPersonaMemoryRoutes(app, {
+    repository: options.repository,
+    getConfig: options.getConfig,
+    accounts: options.accounts,
   });
   registerViewImpressionsRoutes(app, {
     repository: options.repository,

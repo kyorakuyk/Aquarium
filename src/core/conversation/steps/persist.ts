@@ -5,8 +5,13 @@ export const persistStep: PipelineStep = async (ctx) => traceStep(ctx, 'persist'
   const inserted = ctx.processOptions.replay === true
     || ctx.processOptions.alreadySaved === true
     || ctx.options.repository.saveMessage(messageRecord(ctx.message, ctx.currentSessionId));
-  if (!inserted) return { next: false, reason: 'duplicate' };
-  if (!ctx.processOptions.replay && ctx.message.session.kind === 'group') {
+  if (!inserted) {
+    if (!ctx.processOptions.replay) ctx.options.personaMemoryService?.recordMemo(ctx.message);
+    return { next: false, reason: 'duplicate' };
+  }
+  if (!ctx.processOptions.replay && ctx.options.personaMemoryService) {
+    ctx.options.personaMemoryService.recordMemo(ctx.message);
+  } else if (!ctx.processOptions.replay && ctx.message.session.kind === 'group') {
     ctx.options.privateMentionService?.maybePromote({
       session: ctx.message.session,
       senderId: ctx.message.senderId,
@@ -20,7 +25,7 @@ export const persistStep: PipelineStep = async (ctx) => traceStep(ctx, 'persist'
       template: ctx.state.promptTemplates.extractTags,
     });
   }
-  if (!ctx.processOptions.replay && ctx.message.session.kind === 'private'
+  if (!ctx.options.personaMemoryService && !ctx.processOptions.replay && ctx.message.session.kind === 'private'
     && ctx.message.senderId === ctx.message.session.peer
     && ctx.message.senderId !== ctx.message.session.account) {
     ctx.options.privateFactsService?.maybeExtract({

@@ -86,6 +86,11 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     template: ctx.state.promptTemplates.replySystem,
   }) ?? { droppedTags: 0 };
   if (tagBlocks.droppedTags > 0) ctx.state.droppedTags = tagBlocks.droppedTags;
+  const recentMemoryBlock = ctx.options.personaMemoryService?.recentDiaryBlock(
+    ctx.message.session.account,
+    ctx.message.session,
+    ctx.now(),
+  );
   const privateFactsBlock = ctx.options.privateFactsService?.promptBlock({
     session: ctx.message.session,
     name: identity.name,
@@ -143,6 +148,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
       ...(privateFactsBlock === undefined ? {} : { privateFacts: privateFactsBlock }),
       ...(tagBlocks.memberTags === undefined ? {} : { memberTags: tagBlocks.memberTags }),
       ...(tagBlocks.impressions === undefined ? {} : { impressions: tagBlocks.impressions }),
+      ...(recentMemoryBlock === undefined ? {} : { recentMemory: recentMemoryBlock }),
       ...(ctx.state.privacyPromptBlocks?.knownFacts === undefined
         ? {} : { knownFacts: ctx.state.privacyPromptBlocks.knownFacts }),
       ...(ctx.state.privacyPromptBlocks?.privateRule === undefined

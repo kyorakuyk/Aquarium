@@ -121,7 +121,8 @@ test('private extraction is thresholded, validates evidence, updates facts, and 
 
     assert.equal(requests.length, 1);
     assert.equal(requests[0]?.slot, 'extract');
-    assert.ok(requests[0]?.content.includes(`#${currentId} 正在准备考研`));
+    assert.ok(requests[0]?.content.includes(`"id":${currentId}`));
+    assert.ok(requests[0]?.content.includes('"text":"正在准备考研"'));
     assert.equal(requests[0]?.content.includes('其他私聊里的秘密'), false);
     assert.equal(requests[0]?.content.includes('别人准备换工作'), false);
     assert.equal(requests[0]?.content.includes('QQ 42'), false);
@@ -169,6 +170,15 @@ test('privacy extraction ignores disabled feature and budget-exceeded accounts',
 
     service.maybeExtract({ session, messageId: 'disabled-4', senderId: ownerId, now, template: promptTemplateStore.get().extractPrivate });
     await service.idle();
+    assert.equal(calls, 0);
+    assert.equal(repository.getPrivacyRun(session.account, key), undefined);
+    const disabledBatch = await service.extractWindowUnderSessionLock({
+      session,
+      records: repository.recentMessages(key, 10),
+      now,
+      template: promptTemplateStore.get().extractPrivate,
+    });
+    assert.equal(disabledBatch.status, 'failed');
     assert.equal(calls, 0);
     assert.equal(repository.getPrivacyRun(session.account, key), undefined);
 
@@ -301,5 +311,39 @@ test('malformed extraction output still advances the privacy run cursor', async 
       lastMessageTime: now - 60_000,
     });
     assert.equal(repository.listPrivateFactsForOwner(session.account, ownerId).length, 0);
+  });
+});
+
+test('night batch extraction processes one private memo below daytime trigger thresholds', async () => {
+  await withRepository(async (repository) => {
+    const messageId = 'night-single-message';
+    await savePrivateMessage(repository, { messageId, time: now, plainText: '这周末准备去徒步。' });
+    const summaries: PrivateFactsSummary[] = [];
+    const service = createPrivateFactsService({
+      repository,
+      getConfig: makeConfig,
+      onExtract: (summary) => summaries.push(summary),
+      callModel: async () => ({
+        text: JSON.stringify({
+          new: [{ text: '周末计划徒步', keywords: ['周末', '徒步'], messageId }],
+          update: [],
+          obsolete: [],
+        }),
+        provider: 'fake',
+        model: 'fake-extract',
+        usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
+      }),
+    });
+    const result = await service.extractWindowUnderSessionLock({
+      session,
+      records: repository.recentMessages(key, 10),
+      now,
+      template: promptTemplateStore.get().extractPrivate,
+    });
+
+    assert.equal(result.status, 'done');
+    assert.equal(result.inserted, 1);
+    assert.equal(summaries.length, 1);
+    assert.equal(repository.listPrivateFactsForOwner(session.account, ownerId)[0]?.text, '周末计划徒步');
   });
 });

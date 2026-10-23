@@ -20,6 +20,7 @@ import type { PrivacyGateDecision, PrivacyGateDetail, PrivacyGateService } from 
 import type { PrivateMentionService } from '../../privacy/mentions.ts';
 import type { PersonaTraits, StructuredPersona } from '../../../persona/load.ts';
 import type { SleepWakeState } from '../../sleep/index.ts';
+import type { PersonaMemoryService } from '../../persona-memory.ts';
 import type { StickerService } from '../../stickers/service.ts';
 import type { StickerOffer } from '../../stickers/selection.ts';
 
@@ -75,6 +76,7 @@ export interface MessagePipelineOptions {
   impressionsService?: ImpressionsService;
   privateFactsService?: PrivateFactsService;
   privateMentionService?: PrivateMentionService;
+  personaMemoryService?: PersonaMemoryService;
   privacyGateService?: PrivacyGateService;
   stickerService?: StickerService;
   sleepWakeState?: SleepWakeState;

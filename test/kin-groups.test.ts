@@ -105,6 +105,11 @@ test('v24 to v25 preserves tags and scopes shared-tag hysteresis by account and 
     ).get(legacyTagId) as { text: string; source_account: number | null; source_fact_id: number | null };
     assert.deepEqual({ ...legacyTag }, { text: '旧群聊事实', source_account: null, source_fact_id: null });
 
+    for (const migration of migrations.filter(({ version }) => version > kinGroupMigration.version)) {
+      migration.up(database);
+      database.prepare('UPDATE schema_version SET version = ? WHERE id = 1').run(migration.version);
+    }
+
     const repository = createRepository(database);
     const first = repository.kinTagPromptState(9002, '9002:group:1', legacyTagId);
     const otherSession = repository.kinTagPromptState(9002, '9002:group:2', legacyTagId);

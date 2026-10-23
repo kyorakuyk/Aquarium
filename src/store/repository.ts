@@ -14,6 +14,7 @@ import { createTagVetoQueries } from './tag-veto-repo.ts';
 import { createGroupSummaryRepository } from './group-summary-repo.ts';
 import { createTagDropRepository } from './tag-drop-repo.ts';
 import { createKinGroupRepository } from './kin-group-repo.ts';
+import { createPersonaMemoryRepository } from './persona-memory-repo.ts';
 import type { ImageCaptionKind, StoreRepository } from './repository-types.ts';
 
 export type {
@@ -215,6 +216,7 @@ export function createRepository(
   const groupSummaries = createGroupSummaryRepository(database);
   const tagDrops = createTagDropRepository(database);
   const kinGroups = createKinGroupRepository(database);
+  const personaMemory = createPersonaMemoryRepository(database);
   const transaction = <T>(task: () => T): T => {
     database.exec('BEGIN IMMEDIATE');
     let transactionOpen = true;
@@ -249,6 +251,7 @@ export function createRepository(
     ...createIdentityQueries(database, identityTags, identityVetoes),
     ...groupSummaries,
     ...kinGroups,
+    ...personaMemory,
     ...tagDrops,
     ...createAffectQueries(database),
     ...createPersonaVersionRepository(database, clock),

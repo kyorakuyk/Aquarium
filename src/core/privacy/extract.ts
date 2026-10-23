@@ -21,16 +21,25 @@ function formatTime(timestamp: number): string {
   return `${hours}:${minutes}`;
 }
 
+function serializePromptData(value: unknown): string {
+  const slash = String.fromCharCode(92);
+  return JSON.stringify(value)
+    .replaceAll('&', `${slash}u0026`)
+    .replaceAll('<', `${slash}u003c`)
+    .replaceAll('>', `${slash}u003e`);
+}
+
 function formatContext(records: readonly MessageStorageRecord[], ownerId: number): string {
-  return records.slice(-60).map((record) => {
-    const speaker = record.isSelf ? '眷属' : record.senderId === ownerId ? '对方' : '其他';
-    return `[${formatTime(record.time)}] ${speaker}: ${record.plainText} #${record.messageId}`;
-  }).join('\n');
+  return serializePromptData(records.slice(-60).map((record) => ({
+    time: formatTime(record.time),
+    speaker: record.isSelf ? '眷属' : record.senderId === ownerId ? '对方' : '其他',
+    messageId: `#${record.messageId}`,
+    text: record.plainText,
+  })));
 }
 
 function formatExisting(facts: readonly ExistingPrivateFactSummary[]): string {
-  if (facts.length === 0) return '（暂无）';
-  return facts.map((fact) => `#${fact.id} ${fact.text}（关键词：${fact.keywords.join('、')}）`).join('\n');
+  return serializePromptData(facts.map(({ id, text, keywords }) => ({ id, text, keywords })));
 }
 
 export function buildPrivateExtractionMessages(input: {
@@ -43,9 +52,10 @@ export function buildPrivateExtractionMessages(input: {
     { role: 'system', content: input.template.system },
     {
       role: 'user',
-      content: input.template.user
-        .replaceAll('{{context}}', formatContext(input.records, input.ownerId))
-        .replaceAll('{{existing}}', formatExisting(input.existing)),
+      content: input.template.user.replace(/\{\{context\}\}|\{\{existing\}\}/gu, (placeholder) =>
+        placeholder === '{{context}}'
+          ? formatContext(input.records, input.ownerId)
+          : formatExisting(input.existing)),
     },
   ];
 }

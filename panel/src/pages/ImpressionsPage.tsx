@@ -22,6 +22,7 @@ import { shouldRefreshHistoryImport, tagClassificationStatusText } from '../impr
 import { useImpressionsBackgroundRefresh } from '../use-impressions-background-refresh.ts';
 
 const PrivateFactsPanel = lazy(() => import('../components/PrivateFactsPanel.tsx').then((module) => ({ default: module.PrivateFactsPanel })));
+const PersonaMemoryPanel = lazy(() => import('../components/PersonaMemoryPanel.tsx').then((module) => ({ default: module.PersonaMemoryPanel })));
 
 type HistoryImportTarget = 200 | 500 | 1_000 | 2_000;
 
@@ -57,7 +58,7 @@ export function ImpressionsPage() {
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState(() => currentImpressionsRoute()?.sessionId ?? '');
-  const [tab, setTab] = useState<'groups' | 'people' | 'privacy' | 'kin-groups'>('groups');
+  const [tab, setTab] = useState<'groups' | 'people' | 'privacy' | 'kin-groups' | 'memory'>('groups');
   const [view, setView] = useState<ImpressionsView>();
   const [selectedUserId, setSelectedUserId] = useState<number | undefined>(() => currentImpressionsRoute()?.userId);
   const [error, setError] = useState('');
@@ -383,6 +384,7 @@ export function ImpressionsPage() {
           <button className={tab === 'privacy' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'privacy'} onClick={() => setTab('privacy')}>私聊</button>
           <button className={tab === 'people' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'people'} onClick={() => setTab('people')}>所有人</button>
           <button className={tab === 'kin-groups' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'kin-groups'} onClick={() => setTab('kin-groups')}>眷属组</button>
+          <button className={tab === 'memory' ? 'is-active' : ''} type="button" role="tab" aria-selected={tab === 'memory'} onClick={() => setTab('memory')}>记忆</button>
         </div>
         {tab === 'groups' && <div className="impressions-group-tools">
           <label className="impressions-group-select">
@@ -415,6 +417,9 @@ export function ImpressionsPage() {
       </div>
       {tab === 'people' && <AffinityPanel />}
       {tab === 'kin-groups' && <KinGroupsPanel />}
+      {tab === 'memory' && <Suspense fallback={<div className="empty-state">正在载入近期记忆…</div>}>
+        <PersonaMemoryPanel />
+      </Suspense>}
       {tab === 'privacy' && <Suspense fallback={<div className="empty-state">正在载入私聊记忆…</div>}>
         <PrivateFactsPanel sessions={privateSessions} loadingFriends={sessionsLoading} />
       </Suspense>}

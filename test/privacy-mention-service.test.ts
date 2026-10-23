@@ -225,3 +225,33 @@ test('parse failure is conservative and a later owner mention is recorded', asyn
     assert.equal(repository.privateFactById(id)?.level, 'L1');
   });
 });
+
+test('a group mention promotion creates the newly authorized kin relay immediately', async () => {
+  await withRepository(async (repository) => {
+    const ownerId = 42;
+    const recipientAccount = groupSession.account + 1;
+    const groupId = repository.createKinGroup('夜间转述');
+    repository.setKinGroupMembers(groupId, [groupSession.account, recipientAccount]);
+    const factId = repository.insertPrivateFact(fact(ownerId, '准备参加考试', ['参加考试', '考试计划']));
+    const messageId = 'mention-promotes-relay';
+    saveGroupMessage(repository, messageId, ownerId, '我最近准备参加考试。');
+    const service = createPrivacyMentionService({
+      repository,
+      getConfig: makeConfig,
+      now: () => baseTime + 10,
+      callModel: async () => modelResult(JSON.stringify({ mentions: [factId] })),
+    });
+
+    service.maybePromote({
+      session: groupSession,
+      senderId: ownerId,
+      messageId,
+      now: baseTime,
+      template: promptTemplateStore.get().privacyMention,
+    });
+    await service.idle();
+
+    assert.equal(repository.privateFactById(factId)?.level, 'L1');
+    assert.deepEqual(repository.listRelayTagsForAccount(recipientAccount).map(({ sourceFactId }) => sourceFactId), [factId]);
+  });
+});

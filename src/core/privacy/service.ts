@@ -1,7 +1,7 @@
 import type { AquariumConfig } from '../../config/schema.ts';
 import { budgetState } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
-import type { StoreRepository } from '../../store/repository.ts';
+import type { MessageStorageRecord, StoreRepository } from '../../store/repository.ts';
 import type { NewPrivateFactRecord, PrivateFactEvidence, PrivateFactRecord } from '../../store/privacy-repo.ts';
 import type { ExtractPrivatePromptTemplate, ReplySystemTemplate } from '../prompt/templates.ts';
 import { persistTagPromptStates } from '../impressions/prompt-state.ts';
@@ -41,6 +41,12 @@ export interface PrivateFactsService {
     now: number;
     template: ExtractPrivatePromptTemplate;
   }): void;
+  extractWindowUnderSessionLock(input: {
+    session: SessionKey;
+    records: MessageStorageRecord[];
+    now: number;
+    template: ExtractPrivatePromptTemplate;
+  }): Promise<PrivateFactsSummary>;
   idle(): Promise<void>;
 }
 
@@ -242,8 +248,13 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
     config: AquariumConfig,
     records: ReturnType<StoreRepository['recentMessages']>,
     newestMessageTime: number,
-  ): Promise<ExtractStatus> {
+  ): Promise<PrivateFactsSummary> {
     const summary = emptySummary(input.session.account, sessionIdValue, 'failed');
+    if (budgetState(config, options.repository.costToday()) === 'exceeded') {
+      const skipped = { ...summary, status: 'budget' as const };
+      report(skipped);
+      return skipped;
+    }
     const target = { kind: 'private' as const, sessionId: sessionIdValue, peerId: input.session.kind === 'private' ? input.session.peer : 0 };
     const allowedRecords = records.filter((record) => decide({
       info: { origin: 'private', sessionId: record.sessionId, ownerId: input.session.kind === 'private' ? input.session.peer : null, level: 'L0' },
@@ -272,8 +283,8 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
       responseText = response.text;
     } catch {
       reportError(input.session.account, sessionIdValue);
-      report({ ...summary, status: 'failed' });
-      return 'failed';
+      report(summary);
+      return summary;
     }
 
     try {
@@ -285,11 +296,11 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
       }
       saveRun(input, sessionIdValue, newestMessageTime);
       report(applied);
-      return applied.status;
+      return applied;
     } catch {
       reportError(input.session.account, sessionIdValue);
-      report({ ...summary, status: 'failed' });
-      return 'failed';
+      report(summary);
+      return summary;
     }
   }
 
@@ -317,12 +328,12 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
 
     let task: Promise<void>;
     task = runExtraction(input, sessionIdValue, config, records, newestMessageTime)
-      .then((status) => {
+      .then((summary) => {
         running.delete(sessionIdValue);
         pending.delete(task);
         const next = queued.get(sessionIdValue);
         queued.delete(sessionIdValue);
-        if (next && (status === 'done' || status === 'parse_error')) {
+        if (next && (summary.status === 'done' || summary.status === 'parse_error')) {
           const nextMessage = options.repository.messageBySessionAndId(sessionIdValue, next.messageId);
           if (nextMessage) checkAndStart(next, sessionIdValue, nextMessage);
         }
@@ -367,6 +378,54 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
         return;
       }
       checkAndStart(input, sessionIdValue, storedMessage);
+    },
+
+    async extractWindowUnderSessionLock(input) {
+      if (input.session.kind !== 'private' || !Number.isSafeInteger(input.session.peer)
+        || input.session.peer <= 0 || !Number.isSafeInteger(input.now) || input.now < 0) {
+        throw new RangeError('私聊 memo 整理参数无效');
+      }
+      const sessionIdValue = sessionId(input.session);
+      if (input.records.some((record) => record.sessionId !== sessionIdValue)) {
+        throw new RangeError('私聊 memo 会话不匹配');
+      }
+      const config = options.getConfig();
+      if (input.records.length === 0) {
+        return emptySummary(input.session.account, sessionIdValue, 'done');
+      }
+      if (!config.privacy.enabled) {
+        const summary = emptySummary(input.session.account, sessionIdValue, 'failed');
+        report(summary);
+        return summary;
+      }
+      if (running.has(sessionIdValue)) return emptySummary(input.session.account, sessionIdValue, 'failed');
+      const ownerRecords = input.records.filter((record) => !record.isSelf && record.senderId === input.session.peer);
+      if (ownerRecords.length === 0) return emptySummary(input.session.account, sessionIdValue, 'done');
+      const newestMessageTime = ownerRecords.reduce((latest, record) => Math.max(latest, record.time), 0);
+      const latest = ownerRecords.at(-1)!;
+      const extractionInput: ExtractInput = {
+        session: input.session,
+        messageId: latest.messageId,
+        senderId: input.session.peer,
+        now: input.now,
+        template: input.template,
+      };
+      if (budgetState(config, options.repository.costToday()) === 'exceeded') {
+        const summary = emptySummary(input.session.account, sessionIdValue, 'budget');
+        report(summary);
+        return summary;
+      }
+      running.add(sessionIdValue);
+      try {
+        return await runExtraction(extractionInput, sessionIdValue, config, input.records, newestMessageTime);
+      } catch {
+        reportError(input.session.account, sessionIdValue);
+        const summary = emptySummary(input.session.account, sessionIdValue, 'failed');
+        report(summary);
+        return summary;
+      } finally {
+        running.delete(sessionIdValue);
+      }
     },
 
     async idle() {

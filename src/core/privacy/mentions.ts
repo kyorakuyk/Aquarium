@@ -8,6 +8,7 @@ import type { PrivacyMentionPromptTemplate } from '../prompt/templates.ts';
 import type { PipelineModelCall } from '../conversation/steps/types.ts';
 import { sessionId, type SessionKey } from '../shared/events.ts';
 import { decide } from './policy.ts';
+import { syncKinRelays } from './kin-relay.ts';
 
 interface MentionInput {
   session: SessionKey;
@@ -179,6 +180,13 @@ export function createPrivacyMentionService(options: PrivateMentionServiceOption
           promoteMentions: config.privacy.promoteMentions,
         });
         if (saved.recorded && saved.fact) {
+          if (saved.fact.level !== fact.level) {
+            try {
+              syncKinRelays(options.repository, completedAt);
+            } catch {
+              reportError(input.session.account, groupSessionId);
+            }
+          }
           reportMention({
             account: input.session.account,
             sessionId: groupSessionId,

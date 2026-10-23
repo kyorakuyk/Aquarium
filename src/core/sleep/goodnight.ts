@@ -15,6 +15,7 @@ export interface SleepGoodnightSchedulerOptions {
   repository: StoreRepository;
   getGoodnightLines: () => readonly string[];
   sendGoodnight: (session: SessionKey, text: string, cycleKey: string) => Promise<boolean>;
+  onSleep?: (cycleKey: string, now: number) => Promise<void>;
   now?: () => number;
   random?: () => number;
   onError?: (error: unknown) => void;
@@ -38,7 +39,7 @@ export function createSleepGoodnightScheduler(options: SleepGoodnightSchedulerOp
     running = true;
     try {
       const config = options.getConfig();
-      if (!config.sleep.enabled || !config.sleep.goodnight) {
+      if (!config.sleep.enabled) {
         previousAsleep = undefined;
         handledCycleKey = undefined;
         return;
@@ -50,15 +51,31 @@ export function createSleepGoodnightScheduler(options: SleepGoodnightSchedulerOp
         previousAsleep = false;
         return;
       }
+      const reportSleepError = (error: unknown): void => {
+        try {
+          options.onError?.(error);
+        } catch {}
+      };
+      const notifySleep = (): void => {
+        try {
+          const task = options.onSleep?.(plan.cycleKey, currentTime);
+          if (task) void task.catch(reportSleepError);
+        } catch (error) {
+          reportSleepError(error);
+        }
+      };
       if (previousAsleep === undefined) {
         previousAsleep = true;
         handledCycleKey = plan.cycleKey;
+        notifySleep();
         return;
       }
       const transitionedToSleep = previousAsleep === false && handledCycleKey !== plan.cycleKey;
       previousAsleep = true;
       if (!transitionedToSleep) return;
       handledCycleKey = plan.cycleKey;
+      notifySleep();
+      if (!config.sleep.goodnight) return;
 
       const cutoff = currentTime - RECENT_BOT_ACTIVITY_MS;
       const candidates = new Map<string, { session: SessionKey; lastSentAt: number }>();

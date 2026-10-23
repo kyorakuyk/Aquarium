@@ -246,7 +246,7 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .save-state { margin: 0; color: var(--muted); font-size: 12px; }
 
 .impressions-controls { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
-.impressions-controls .page-tabs { flex: 0 0 240px; margin: 0; }
+.impressions-controls .page-tabs { flex: 0 0 auto; flex-wrap: wrap; margin: 0; }
 .impressions-group-select { display: block; width: min(100%, 280px); }
 .impressions-group-select select { min-height: 44px; padding: 8px 10px; font-size: 12px; }
 .group-vibe-card { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: center; gap: 14px; padding: 20px; }

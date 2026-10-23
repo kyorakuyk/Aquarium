@@ -4,6 +4,7 @@ import type { AdapterStatus } from '../adapters/types.ts';
 import { loadConfig } from '../config/load.ts';
 import { watchConfig } from '../config/watch.ts';
 import { writeConfig } from '../config/write.ts';
+import { resolveSession } from '../config/resolve.ts';
 import { createLogger } from '../core/shared/logger.ts';
 import { createMessagePipeline } from '../core/conversation/pipeline.ts';
 import { bindPromptTemplateReload, promptTemplateStore } from '../core/prompt/templates.ts';
@@ -31,9 +32,11 @@ import { bindHostTrayAfterLoad, createWindowsTray } from '../host/tray.ts';
 import { createWindowsHost } from '../host/windows/host.ts';
 import { createAccountActivityRouter } from './activity-routing.ts';
 import { createMemoryServices } from './memory-services.ts';
+import { createQueuedPersonaMemoryProcessor } from './persona-memory-processor.ts';
 import { createAccountStickerService, startStickerSyncTimer } from './stickers.ts';
 import { startAdapterForHost } from './adapter-start.ts';
 import { createProfileActivityService } from '../core/profiles/presence-service.ts';
+import { createPersonaMemoryService } from '../core/persona-memory.ts';
 import { startProfileActivitySchedule } from './profile-activity.ts';
 import {
   createHostLifecycleQueue,
@@ -105,19 +108,7 @@ subscriptions.push(bindPromptTemplateReload(configWatcher, promptTemplateStore, 
 const adapterStatuses = new Map<number, AdapterStatus>();
 const sessionQueue = createSessionQueue();
 const sleepWakeState = createSleepWakeState();
-const sleepGoodnightScheduler = createSleepGoodnightScheduler({
-  getConfig: () => configWatcher.getConfig(),
-  adapters: () => adapters,
-  repository,
-  getGoodnightLines: () => promptTemplateStore.get().sleep.goodnight,
-  sendGoodnight: (session, text, cycleKey) => {
-    const pipeline = pipelines.get(session.account);
-    if (!pipeline) return Promise.resolve(false);
-    return sessionQueue.run(sessionId(session), () => pipeline.sendSystemReply(session, text, cycleKey));
-  },
-  onError: (error) => logger.error(`定时晚安发送失败：${describeError(error)}`),
-});
-subscriptions.push(sleepGoodnightScheduler.start());
+const sleepOrganizationTasks = new Set<Promise<void>>();
 const affinityService = createAffinityService({
   repository,
   getConfig: () => configWatcher.getConfig(),
@@ -149,6 +140,85 @@ const { impressionsService, memberSummaryService, groupSummaryService, tagClassi
   describeError,
 });
 tagClassificationService.startOnStartup();
+const processPersonaMemorySession = createQueuedPersonaMemoryProcessor({
+  isSessionEnabled: (session) => resolveSession(configWatcher.getConfig(), session).enabled,
+  process: async (session, records, now) => {
+    if (session.kind === 'group') {
+      const key = sessionId(session);
+      const release = impressionsService.tryAcquireSession(key);
+      if (!release) return 'failed';
+      try {
+        for (const record of records) {
+          if (record.isSelf) continue;
+          privateMentionService.maybePromote({
+            session,
+            senderId: record.senderId,
+            messageId: record.messageId,
+            now: record.time,
+            template: promptTemplateStore.get().privacyMention,
+          });
+        }
+        await privateMentionService.idle();
+        const summary = await impressionsService.extractWindowUnderSessionLock({
+          session,
+          records,
+          now,
+          template: promptTemplateStore.get().extractTags,
+        });
+        return summary.status === 'done' ? 'done' : summary.status === 'budget' ? 'budget' : 'failed';
+      } finally {
+        release();
+      }
+    }
+    const summary = await privateFactsService.extractWindowUnderSessionLock({
+      session,
+      records,
+      now,
+      template: promptTemplateStore.get().extractPrivate,
+    });
+    return summary.status === 'done' ? 'done' : summary.status === 'budget' ? 'budget' : 'failed';
+  },
+});
+const personaMemoryService = createPersonaMemoryService({
+  repository,
+  getConfig: () => configWatcher.getConfig(),
+  canProcessSession: (session) => resolveSession(configWatcher.getConfig(), session).enabled,
+  processSession: processPersonaMemorySession,
+  onError: () => logger.error('夜间人格记忆整理失败；未完成的 memo 保留待下次重试。'),
+});
+const sleepGoodnightScheduler = createSleepGoodnightScheduler({
+  getConfig: () => configWatcher.getConfig(),
+  adapters: () => adapters,
+  repository,
+  getGoodnightLines: () => promptTemplateStore.get().sleep.goodnight,
+  sendGoodnight: (session, text, cycleKey) => {
+    const pipeline = pipelines.get(session.account);
+    if (!pipeline) return Promise.resolve(false);
+    return sessionQueue.run(sessionId(session), () => pipeline.sendSystemReply(session, text, cycleKey));
+  },
+  onSleep: async (cycleKey, now) => {
+    const task = (async () => {
+      for (const account of configWatcher.getConfig().accounts) {
+        try {
+          const result = await personaMemoryService.organizeAtSleep({ account: account.uin, cycleKey, now });
+          if (result.status === 'budget') logger.warn(`账号 ${account.uin} 夜间整理因预算超限跳过。`);
+          else if (result.status === 'partial') logger.warn(`账号 ${account.uin} 本轮夜间整理未完成，剩余 memo 留待下个睡眠周期。`);
+          else if (result.status === 'failed') logger.error(`账号 ${account.uin} 夜间整理失败；待处理 memo 保留。`);
+        } catch {
+          logger.error(`账号 ${account.uin} 夜间整理失败；待处理 memo 保留。`);
+        }
+      }
+    })();
+    sleepOrganizationTasks.add(task);
+    try {
+      await task;
+    } finally {
+      sleepOrganizationTasks.delete(task);
+    }
+  },
+  onError: (error) => logger.error(`定时晚安发送失败：${describeError(error)}`),
+});
+subscriptions.push(sleepGoodnightScheduler.start());
 let panelServer: ReturnType<typeof startPanelServer> | undefined;
 let managedHost: Host | undefined;
 let shuttingDown = false;
@@ -181,6 +251,9 @@ async function shutdown(signal: string): Promise<void> {
     await managedHost?.stop();
   } catch (error) {
     logger.error(`Windows 托管关闭失败：${describeError(error)}`);
+  }
+  while (sleepOrganizationTasks.size > 0) {
+    await Promise.all([...sleepOrganizationTasks].map((task) => task.catch(() => undefined)));
   }
   await sessionQueue.idle();
   await impressionsService.idle();
@@ -333,6 +406,7 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
     impressionsService,
     privateFactsService,
     privateMentionService,
+    personaMemoryService,
     privacyGateService,
     stickerService,
     sleepWakeState,
