@@ -21,7 +21,8 @@ export function createSlotCallOptions(
         }
       }
     },
-    ...(debugEnabled && !ctx.processOptions.replay ? {
+    // 私聊提示词可能包含 L0 原文；debug trace 会保存完整提示词，不能附加到私聊模型调用。
+    ...(debugEnabled && !ctx.processOptions.replay && ctx.message.session.kind !== 'private' ? {
       debugTrace: {
         sessionId: ctx.currentSessionId,
         messageId: ctx.message.messageId,

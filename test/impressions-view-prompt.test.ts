@@ -132,6 +132,39 @@ test('view 印象排除非确认、锁定、其他成员与 L0 私聊来源', as
   });
 });
 
+test('linked alt view impressions follow main identity mapping in private prompts', async () => {
+  await withRepository((repository) => {
+    const mainId = 55;
+    const altId = 56;
+    const otherId = 57;
+    const targetSession: SessionKey = { account, kind: 'private', peer: mainId };
+    const altPrivateSession: SessionKey = { account, kind: 'private', peer: altId };
+    addView(repository, { text: '小号群聊印象', sessionId: sessionId(groupSession), userId: altId });
+    addView(repository, { text: '小号私聊印象', sessionId: sessionId(altPrivateSession), userId: altId });
+    addView(repository, { text: '无关成员印象', sessionId: sessionId(groupSession), userId: otherId });
+    const input = {
+      session: targetSession,
+      sessionId: sessionId(targetSession),
+      senderId: mainId,
+      senderName: '小明',
+      now,
+      template: {
+        ...promptTemplateStore.get().replySystem,
+        impressions: impressionsTemplate,
+      } as ReplySystemTemplate,
+    };
+    const service = promptService(repository);
+    const beforeLink = service.promptBlocks(input) as { impressions?: string };
+    assert.doesNotMatch(beforeLink.impressions ?? '', /小号群聊印象|小号私聊印象/u);
+
+    repository.linkAltAccount({ account, aUserId: mainId, bUserId: altId, createdAt: now });
+    const afterLink = service.promptBlocks(input) as { impressions?: string };
+    assert.match(afterLink.impressions ?? '', /小号群聊印象/u);
+    assert.match(afterLink.impressions ?? '', /小号私聊印象/u);
+    assert.doesNotMatch(afterLink.impressions ?? '', /无关成员印象/u);
+  });
+});
+
 test('印象块排在 groupTags 与 memberTags 知识块之后', () => {
   const template = {
     ...promptTemplateStore.get().replySystem,

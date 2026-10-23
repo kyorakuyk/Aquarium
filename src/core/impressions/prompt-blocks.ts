@@ -78,19 +78,21 @@ function displayViewTagText(tag: StoredTag): string {
 }
 
 function viewTagAllowed(
+  repository: StoreRepository,
   tag: StoredTag,
   account: number,
   subjectId: number | null,
   target: { kind: 'group'; sessionId: string } | { kind: 'private'; sessionId: string; peerId: number },
 ): boolean {
-  if (tag.kind !== 'view' || (tag.userId !== null && tag.userId !== subjectId)) return false;
+  const ownerId = tag.userId === null ? null : repository.mainUserIdFor(account, tag.userId);
+  if (tag.kind !== 'view' || (ownerId !== null && ownerId !== subjectId)) return false;
   const source = parseSessionId(tag.sessionId);
   if (!source || source.account !== account) return false;
   const decision = decide({
     info: {
       origin: source.kind,
       sessionId: tag.sessionId,
-      ownerId: tag.userId,
+      ownerId,
       ...(source.kind === 'private' ? { level: 'L0' as const } : {}),
     },
     target,
@@ -160,7 +162,11 @@ export function buildImpressionsPromptBlocks(
     })
     : undefined;
   const target = input.session.kind === 'private'
-    ? { kind: 'private' as const, sessionId: input.sessionId, peerId: input.session.peer }
+    ? {
+      kind: 'private' as const,
+      sessionId: input.sessionId,
+      peerId: repository.mainUserIdFor(account, input.session.peer),
+    }
     : { kind: 'group' as const, sessionId: input.sessionId };
   const sharedTagSources = new Map<number, StoredTag>();
   const renderGroupTag = (tag: StoredTag) => groupTagText(
@@ -214,9 +220,10 @@ export function buildImpressionsPromptBlocks(
       );
     }
   }
-  const subjectId = identity?.userId ?? (input.session.kind === 'private' ? input.session.peer : null);
+  const subjectId = identity?.userId
+    ?? (input.session.kind === 'private' ? repository.mainUserIdFor(account, input.session.peer) : null);
   const eligibleViewTags = repository.listViewTagsForAccount(account)
-    .filter((tag) => viewTagAllowed(tag, account, subjectId, target));
+    .filter((tag) => viewTagAllowed(repository, tag, account, subjectId, target));
   const viewSelection = selectInjectableTags(eligibleViewTags, input.now, VIEW_TAGS_LIMIT, {
     includeMisc: true,
     renderText: (tags) => tags.map(displayViewTagText).join('、'),

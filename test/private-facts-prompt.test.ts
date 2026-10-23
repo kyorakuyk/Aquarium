@@ -66,15 +66,15 @@ test('private prompt facts obey scope policy and append same-person group tags l
       updatedAt: now - 1,
     }));
     repository.insertPrivateFact(fact({
-      ownerId,
-      sessionId: `${privateSession.account}:private:42:other`,
+      ownerId: 43,
+      sessionId: `${privateSession.account}:private:43`,
       text: '其他私聊高等级事实',
       level: 'L2',
       updatedAt: now,
     }));
     repository.insertPrivateFact(fact({
-      ownerId,
-      sessionId: `${privateSession.account}:private:42:third`,
+      ownerId: 44,
+      sessionId: `${privateSession.account}:private:44`,
       text: '另一私聊低等级事实',
       level: 'L0',
       updatedAt: now + 1,

@@ -11,6 +11,7 @@ import { decide } from './policy.ts';
 import { syncKinRelays } from './kin-relay.ts';
 import type { PipelineModelCall } from '../conversation/steps/types.ts';
 import { sessionId, type SessionKey } from '../shared/events.ts';
+import { linkedAccountUserIds } from '../profiles/account-identity.ts';
 
 const twentyMessages = 20;
 const fiveMessages = 5;
@@ -353,10 +354,12 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
       const sessionIdValue = sessionId(input.session);
       try {
         if (!options.getConfig().privacy.enabled) return undefined;
+        const ownerIds = linkedAccountUserIds(options.repository, input.session.account, input.session.peer);
         return buildPrivateFactsBlock({
           ...input,
-          facts: options.repository.listPrivateFactsForOwner(input.session.account, input.session.peer),
-          groupTags: options.repository.listGroupTagsForUser(input.session.account, input.session.peer),
+          facts: ownerIds.flatMap((ownerId) => options.repository.listPrivateFactsForOwner(input.session.account, ownerId)),
+          groupTags: ownerIds.flatMap((ownerId) => options.repository.listGroupTagsForUser(input.session.account, ownerId)),
+          mainUserIdFor: (userId) => options.repository.mainUserIdFor(input.session.account, userId),
           onTagPromptStates: (updates) => persistTagPromptStates(options.repository, updates),
         });
       } catch {

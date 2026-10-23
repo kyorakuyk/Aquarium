@@ -1,4 +1,5 @@
 import type { PersonaMemoryRepository } from '../store/persona-memory-repo.ts';
+import type { IdentityRepository } from '../store/identity-repo.ts';
 import { parseSessionId } from './conversation/sessions.ts';
 import { redactSensitiveText } from './impressions/sensitive-text.ts';
 import { decide } from './privacy/policy.ts';
@@ -23,14 +24,19 @@ function serializeDiaryEntries(entries: readonly RenderedDiaryEntry[]): string {
 }
 
 export function createRecentDiaryBlock(
-  repository: Pick<PersonaMemoryRepository, 'listVisiblePersonaDiariesInRange'>,
+  repository: Pick<PersonaMemoryRepository, 'listVisiblePersonaDiariesInRange'>
+    & Pick<IdentityRepository, 'mainUserIdFor'>,
   truncateText: (text: string, max: number) => string,
 ): (account: number, session: SessionKey, now: number) => string | undefined {
   return (account, session, now) => {
     if (!Number.isSafeInteger(account) || account <= 0 || session.account !== account
       || !Number.isSafeInteger(now) || now < 0) return undefined;
     const targetSessionId = sessionId(session);
-    const target = { kind: session.kind, sessionId: targetSessionId, peerId: session.peer };
+    const target = {
+      kind: session.kind,
+      sessionId: targetSessionId,
+      peerId: session.kind === 'private' ? repository.mainUserIdFor(account, session.peer) : session.peer,
+    };
     const diaries = repository.listVisiblePersonaDiariesInRange(
       account,
       Math.max(0, now - RECENT_DIARY_WINDOW_MS),
@@ -45,7 +51,7 @@ export function createRecentDiaryBlock(
           info: {
             origin: source.kind,
             sessionId: entry.sessionId,
-            ownerId: source.kind === 'private' ? source.peer : null,
+            ownerId: source.kind === 'private' ? repository.mainUserIdFor(account, source.peer) : null,
             level: 'L0',
           },
           target,

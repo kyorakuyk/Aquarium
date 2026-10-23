@@ -64,7 +64,10 @@ export function decide(input: PrivacyDecisionInput): PrivacyDecision {
     return 'deny';
   }
 
-  if (info.origin === 'private' && target.kind === 'private') return 'deny';
+  if (info.origin === 'private' && target.kind === 'private') {
+    if (purpose === 'prompt' && target.peerId !== undefined && info.ownerId === target.peerId) return 'allow';
+    return 'deny';
+  }
 
   if (info.origin === 'group' && target.kind === 'private'
     && info.ownerId !== null && info.ownerId === target.peerId && purpose === 'prompt') {

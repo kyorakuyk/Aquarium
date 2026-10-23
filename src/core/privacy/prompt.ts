@@ -19,20 +19,22 @@ export function buildPrivateFactsBlock(input: {
   template: ReplySystemTemplate;
   facts: readonly PrivateFactRecord[];
   groupTags: readonly StoredTag[];
+  mainUserIdFor: (userId: number) => number;
   onTagPromptStates?: (updates: readonly TagPromptStateUpdate[]) => void;
 }): string | undefined {
   if (input.session.kind !== 'private') return undefined;
 
   const targetSessionId = sessionId(input.session);
-  const ownerId = input.session.peer;
+  const ownerId = input.mainUserIdFor(input.session.peer);
   const target = { kind: 'private' as const, sessionId: targetSessionId, peerId: ownerId };
   const facts = input.facts
-    .filter((fact) => fact.account === input.session.account && fact.ownerId === ownerId)
+    .filter((fact) => fact.account === input.session.account
+      && input.mainUserIdFor(fact.ownerId) === ownerId)
     .filter((fact) => decide({
       info: {
         origin: 'private',
         sessionId: fact.sessionId,
-        ownerId: fact.ownerId,
+        ownerId: input.mainUserIdFor(fact.ownerId),
         level: fact.level,
       },
       target,
@@ -40,10 +42,14 @@ export function buildPrivateFactsBlock(input: {
     }) === 'allow')
     .sort((left, right) => right.updatedAt - left.updatedAt || right.id - left.id);
   const groupTags = input.groupTags.filter((tag) => tag.account === input.session.account
-    && tag.userId === ownerId
+    && tag.userId !== null && input.mainUserIdFor(tag.userId) === ownerId
     && tag.kind === 'fact'
     && decide({
-      info: { origin: 'group', sessionId: tag.sessionId, ownerId: tag.userId },
+      info: {
+        origin: 'group',
+        sessionId: tag.sessionId,
+        ownerId: tag.userId === null ? null : input.mainUserIdFor(tag.userId),
+      },
       target,
       purpose: 'prompt',
     }) === 'allow');

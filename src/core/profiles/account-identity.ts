@@ -8,6 +8,20 @@ export interface AccountIdentity {
   kind: AccountKind | undefined;
 }
 
+export function linkedAccountUserIds(
+  repository: Pick<StoreRepository, 'mainUserIdFor' | 'listRelationsForUser'>,
+  account: number,
+  userId: number,
+): number[] {
+  const mainUserId = repository.mainUserIdFor(account, userId);
+  const aliases = repository.listRelationsForUser(account, mainUserId)
+    .filter((relation) => relation.type === 'alt')
+    .flatMap((relation) => [relation.aUserId, relation.bUserId])
+    .filter((candidate) => candidate !== mainUserId
+      && repository.mainUserIdFor(account, candidate) === mainUserId);
+  return [...new Set([mainUserId, ...aliases])];
+}
+
 function cachedGroupName(repository: StoreRepository, account: number, sessionId: string, userId: number): string | undefined {
   const key = parseSessionId(sessionId);
   if (!key || key.kind !== 'group') return undefined;

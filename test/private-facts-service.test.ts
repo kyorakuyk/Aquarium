@@ -51,7 +51,8 @@ test('private extraction is thresholded, validates evidence, updates facts, and 
     const currentId = repository.insertPrivateFact(fact());
     const obsoleteId = repository.insertPrivateFact(fact({ text: '已完成搬家', keywords: ['搬家', '完成'] }));
     const otherSessionId = repository.insertPrivateFact(fact({
-      sessionId: `${session.account}:private:other`,
+      ownerId: 43,
+      sessionId: `${session.account}:private:43`,
       text: '其他私聊里的秘密',
       keywords: ['其他', '秘密'],
     }));
