@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildExtractMessages, asContradictItem, asNewItem, runExtract } from '../src/core/impressions/extract.ts';
+import {
+  buildExtractMessages,
+  asContradictItem,
+  asNewItem,
+  parseExtractResponse,
+  runExtract,
+} from '../src/core/impressions/extract.ts';
 import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { isTagCategoryForScope, prepareTagText } from '../src/core/impressions/tag-model.ts';
 
@@ -50,6 +56,27 @@ test('new 与 contradict 条目要求合法画像字段', () => {
   });
 });
 
+test('extract response preserves group events and accepts older responses without events', () => {
+  const events = [{
+    title: '周末漫展',
+    summary: '群友约好周末一同参加漫展',
+    participantIds: [42, 43],
+    messageIds: ['m1', 'm2'],
+  }];
+  const parsed = parseExtractResponse(JSON.stringify({
+    group: { observe: [], new: [], contradict: [] },
+    members: [],
+    events,
+  }));
+  const legacy = parseExtractResponse(JSON.stringify({
+    group: { observe: [], new: [], contradict: [] },
+    members: [],
+  }));
+
+  assert.deepEqual(parsed?.events, events);
+  assert.deepEqual(legacy?.events, []);
+});
+
 test('标签写法校验去前缀、拒绝近况习惯和作息词，并要求梗语为证据原话', () => {
   assert.deepEqual(prepareTagText('personality', '喜欢游戏', []), { ok: true, text: '游戏' });
   assert.deepEqual(prepareTagText('personality', '爱   ', []), { ok: false, reason: 'invalid_text' });
@@ -94,6 +121,11 @@ test('runExtract returns model errors for the caller instead of discarding them'
 
 test('提取上下文包含现有 tag_subjects canonical names 与 aliases', () => {
   const template = promptTemplateStore.get().extractTags;
+  assert.ok(template.system.includes('events'));
+  assert.ok(template.system.includes('participantIds'));
+  assert.ok(template.system.includes('messageIds'));
+  assert.ok(template.system.includes('不超过 16 个字符'));
+  assert.ok(template.system.includes('不超过 60 个字符'));
   assert.ok(template.system.includes('schedule 只由本地统计或主人手动生成'));
   assert.ok(template.system.includes('不要输出人际关系'));
   assert.ok(template.system.includes('group 可用 positioning、topic、atmosphere、meme、norms、recent'));

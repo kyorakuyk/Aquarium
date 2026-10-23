@@ -15,6 +15,7 @@ import { createGroupSummaryRepository } from './group-summary-repo.ts';
 import { createTagDropRepository } from './tag-drop-repo.ts';
 import { createKinGroupRepository } from './kin-group-repo.ts';
 import { createPersonaMemoryRepository } from './persona-memory-repo.ts';
+import { createEventRepository } from './event-repo.ts';
 import type { ImageCaptionKind, StoreRepository } from './repository-types.ts';
 
 export type {
@@ -36,6 +37,7 @@ export type {
   UsageSummary,
 } from './repository-types.ts';
 export type { AccountKind, AccountKindRecord, RelationRecord, RelationType, StoredRelation } from './identity-repo.ts';
+export type { EventRepository, GroupEventInput, StoredGroupEvent } from './event-repo.ts';
 
 function limitValue(count: number): number {
   if (!Number.isSafeInteger(count) || count < 0) {
@@ -252,6 +254,7 @@ export function createRepository(
     ...groupSummaries,
     ...kinGroups,
     ...personaMemory,
+    ...createEventRepository(database),
     ...tagDrops,
     ...createAffectQueries(database),
     ...createPersonaVersionRepository(database, clock),

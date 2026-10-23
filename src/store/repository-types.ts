@@ -26,6 +26,7 @@ import type { GroupSummaryRepository } from './group-summary-repo.ts';
 import type { TagDropRepository } from './tag-drop-repo.ts';
 import type { KinGroupRepository } from './kin-group-repo.ts';
 import type { PersonaMemoryRepository } from './persona-memory-repo.ts';
+import type { EventRepository } from './event-repo.ts';
 
 export interface MessageStorageRecord {
   sessionId: string;
@@ -153,7 +154,7 @@ export interface StoredPipelineTrace extends PipelineTraceRecord {
   id: number;
 }
 
-export interface StoreRepository extends RecentExtractUsageRepository, PersonaVersionRepository, PrivacyRepository, PrivateFactMentionRepository, PrivateFactControlsRepository, StickerRepository, TagVetoRepository, QqProfileRepository, IdentityRepository, GroupSummaryRepository, TagDropRepository, KinGroupRepository, PersonaMemoryRepository {
+export interface StoreRepository extends RecentExtractUsageRepository, PersonaVersionRepository, PrivacyRepository, PrivateFactMentionRepository, PrivateFactControlsRepository, StickerRepository, TagVetoRepository, QqProfileRepository, IdentityRepository, GroupSummaryRepository, TagDropRepository, KinGroupRepository, PersonaMemoryRepository, EventRepository {
   transaction<T>(task: () => T): T;
   resetImpressionsSession(account: number, sessionId: string): { tags: number; vetoes: number };
   saveMessage(message: MessageStorageRecord): boolean;

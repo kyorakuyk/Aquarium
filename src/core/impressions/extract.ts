@@ -30,6 +30,13 @@ export interface ExtractContradictItem extends ExtractNewItem {
   id: number;
 }
 
+export interface ExtractEventItem {
+  title: string;
+  summary: string;
+  participantIds: number[];
+  messageIds: string[];
+}
+
 export interface ExtractSubjectItems {
   observe: unknown[];
   new: unknown[];
@@ -43,6 +50,7 @@ export interface ExtractMemberItems extends ExtractSubjectItems {
 export interface ParsedExtractResponse {
   group: ExtractSubjectItems;
   members: ExtractMemberItems[];
+  events: unknown[];
 }
 
 export type ExtractResult =
@@ -145,6 +153,7 @@ export function parseExtractResponse(text: string): ParsedExtractResponse | unde
   if (!group) return undefined;
   const membersField = record.members ?? [];
   if (!Array.isArray(membersField)) return undefined;
+  const events = Array.isArray(record.events) ? record.events : [];
 
   const members: ExtractMemberItems[] = [];
   for (const entry of membersField) {
@@ -155,7 +164,7 @@ export function parseExtractResponse(text: string): ParsedExtractResponse | unde
     if (!items) return undefined;
     members.push({ userId, ...items });
   }
-  return { group, members };
+  return { group, members, events };
 }
 
 function tagProfile(record: Record<string, unknown>): Omit<ExtractNewItem, 'text' | 'messageId'> | undefined {
@@ -210,6 +219,36 @@ export function asContradictItem(raw: unknown): ExtractContradictItem | undefine
   const profile = tagProfile(record);
   if (!profile) return undefined;
   return { id: record.id, text: record.text, messageId: record.messageId, ...profile };
+}
+
+export function asEventItem(raw: unknown): ExtractEventItem | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const record = raw as Record<string, unknown>;
+  const title = record.title;
+  const summary = record.summary;
+  const participantIds = record.participantIds;
+  const messageIds = record.messageIds;
+  if (typeof title !== 'string' || Array.from(title.trim()).length < 1 || Array.from(title.trim()).length > 16) {
+    return undefined;
+  }
+  if (typeof summary !== 'string' || Array.from(summary.trim()).length < 1 || Array.from(summary.trim()).length > 60) {
+    return undefined;
+  }
+  if (!Array.isArray(participantIds) || participantIds.length > 80
+    || participantIds.some((userId) => typeof userId !== 'number' || !Number.isSafeInteger(userId) || userId <= 0)) {
+    return undefined;
+  }
+  if (!Array.isArray(messageIds) || messageIds.length < 1 || messageIds.length > 80
+    || messageIds.some((messageId) => typeof messageId !== 'string'
+      || messageId.trim().length < 1 || messageId.length > 512)) {
+    return undefined;
+  }
+  return {
+    title: title.trim(),
+    summary: summary.trim(),
+    participantIds: [...new Set(participantIds as number[])].sort((first, second) => first - second),
+    messageIds: [...new Set((messageIds as string[]).map((messageId) => messageId.trim()))],
+  };
 }
 
 export async function runExtract(

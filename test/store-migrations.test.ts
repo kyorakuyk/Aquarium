@@ -54,6 +54,92 @@ test('v18 creates account- and group-scoped QQ profile caches', () => {
   }
 });
 
+test('latest migration creates account-scoped event and annotation tables', () => {
+  const database = openDatabase(':memory:');
+  try {
+    const version = database.prepare('SELECT version FROM schema_version WHERE id = 1').get() as { version: number };
+    const eventColumns = database.prepare("PRAGMA table_info('events')").all() as Array<{ name: string }>;
+    const noteColumns = database.prepare("PRAGMA table_info('event_notes')").all() as Array<{ name: string }>;
+    const eventIndexes = database.prepare("PRAGMA index_list('events')").all() as Array<{ name: string }>;
+    const noteForeignKeys = database.prepare("PRAGMA foreign_key_list('event_notes')").all() as Array<{
+      table: string;
+      from: string;
+      to: string;
+    }>;
+
+    assert.equal(version.version, migrations.at(-1)?.version);
+    assert.deepEqual(eventColumns.map(({ name }) => name), [
+      'id', 'account', 'source_group_id', 'anchor_message_id', 'title', 'summary',
+      'participant_ids_json', 'evidence_message_ids_json', 'occurred_at', 'created_at', 'updated_at',
+    ]);
+    assert.deepEqual(noteColumns.map(({ name }) => name), [
+      'id', 'account', 'event_id', 'owner_id', 'source_session_id', 'text', 'intent', 'level', 'status',
+      'source_message_ids_json', 'created_at', 'updated_at',
+    ]);
+    assert.ok(eventIndexes.some(({ name }) => name === 'idx_events_account_group_time'));
+    assert.ok(noteForeignKeys.some(({ table, from, to }) => table === 'events' && from === 'event_id' && to === 'id'));
+    assert.ok(noteForeignKeys.some(({ table, from, to }) => table === 'events' && from === 'account' && to === 'account'));
+
+    const eventId = Number(database.prepare(`
+      INSERT INTO events (
+        account, source_group_id, anchor_message_id, title, summary, participant_ids_json,
+        evidence_message_ids_json, occurred_at, created_at, updated_at
+      ) VALUES (7, 8, 'event-source', '周末漫展', '群友约好周末参加漫展', '[42]', '["event-source"]', 10, 10, 10)
+    `).run().lastInsertRowid);
+    const insertNote = database.prepare(`
+      INSERT INTO event_notes (
+        account, event_id, owner_id, source_session_id, text, source_message_ids_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    insertNote.run(7, eventId, 42, '7:private:42', '事件私聊注解', '["note-source"]', 10, 10);
+    assert.throws(() => insertNote.run(
+      8, eventId, 43, '8:private:43', '跨账号错误注解', '["other-source"]', 10, 10,
+    ));
+  } finally {
+    database.close();
+  }
+});
+
+test('reapplying the latest event migration preserves existing group messages', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-event-migration-'));
+  const databasePath = path.join(root, 'aquarium.db');
+  let database: ReturnType<typeof openDatabase> | undefined;
+  try {
+    database = openDatabase(databasePath);
+    const repository = createRepository(database);
+    repository.saveMessage({
+      sessionId: '7:group:8',
+      messageId: 'before-event-migration',
+      senderId: 42,
+      senderName: '小明',
+      isSelf: false,
+      plainText: '既有群聊消息',
+      segments: [],
+      time: 10,
+    });
+    const latestVersion = migrations.at(-1)?.version ?? 0;
+    database.exec('DROP TABLE event_notes; DROP TABLE events;');
+    database.prepare('UPDATE schema_version SET version = ? WHERE id = 1').run(latestVersion - 1);
+    database.close();
+    database = undefined;
+
+    database = openDatabase(databasePath);
+    const version = database.prepare('SELECT version FROM schema_version WHERE id = 1').get() as { version: number };
+    const rows = database.prepare('SELECT message_id, plain_text FROM messages').all() as Array<{
+      message_id: string;
+      plain_text: string;
+    }>;
+
+    assert.equal(version.version, latestVersion);
+    assert.deepEqual(rows.map(({ message_id, plain_text }) => ({ message_id, plain_text })), [
+      { message_id: 'before-event-migration', plain_text: '既有群聊消息' },
+    ]);
+  } finally {
+    if (database?.isOpen) database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('v20 schedules only unlocked quoted member speech tags for reclassification', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-migration-v20-'));
   const databasePath = path.join(root, 'aquarium.db');

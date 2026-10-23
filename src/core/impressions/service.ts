@@ -30,6 +30,7 @@ import { buildImpressionsPromptBlocks } from './prompt-blocks.ts';
 import { persistTagPromptStates } from './prompt-state.ts';
 import type { TagSubjectRepository } from '../../store/tag-subject-repo.ts';
 import { recordScheduleTagDrop } from './record-tag-drop.ts';
+import { persistExtractedGroupEvents } from './persist-events.ts';
 import {
   createImpressionsRunState,
   type ImpressionsRunStateEvent,
@@ -508,16 +509,18 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     );
 
     const newestTime = records.reduce((max, record) => Math.max(max, record.time), 0);
-    if (updateTagRun) {
+    const advanceTagRun = () => {
+      if (!updateTagRun) return;
       options.repository.saveTagRun({
         account,
         sessionId: sessionKey,
         lastRunAt: at,
         lastMessageTime: newestTime > 0 ? newestTime : null,
       });
-    }
+    };
 
     if (!result.ok) {
+      advanceTagRun();
       if (result.reason === 'extract_error') {
         const classified = classifyExtractFailure(result.error);
         failureReason = classified.type;
@@ -541,6 +544,14 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       const current = memberTags.find((entry) => entry.userId === member.userId)?.tags ?? [];
       applySubject(member, current, account, sessionKey, member.userId, recordsById, at, counters);
     }
+    persistExtractedGroupEvents({
+      repository: options.repository,
+      session,
+      records: identityRecords,
+      events: parsed.events,
+      now: at,
+    });
+    advanceTagRun();
     for (const userId of senderIds) {
       try {
         options.onMemberSummaryCheck?.(account, userId, at);

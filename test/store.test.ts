@@ -40,6 +40,8 @@ test('openDatabase 开启 WAL 并创建当前 schema 数据表', () => {
       'affinity_state',
       'debug_traces',
       'decisions',
+      'event_notes',
+      'events',
       'group_summaries',
       'image_captions',
       'kin_group_members',

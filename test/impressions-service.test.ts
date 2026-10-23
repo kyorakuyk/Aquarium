@@ -149,6 +149,120 @@ test('假模型下完成一次提取：观察转正、新标签、成员标签�
   });
 });
 
+test('one group extraction stores only events backed by window messages and known speakers', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const t0 = new Date(2026, 9, 12, 9, 0).getTime();
+    const harness = createImpressionsHarness(repository, makeConfig({ nicknames: [] }), personaRoot, {
+      extractText: JSON.stringify({
+        group: { observe: [], new: [], contradict: [] },
+        members: [],
+        events: [
+          {
+            title: '周末漫展',
+            summary: '群友约好周末一同参加漫展',
+            participantIds: [43, 44],
+            messageIds: ['msg-2', 'msg-4'],
+          },
+          {
+            title: '无证据事件',
+            summary: '引用不在本次提取窗口中的消息',
+            participantIds: [42],
+            messageIds: ['outside-window'],
+          },
+          {
+            title: '未知参与者',
+            summary: '参与者未出现在当前群聊窗口',
+            participantIds: [999],
+            messageIds: ['msg-3'],
+          },
+          {
+            title: '这条事件标题明显超过十六个字的上限',
+            summary: '该事件标题不符合限制',
+            participantIds: [43],
+            messageIds: ['msg-1'],
+          },
+        ],
+      }),
+    });
+
+    await pump(harness, groupSession, 10);
+    await harness.impressionsService.idle();
+
+    const events = repository.listGroupEvents(account, groupSession.peer, 0, 10);
+    assert.equal(harness.extractRequests.length, 1);
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.title, '周末漫展');
+    assert.equal(events[0]?.summary, '群友约好周末一同参加漫展');
+    assert.equal(events[0]?.anchorMessageId, 'msg-2');
+    assert.deepEqual(events[0]?.participantIds, [43, 44]);
+    assert.deepEqual(events[0]?.evidenceMessageIds, ['msg-2', 'msg-4']);
+    assert.equal(events[0]?.occurredAt, t0 + 2_000);
+  });
+});
+
+test('group event persistence redacts credentials and keeps sanitized text within field limits', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const credential = 'token=FAKE_TOKEN_VALUE_123456';
+    const summaryPrefix = `${credential} 群友约好周末参加漫展`;
+    const summary = summaryPrefix + '。'.repeat(60 - Array.from(summaryPrefix).length);
+    const harness = createImpressionsHarness(repository, makeConfig({ nicknames: [] }), personaRoot, {
+      extractText: JSON.stringify({
+        group: { observe: [], new: [], contradict: [] },
+        members: [],
+        events: [{
+          title: '周末漫展',
+          summary,
+          participantIds: [44],
+          messageIds: ['msg-2'],
+        }],
+      }),
+    });
+
+    await pump(harness, groupSession, 10);
+
+    const events = repository.listGroupEvents(account, groupSession.peer, 0, 10);
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.title, '周末漫展');
+    assert.ok(!events[0]?.summary.includes(credential));
+    assert.ok(events[0]?.summary.includes('[敏感内容已隐藏]'));
+    assert.ok(Array.from(events[0]?.title ?? '').length <= 16);
+    assert.ok(Array.from(events[0]?.summary ?? '').length <= 60);
+  });
+});
+
+test('event persistence failure does not advance the group extraction cursor', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const harness = createImpressionsHarness(repository, makeConfig({ nicknames: [] }), personaRoot, {
+      extractText: JSON.stringify({
+        group: { observe: [], new: [], contradict: [] },
+        members: [],
+        events: [{
+          title: '周末漫展',
+          summary: '群友约好周末一同参加漫展',
+          participantIds: [43, 44],
+          messageIds: ['msg-2', 'msg-4'],
+        }],
+      }),
+    });
+    const upsertGroupEvent = repository.upsertGroupEvent.bind(repository);
+    let failFirstWrite = true;
+    repository.upsertGroupEvent = (event) => {
+      if (failFirstWrite) {
+        failFirstWrite = false;
+        throw new Error('synthetic event write failure');
+      }
+      return upsertGroupEvent(event);
+    };
+
+    await pump(harness, groupSession, 10);
+    assert.equal(repository.getTagRun(account, sessionId(groupSession)), undefined);
+
+    await pump(harness, groupSession, 10, 10);
+    assert.equal(harness.extractRequests.length, 2);
+    assert.equal(repository.listGroupEvents(account, groupSession.peer, 0, 10).length, 1);
+  });
+});
+
 test('模型提取异常发出安全 WARN，保留错误分类且不输出模型正文', async () => {
   await withRepository(async (repository) => {
     const config = makeConfig({ nicknames: [] });
