@@ -11,7 +11,7 @@
 .persona-import-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 15px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-accent); }
 .persona-import-banner p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 .persona-import-actions { display: flex; flex: none; align-items: center; gap: 8px; }
-.persona-editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 12px; padding: 0 1px 12px; border-bottom: 1px solid var(--line); }
+.persona-editor-heading { position: sticky; top: 0; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 12px; padding: 12px 1px; border-bottom: 1px solid var(--line); background: var(--bg); }
 .persona-editor-heading h2 { margin: 0 0 4px; }
 .persona-editor-heading p { margin: 0; font-size: 12px; }
 .persona-save-actions { display: flex; align-items: center; gap: 12px; }
@@ -29,6 +29,7 @@
 .persona-short-fields > .persona-field { margin-top: 11px; }
 .persona-short-fields > .persona-field:first-child { margin-top: 0; }
 .persona-field-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+.personas-page:not(.is-source-view) .persona-reference { display: none; }
 .persona-field-heading label { color: var(--ink-2); font-size: 12px; font-weight: 700; }
 .persona-field-heading span { color: var(--muted); font-family: var(--mono); font-size: 12px; }
 .persona-field input, .persona-field textarea { box-sizing: border-box; width: 100%; min-height: 42px; padding: 9px 10px; font-size: 12px; line-height: 1.55; }

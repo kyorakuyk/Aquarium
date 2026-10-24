@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { apiRequest, type PanelStatus } from '../api.ts';
 import type { PageId } from '../components/Sidebar.tsx';
+import { personaEditorViewClass } from '../persona-editor-view.ts';
 import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 import { hasPersonaIdCollision, normalizePersonaId, validPersonaId } from '../../../src/persona/persona-id.ts';
 import {
@@ -365,7 +366,7 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const saveLabel = busy ? '处理中…' : dirty ? '有未保存更改' : saved ? '已保存' : '已同步';
 
   return (
-    <div className="page personas-page">
+    <div className={['page', 'personas-page', personaEditorViewClass(viewMode)].filter(Boolean).join(' ')}>
       <header className="page-header page-header-actions">
         <div><h1>人设</h1><p className="page-description">整理角色背景、语气与边界，并核对实际注入内容。</p></div>
         <div className="header-actions">

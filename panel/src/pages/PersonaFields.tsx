@@ -13,7 +13,7 @@ type TextHeading = '身份' | '年龄' | '背景' | '说话方式' | '对熟人'
 type ListHeading = '口头禅' | '常用表情' | '底线';
 
 function FieldLabel({ id, title, reference }: { id: string; title: string; reference?: string }) {
-  return <div className="persona-field-heading"><label htmlFor={id}>{title}</label>{reference && <span>{reference}</span>}</div>;
+  return <div className="persona-field-heading"><label htmlFor={id}>{title}</label>{reference && <span className="persona-reference">{reference}</span>}</div>;
 }
 
 function TextField({
