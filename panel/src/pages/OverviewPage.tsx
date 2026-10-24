@@ -129,7 +129,7 @@ export function OverviewPage({ onNavigate, onOpenSleepSettings }: {
       )}
 
       <section className="section-block">
-        <div className="section-heading"><h2>眷属</h2><span className="muted">{status.accounts.length} 个账号</span></div>
+        <div className="section-heading"><h2>眷属</h2><span className="muted">{status.accounts.length} 位眷属</span></div>
         <div className="tank-grid">
           {status.accounts.map((account) => (
             <article className="tank-card" key={account.account}>
@@ -246,7 +246,7 @@ export function OverviewPage({ onNavigate, onOpenSleepSettings }: {
       <section className="section-block panel-card table-card">
         <div className="section-heading">
           <div><h2>最近的决定</h2><p className="muted">每一次回复与跳过都留有记录。</p></div>
-          <button className="text-button" type="button" onClick={() => onNavigate('sandbox')}>查看全部决策追踪 →</button>
+          <button className="text-button" type="button" onClick={() => onNavigate('sandbox')}>查看全部决策记录 →</button>
         </div>
         <div className="table-scroll">
           <table>

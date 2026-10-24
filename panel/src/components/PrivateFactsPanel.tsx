@@ -228,7 +228,7 @@ export function PrivateFactsPanel({ sessions, loadingFriends }: { sessions: Sess
                 onClick={() => setSelectedId(friend.session.sessionId)}
               >
                 <span>{friend.session.name}</span>
-                <span className="mono muted">{friend.userId} · 账号 {friend.account}</span>
+                <span className="mono muted">{friend.userId} · 眷属 {friend.account}</span>
               </button>
             ))}
           </div>

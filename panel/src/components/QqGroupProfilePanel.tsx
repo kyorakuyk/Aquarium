@@ -57,7 +57,7 @@ export function QqGroupProfilePanel({ sessionId, profile, onReload }: {
         `/api/impressions/${encodeURIComponent(sessionId)}/refresh-qq-profile`,
         { method: 'POST' },
       );
-      if (await onReload()) setNotice(result.refreshed ? '资料已更新。' : '账号离线，显示已有缓存。');
+      if (await onReload()) setNotice(result.refreshed ? '资料已更新。' : '眷属离线，显示已有缓存。');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '刷新 QQ 资料失败');
     } finally {

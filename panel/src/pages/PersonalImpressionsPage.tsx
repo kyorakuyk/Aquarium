@@ -21,7 +21,7 @@ export function PersonalImpressionsPage() {
       setStatus(result);
       setSelectedAccount((current) => current ?? result.accounts[0]?.account);
     }).catch((reason: unknown) => {
-      if (active) setError(reason instanceof Error ? reason.message : '读取账号失败');
+      if (active) setError(reason instanceof Error ? reason.message : '读取眷属失败');
     }).finally(() => {
       if (active) setLoadingAccounts(false);
     });
@@ -76,7 +76,7 @@ export function PersonalImpressionsPage() {
       <header className="page-header personal-impressions-header">
         <div className="personal-impressions-title">
           <h1>印象</h1>
-          <p className="page-description">这是人格自己的看法；带 ? 的条目尚不确定，也可能与他人不同。</p>
+          <p className="page-description">这是眷属自己的看法；带 ? 的条目尚不确定，也可能与他人不同。</p>
         </div>
         <div className="personal-impressions-tools">
           <ul className="personal-impressions-legend" aria-label="印象状态说明">
@@ -85,9 +85,9 @@ export function PersonalImpressionsPage() {
             <li><span className="personal-impressions-legend-chip is-candidate" />待观察 ?</li>
           </ul>
           {(status?.accounts.length ?? 0) > 1 && <label className="personal-impressions-account">
-            <span>人格账号</span>
+            <span>眷属</span>
             <select
-              aria-label="选择人格账号"
+              aria-label="选择眷属"
               value={selectedAccount ?? ''}
               onChange={(event) => {
                 setTags([]);
@@ -104,8 +104,8 @@ export function PersonalImpressionsPage() {
         </div>
       </header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
-      {loadingAccounts && <div className="empty-state" role="status">正在读取账号…</div>}
-      {!loadingAccounts && !status?.accounts.length && <div className="empty-state">尚无可查看的人格账号。</div>}
+      {loadingAccounts && <div className="empty-state" role="status">正在读取眷属…</div>}
+      {!loadingAccounts && !status?.accounts.length && <div className="empty-state">尚无可查看的眷属。</div>}
       {!loadingAccounts && selectedAccount !== undefined && loadingTags && <div className="empty-state" role="status">正在读取印象…</div>}
       {selectedAccount !== undefined && showEmptyPersonalImpressions(loadingAccounts || loadingTags, error, tags.length)
         && <div className="empty-state">还没有整理出的个人印象。</div>}

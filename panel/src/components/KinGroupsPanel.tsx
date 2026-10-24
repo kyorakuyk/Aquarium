@@ -90,7 +90,7 @@ export function KinGroupsPanel() {
     <header className="kin-groups-heading">
       <div>
         <h2 id="kin-groups-title">眷属组</h2>
-        <p className="muted">只有手动加入同一组的账号才会共享群聊事实与获准转述。</p>
+        <p className="muted">只有手动加入同一组的眷属才会共享群聊事实与获准转述。</p>
       </div>
     </header>
     {error && <p className="notice notice-warn" role="alert">{error}</p>}
@@ -106,13 +106,13 @@ export function KinGroupsPanel() {
       </button>
     </form>
     {loading && <p className="muted" role="status">正在读取眷属组…</p>}
-    {!loading && payload?.accounts.length === 0 && <p className="empty-state">当前没有可管理的机器人账号。</p>}
-    {!loading && payload?.groups.length === 0 && <p className="empty-state">还没有眷属组；创建后手动勾选账号。</p>}
+    {!loading && payload?.accounts.length === 0 && <p className="empty-state">当前没有可管理的眷属。</p>}
+    {!loading && payload?.groups.length === 0 && <p className="empty-state">还没有眷属组；创建后手动勾选眷属。</p>}
     <div className="kin-groups-list">
       {payload?.groups.map((group) => <section className="kin-group-card" key={group.id} aria-labelledby={`kin-group-${group.id}`}>
         <div className="kin-group-card-heading">
           <h3 id={`kin-group-${group.id}`}>{group.name}</h3>
-          <span className="muted">{savingGroupId === group.id ? '正在保存…' : `${group.accounts.length} 个账号`}</span>
+          <span className="muted">{savingGroupId === group.id ? '正在保存…' : `${group.accounts.length} 位眷属`}</span>
         </div>
         <div className="kin-group-account-list">
           {payload.accounts.map(({ account, name: accountName }) => <label key={account}>

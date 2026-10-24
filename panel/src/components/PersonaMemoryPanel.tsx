@@ -53,7 +53,7 @@ export function PersonaMemoryPanel() {
       setAccounts(rows);
       setAccount((current) => rows.some((row) => row.account === current) ? current : rows[0]?.account);
     }).catch((reason: unknown) => {
-      if (active) setError(reason instanceof Error ? reason.message : '读取账号失败');
+      if (active) setError(reason instanceof Error ? reason.message : '读取眷属失败');
     }).finally(() => {
       if (active) setAccountsLoading(false);
     });
@@ -102,23 +102,23 @@ export function PersonaMemoryPanel() {
       <header className="persona-memory-heading">
         <div>
           <h2>近期记忆</h2>
-          <p className="muted">白天只暂存 memo；睡眠整理后形成日记，并按账号隔离。</p>
+          <p className="muted">白天只暂存 memo；睡眠整理后形成日记，并按眷属隔离。</p>
         </div>
         <label className="persona-memory-account">
-          <span>账号</span>
+          <span>眷属</span>
           <select
             value={account ?? ''}
             disabled={accountsLoading || accounts.length === 0}
             onChange={(event) => setAccount(Number(event.currentTarget.value))}
           >
-            {accounts.length === 0 && <option value="">暂无可用账号</option>}
+            {accounts.length === 0 && <option value="">暂无可用眷属</option>}
             {accounts.map((entry) => <option value={entry.account} key={entry.account}>{entry.name} · {entry.account}</option>)}
           </select>
         </label>
       </header>
       {error && <p className="notice notice-warn" role="alert">{error}</p>}
       {loading && <p className="muted" role="status">正在读取近期记忆…</p>}
-      {!loading && !accountsLoading && accounts.length === 0 && <p className="empty-state">当前没有已连接的账号。</p>}
+      {!loading && !accountsLoading && accounts.length === 0 && <p className="empty-state">当前没有已连接的眷属。</p>}
       {!loading && selectedAccount && visibleMemory && <>
         <section className="persona-memory-section" aria-labelledby="persona-memos-title">
           <div className="persona-memory-section-heading">
@@ -160,7 +160,7 @@ export function PersonaMemoryPanel() {
                         disabled={savingId !== undefined}
                         onChange={(event) => void changeVisibility(diary, event.currentTarget.value === 'visible')}
                       >
-                        <option value="private">仅人格自知</option>
+                        <option value="private">仅眷属自知</option>
                         <option value="visible">对 AnI 可见</option>
                       </select>
                     </label>

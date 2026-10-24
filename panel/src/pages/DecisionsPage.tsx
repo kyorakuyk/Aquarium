@@ -58,7 +58,7 @@ function hasInteractionAlert(entries: DecisionView['interactionTrace']): boolean
 const TASK_PROGRESS: readonly TaskProgressItem[] = [
   { id: 'I0', title: '准备与计划链接', detail: '交互施工计划已接入当前项目。', status: 'done' },
   { id: 'I1', title: '事件核验与表情白名单', detail: '事件管线已核实，5 桶共 26 个白名单表情已取数。', status: 'done' },
-  { id: 'I2', title: '动作门控与追踪', detail: 'InteractionGate、限速、日志、配置和决策追踪已提交。', status: 'done' },
+  { id: 'I2', title: '动作门控与追踪', detail: 'InteractionGate、限速、日志、配置和决策记录已提交。', status: 'done' },
   { id: 'I3', title: '贴表情与正反馈', detail: 'react()、安全规则、忙碌模式和入站正反馈已提交。', status: 'done' },
   { id: 'P1', title: '测试群现场验收', detail: '等待观察 20 分钟，确认表情、去重、严肃话题、紧急闭嘴和决策记录。', status: 'active' },
   { id: 'I4', title: '戳一戳', detail: '等待 P1 验收后再开始。', status: 'pending' },
@@ -276,7 +276,7 @@ export function DecisionsPage() {
           </div>
         </section>
         <aside className="panel-card trace-card">
-          <h2>决策追踪</h2>
+          <h2>决策记录</h2>
           {!selectedDecision && <p className="muted">选择一条决策查看详情。</p>}
           {selectedDecision && selectedActivityMetrics.length > 0 && <section className="activity-metrics" aria-labelledby="activity-metrics-title">
             <h3 id="activity-metrics-title">主动判断分值</h3>

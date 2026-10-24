@@ -45,7 +45,7 @@ export function StickersPage() {
       setAccounts(status.accounts);
       const first = status.accounts[0]?.account;
       setAccount(first);
-      if (first === undefined) setError('尚未连接可用 QQ 账号。');
+      if (first === undefined) setError('尚未连接可用眷属。');
     }).catch(() => {});
     return () => { active = false; };
   }, []);
@@ -116,7 +116,7 @@ export function StickersPage() {
       const first = result.results[0];
       setNotice(first?.ok
         ? `同步完成：收到 ${first.received ?? 0} 张，新增 ${first.inserted ?? 0} 张。`
-        : '同步失败，请检查账号是否在线。');
+        : '同步失败，请检查眷属是否在线。');
       await load();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '同步失败');
@@ -163,7 +163,7 @@ export function StickersPage() {
           <p className="page-description">收藏即表情库；同步后会补上描述与标签。</p>
           {accounts.length > 1 && (
             <label className="stickers-account-select">
-              <span>QQ 账号</span>
+              <span>眷属</span>
               <select value={account ?? ''} onChange={(event) => setAccount(Number(event.target.value))}>
                 {accounts.map((item) => <option key={item.account} value={item.account}>{item.name}</option>)}
               </select>

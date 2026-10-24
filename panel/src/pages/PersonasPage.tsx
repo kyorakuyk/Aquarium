@@ -336,7 +336,7 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
 
   async function bindSelectedAccountPersona() {
     if (!selectedId || !previewAccount || busy) return;
-    if (dirty && !window.confirm('当前人设有未保存更改；切换账号绑定不会保存这些更改，仍要继续吗？')) return;
+    if (dirty && !window.confirm('当前人设有未保存更改；切换当前眷属的人设不会保存这些更改，仍要继续吗？')) return;
     setBusy(true);
     setError('');
     setBindingMessage('');
@@ -417,10 +417,10 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
       {selected ? (
         <>
           <div className="persona-editor-heading">
-            <div><h2>{selected.id}</h2><p className="muted">{selected.source === 'built-in' ? '内置人设副本' : selected.filename} · {boundAccounts.length ? `绑定 QQ ${boundAccounts.map((account) => account.account).join('、')}` : '尚无账号绑定'}</p></div>
+            <div><h2>{selected.id}</h2><p className="muted">{selected.source === 'built-in' ? '内置人设副本' : selected.filename} · {boundAccounts.length ? `已绑定眷属：QQ ${boundAccounts.map((account) => account.account).join('、')}` : '尚未绑定眷属'}</p></div>
             <div className="persona-save-actions">
               <span className={dirty ? 'is-dirty' : ''}>{saveLabel}</span>
-              <button className="button button-secondary" type="button" disabled={busy || !previewAccount} onClick={() => void bindSelectedAccountPersona()}>切换为此人格</button>
+              <button className="button button-secondary" type="button" disabled={busy || !previewAccount} onClick={() => void bindSelectedAccountPersona()}>切换为此人设</button>
               <button className="button button-primary" type="button" disabled={busy || !dirty || Boolean(sourceError)} onClick={() => void save()}>保存</button>
             </div>
           </div>

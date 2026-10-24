@@ -121,7 +121,7 @@ export function AffinityPanel() {
   return (
     <section className="panel-card affinity-panel">
       <div className="section-heading">
-        <div><h2>所有人</h2><p className="muted">关系按 QQ 账号跨群共享；回落值在读取时计算。</p></div>
+        <div><h2>所有人</h2><p className="muted">同一眷属的关系跨群共享；回落值在读取时计算。</p></div>
         <button className="text-button" type="button" onClick={() => setAscending((value) => !value)}>
           数值{ascending ? '从低到高' : '从高到低'}
         </button>

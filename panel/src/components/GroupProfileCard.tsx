@@ -59,9 +59,9 @@ export function GroupProfileCard({ sessionId, groupName, enabled, profile, tags,
       <div className="kin-relay-tags-list">
         {kinRelayTags.map((tag) => <div className="kin-relay-tag-row" key={tag.id}>
           <span>{tag.text}</span>
-          <span className="profile-tag-meta" aria-label={`来源 转述 · 账号 ${tag.sourceAccount ?? '未知'}`}>
+          <span className="profile-tag-meta" aria-label={`来源 转述 · 眷属 ${tag.sourceAccount ?? '未知'}`}>
             <span className="profile-tag-meta-label">来源</span>
-            <span className="profile-tag-meta-value">转述 · 账号 {tag.sourceAccount ?? '未知'}</span>
+            <span className="profile-tag-meta-value">转述 · 眷属 {tag.sourceAccount ?? '未知'}</span>
           </span>
         </div>)}
       </div>

@@ -60,7 +60,7 @@ test('usage API groups by provider/account, honors local ranges, and keeps seven
     assert.equal(legacy?.cacheHitRatio, null);
     assert.deepEqual(usageAccountLabels(legacy?.account ?? null, []), {
       primary: '未知',
-      secondary: '旧记录未关联账号',
+      secondary: '旧记录未关联眷属',
     });
     assert.equal(usageCostLabel('cli', 0), '—');
     assert.equal(weekReport.totals.cacheHitRatio, 25 / 60);

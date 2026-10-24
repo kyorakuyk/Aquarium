@@ -228,7 +228,7 @@ export function tagOriginLabel(origin: string): string {
 }
 
 export function knowledgeSourceLabel(tag: Pick<TagView, 'origin' | 'source' | 'sourceAccount' | 'samples'>): string {
-  if (tag.sourceAccount !== undefined && tag.sourceAccount !== null) return `转述 · 账号 ${tag.sourceAccount}`;
+  if (tag.sourceAccount !== undefined && tag.sourceAccount !== null) return `转述 · 眷属 ${tag.sourceAccount}`;
   if (tag.origin === 'self_report') return `自述 ×${tag.samples}`;
   if (tag.origin === 'manual' || tag.source === 'manual') return '手动';
   return `${tagOriginLabel(tag.origin)} · ${tag.source === 'auto' ? '自动' : '手动'}`;

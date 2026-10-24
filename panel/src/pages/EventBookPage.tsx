@@ -167,7 +167,7 @@ export function EventBookPage() {
     void apiRequest<EventBookResponse>(`/api/events?account=${selectedAccount}`).then((result) => {
       if (!active) return;
       if (result.account === selectedAccount) setEvents(result);
-      else setError('返回账号与所选账号不一致，请重新读取。');
+      else setError('返回的 QQ 号与所选眷属不一致，请重新读取。');
     }).catch((reason: unknown) => {
       if (active) setError(eventBookError(reason));
     }).finally(() => {
@@ -219,9 +219,9 @@ export function EventBookPage() {
           <p className="page-description">查看群聊事件与成员注解；调整分类不会绕过私聊确认或出面限制。</p>
         </div>
         {(status?.accounts.length ?? 0) > 1 && <label className="event-book-account">
-          <span>眷属账号</span>
+          <span>眷属</span>
           <select
-            aria-label="选择眷属账号"
+            aria-label="选择眷属"
             value={selectedAccount ?? ''}
             onChange={(change) => {
               setEvents(undefined);
@@ -237,8 +237,8 @@ export function EventBookPage() {
         </label>}
       </header>
       {error && <div className="notice notice-warn" role="alert">{error}</div>}
-      {loadingAccounts && <div className="empty-state" role="status">正在读取账号…</div>}
-      {!loadingAccounts && !status?.accounts.length && <div className="empty-state">尚无可查看的眷属账号。</div>}
+      {loadingAccounts && <div className="empty-state" role="status">正在读取眷属…</div>}
+      {!loadingAccounts && !status?.accounts.length && <div className="empty-state">尚无可查看的眷属。</div>}
       {!loadingAccounts && selectedAccount !== undefined && loadingEvents
         && <div className="empty-state" role="status">正在读取事件簿…</div>}
       {!loadingEvents && selectedAccount !== undefined && visibleEvents.length === 0 && !error

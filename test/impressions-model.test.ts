@@ -251,13 +251,13 @@ test('confidence levels use the five documented lower-inclusive bands', () => {
     .map(confidenceLevel), [1, 1, 2, 2, 3, 3, 4, 4, 5, 5]);
 });
 
-test('knowledge source details identify relayed account facts explicitly', () => {
+test('knowledge source details identify relayed kin facts explicitly', () => {
   const knowledgeSourceLabel = Reflect.get(impressionsModel, 'knowledgeSourceLabel') as
     ((tag: Pick<ViewImpression, 'origin' | 'source' | 'sourceAccount'> & { samples: number }) => string) | undefined;
 
   assert.equal(typeof knowledgeSourceLabel, 'function');
   if (!knowledgeSourceLabel) return;
-  assert.equal(knowledgeSourceLabel({ origin: 'inferred', source: 'auto', sourceAccount: 900000002, samples: 1 }), '转述 · 账号 900000002');
+  assert.equal(knowledgeSourceLabel({ origin: 'inferred', source: 'auto', sourceAccount: 900000002, samples: 1 }), '转述 · 眷属 900000002');
   assert.equal(knowledgeSourceLabel({ origin: 'stats', source: 'auto', sourceAccount: null, samples: 1 }), '统计 · 自动');
   assert.equal(knowledgeSourceLabel({ origin: 'self_report', source: 'auto', sourceAccount: null, samples: 3 }), '自述 ×3');
 });
