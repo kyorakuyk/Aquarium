@@ -1,19 +1,24 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { apiRequest, clearAuthentication, UNAUTHORIZED_EVENT } from './api.ts';
 import { Sidebar, type PageId } from './components/Sidebar.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
-import { LoginPage } from './pages/LoginPage.tsx';
-import { OverviewPage } from './pages/OverviewPage.tsx';
-import { SessionsPage } from './pages/SessionsPage.tsx';
-import { PersonasPage } from './pages/PersonasPage.tsx';
-import { DecisionsPage } from './pages/DecisionsPage.tsx';
-import { UsagePage } from './pages/UsagePage.tsx';
-import { ImpressionsPage } from './pages/ImpressionsPage.tsx';
-import { PersonalImpressionsPage } from './pages/PersonalImpressionsPage.tsx';
-import { ModelsPage } from './pages/ModelsPage.tsx';
-import { StickersPage } from './pages/StickersPage.tsx';
-import { EventBookPage } from './pages/EventBookPage.tsx';
 import { parseAppHash, serializeAppHash } from './hash-navigation.ts';
+
+const LoginPage = lazy(() => import('./pages/LoginPage.tsx').then((module) => ({ default: module.LoginPage })));
+const OverviewPage = lazy(() => import('./pages/OverviewPage.tsx').then((module) => ({ default: module.OverviewPage })));
+const SessionsPage = lazy(() => import('./pages/SessionsPage.tsx').then((module) => ({ default: module.SessionsPage })));
+const PersonasPage = lazy(() => import('./pages/PersonasPage.tsx').then((module) => ({ default: module.PersonasPage })));
+const DecisionsPage = lazy(() => import('./pages/DecisionsPage.tsx').then((module) => ({ default: module.DecisionsPage })));
+const UsagePage = lazy(() => import('./pages/UsagePage.tsx').then((module) => ({ default: module.UsagePage })));
+const ImpressionsPage = lazy(() => import('./pages/ImpressionsPage.tsx').then((module) => ({ default: module.ImpressionsPage })));
+const PersonalImpressionsPage = lazy(() => import('./pages/PersonalImpressionsPage.tsx').then((module) => ({ default: module.PersonalImpressionsPage })));
+const ModelsPage = lazy(() => import('./pages/ModelsPage.tsx').then((module) => ({ default: module.ModelsPage })));
+const StickersPage = lazy(() => import('./pages/StickersPage.tsx').then((module) => ({ default: module.StickersPage })));
+const EventBookPage = lazy(() => import('./pages/EventBookPage.tsx').then((module) => ({ default: module.EventBookPage })));
+
+function PageLoading() {
+  return <p className="muted" role="status">正在加载页面…</p>;
+}
 
 export function App() {
   const [authenticated, setAuthenticated] = useState(
@@ -69,7 +74,11 @@ export function App() {
   const finishSleepSettingsRequest = useCallback(() => setFocusSleepSettings(false), []);
 
   if (!authenticated) {
-    return <LoginPage onAuthenticated={() => setAuthenticated(true)} />;
+    return <ErrorBoundary key="login">
+      <Suspense fallback={<PageLoading />}>
+        <LoginPage onAuthenticated={() => setAuthenticated(true)} />
+      </Suspense>
+    </ErrorBoundary>;
   }
 
   return (
@@ -77,19 +86,21 @@ export function App() {
       <Sidebar page={page} onSelect={navigateTo} onLogout={logout} />
       <main className="main-content">
         <ErrorBoundary key={page}>
-          {page === 'overview' && <OverviewPage onNavigate={navigateTo} onOpenSleepSettings={openSleepSettings} />}
-          {page === 'sessions' && <SessionsPage
-            focusSleepSettings={focusSleepSettings}
-            onSleepSettingsOpened={finishSleepSettingsRequest}
-          />}
-          {page === 'personas' && <PersonasPage onNavigate={navigateTo} />}
-          {page === 'models' && <ModelsPage />}
-          {page === 'sandbox' && <DecisionsPage />}
-          {page === 'usage' && <UsagePage />}
-          {page === 'impressions' && <ImpressionsPage />}
-          {page === 'events' && <EventBookPage />}
-          {page === 'personal-impressions' && <PersonalImpressionsPage />}
-          {page === 'stickers' && <StickersPage />}
+          <Suspense fallback={<PageLoading />}>
+            {page === 'overview' && <OverviewPage onNavigate={navigateTo} onOpenSleepSettings={openSleepSettings} />}
+            {page === 'sessions' && <SessionsPage
+              focusSleepSettings={focusSleepSettings}
+              onSleepSettingsOpened={finishSleepSettingsRequest}
+            />}
+            {page === 'personas' && <PersonasPage onNavigate={navigateTo} />}
+            {page === 'models' && <ModelsPage />}
+            {page === 'sandbox' && <DecisionsPage />}
+            {page === 'usage' && <UsagePage />}
+            {page === 'impressions' && <ImpressionsPage />}
+            {page === 'events' && <EventBookPage />}
+            {page === 'personal-impressions' && <PersonalImpressionsPage />}
+            {page === 'stickers' && <StickersPage />}
+          </Suspense>
         </ErrorBoundary>
       </main>
     </div>
