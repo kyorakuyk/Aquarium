@@ -1,7 +1,7 @@
 .identity-relations { display: grid; gap: 12px; margin-top: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; }
 .identity-relations-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .identity-relations-heading h3, .identity-link-heading h3 { margin: 0 0 4px; font-size: 14px; }
-.identity-relations-heading .muted, .identity-link-heading .muted { font-size: 11px; }
+.identity-relations-heading .muted, .identity-link-heading .muted { font-size: 12px; }
 .identity-kind-row { display: flex; align-items: center; gap: 8px; }
 .identity-kind-row label { color: var(--muted); font-size: 12px; }
 .identity-kind-row select { min-width: 120px; }

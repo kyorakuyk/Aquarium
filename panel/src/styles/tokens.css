@@ -8,7 +8,7 @@
   --line: #DCE1DD;
   --ink: #12201E;
   --ink-2: #3D4B48;
-  --muted: #56635F;
+  --muted: #4B5854;
   --accent: #1C5F5A;
   --accent-soft: #E1EEEB;
   --conf-1: #EAF2F0;
@@ -24,7 +24,10 @@
   --warn: #A8461F;
   --warn-ink: #A8461F;
   --warn-soft: #F8E8E1;
-  --placeholder: #7C8884;
+  --placeholder: #626E6A;
+  --type-body: 14px;
+  --type-support: 12px;
+  --type-control: 13px;
   --mode-mention: #657D76;
   --mode-natural: #B6C9C2;
   --mode-active: #1C5F5A;

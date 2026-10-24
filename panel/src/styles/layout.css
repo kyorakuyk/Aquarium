@@ -9,7 +9,7 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: var(--type-body);
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
@@ -29,9 +29,9 @@ h1 { margin-bottom: 8px; font-size: 32px; font-weight: 700; line-height: 1.25; }
 h2 { margin-bottom: 4px; font-size: 20px; font-weight: 600; line-height: 1.35; }
 h3 { margin-bottom: 0; font-size: 15px; font-weight: 700; }
 
-.muted { color: var(--muted); }
+.muted { color: var(--muted); font-size: var(--type-support); }
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.eyebrow, .section-eyebrow { color: var(--muted); font-family: var(--mono); font-size: 11px; letter-spacing: .07em; }
+.eyebrow, .section-eyebrow { color: var(--muted); font-family: var(--mono); font-size: 12px; letter-spacing: .07em; }
 .small-heading { color: var(--ink-2); font-size: 13px; font-weight: 700; }
 
 .app-shell { display: flex; min-height: 100vh; }
@@ -51,7 +51,7 @@ h3 { margin-bottom: 0; font-size: 15px; font-weight: 700; }
 .brand-lockup { display: flex; align-items: center; gap: 12px; padding: 0 8px; color: var(--accent); }
 .brand-fish { width: 36px; height: 22px; flex: none; }
 .brand-title { color: var(--ink); font-family: var(--serif); font-size: 20px; font-weight: 700; line-height: 1.2; }
-.brand-subtitle { margin-top: 3px; color: var(--muted); font-family: var(--mono); font-size: 11px; letter-spacing: .09em; }
+.brand-subtitle { margin-top: 3px; color: var(--muted); font-family: var(--mono); font-size: 12px; letter-spacing: .09em; }
 .account-summary { display: flex; width: 100%; min-height: 52px; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); text-align: left; }
 .account-avatar { position: relative; display: inline-flex; width: 32px; height: 32px; flex: none; align-items: center; justify-content: center; border-radius: 50%; background: var(--accent); color: #fff; font-family: var(--serif); font-weight: 700; }
 .connection-dot { position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border: 2px solid var(--bg); border-radius: 50%; background: var(--muted); }
@@ -118,7 +118,7 @@ h3 { margin-bottom: 0; font-size: 15px; font-weight: 700; }
 .text-button, .inherit-button { min-height: 44px; padding: 0 8px; border: 0; background: transparent; color: var(--accent); cursor: pointer; font-weight: 700; }
 .text-button:hover, .inherit-button:hover { text-decoration: underline; }
 .inherit-label { color: var(--muted); font-size: 12px; }
-.inherit-button { color: var(--accent); font-size: 12px; }
+.inherit-button { color: var(--accent); font-size: var(--type-control); }
 
 input, textarea, select {
   width: 100%;
@@ -133,7 +133,7 @@ textarea { min-height: 86px; resize: vertical; }
 input::placeholder, textarea::placeholder { color: var(--placeholder); }
 input[type="number"] { font-family: var(--mono); }
 input[type="file"] { min-height: auto; padding: 8px; }
-.field-label { display: block; margin-bottom: 7px; color: var(--ink-2); font-size: 12px; font-weight: 700; }
+.field-label { display: block; margin-bottom: 7px; color: var(--ink-2); font-size: var(--type-control); font-weight: 700; }
 .field-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
 .field-heading-title { display: flex; align-items: center; gap: 4px; }
 .field-heading h3 { margin: 0; }

@@ -2,10 +2,10 @@
 .personal-impressions-title { min-width: 0; }
 .personal-impressions-title h1 { margin-bottom: 6px; }
 .personal-impressions-tools { display: grid; justify-items: end; gap: 10px; }
-.personal-impressions-account { display: grid; width: min(100%, 260px); gap: 5px; color: var(--muted); font-size: 11px; }
+.personal-impressions-account { display: grid; width: min(100%, 260px); gap: 5px; color: var(--muted); font-size: 12px; }
 .personal-impressions-account select { min-width: 180px; min-height: 44px; padding: 7px 10px; }
 .personal-impressions-account select:disabled { opacity: .8; }
-.personal-impressions-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 14px; margin: 0; padding: 0; color: var(--muted); font-size: 10px; list-style: none; }
+.personal-impressions-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 14px; margin: 0; padding: 0; color: var(--muted); font-size: 12px; list-style: none; }
 .personal-impressions-legend li { display: flex; align-items: center; gap: 6px; }
 .personal-impressions-legend-chip { width: 22px; height: 15px; border-radius: 4px; background: var(--conf-4); }
 .personal-impressions-legend-chip.is-uncertain { border: 1px dotted var(--accent); background: var(--surface); }
@@ -13,21 +13,21 @@
 .personal-impressions-workspace { display: grid; grid-template-columns: minmax(190px, 230px) minmax(0, 1fr); align-items: start; gap: 16px; }
 .personal-impressions-sidebar { display: grid; min-width: 0; gap: 10px; }
 .personal-impressions-nav-section { display: grid; min-width: 0; gap: 4px; padding: 10px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
-.personal-impressions-nav-section h2 { margin: 0 0 3px; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .04em; }
+.personal-impressions-nav-section h2 { margin: 0 0 3px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; }
 .personal-impressions-nav-session { display: grid; min-width: 0; gap: 2px; }
-.personal-impressions-nav-session-title { overflow: hidden; margin: 7px 4px 2px; color: var(--muted); font-family: var(--mono); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.personal-impressions-nav-session-title { overflow: hidden; margin: 7px 4px 2px; color: var(--muted); font-family: var(--mono); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .personal-impressions-nav-item { display: flex; width: 100%; min-width: 0; min-height: 44px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 9px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--ink-2); cursor: pointer; font: inherit; text-align: left; }
 .personal-impressions-nav-item:hover { background: var(--surface-2); }
 .personal-impressions-nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .personal-impressions-nav-item.is-selected { border-color: var(--accent-soft); background: var(--surface-accent); color: var(--accent); }
-.personal-impressions-nav-item-name { min-width: 0; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.personal-impressions-nav-count { display: grid; width: 22px; height: 22px; flex: none; place-items: center; border-radius: 50%; background: var(--surface-2); color: var(--muted); font-family: var(--mono); font-size: 9px; }
+.personal-impressions-nav-item-name { min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.personal-impressions-nav-count { display: grid; width: 22px; height: 22px; flex: none; place-items: center; border-radius: 50%; background: var(--surface-2); color: var(--muted); font-family: var(--mono); font-size: 11px; }
 .personal-impressions-detail { display: grid; min-width: 0; gap: 12px; padding: 16px 18px; }
 .personal-impressions-detail-empty { min-height: 190px; place-items: center; color: var(--muted); }
 .personal-impressions-detail-heading { display: flex; min-width: 0; align-items: center; gap: 11px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .personal-impressions-detail-avatar { display: grid; width: 38px; height: 38px; flex: none; place-items: center; border-radius: 50%; background: var(--surface-accent); color: var(--accent); font-family: var(--serif); font-size: 16px; }
 .personal-impressions-detail-heading h2 { overflow: hidden; margin: 0; font-family: var(--serif); font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
-.personal-impressions-detail-heading p { overflow: hidden; margin: 4px 0 0; color: var(--muted); font-family: var(--mono); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.personal-impressions-detail-heading p { overflow: hidden; margin: 4px 0 0; color: var(--muted); font-family: var(--mono); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .personal-impressions-detail-rows { display: grid; min-width: 0; }
 .personal-impression-category-row:first-child { border-top: 0; }
 .personal-impression-category-row .profile-tag-label { margin: 8px 0 0; }
@@ -43,15 +43,15 @@
 .personal-impression-chip.is-rejected { color: var(--warn-ink); }
 .personal-impression-chip.is-rejected::before { border: 1px solid var(--warn-ink); background: var(--warn-soft); }
 .personal-impression-chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.personal-impression-chip-question { color: var(--accent); font-family: var(--mono); font-size: 10px; font-weight: 700; }
-.personal-impression-chip .tag-lock-indicator { padding-left: 1px; color: inherit; font-size: 9px; }
+.personal-impression-chip-question { color: var(--accent); font-family: var(--mono); font-size: 12px; font-weight: 700; }
+.personal-impression-chip .tag-lock-indicator { padding-left: 1px; color: inherit; font-size: 11px; }
 .personal-impression-popover { max-height: min(70vh, 560px); overflow-y: auto; }
 .personal-impression-detail-list { display: grid; gap: 5px; margin: 3px 0 8px; padding: 0; }
-.personal-impression-detail-list > div { display: grid; grid-template-columns: 45px minmax(0, 1fr); gap: 8px; font-size: 11px; }
+.personal-impression-detail-list > div { display: grid; grid-template-columns: 45px minmax(0, 1fr); gap: 8px; font-size: 12px; }
 .personal-impression-detail-list dt { color: var(--muted); }
 .personal-impression-detail-list dd { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
 .personal-impression-promote-action { display: grid; justify-items: start; gap: 4px; }
-.personal-impression-reason { max-width: 240px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+.personal-impression-reason { max-width: 240px; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .personal-impressions-page > .notice { margin-bottom: 16px; }
 
 @media (max-width: 760px) {
