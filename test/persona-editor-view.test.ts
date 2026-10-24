@@ -8,6 +8,6 @@ const personaStyles = readFileSync(new URL('../panel/src/styles/personas.css', i
 test('persona editor keeps save actions visible and limits Markdown hints to source view', () => {
   assert.equal(personaEditorViewClass('preview'), '');
   assert.equal(personaEditorViewClass('source'), 'is-source-view');
-  assert.match(personaStyles, /\.persona-editor-heading\s*\{[^}]*position:\s*sticky/);
+  assert.ok(/\.persona-editor-sticky\s*\{[^}]*position:\s*sticky/u.test(personaStyles), 'save bar and tabs remain sticky');
   assert.match(personaStyles, /\.personas-page:not\(\.is-source-view\)\s+\.persona-reference\s*\{[^}]*display:\s*none/);
 });

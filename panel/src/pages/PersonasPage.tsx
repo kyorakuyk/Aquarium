@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { apiRequest, type PanelStatus } from '../api.ts';
 import type { PageId } from '../components/Sidebar.tsx';
 import { personaEditorViewClass } from '../persona-editor-view.ts';
+import { readPersonaPageTabs, writePersonaPageTabs } from '../persona-page-tabs.ts';
 import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 import { hasPersonaIdCollision, normalizePersonaId, validPersonaId } from '../../../src/persona/persona-id.ts';
 import {
@@ -14,14 +15,10 @@ import {
   type PersonaSectionsForm,
 } from '../persona-sections.ts';
 import { PersonaComparisonDialog } from './PersonaComparisonDialog.tsx';
+import { PersonaEditorToolbar } from './PersonaEditorToolbar.tsx';
 import { PersonaFields } from './PersonaFields.tsx';
+import { PersonaLibraryToolbar, type PersonaCard } from './PersonaLibraryToolbar.tsx';
 import { PersonaPreview, type PersonaPreviewResult } from './PersonaPreview.tsx';
-
-interface PersonaCard {
-  id: string;
-  filename: string;
-  source: 'data' | 'built-in';
-}
 
 interface PersonaDocument {
   markdown: string;
@@ -44,6 +41,8 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const [previewAccountId, setPreviewAccountId] = useState<number | null>(null);
   const [form, setForm] = useState<PersonaSectionsForm>(() => emptyPersonaSections());
   const [sourceText, setSourceText] = useState(() => buildSections(emptyPersonaSections()));
+  const [savedMarkdown, setSavedMarkdown] = useState<string | null>(null);
+  const [pageTabs, setPageTabs] = useState(readPersonaPageTabs);
   const [sourceError, setSourceError] = useState('');
   const [viewMode, setViewMode] = useState<'preview' | 'source'>('preview');
   const [activeBlockId, setActiveBlockId] = useState('');
@@ -60,7 +59,9 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const [newId, setNewId] = useState('');
   const [importDraft, setImportDraft] = useState<PersonaImportDraft | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [fileDragActive, setFileDragActive] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const fileDragDepth = useRef(0);
 
   const loadLibrary = useCallback(async (preferred?: string) => {
     const [items, status] = await Promise.all([
@@ -83,6 +84,10 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const previewName = previewAccount?.name.trim() || '水族箱';
 
   useEffect(() => {
+    writePersonaPageTabs(pageTabs);
+  }, [pageTabs]);
+
+  useEffect(() => {
     setPreviewAccountId(null);
     setBindingMessage('');
   }, [selectedId]);
@@ -101,18 +106,22 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
     setActiveBlockId('');
     if (!selectedId) {
       const empty = emptyPersonaSections();
+      const markdown = buildSections(empty);
       setForm(empty);
-      setSourceText(buildSections(empty));
+      setSavedMarkdown(markdown);
+      setSourceText(markdown);
       setSourceError('');
       setViewMode('preview');
       setDirty(false);
       setSaved(false);
       return;
     }
+    setSavedMarkdown(null);
     let active = true;
     void apiRequest<PersonaDocument>(`/api/personas/${encodeURIComponent(selectedId)}`)
       .then((document) => {
         if (!active) return;
+        setSavedMarkdown(document.markdown);
         setSourceText(document.markdown);
         setDirty(false);
         setSaved(false);
@@ -221,6 +230,25 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
     }
   }
 
+  function restoreLastSaved() {
+    if (!dirty || savedMarkdown === null) return;
+    if (!window.confirm('放弃当前未保存更改，并还原到上次保存的内容？')) return;
+    setSourceText(savedMarkdown);
+    setActiveBlockId('');
+    setError('');
+    setSaved(false);
+    setDirty(false);
+    try {
+      setForm(parseSections(savedMarkdown));
+      setSourceError('');
+      setViewMode('preview');
+    } catch {
+      setForm(emptyPersonaSections());
+      setSourceError('源文件 YAML 或 traits 格式无效；请在源文件视图修复后再使用表单。');
+      setViewMode('source');
+    }
+  }
+
   async function save() {
     if (!selectedId || busy || sourceError) return;
     let markdown: string;
@@ -244,12 +272,14 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
         method: 'PUT', body: JSON.stringify({ markdown }),
       });
       savedToServer = true;
+      setSavedMarkdown(markdown);
       setVersionRefreshKey((current) => current + 1);
       setSourceText(markdown);
       setDirty(false);
       setSaved(true);
       const savedDocument = await apiRequest<PersonaDocument>(`/api/personas/${encodeURIComponent(selectedId)}`);
       const savedForm = parseSections(savedDocument.markdown);
+      setSavedMarkdown(savedDocument.markdown);
       setForm(savedForm);
       setSourceText(savedDocument.markdown);
       setSourceError('');
@@ -356,52 +386,64 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
     }
   }
 
-  function onDrop(event: DragEvent<HTMLLabelElement>) {
+  function carriesFiles(event: DragEvent<HTMLDivElement>): boolean {
+    return Array.from(event.dataTransfer.types).includes('Files');
+  }
+
+  function onPageDragEnter(event: DragEvent<HTMLDivElement>) {
+    if (!carriesFiles(event)) return;
     event.preventDefault();
+    fileDragDepth.current += 1;
+    setFileDragActive(true);
+  }
+
+  function onPageDragOver(event: DragEvent<HTMLDivElement>) {
+    if (!carriesFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  }
+
+  function onPageDragLeave(event: DragEvent<HTMLDivElement>) {
+    if (!carriesFiles(event)) return;
+    event.preventDefault();
+    fileDragDepth.current = Math.max(0, fileDragDepth.current - 1);
+    if (fileDragDepth.current === 0) setFileDragActive(false);
+  }
+
+  function onPageDrop(event: DragEvent<HTMLDivElement>) {
+    if (!carriesFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    fileDragDepth.current = 0;
+    setFileDragActive(false);
     const file = event.dataTransfer.files[0];
-    if (file) void importFile(file);
+    if (file && !busy) void importFile(file);
   }
 
   const selected = personas.find((persona) => persona.id === selectedId);
   const saveLabel = busy ? '处理中…' : dirty ? '有未保存更改' : saved ? '已保存' : '已同步';
 
   return (
-    <div className={['page', 'personas-page', personaEditorViewClass(viewMode)].filter(Boolean).join(' ')}>
-      <header className="page-header page-header-actions">
-        <div><h1>人设</h1><p className="page-description">整理角色背景、语气与边界，并核对实际注入内容。</p></div>
-        <div className="header-actions">
-          <button className="button button-secondary" type="button" disabled={busy} onClick={() => fileInput.current?.click()}>导入 Markdown</button>
-          <button className="button button-primary" type="button" disabled={busy} onClick={() => setNewId((current) => current || 'new-persona')}>新建人设</button>
-        </div>
-      </header>
-      <input ref={fileInput} className="visually-hidden" type="file" accept=".md,text/markdown" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) void importFile(file); }} />
+    <div
+      className={['page', 'personas-page', personaEditorViewClass(viewMode)].filter(Boolean).join(' ')}
+      onDragEnter={onPageDragEnter}
+      onDragOver={onPageDragOver}
+      onDragLeave={onPageDragLeave}
+      onDrop={onPageDrop}
+    >
+      <PersonaLibraryToolbar
+        personas={personas}
+        accounts={accounts}
+        selectedId={selectedId}
+        loading={loading}
+        busy={busy}
+        onSelect={selectPersona}
+        onImport={() => fileInput.current?.click()}
+        onNew={() => setNewId((current) => current || 'new-persona')}
+      />
+      <input id="persona-file" ref={fileInput} className="visually-hidden" type="file" accept=".md,text/markdown" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) void importFile(file); }} />
       {error && <div className="notice notice-warn persona-page-notice" role="alert">{error}</div>}
       {newId && <div className="new-persona-row"><label htmlFor="new-persona-id">新建 ID</label><input id="new-persona-id" value={newId} onChange={(event) => setNewId(event.currentTarget.value)} /><button className="button button-primary" type="button" disabled={busy} onClick={() => void createPersona()}>创建</button><button className="text-button" type="button" disabled={busy} onClick={() => setNewId('')}>取消</button></div>}
-
-      <div className="persona-library-row" role="tablist" aria-label="人设库">
-        {personas.map((persona) => {
-          const bound = accounts.filter((account) => account.persona === persona.id);
-          return (
-            <button
-              className={`persona-library-chip ${selectedId === persona.id ? 'is-selected' : ''}`}
-              type="button"
-              role="tab"
-              aria-selected={selectedId === persona.id}
-              key={persona.id}
-              disabled={busy}
-              onClick={() => selectPersona(persona.id)}
-            >
-              <strong>{persona.id}</strong><span className="mono">{persona.filename}</span>
-              {bound.length > 0 && <small>在用 · {bound.length}</small>}
-            </button>
-          );
-        })}
-        {!loading && personas.length === 0 && <p className="muted">还没有人设，先创建一个。</p>}
-        {loading && <p className="muted">正在读取人设库…</p>}
-      </div>
-      <label className="persona-import-drop" htmlFor="persona-file" onDragOver={(event) => event.preventDefault()} onDrop={onDrop}>
-        拖入 .md 文件，或点击“导入 Markdown”
-      </label>
 
       {importDraft && (
         <section className="persona-import-banner" aria-label="人设导入草稿">
@@ -416,17 +458,35 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
 
       {selected ? (
         <>
-          <div className="persona-editor-heading">
-            <div><h2>{selected.id}</h2><p className="muted">{selected.source === 'built-in' ? '内置人设副本' : selected.filename} · {boundAccounts.length ? `已绑定眷属：QQ ${boundAccounts.map((account) => account.account).join('、')}` : '尚未绑定眷属'}</p></div>
-            <div className="persona-save-actions">
-              <span className={dirty ? 'is-dirty' : ''}>{saveLabel}</span>
-              <button className="button button-secondary" type="button" disabled={busy || !previewAccount} onClick={() => void bindSelectedAccountPersona()}>切换为此人设</button>
-              <button className="button button-primary" type="button" disabled={busy || !dirty || Boolean(sourceError)} onClick={() => void save()}>保存</button>
-            </div>
-          </div>
+          <PersonaEditorToolbar
+            title={selected.id}
+            detail={`${selected.source === 'built-in' ? '内置人设副本' : selected.filename} · ${boundAccounts.length ? `已绑定眷属：QQ ${boundAccounts.map((account) => account.account).join('、')}` : '尚未绑定眷属'}`}
+            saveLabel={saveLabel}
+            dirty={dirty}
+            busy={busy}
+            canRestore={dirty && savedMarkdown !== null}
+            canBind={Boolean(previewAccount)}
+            canSave={dirty && !Boolean(sourceError)}
+            activeTab={pageTabs.page}
+            onRestore={restoreLastSaved}
+            onTryChat={() => onNavigate('sandbox')}
+            onBind={() => { void bindSelectedAccountPersona(); }}
+            onSave={() => { void save(); }}
+            onTabChange={(page) => setPageTabs((current) => ({ ...current, page }))}
+          />
           {bindingMessage && <p className="muted" role="status">{bindingMessage}</p>}
           <div className="persona-workspace-v2">
-            <PersonaFields form={form} onChange={updateForm} onFocus={setActiveBlockId} disabled={busy || Boolean(sourceError)} />
+            <div className="persona-main-tab-panel">
+              <PersonaFields
+                form={form}
+                onChange={updateForm}
+                onFocus={setActiveBlockId}
+                disabled={busy || Boolean(sourceError)}
+                activeTab={pageTabs.page}
+                parameterTab={pageTabs.parameter}
+                onParameterTabChange={(parameter) => setPageTabs((current) => ({ ...current, parameter }))}
+              />
+            </div>
             <PersonaPreview
               mode={viewMode}
               onModeChange={changeViewMode}
@@ -441,7 +501,6 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
               previewAccountId={previewAccount?.account ?? null}
               onPreviewAccountChange={(account) => { setPreviewAccountId(account); setBindingMessage(''); }}
               disabled={busy}
-              onTryChat={() => onNavigate('sandbox')}
               personaId={selected.id}
               versionRefreshKey={versionRefreshKey}
               onRestoreVersion={loadVersionIntoEditor}
@@ -459,6 +518,7 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
         form={importDraft?.form ?? form}
         onClose={() => setCompareOpen(false)}
       />
+      {fileDragActive && <div className="persona-page-drop-overlay" role="status" aria-live="polite"><span>松开以导入 Markdown 文件</span></div>}
     </div>
   );
 }

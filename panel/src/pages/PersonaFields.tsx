@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PersonaTraits } from '../api.ts';
+import type { PersonaEditorTab, PersonaParameterTab } from '../persona-page-tabs.ts';
+import { PersonaParametersPanel } from './PersonaParametersPanel.tsx';
 import {
   PERSONA_TRAIT_LABELS,
   personaNameFromTitle,
@@ -11,6 +13,49 @@ import {
 
 type TextHeading = '身份' | '年龄' | '背景' | '说话方式' | '对熟人' | '对陌生人' | '对主人';
 type ListHeading = '口头禅' | '常用表情' | '底线';
+
+function useTextareaAutoHeight(value: string, active: boolean) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const textarea = ref.current;
+    if (!active || !textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [active, value]);
+  return ref;
+}
+
+function AutoGrowTextarea({
+  id,
+  value,
+  rows,
+  active,
+  disabled,
+  onFocus,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  rows: 2 | 3;
+  active: boolean;
+  disabled: boolean;
+  onFocus: () => void;
+  onChange: (value: string) => void;
+}) {
+  const ref = useTextareaAutoHeight(value, active);
+  return (
+    <textarea
+      ref={ref}
+      className="persona-auto-textarea"
+      id={id}
+      value={value}
+      rows={rows}
+      disabled={disabled}
+      onFocus={onFocus}
+      onChange={(event) => onChange(event.currentTarget.value)}
+    />
+  );
+}
 
 function FieldLabel({ id, title, reference }: { id: string; title: string; reference?: string }) {
   return <div className="persona-field-heading"><label htmlFor={id}>{title}</label>{reference && <span className="persona-reference">{reference}</span>}</div>;
@@ -26,6 +71,7 @@ function TextField({
   disabled,
   multiline = true,
   rows = 3,
+  active = true,
 }: {
   id: string;
   title: string;
@@ -36,12 +82,13 @@ function TextField({
   disabled: boolean;
   multiline?: boolean;
   rows?: 2 | 3;
+  active?: boolean;
 }) {
   return (
     <div className="persona-field">
       <FieldLabel id={id} title={title} reference={reference} />
       {multiline
-        ? <textarea id={id} value={value} rows={rows} disabled={disabled} onFocus={onFocus} onChange={(event) => onChange(event.currentTarget.value)} />
+        ? <AutoGrowTextarea id={id} value={value} rows={rows} active={active} disabled={disabled} onFocus={onFocus} onChange={onChange} />
         : <input id={id} value={value} disabled={disabled} onFocus={onFocus} onChange={(event) => onChange(event.currentTarget.value)} />}
     </div>
   );
@@ -161,11 +208,17 @@ export function PersonaFields({
   onChange,
   onFocus,
   disabled,
+  activeTab,
+  parameterTab,
+  onParameterTabChange,
 }: {
   form: PersonaSectionsForm;
   onChange: (form: PersonaSectionsForm) => void;
   onFocus: (blockId: string) => void;
   disabled: boolean;
+  activeTab: PersonaEditorTab;
+  parameterTab: PersonaParameterTab;
+  onParameterTabChange: (tab: PersonaParameterTab) => void;
 }) {
   function setText(heading: TextHeading, value: string) {
     onChange({ ...form, fields: { ...form.fields, [heading]: value } as PersonaSectionFields });
@@ -183,13 +236,13 @@ export function PersonaFields({
     onChange({ ...form, other: form.other.map((section, itemIndex) => itemIndex === index ? { ...section, ...change } : section) });
   }
 
-  return (
+  const whoFields = (
     <div className="persona-form-grid">
       <section className="persona-form-card">
-        <h3>它是谁</h3>
+        <h3>我是谁</h3>
         <div className="persona-short-fields">
           <div className="persona-field">
-            <FieldLabel id="persona-name" title="名字" />
+            <FieldLabel id="persona-name" title="名字 / 称呼" />
             <input
               id="persona-name"
               value={personaNameFromTitle(form.title)}
@@ -200,11 +253,11 @@ export function PersonaFields({
             />
             <p className="persona-field-hint">留空时跟随 QQ 昵称；填写后固定显示该名字</p>
           </div>
-          <TextField id="persona-年龄" title="年龄" reference="## 年龄" value={form.fields.年龄} multiline={false} disabled={disabled} onFocus={() => onFocus('persona-section-年龄')} onChange={(value) => setText('年龄', value)} />
+          <TextField id="persona-年龄" title="年龄" reference="## 年龄" value={form.fields.年龄} multiline={false} active={activeTab === 'who'} disabled={disabled} onFocus={() => onFocus('persona-section-年龄')} onChange={(value) => setText('年龄', value)} />
         </div>
-        <TextField id="persona-身份" title="身份" reference="## 身份" value={form.fields.身份} multiline={false} disabled={disabled} onFocus={() => onFocus('persona-section-身份')} onChange={(value) => setText('身份', value)} />
-        <TextField id="persona-opening" title="开头说明" reference="开头说明" value={form.introduction} rows={3} disabled={disabled} onFocus={() => onFocus('persona-opening')} onChange={(value) => onChange({ ...form, introduction: value })} />
-        <TextField id="persona-背景" title="背景" reference="## 背景" value={form.fields.背景} rows={3} disabled={disabled} onFocus={() => onFocus('persona-section-背景')} onChange={(value) => setText('背景', value)} />
+        <TextField id="persona-身份" title="身份" reference="## 身份" value={form.fields.身份} multiline={false} active={activeTab === 'who'} disabled={disabled} onFocus={() => onFocus('persona-section-身份')} onChange={(value) => setText('身份', value)} />
+        <TextField id="persona-opening" title="开头说明" reference="开头说明" value={form.introduction} rows={3} active={activeTab === 'who'} disabled={disabled} onFocus={() => onFocus('persona-opening')} onChange={(value) => onChange({ ...form, introduction: value })} />
+        <TextField id="persona-背景" title="背景" reference="## 背景" value={form.fields.背景} rows={3} active={activeTab === 'who'} disabled={disabled} onFocus={() => onFocus('persona-section-背景')} onChange={(value) => setText('背景', value)} />
       </section>
 
       <section className="persona-form-card">
@@ -250,60 +303,84 @@ export function PersonaFields({
           ))}
         </div>
       </section>
+    </div>
+  );
 
-      <section className="persona-form-card">
-        <h3>它怎么说话</h3>
-        <TextField id="persona-说话方式" title="说话方式" reference="## 说话方式" value={form.fields.说话方式} rows={2} disabled={disabled} onFocus={() => onFocus('persona-section-说话方式')} onChange={(value) => setText('说话方式', value)} />
-        <div className="persona-short-fields">
+  const relationshipFields = (
+    <div className="persona-deal-columns">
+      <div className="persona-deal-column">
+        <section className="persona-form-card">
+          <h3>说话方式</h3>
+          <TextField id="persona-说话方式" title="说话方式" reference="## 说话方式" value={form.fields.说话方式} rows={2} active={activeTab === 'deal'} disabled={disabled} onFocus={() => onFocus('persona-section-说话方式')} onChange={(value) => setText('说话方式', value)} />
           <TagListField heading="口头禅" items={form.fields.口头禅} disabled={disabled} onFocus={() => onFocus('persona-section-口头禅')} onChange={(value) => setList('口头禅', value)} />
           <TagListField heading="常用表情" items={form.fields.常用表情} disabled={disabled} onFocus={() => onFocus('persona-section-常用表情')} onChange={(value) => setList('常用表情', value)} />
-        </div>
-      </section>
-
-      <section className="persona-form-card">
-        <h3>它怎么对人</h3>
-        <div className="persona-short-fields">
+        </section>
+      </div>
+      <div className="persona-deal-column">
+        <section className="persona-form-card">
+          <h3>对人</h3>
           {(['对熟人', '对陌生人'] as const).map((heading) => (
-            <TextField key={heading} id={`persona-${heading}`} title={heading} reference={`## ${heading}`} value={form.fields[heading]} multiline={false} disabled={disabled} onFocus={() => onFocus(`persona-section-${heading}`)} onChange={(value) => setText(heading, value)} />
+            <TextField key={heading} id={`persona-${heading}`} title={heading} reference={`## ${heading}`} value={form.fields[heading]} active={activeTab === 'deal'} disabled={disabled} onFocus={() => onFocus(`persona-section-${heading}`)} onChange={(value) => setText(heading, value)} />
           ))}
-        </div>
-        <TextField id="persona-对主人" title="对主人" reference="## 对主人" value={form.fields.对主人} multiline={false} disabled={disabled} onFocus={() => onFocus('persona-section-对主人')} onChange={(value) => setText('对主人', value)} />
-      </section>
+          <TextField id="persona-对主人" title="对主人" reference="## 对主人" value={form.fields.对主人} active={activeTab === 'deal'} disabled={disabled} onFocus={() => onFocus('persona-section-对主人')} onChange={(value) => setText('对主人', value)} />
+        </section>
+        <section className="persona-form-card">
+          <h3>底线</h3>
+          <RuleListField heading="底线" items={form.fields.底线} disabled={disabled} onFocus={() => onFocus('persona-section-底线')} onChange={(value) => setList('底线', value)} />
+        </section>
+      </div>
+    </div>
+  );
 
-      <section className="persona-form-card">
-        <h3>底线</h3>
-        <RuleListField heading="底线" items={form.fields.底线} disabled={disabled} onFocus={() => onFocus('persona-section-底线')} onChange={(value) => setList('底线', value)} />
-      </section>
-
+  const otherFields = (
+    <div className="persona-form-grid">
       <section className="persona-form-card persona-other-card">
-        <details>
-          <summary>其他小节 <span className="muted">{form.other.length} 段</span></summary>
-          <div className="persona-other-list">
-            {form.other.map((section, index) => (
-              <div className="persona-other-entry" key={index}>
-                <div className="persona-field-heading"><label htmlFor={`persona-other-heading-${index}`}>小节标题</label><span>自定义小节</span></div>
-                <input
-                  id={`persona-other-heading-${index}`}
-                  value={section.heading}
-                  disabled={disabled}
-                  onFocus={() => onFocus(`persona-other-section-${index}`)}
-                  onChange={(event) => setOther(index, { heading: event.currentTarget.value })}
-                />
-                <div className="persona-field-heading"><label htmlFor={`persona-other-text-${index}`}>小节内容</label><span>原文保留</span></div>
-                <textarea
-                  id={`persona-other-text-${index}`}
-                  value={section.text}
-                  rows={3}
-                  disabled={disabled}
-                  onFocus={() => onFocus(`persona-other-section-${index}`)}
-                  onChange={(event) => setOther(index, { text: event.currentTarget.value })}
-                />
-                <button className="text-button persona-remove-other" type="button" disabled={disabled} onClick={() => onChange({ ...form, other: form.other.filter((_, itemIndex) => itemIndex !== index) })}>删除小节</button>
-              </div>
-            ))}
-            <button className="button button-secondary" type="button" disabled={disabled} onClick={() => onChange({ ...form, other: [...form.other, { heading: '', text: '' }] })}>＋ 添加小节</button>
-          </div>
-        </details>
+        <div className="persona-parameter-placeholder-heading">
+          <h3>其他小节</h3><span className="muted">{form.other.length} 段</span>
+        </div>
+        <div className="persona-other-list">
+          {form.other.map((section, index) => (
+            <div className="persona-other-entry" key={index}>
+              <div className="persona-field-heading"><label htmlFor={`persona-other-heading-${index}`}>小节标题</label><span>自定义小节</span></div>
+              <input
+                id={`persona-other-heading-${index}`}
+                value={section.heading}
+                disabled={disabled}
+                onFocus={() => onFocus(`persona-other-section-${index}`)}
+                onChange={(event) => setOther(index, { heading: event.currentTarget.value })}
+              />
+              <div className="persona-field-heading"><label htmlFor={`persona-other-text-${index}`}>小节内容</label><span>原文保留</span></div>
+              <AutoGrowTextarea
+                id={`persona-other-text-${index}`}
+                value={section.text}
+                rows={3}
+                active={activeTab === 'other'}
+                disabled={disabled}
+                onFocus={() => onFocus(`persona-other-section-${index}`)}
+                onChange={(value) => setOther(index, { text: value })}
+              />
+              <button className="text-button persona-remove-other" type="button" disabled={disabled} onClick={() => onChange({ ...form, other: form.other.filter((_, itemIndex) => itemIndex !== index) })}>删除小节</button>
+            </div>
+          ))}
+          <button className="button button-secondary" type="button" disabled={disabled} onClick={() => onChange({ ...form, other: [...form.other, { heading: '', text: '' }] })}>＋ 添加小节</button>
+        </div>
+      </section>
+    </div>
+  );
+
+  return (
+    <div className="persona-fields-panels">
+      <section className="persona-fields-panel" role="tabpanel" aria-labelledby="persona-editor-tab-who" hidden={activeTab !== 'who'}>
+        {whoFields}
+      </section>
+      <section className="persona-fields-panel" role="tabpanel" aria-labelledby="persona-editor-tab-deal" hidden={activeTab !== 'deal'}>
+        {relationshipFields}
+      </section>
+      <section className="persona-fields-panel" role="tabpanel" aria-labelledby="persona-editor-tab-parameters" hidden={activeTab !== 'parameters'}>
+        <PersonaParametersPanel parameterTab={parameterTab} onParameterTabChange={onParameterTabChange} />
+      </section>
+      <section className="persona-fields-panel" role="tabpanel" aria-labelledby="persona-editor-tab-other" hidden={activeTab !== 'other'}>
+        {otherFields}
       </section>
     </div>
   );

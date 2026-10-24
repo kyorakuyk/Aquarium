@@ -196,18 +196,18 @@ export function renderPersonaSectionBlocks(form: PersonaSectionsForm): PersonaSe
   const blocks: PersonaSectionBlock[] = [];
   const title = form.title.replace(/^#[ \t]*/u, '').trim() ? form.title : '# {{name}}';
   const opening = form.introduction ? `${title}${form.lineEnding}${form.introduction}` : title;
-  if (opening.length > 0) blocks.push({ id: 'persona-opening', label: 'persona · 开头说明', text: opening });
+  if (opening.length > 0) blocks.push({ id: 'persona-opening', label: '我 · 开头说明', text: opening });
   for (const heading of PERSONA_SECTION_HEADINGS) {
     const content = standardSectionText(heading, form.fields, form.lineEnding);
     if (content.length === 0) continue;
-    blocks.push({ id: `persona-section-${heading}`, label: `persona · ${heading}`, text: `## ${heading}${form.lineEnding}${content}` });
+    blocks.push({ id: `persona-section-${heading}`, label: `我 · ${heading}`, text: `## ${heading}${form.lineEnding}${content}` });
   }
   for (let index = 0; index < form.other.length; index += 1) {
     const section = form.other[index];
     if (!section) continue;
     if (section.text.length === 0) continue;
     if (/[\r\n]/u.test(section.heading)) throw new Error('人设小节标题不能包含换行');
-    blocks.push({ id: `persona-other-section-${index}`, label: `persona · ${section.heading}`, text: `## ${section.heading}${form.lineEnding}${section.text}` });
+    blocks.push({ id: `persona-other-section-${index}`, label: `我 · ${section.heading}`, text: `## ${section.heading}${form.lineEnding}${section.text}` });
   }
   return blocks;
 }

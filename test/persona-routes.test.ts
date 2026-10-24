@@ -126,7 +126,7 @@ test('persona preview returns section blocks and the runtime trait renderer outp
       estTokens: number;
     };
     assert.deepEqual(preview.blocks, expectedBlocks);
-    assert.ok(preview.blocks.some((block) => block.label === 'persona · 身份'));
+    assert.ok(preview.blocks.some((block) => block.label === '我 · 身份'));
     assert.ok(preview.blocks.some((block) => block.id === 'traits'));
     assert.equal(preview.chars, safePreviewText.length);
     assert.equal(preview.estTokens, Math.ceil(preview.chars / 1.3));

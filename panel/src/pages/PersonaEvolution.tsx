@@ -20,10 +20,14 @@ function formatDelta(value: number): string {
 }
 
 export function PersonaEvolution({
+  section,
+  hidden,
   personaId,
   refreshKey,
   onRestore,
 }: {
+  section: 'evolution' | 'versions';
+  hidden: boolean;
   personaId: string;
   refreshKey: number;
   onRestore: (markdown: string) => void;
@@ -103,100 +107,112 @@ export function PersonaEvolution({
   }
 
   return (
-    <section className="persona-evolution-card panel-card" aria-labelledby="persona-evolution-title">
+    <section className="persona-evolution-card panel-card" aria-labelledby="persona-evolution-title" hidden={hidden}>
       <header className="persona-evolution-heading">
-        <div><h2 id="persona-evolution-title">性格的变化</h2><p className="muted">此阶段没有经历偏移；现在等于底色。</p></div>
+        <div>
+          <h2 id="persona-evolution-title">{section === 'evolution' ? '性格的变化' : '版本'}</h2>
+          <p className="muted">{section === 'evolution' ? '此阶段没有经历偏移；现在等于底色。' : '查看已保存版本、差异，或将旧版本载入编辑器。'}</p>
+        </div>
       </header>
 
-      <div className="persona-evolution-stats" aria-label="七维性格底色与现在">
-        {PERSONA_TRAIT_LABELS.map((dimension) => (
-          <div className="persona-evolution-stat" key={dimension.key}>
-            <strong>{dimension.title}{'locked' in dimension && dimension.locked ? ' · 锁定' : ''}</strong>
-            <span className="mono">{currentTraits[dimension.key]} → {currentTraits[dimension.key]}</span>
+      {section === 'evolution' && (
+        <>
+          <div className="persona-evolution-stats" aria-label="七维性格底色与现在">
+            {PERSONA_TRAIT_LABELS.map((dimension) => (
+              <div className="persona-evolution-stat" key={dimension.key}>
+                <strong>{dimension.title}{'locked' in dimension && dimension.locked ? ' · 锁定' : ''}</strong>
+                <span className="mono">{currentTraits[dimension.key]} → {currentTraits[dimension.key]}</span>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      <div className="persona-evolution-views" role="group" aria-label="性格变化视图">
-        {PERSONA_EVOLUTION_VIEW_OPTIONS.map((item) => {
-          const viewKey = item.key;
-          return (
-            <button
-              key={viewKey}
-              className={view === viewKey ? 'is-active' : ''}
-              type="button"
-              aria-pressed={view === viewKey}
-              onClick={() => setView(viewKey)}
-            >{item.label}</button>
-          );
-        })}
-      </div>
+          <div className="persona-evolution-views" role="group" aria-label="性格变化视图">
+            {PERSONA_EVOLUTION_VIEW_OPTIONS.map((item) => {
+              const viewKey = item.key;
+              return (
+                <button
+                  key={viewKey}
+                  className={view === viewKey ? 'is-active' : ''}
+                  type="button"
+                  aria-pressed={view === viewKey}
+                  onClick={() => setView(viewKey)}
+                >{item.label}</button>
+              );
+            })}
+          </div>
 
-      {view === 'radar' && (
-        <label className="persona-radar-version-picker">
-          <span>所选历史版本</span>
-          <select
-            aria-label="雷达图历史版本"
-            value={selectedVersionId ?? ''}
-            onChange={(event) => setSelectedVersionId(Number(event.currentTarget.value))}
-            disabled={versions.length === 0}
-          >
-            {versions.map((item) => <option key={item.id} value={item.id}>{formatDate(item.savedAt)} · #{item.id}</option>)}
-          </select>
-        </label>
+          {view === 'radar' && (
+            <label className="persona-radar-version-picker">
+              <span>所选历史版本</span>
+              <select
+                aria-label="雷达图历史版本"
+                value={selectedVersionId ?? ''}
+                onChange={(event) => setSelectedVersionId(Number(event.currentTarget.value))}
+                disabled={versions.length === 0}
+              >
+                {versions.map((item) => <option key={item.id} value={item.id}>{formatDate(item.savedAt)} · #{item.id}</option>)}
+              </select>
+            </label>
+          )}
+
+          <div className="persona-evolution-plot">
+            {loading ? <p className="muted">正在读取版本…</p> : error ? (
+              <div><p className="notice notice-warn" role="alert">{error}</p><button className="button button-secondary" type="button" onClick={() => setRetryKey((value) => value + 1)}>重试</button></div>
+            ) : (
+              <PersonaEvolutionCharts
+                view={view}
+                versions={versions}
+                currentTraits={currentTraits}
+                selectedVersion={selectedVersion}
+              />
+            )}
+          </div>
+
+          <div className="persona-evolution-legend" aria-label="性格维度颜色图例">
+            {PERSONA_TRAIT_LABELS.map((dimension) => (
+              <span key={dimension.key}><i style={{ backgroundColor: PERSONA_TRAIT_COLORS[dimension.key] }} />{dimension.title}</span>
+            ))}
+          </div>
+          <p className="persona-evolution-note">模仿（锁定）不随经历变化；可在表单中手动设置。</p>
+        </>
       )}
 
-      <div className="persona-evolution-plot">
-        {loading ? <p className="muted">正在读取版本…</p> : error ? (
-          <div><p className="notice notice-warn" role="alert">{error}</p><button className="button button-secondary" type="button" onClick={() => setRetryKey((value) => value + 1)}>重试</button></div>
-        ) : (
-          <PersonaEvolutionCharts
-            view={view}
-            versions={versions}
-            currentTraits={currentTraits}
-            selectedVersion={selectedVersion}
-          />
-        )}
-      </div>
-
-      <div className="persona-evolution-legend" aria-label="性格维度颜色图例">
-        {PERSONA_TRAIT_LABELS.map((dimension) => (
-          <span key={dimension.key}><i style={{ backgroundColor: PERSONA_TRAIT_COLORS[dimension.key] }} />{dimension.title}</span>
-        ))}
-      </div>
-      <p className="persona-evolution-note">模仿（锁定）不随经历变化；可在表单中手动设置。</p>
-
-      <div className="persona-version-history">
-        <div className="persona-version-history-heading"><h3>文字记录</h3>{versions.length > 4 && (
-          <button className="text-button" type="button" disabled={loading} onClick={() => setShowAll((current) => !current)}>
-            {showAll ? '收起' : `查看全部 ${versions.length} 条`}
-          </button>
-        )}</div>
-        {actionMessage && <p className="muted persona-version-message" role="status">{redactSensitiveText(actionMessage)}</p>}
-        {!loading && !error && visibleVersions.length === 0 && <p className="muted">还没有保存版本。</p>}
-        {visibleVersions.map((version) => {
-          const actualIndex = versions.findIndex((item) => item.id === version.id);
-          return (
-            <article className="persona-version-entry" key={version.id}>
-              <div className="persona-version-entry-content">
-                <time className="mono" dateTime={new Date(version.savedAt).toISOString()}>{formatDate(version.savedAt)} · #{version.id}</time>
-                <p>{redactSensitiveText(version.summary)}</p>
-                <div className="persona-version-deltas">
-                  {PERSONA_TRAIT_LABELS.filter((field) => version.traitsDelta[field.key] !== 0).map((field) => (
-                    <span key={field.key}>{field.title} {formatDelta(version.traitsDelta[field.key])}</span>
-                  ))}
+      {section === 'versions' && (
+        <div className="persona-version-history">
+          <div className="persona-version-history-heading"><h3>文字记录</h3>{versions.length > 4 && (
+            <button className="text-button" type="button" disabled={loading} onClick={() => setShowAll((current) => !current)}>
+              {showAll ? '收起' : `查看全部 ${versions.length} 条`}
+            </button>
+          )}</div>
+          {loading && <p className="muted">正在读取版本…</p>}
+          {error && <div><p className="notice notice-warn" role="alert">{error}</p><button className="button button-secondary" type="button" onClick={() => setRetryKey((value) => value + 1)}>重试</button></div>}
+          {actionMessage && <p className="muted persona-version-message" role="status">{redactSensitiveText(actionMessage)}</p>}
+          {!loading && !error && visibleVersions.length === 0 && <p className="muted">还没有保存版本。</p>}
+          {visibleVersions.map((version) => {
+            const actualIndex = versions.findIndex((item) => item.id === version.id);
+            return (
+              <article className="persona-version-entry" key={version.id}>
+                <div className="persona-version-entry-content">
+                  <time className="mono" dateTime={new Date(version.savedAt).toISOString()}>{formatDate(version.savedAt)} · #{version.id}</time>
+                  <p>{redactSensitiveText(version.summary)}</p>
+                  <div className="persona-version-deltas">
+                    {PERSONA_TRAIT_LABELS.filter((field) => version.traitsDelta[field.key] !== 0).map((field) => (
+                      <span key={field.key}>{field.title} {formatDelta(version.traitsDelta[field.key])}</span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div className="persona-version-actions">
-                <button className="text-button" type="button" disabled={loading || actionBusy} onClick={() => void loadDiff(version, actualIndex)}>查看差异</button>
-                <button className="text-button" type="button" disabled={loading || actionBusy} onClick={() => void restoreVersion(version)}>恢复</button>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+                <div className="persona-version-actions">
+                  <button className="text-button" type="button" disabled={loading || actionBusy} onClick={() => void loadDiff(version, actualIndex)}>查看差异</button>
+                  <button className="text-button" type="button" disabled={loading || actionBusy} onClick={() => void restoreVersion(version)}>恢复</button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
       <PersonaVersionDiffDialog
-        open={diff !== null}
+        open={section === 'versions' && !hidden && diff !== null}
         previousMarkdown={diff?.previousMarkdown ?? null}
         currentMarkdown={diff?.currentMarkdown ?? ''}
         onClose={() => setDiff(null)}

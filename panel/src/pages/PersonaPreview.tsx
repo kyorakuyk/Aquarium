@@ -1,5 +1,7 @@
+import { useEffect, useRef, useState } from 'react';
 import type { PersonaSectionBlock } from '../persona-sections.ts';
 import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
+import { PERSONA_PREVIEW_TABS, type PersonaPreviewTab } from '../persona-page-tabs.ts';
 import { PersonaEvolution } from './PersonaEvolution.tsx';
 
 export interface PersonaPreviewResult {
@@ -22,7 +24,6 @@ export function PersonaPreview({
   previewAccountId,
   onPreviewAccountChange,
   disabled,
-  onTryChat,
   personaId,
   versionRefreshKey,
   onRestoreVersion,
@@ -40,14 +41,34 @@ export function PersonaPreview({
   previewAccountId: number | null;
   onPreviewAccountChange: (account: number) => void;
   disabled: boolean;
-  onTryChat: () => void;
   personaId: string;
   versionRefreshKey: number;
   onRestoreVersion: (markdown: string) => void;
 }) {
+  const [activeRailTab, setActiveRailTab] = useState<PersonaPreviewTab>('injected');
+  const activeBlockRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (activeRailTab === 'injected' && mode === 'preview') {
+      activeBlockRef.current?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [activeBlockId, activeRailTab, mode, preview]);
+
   return (
     <div className="persona-preview-rail">
-      <section className="persona-preview-card panel-card" aria-labelledby="persona-preview-title">
+      <nav className="persona-preview-tabs" aria-label="人设辅助视图">
+        {PERSONA_PREVIEW_TABS.map((tab) => (
+          <button
+            className={activeRailTab === tab.id ? 'is-active' : ''}
+            type="button"
+            aria-pressed={activeRailTab === tab.id}
+            key={tab.id}
+            onClick={() => setActiveRailTab(tab.id)}
+          >{tab.label}</button>
+        ))}
+      </nav>
+
+      <section className="persona-preview-card panel-card" aria-labelledby="persona-preview-title" aria-label="实际注入" hidden={activeRailTab !== 'injected'}>
         <div className="persona-preview-heading">
           <div>
             <h2 id="persona-preview-title">实际注入</h2>
@@ -73,16 +94,22 @@ export function PersonaPreview({
           </div>
         </div>
         {mode === 'preview' ? (
-          <div className="persona-preview-blocks" aria-live="polite">
-            {previewBusy && <p className="muted persona-preview-status">正在更新预览…</p>}
-            {previewError && <p className="notice notice-warn" role="alert">{previewError}</p>}
-            {!previewBusy && !previewError && preview?.blocks.length === 0 && <p className="empty-state">当前没有可注入的人设内容。</p>}
-            {preview?.blocks.map((block) => (
-              <section className={`persona-preview-block ${activeBlockId === block.id ? 'is-highlighted' : ''}`} key={block.id}>
-                <span>{redactSensitiveText(block.label)}</span>
-                <pre>{redactSensitiveText(block.text)}</pre>
-              </section>
-            ))}
+          <div className="persona-preview-scroll">
+            <div className="persona-preview-blocks" aria-live="polite">
+              {previewBusy && <p className="muted persona-preview-status">正在更新预览…</p>}
+              {previewError && <p className="notice notice-warn" role="alert">{previewError}</p>}
+              {!previewBusy && !previewError && preview?.blocks.length === 0 && <p className="empty-state">当前没有可注入的人设内容。</p>}
+              {preview?.blocks.map((block) => (
+                <section
+                  className={`persona-preview-block ${activeBlockId === block.id ? 'is-highlighted' : ''}`}
+                  key={block.id}
+                  ref={activeBlockId === block.id ? activeBlockRef : undefined}
+                >
+                  <span>{redactSensitiveText(block.label)}</span>
+                  <pre>{redactSensitiveText(block.text)}</pre>
+                </section>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="persona-source-editor">
@@ -99,10 +126,15 @@ export function PersonaPreview({
         )}
         <div className="persona-preview-footer">
           <span className="mono">{sourceError ? '—' : preview ? `${preview.chars} 字 · 约 ${preview.estTokens} tokens` : '等待预览…'}</span>
-          <button className="text-button" type="button" onClick={onTryChat}>用它试聊 →</button>
         </div>
       </section>
-      <PersonaEvolution personaId={personaId} refreshKey={versionRefreshKey} onRestore={onRestoreVersion} />
+      <PersonaEvolution
+        section={activeRailTab === 'versions' ? 'versions' : 'evolution'}
+        hidden={activeRailTab === 'injected'}
+        personaId={personaId}
+        refreshKey={versionRefreshKey}
+        onRestore={onRestoreVersion}
+      />
     </div>
   );
 }

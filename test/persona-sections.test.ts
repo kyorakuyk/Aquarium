@@ -58,7 +58,7 @@ test('repeated other-section headings receive unique preview block IDs', () => {
     '第二条。',
   ].join('\n'));
   const ids = renderPersonaSectionBlocks(form)
-    .filter((block) => block.label === 'persona · 记录')
+    .filter((block) => block.label === '我 · 记录')
     .map((block) => block.id);
   assert.equal(new Set(ids).size, 2);
 });
