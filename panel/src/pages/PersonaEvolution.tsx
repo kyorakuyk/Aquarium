@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiRequest, type PersonaTraits, type PersonaVersionDocument, type PersonaVersionSummary } from '../api.ts';
 import { PERSONA_TRAIT_LABELS } from '../persona-sections.ts';
+import { PERSONA_EVOLUTION_VIEW_OPTIONS } from '../persona-evolution-views.ts';
 import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 import { PersonaEvolutionCharts, PERSONA_TRAIT_COLORS, type PersonaEvolutionView } from './PersonaEvolutionCharts.tsx';
 import { PersonaVersionDiffDialog } from './PersonaVersionDiffDialog.tsx';
@@ -8,12 +9,6 @@ import { PersonaVersionDiffDialog } from './PersonaVersionDiffDialog.tsx';
 const neutralTraits: PersonaTraits = {
   order: 0, morality: 0, talk: 0, mind: 0, humor: 0, openness: 0, imitation: 0,
 };
-const viewLabels: Array<{ key: PersonaEvolutionView | 'source'; label: string }> = [
-  { key: 'increment', label: '增量' },
-  { key: 'trajectory', label: '轨迹' },
-  { key: 'radar', label: '雷达' },
-  { key: 'source', label: '来源' },
-];
 function formatDate(timestamp: number): string {
   return new Date(timestamp).toLocaleString('zh-CN', {
     month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
@@ -36,7 +31,7 @@ export function PersonaEvolution({
   const [versions, setVersions] = useState<PersonaVersionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [view, setView] = useState<PersonaEvolutionView | 'source'>('increment');
+  const [view, setView] = useState<PersonaEvolutionView>('increment');
   const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
@@ -123,22 +118,19 @@ export function PersonaEvolution({
       </div>
 
       <div className="persona-evolution-views" role="group" aria-label="性格变化视图">
-        {viewLabels.map((item) => {
+        {PERSONA_EVOLUTION_VIEW_OPTIONS.map((item) => {
           const viewKey = item.key;
           return (
             <button
               key={viewKey}
               className={view === viewKey ? 'is-active' : ''}
               type="button"
-              disabled={viewKey === 'source'}
               aria-pressed={view === viewKey}
-              title={viewKey === 'source' ? '性格演进上线后可用' : undefined}
-              onClick={() => { if (viewKey !== 'source') setView(viewKey); }}
+              onClick={() => setView(viewKey)}
             >{item.label}</button>
           );
         })}
       </div>
-      <p className="persona-evolution-mode-note">来源视图：性格演进上线后可用。</p>
 
       {view === 'radar' && (
         <label className="persona-radar-version-picker">
@@ -157,8 +149,6 @@ export function PersonaEvolution({
       <div className="persona-evolution-plot">
         {loading ? <p className="muted">正在读取版本…</p> : error ? (
           <div><p className="notice notice-warn" role="alert">{error}</p><button className="button button-secondary" type="button" onClick={() => setRetryKey((value) => value + 1)}>重试</button></div>
-        ) : view === 'source' ? (
-          <p className="muted">性格演进上线后可用</p>
         ) : (
           <PersonaEvolutionCharts
             view={view}
@@ -204,10 +194,6 @@ export function PersonaEvolution({
             </article>
           );
         })}
-      </div>
-      <div className="persona-evolution-back-action">
-        <button className="text-button" type="button" disabled title="性格演进上线后可用">回到底色</button>
-        <span className="muted">性格演进上线后可用</span>
       </div>
       <PersonaVersionDiffDialog
         open={diff !== null}

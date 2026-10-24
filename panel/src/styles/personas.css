@@ -107,8 +107,6 @@
 .persona-evolution-heading h2, .persona-version-history-heading h3 { margin: 0; font-size: 13px; }
 .persona-evolution-heading p { margin: 3px 0 0; font-size: 10px; }
 .persona-evolution-heading .text-button { min-height: 44px; }
-.persona-evolution-back-action { display: grid; justify-items: end; }
-.persona-evolution-back-action span { font-size: 8px; white-space: nowrap; }
 .persona-evolution-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 10px 0; }
 .persona-evolution-stat { display: grid; min-width: 0; gap: 3px; padding: 7px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
 .persona-evolution-stat strong { overflow: hidden; color: var(--ink-2); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
@@ -116,7 +114,6 @@
 .persona-evolution-views { display: flex; gap: 3px; padding: 3px; border-radius: 9px; background: var(--surface-2); }
 .persona-evolution-views button { min-width: 52px; min-height: 44px; flex: 1; padding: 0 7px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; font-size: 10px; }
 .persona-evolution-views button.is-active { background: var(--surface); color: var(--accent); font-weight: 700; }
-.persona-evolution-views button:disabled { cursor: not-allowed; opacity: .48; }
 .persona-radar-version-picker { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; color: var(--muted); font-size: 10px; }
 .persona-radar-version-picker select { min-height: 44px; max-width: 210px; padding: 6px 9px; font-size: 10px; }
 .persona-evolution-plot { min-height: 128px; padding: 10px 0 4px; }
@@ -130,7 +127,7 @@
 .persona-radar-dot.is-base { background: #1C5F5A; }
 .persona-radar-dot.is-history { background: #C2702B; }
 .persona-evolution-legend { display: flex; flex-wrap: wrap; gap: 7px 12px; padding: 6px 0; color: var(--muted); font-size: 9px; }
-.persona-evolution-note, .persona-evolution-mode-note { margin: 2px 0; color: var(--muted); font-size: 9px; }
+.persona-evolution-note { margin: 2px 0; color: var(--muted); font-size: 9px; }
 .persona-version-history { margin-top: 8px; border-top: 1px solid var(--line); }
 .persona-version-history-heading { min-height: 44px; }
 .persona-version-history-heading .text-button { min-height: 44px; }

@@ -3,7 +3,7 @@
   .sidebar { position: relative; inset: auto; width: 100%; gap: 10px; padding: 13px 14px 10px; border-right: 0; border-bottom: 1px solid var(--line); }
   .brand-lockup { padding: 0 7px; }
   .brand-fish { width: 36px; }
-  .account-switcher { max-width: 320px; }
+  .account-summary { max-width: 320px; }
   .main-nav { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; }
   .nav-group { display: contents; }
   .nav-group-label { display: none; }
@@ -43,7 +43,6 @@
 @media (max-width: 480px) {
   .page { padding-right: 14px; padding-left: 14px; }
   .tank-grid, .usage-grid { grid-template-columns: 1fr; }
-  .tank-card-placeholder { min-height: 130px; }
   .session-list-card, .session-detail, .chat-card, .trace-card { padding: 15px; }
   .number-grid { grid-template-columns: 1fr; }
   .decision-record { grid-template-columns: auto 1fr; }

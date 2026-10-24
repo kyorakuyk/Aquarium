@@ -95,11 +95,10 @@ export function Sidebar({
           <div className="brand-subtitle">AQUARIUM</div>
         </div>
       </div>
-      <button className="account-switcher" type="button" disabled={accounts.length <= 1} aria-label={`切换眷属；${account?.name ?? '尚无眷属'}，${presence}${sleep?.enabled ? ` · ${energy}` : ''}`}>
+      <div className="account-summary" role="group" aria-label="当前眷属">
         <span className="account-avatar" aria-hidden="true">{Array.from(account?.name ?? '眷')[0] ?? '眷'}<span className={`connection-dot ${account?.connectionStatus === 'online' ? 'is-online' : account?.connectionStatus === 'connecting' ? 'is-connecting' : account?.connectionStatus === 'waiting_login' ? 'is-waiting' : ''}`} /></span>
         <span className="account-copy"><span className="account-name">{account?.name ?? '尚无眷属'}</span><span className="account-presence">{sleep?.enabled ? `${presence} · ${energy}` : presence}</span></span>
-        <svg className="account-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M7 10l5-5 5 5M7 14l5 5 5-5" /></svg>
-      </button>
+      </div>
       <nav className="main-nav" aria-label="主导航">
         {navGroups.map((group) => <div className="nav-group" key={group.label}>
           <span className="nav-group-label">{group.label}</span>

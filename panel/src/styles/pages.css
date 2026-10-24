@@ -7,9 +7,6 @@
 .tank-card-stats strong { margin-left: 4px; color: var(--ink); font-family: var(--mono); font-size: 14px; }
 .last-reply { min-height: 48px; margin-top: 14px; padding-top: 11px; border-top: 1px solid var(--line); font-size: 12px; }
 .last-reply p { margin: 5px 0 0; overflow: hidden; color: var(--ink-2); text-overflow: ellipsis; white-space: nowrap; }
-.tank-card-placeholder { display: flex; min-height: 220px; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border-style: dashed; background: transparent; color: var(--muted); }
-.placeholder-mark { color: var(--accent); font-size: 28px; font-weight: 400; }
-
 .stats-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .stat-card { min-height: 192px; padding: 20px; }
 .card-title { margin-bottom: 14px; color: var(--ink-2); font-family: var(--serif); font-size: 16px; font-weight: 600; }

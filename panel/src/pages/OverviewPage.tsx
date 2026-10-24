@@ -151,11 +151,6 @@ export function OverviewPage({ onNavigate, onOpenSleepSettings }: {
               </div>
             </article>
           ))}
-          <div className="tank-card tank-card-placeholder" aria-label="多账号功能即将开放">
-            <span className="placeholder-mark">＋</span>
-            <strong>添加新眷属</strong>
-            <span className="m2-tag">M3 多账号</span>
-          </div>
         </div>
       </section>
 
