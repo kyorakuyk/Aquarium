@@ -7,6 +7,7 @@ import { createProfileActivityService } from '../src/core/profiles/presence-serv
 import { sessionId, type SessionKey } from '../src/core/shared/events.ts';
 import { createPanelApp } from '../src/panel-server/app.ts';
 import { makeConfig } from './pipeline-test-helpers.ts';
+import { activitySuggestionCopy } from '../panel/src/activity-suggestion-copy.ts';
 
 const password = 'test-panel-password';
 const headers = { Authorization: `Bearer ${password}` };
@@ -170,4 +171,11 @@ test('采纳群活动建议会保存优先生效的 active 时间段', async () 
   } finally {
     fixture.database.close();
   }
+});
+
+test('activity suggestion copy clearly states that it changes the group session schedule', () => {
+  const copy = activitySuggestionCopy('18:00', '21:00');
+  assert.match(copy.description, /会修改该群的会话时间表/);
+  assert.equal(copy.applyLabel, '写入会话时间表');
+  assert.equal(copy.appliedMessage, '已将该时段写入该群的会话时间表。');
 });

@@ -6,6 +6,7 @@ import {
   type ActivityResponseView,
   type ActivityView,
 } from '../api.ts';
+import { ACTIVITY_SUGGESTION_APPLIED_MESSAGE, activitySuggestionCopy } from '../activity-suggestion-copy.ts';
 import { activityCalendarCells, activityLevel, peakActivityWindow } from '../impressions-model.ts';
 
 const VIEW_LABELS: ReadonlyArray<{ value: ActivityView; label: string }> = [
@@ -129,7 +130,7 @@ export function ActivityHeatmap({ sessionId, userId, group = false, scheduleDrop
         body: JSON.stringify({ sessionId, windowKey: data.suggestion.windowKey }),
       });
       setSuggestionHidden(true);
-      setSuggestionMessage(action === 'apply' ? '已加入该群的积极时段。' : '已关闭这条建议。');
+      setSuggestionMessage(action === 'apply' ? ACTIVITY_SUGGESTION_APPLIED_MESSAGE : '已关闭这条建议。');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '更新活动建议失败');
     } finally {
@@ -141,6 +142,7 @@ export function ActivityHeatmap({ sessionId, userId, group = false, scheduleDrop
   const peak = data?.view === 'hour' ? peakActivityWindow(data.buckets) : undefined;
   const peakFrom = peak ? String(peak.from).padStart(2, '0') : '';
   const peakTo = peak ? String(peak.to === 0 ? 24 : peak.to).padStart(2, '0') : '';
+  const suggestionCopy = suggestion ? activitySuggestionCopy(suggestion.from, suggestion.to) : undefined;
   return <section className={`activity-panel${group ? ' activity-panel-group' : ''}`}>
     <div className="activity-heading">
       <div>
@@ -171,10 +173,10 @@ export function ActivityHeatmap({ sessionId, userId, group = false, scheduleDrop
       <span>多</span>
     </div>}
     {data && <ActivitySummary data={data} />}
-    {suggestion && !suggestionHidden && <div className="activity-suggestion" role="status">
-      <p>这个群 {suggestion.from}–{suggestion.to} 最热闹，要在这段设成积极吗？</p>
+    {suggestion && suggestionCopy && !suggestionHidden && <div className="activity-suggestion" role="status">
+      <p>{suggestionCopy.description}</p>
       <span className="activity-suggestion-ratio mono">{percent(suggestion.ratio)}</span>
-      <button className="button button-primary" type="button" disabled={suggestionBusy} onClick={() => void updateSuggestion('apply')}>加入作息</button>
+      <button className="button button-primary" type="button" disabled={suggestionBusy} onClick={() => void updateSuggestion('apply')}>{suggestionCopy.applyLabel}</button>
       <button className="text-button" type="button" disabled={suggestionBusy} onClick={() => void updateSuggestion('dismiss')}>关闭</button>
     </div>}
     {suggestionMessage && <p className="activity-suggestion-message" role="status">{suggestionMessage}</p>}
