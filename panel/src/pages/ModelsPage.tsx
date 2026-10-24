@@ -274,7 +274,7 @@ export function ModelsPage() {
           <div className="panel-card table-card">
             <div className="table-scroll">
               <table className="models-slot-table">
-                <thead><tr><th>用途</th><th>使用的模型（按顺序降级） <span className="models-help-mark" title="回复建议用 API，CLI 适合后台任务；点击模型名称调整降级顺序。" aria-label="用途表说明">ⓘ</span></th><th>温度</th><th>思考强度</th><th>最大输出</th><th>操作</th></tr></thead>
+                <thead><tr><th>用途</th><th>使用的模型（按顺序降级） <span className="models-help-mark" title="回复建议用 API，CLI 适合后台任务；点击模型名称调整降级顺序。" aria-label="用途表说明">ⓘ</span></th><th>温度</th><th>思考强度</th><th>最大输出</th></tr></thead>
                 <tbody>
                   {MODEL_SLOT_DEFS.map((definition) => {
                     const chain = view.slots[definition.slot] ?? [];

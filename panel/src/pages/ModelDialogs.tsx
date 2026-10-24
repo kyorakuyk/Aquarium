@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { apiRequest, patch, post, type ModelProviderView, type ModelSlotEntryView } from '../api.ts';
-import { reasoningFieldOptions, type SlotDef } from '../models-view.ts';
+import { providerBaseUrlInputValue, providerBaseUrlNeedsInput, reasoningFieldOptions, type SlotDef } from '../models-view.ts';
 import type { ModelParameterName, ProviderModelsState } from '../model-api.ts';
 import { SlotDialogRowCard, type SlotDialogRow } from './SlotDialogRowCard.tsx';
 
@@ -102,7 +102,9 @@ export function ProviderDialog({
         {mode === 'create' && <label><span className="field-label">标识</span><input value={id} placeholder="例如 deepseek" autoComplete="off" disabled={busy} onChange={(event) => setId(event.currentTarget.value)} /></label>}
         <label><span className="field-label">显示名</span><input value={label} placeholder="留空则使用标识" disabled={busy} onChange={(event) => setLabel(event.currentTarget.value)} /></label>
         {kind === 'api' ? <>
-          <label className="model-form-wide"><span className="field-label">Base URL</span><input value={baseUrl} placeholder="https://api.example.com/v1" autoComplete="off" disabled={busy} onChange={(event) => setBaseUrl(event.currentTarget.value)} /></label>
+          <label className="model-form-wide"><span className="field-label">Base URL</span><input value={providerBaseUrlInputValue(baseUrl)} placeholder="https://api.example.com/v1" autoComplete="off" disabled={busy} onChange={(event) => setBaseUrl(event.currentTarget.value)} />
+            {providerBaseUrlNeedsInput(baseUrl) && <small className="provider-base-url-hint">尚未填写 API 地址；请输入服务商提供的地址。</small>}
+          </label>
           <label><span className="field-label">密钥变量名</span><input value={apiKeyEnv} autoComplete="off" disabled={busy} onChange={(event) => setApiKeyEnv(event.currentTarget.value)} /></label>
           <label><span className="field-label">思考强度字段</span><select value={reasoningField} disabled={busy} onChange={(event) => setReasoningField(event.currentTarget.value)}>
             {reasoningFieldOptions(reasoningField).map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
@@ -316,6 +318,7 @@ export function SlotDialog({ definition, chain, providers, providerModels, pageB
         <div>
           <h3 id="slot-dialog-title">{definition.title}</h3>
           <p>{definition.description} · 按顺序尝试，前一项失败才用下一项</p>
+          {definition.requirement && <p className="slot-requirement" role="note">{definition.requirement}</p>}
         </div>
         <button className="slot-dialog-close" type="button" aria-label="关闭" title="关闭" onClick={close}>×</button>
       </header>

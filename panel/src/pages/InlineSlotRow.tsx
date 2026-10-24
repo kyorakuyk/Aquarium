@@ -137,11 +137,15 @@ export function InlineSlotRow({ definition, chain, providers, providerModels, di
 
   return (
     <tr>
-      <td><strong>{definition.title}</strong><span className="slot-description">{definition.description}</span></td>
+      <td>
+        <strong>{definition.title}</strong>
+        <span className="slot-description">{definition.description}</span>
+        {definition.requirement && <span className="slot-requirement" role="note">{definition.requirement}</span>}
+      </td>
       <td>
         <button className="slot-chain-button" type="button" disabled={disabled} onClick={onEdit}>
           <span>{chainSummary(chain, providers)}</span>
-          <span className="slot-chain-edit"><span aria-hidden="true">✎</span>更换</span>
+          <span className="slot-chain-edit"><span aria-hidden="true">✎</span>调整</span>
         </button>
       </td>
       <td><InlineModelParamCell
@@ -207,7 +211,6 @@ export function InlineSlotRow({ definition, chain, providers, providerModels, di
           }}
         />}
       </InlineModelParamCell></td>
-      <td><button className="button button-secondary slot-inline-edit" type="button" disabled={disabled} onClick={onEdit}>编辑</button></td>
     </tr>
   );
 }

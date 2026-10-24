@@ -20,7 +20,6 @@
 
 .models-slot-table th:first-child { width: 22%; }
 .models-slot-table th:nth-child(2) { width: 30%; }
-.models-slot-table th:last-child { width: 82px; }
 .models-slot-table td { white-space: normal; }
 .models-slot-table tbody tr { height: 64px; }
 .models-slot-table tbody td { box-sizing: border-box; height: 64px; padding: 8px 12px; vertical-align: middle; }
@@ -28,13 +27,15 @@
 .slot-chain-button { display: flex; max-width: 100%; min-height: 44px; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 4px 0; border: 0; background: transparent; color: var(--ink-2); cursor: pointer; font-family: var(--mono); font-size: 12px; text-align: left; white-space: normal; overflow-wrap: anywhere; }
 .slot-chain-button:hover { color: var(--accent); text-decoration: underline; }
 .slot-chain-edit { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-family: var(--sans); font-size: 12px; }
-.slot-inline-edit { min-height: 44px; padding: 0 10px; font-size: 12px; }
 .models-help-mark { display: inline-flex; width: 18px; height: 18px; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 50%; color: var(--muted); cursor: help; font-size: 12px; }
 .inline-param-trigger { display: inline-flex; width: 100%; min-width: 52px; min-height: 44px; align-items: center; justify-content: flex-start; gap: 4px; padding: 0 4px; border: 0; border-radius: 6px; background: transparent; color: var(--ink-2); cursor: pointer; font-family: var(--mono); font-size: 12px; text-align: left; }
 .inline-param-trigger:hover, .inline-param-trigger:focus-visible { background: var(--surface-2); color: var(--accent); }
 .inline-param-trigger.is-unsupported { color: var(--muted); }
 .inline-param-trigger.is-unsupported s { text-decoration-thickness: 1px; }
-.param-unknown-marker { display: inline-flex; width: 12px; height: 12px; flex: none; align-items: center; justify-content: center; border: 1px solid var(--muted); border-radius: 50%; color: var(--muted); font-family: var(--sans); font-size: 11px; line-height: 1; }
+.param-unknown-marker { display: inline-flex; width: 12px; height: 12px; flex: none; align-items: center; justify-content: center; margin-left: 4px; border: 1px solid var(--muted); border-radius: 50%; color: var(--muted); font-family: var(--sans); font-size: 11px; line-height: 1; }
+.slot-requirement { display: block; margin-top: 3px; color: var(--warn-ink); font-size: 12px; line-height: 1.4; }
+.slot-dialog-header .slot-requirement { margin-top: 4px; color: var(--warn-ink); }
+.provider-base-url-hint { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.4; }
 .model-param-popover { position: fixed; z-index: 1000; width: min(240px, calc(100vw - 16px)); padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); }
 .model-param-popover-input { display: grid; gap: 6px; color: var(--ink-2); font-size: 12px; }
 .model-param-popover-input input, .model-param-popover-input select { width: 100%; min-height: 44px; padding: 7px 9px; font-size: 12px; }

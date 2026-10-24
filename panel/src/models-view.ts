@@ -4,13 +4,30 @@ export interface SlotDef {
   slot: string;
   title: string;
   description: string;
+  requirement?: string;
+}
+
+const UNFILLED_API_BASE_URL = '<待用户填写>';
+
+export function providerBaseUrlNeedsInput(value: string | undefined): boolean {
+  const trimmed = value?.trim() ?? '';
+  return trimmed === '' || trimmed === UNFILLED_API_BASE_URL;
+}
+
+export function providerBaseUrlInputValue(value: string | undefined): string {
+  return value?.trim() === UNFILLED_API_BASE_URL ? '' : value ?? '';
 }
 
 export const MODEL_SLOT_DEFS: SlotDef[] = [
   { slot: 'reply', title: '回复', description: '群聊和私聊的发言' },
   { slot: 'judge', title: '主动判断', description: '要不要接话' },
   { slot: 'extract', title: '提取与评估', description: '印象标签、情绪评估' },
-  { slot: 'vision', title: '看图', description: '图片转文字' },
+  {
+    slot: 'vision',
+    title: '看图',
+    description: '图片转文字',
+    requirement: '需使用支持图片输入的模型；面板当前不会验证此能力。',
+  },
 ];
 
 export const REASONING_OPTIONS: Array<{ value: ModelReasoning; label: string }> = [
@@ -74,7 +91,11 @@ export function providerStatus(provider: ModelProviderView): { tone: 'ok' | 'war
 }
 
 export function providerMeta(provider: ModelProviderView): string {
-  if (provider.kind === 'api') return provider.baseUrl ?? '';
+  if (provider.kind === 'api') {
+    return providerBaseUrlNeedsInput(provider.baseUrl)
+      ? '尚未填写 API 地址'
+      : provider.baseUrl?.trim() ?? '';
+  }
   const args = provider.args && provider.args.length > 0 ? ` ${provider.args.join(' ')}` : '';
   return `${provider.command ?? ''}${args}`;
 }
