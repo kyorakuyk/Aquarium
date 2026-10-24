@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ModeScheduleEntry } from '../api.ts';
-import { PersistedDetails } from '../components/PersistedDetails.tsx';
 import {
   addModeScheduleEntry,
   changeModeScheduleDraft,
@@ -137,30 +136,24 @@ export function SessionScheduleEditor({
           overridden={target.overrides.includes('modeSchedule')}
           onRestore={onRestore}
         />
-        <PersistedDetails
-          className="session-persisted-details"
-          sessionId={target.id}
-          section="schedule"
-          summary={<span className="details-summary-copy">{summary}</span>}
-        >
-          <div className="schedule-details-content">
-            <div className="schedule-timeline" role="img" aria-label="全天 24 小时时段模式分布">
-              {timeline.map((segment) => <span
-                className="schedule-segment"
-                data-mode={segment.mode}
-                key={`${segment.startMinute}:${segment.endMinute}:${segment.mode}`}
-                title={`${String(Math.floor(segment.startMinute / 60)).padStart(2, '0')}:${String(segment.startMinute % 60).padStart(2, '0')}–${String(Math.floor(segment.endMinute / 60)).padStart(2, '0')}:${String(segment.endMinute % 60).padStart(2, '0')} ${SESSION_MODE_OPTIONS.find((option) => option.mode === segment.mode)?.title ?? segment.mode}`}
-                style={{ width: `${((segment.endMinute - segment.startMinute) / 1440) * 100}%` }}
-              />)}
-            </div>
-            <div className="schedule-timeline-labels mono"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
-            <div className="mode-legend" aria-label="模式图例">
-              {SESSION_MODE_OPTIONS.map((option) => <span className="mode-legend-item" key={option.mode}><i data-mode={option.mode} />{option.title}</span>)}
-            </div>
-            {draftPersistenceError && <p className="schedule-help" role="alert">{draftPersistenceError}</p>}
-            <button className="button button-secondary schedule-edit-button" type="button" onClick={openEditor}>编辑时段</button>
+        <div className="schedule-details-content">
+          <p className="schedule-summary" aria-live="polite">{summary}</p>
+          <div className="schedule-timeline" role="img" aria-label="全天 24 小时时段模式分布">
+            {timeline.map((segment) => <span
+              className="schedule-segment"
+              data-mode={segment.mode}
+              key={`${segment.startMinute}:${segment.endMinute}:${segment.mode}`}
+              title={`${String(Math.floor(segment.startMinute / 60)).padStart(2, '0')}:${String(segment.startMinute % 60).padStart(2, '0')}–${String(Math.floor(segment.endMinute / 60)).padStart(2, '0')}:${String(segment.endMinute % 60).padStart(2, '0')} ${SESSION_MODE_OPTIONS.find((option) => option.mode === segment.mode)?.title ?? segment.mode}`}
+              style={{ width: `${((segment.endMinute - segment.startMinute) / 1440) * 100}%` }}
+            />)}
           </div>
-        </PersistedDetails>
+          <div className="schedule-timeline-labels mono"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+          <div className="mode-legend" aria-label="模式图例">
+            {SESSION_MODE_OPTIONS.map((option) => <span className="mode-legend-item" key={option.mode}><i data-mode={option.mode} />{option.title}</span>)}
+          </div>
+          {draftPersistenceError && <p className="schedule-help" role="alert">{draftPersistenceError}</p>}
+          <button className="button button-secondary schedule-edit-button" type="button" onClick={openEditor}>编辑时段</button>
+        </div>
       </div>
 
       <dialog className="schedule-dialog" ref={dialogRef} aria-labelledby="schedule-dialog-title">

@@ -57,8 +57,41 @@ export function modeScheduleSummary(entries: readonly ModeScheduleEntry[], defau
     && validMinuteOfDay(entry.to) !== undefined && entry.from !== entry.to);
   if (validEntries.length === 0) return '未设置';
   const label = (mode: SessionMode) => SESSION_MODE_OPTIONS.find((option) => option.mode === mode)?.title ?? mode;
-  const periods = validEntries.map((entry) => `${entry.from}–${entry.to} ${label(entry.mode)}`);
-  return [...periods, `其余时间${label(defaultMode)}`].join(' · ');
+  const timeline = modeScheduleTimeline(entries, defaultMode);
+  const modes = new Set(timeline.map((segment) => segment.mode));
+  if (modes.size === 1) {
+    const mode = timeline[0]!.mode;
+    return mode === defaultMode ? '这个时段没有效果（与默认模式相同）' : `全天${label(mode)}`;
+  }
+  const formatMinute = (minute: number) => {
+    const hours = Math.floor(minute / 60);
+    const minutes = minute % 60;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  };
+  const first = timeline[0]!;
+  const last = timeline.at(-1)!;
+  const wrapsMidnight = timeline.length > 1
+    && first.startMinute === 0
+    && last.endMinute === 1440
+    && first.mode === last.mode;
+  const periods: { startMinute: number; text: string }[] = [];
+  if (wrapsMidnight && first.mode !== defaultMode) {
+    periods.push({
+      startMinute: last.startMinute,
+      text: `${formatMinute(last.startMinute)}–${formatMinute(first.endMinute)} ${label(first.mode)}`,
+    });
+  }
+  for (const segment of wrapsMidnight ? timeline.slice(1, -1) : timeline) {
+    if (segment.mode === defaultMode) continue;
+    periods.push({
+      startMinute: segment.startMinute,
+      text: `${formatMinute(segment.startMinute)}–${formatMinute(segment.endMinute)} ${label(segment.mode)}`,
+    });
+  }
+  periods.sort((firstPeriod, secondPeriod) => firstPeriod.startMinute - secondPeriod.startMinute);
+  const summary = periods.map((period) => period.text);
+  if (timeline.some((segment) => segment.mode === defaultMode)) summary.push(`其余时间${label(defaultMode)}`);
+  return summary.join(' · ');
 }
 
 export type ModeScheduleDrafts = ReadonlyMap<string, readonly ModeScheduleEntry[]>;

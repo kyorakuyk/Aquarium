@@ -110,6 +110,7 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .field-inheritance-state[data-overridden="true"] { color: var(--accent); }
 .field-inheritance-state .text-button { min-height: 44px; padding: 0 4px; color: var(--accent); }
 .session-persisted-details { min-width: 0; }
+.schedule-summary { margin: 0 0 8px; color: var(--ink-2); font-size: 12px; line-height: 1.5; }
 .session-persisted-details > summary { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 10px; color: var(--ink-2); cursor: pointer; list-style: none; }
 .session-persisted-details > summary::-webkit-details-marker { display: none; }
 .session-persisted-details > summary::after { flex: none; color: var(--muted); content: '⌄'; font-size: 16px; }
