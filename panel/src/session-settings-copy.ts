@@ -21,3 +21,25 @@ export function sessionSettingsPanelCopy(kind: SessionSettingsPanelKind, id: str
     nicknameTitle: '叫它的名字',
   };
 }
+
+export interface SessionSettingsInheritanceCopy {
+  statusLabel: string;
+  restoreLabel?: string;
+}
+
+export function sessionSettingsInheritanceCopy(kind: SessionSettingsPanelKind, overridden: boolean): SessionSettingsInheritanceCopy | undefined {
+  if (kind === 'global') return undefined;
+  const scopeLabel = kind === 'group' ? '本群' : '本会话';
+  return {
+    statusLabel: overridden ? `${scopeLabel}覆盖` : '继承全局',
+    ...(overridden ? { restoreLabel: '恢复继承' } : {}),
+  };
+}
+
+export function sessionNoteSummary(value: string, kind: SessionSettingsPanelKind, overridden: boolean): string {
+  const note = value.trim();
+  if (note) return note.slice(0, 20);
+  if (kind === 'global') return '未填写';
+  if (overridden) return '已清空';
+  return '未填写 · 继承全局';
+}

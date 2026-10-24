@@ -3,7 +3,7 @@ import type { DefaultsView, SessionSettings, SessionView } from '../api.ts';
 import { PersistedDetails } from '../components/PersistedDetails.tsx';
 import { SESSION_MODE_OPTIONS } from '../session-mode.ts';
 import { formatSavedAt } from '../panel-feedback.ts';
-import { sessionSettingsPanelCopy } from '../session-settings-copy.ts';
+import { sessionNoteSummary, sessionSettingsPanelCopy } from '../session-settings-copy.ts';
 import { SessionFieldHeading } from './SessionFieldHeading.tsx';
 import { SessionScheduleEditor } from './SessionScheduleEditor.tsx';
 
@@ -131,8 +131,7 @@ export function SessionSettingsPanel({
   }
 
   function noteSummary(): string {
-    if (groupNote.trim()) return groupNote.trim().slice(0, 20);
-    return target.kind !== 'global' && !target.overrides.includes('groupNote') ? '未填写 · 继承全局' : '未填写';
+    return sessionNoteSummary(groupNote, target.kind, target.overrides.includes('groupNote'));
   }
 
   function rateSummary(): string {

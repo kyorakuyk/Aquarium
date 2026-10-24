@@ -103,17 +103,12 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .nickname-add-editor { display: flex; align-items: center; gap: 8px; }
 .nickname-add-editor input { max-width: 220px; }
 .session-details-row { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); align-items: start; gap: 12px; }
-.session-details-row .field-heading { min-height: 44px; margin: 0; }
+.session-details-row .field-heading { min-height: 44px; flex-wrap: wrap; margin: 0; }
 .field-heading-title { display: flex; min-width: 0; align-items: center; gap: 4px; }
 .field-heading-title h3 { margin: 0; }
-.field-override-menu { position: relative; flex: none; }
-.field-override-menu > summary { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 50%; cursor: pointer; list-style: none; }
-.field-override-menu > summary::-webkit-details-marker { display: none; }
-.override-dot { display: block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-.field-override-popover { position: absolute; top: 40px; left: 0; z-index: 4; display: none; min-width: 132px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
-.field-override-menu:hover .field-override-popover, .field-override-menu[open] .field-override-popover, .field-override-menu:focus-within .field-override-popover { display: block; }
-.field-override-popover button { width: 100%; min-height: 44px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--ink-2); cursor: pointer; text-align: left; white-space: nowrap; }
-.field-override-popover button:hover { background: var(--surface-2); color: var(--accent); }
+.field-inheritance-state { display: flex; min-height: 44px; flex: none; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.field-inheritance-state[data-overridden="true"] { color: var(--accent); }
+.field-inheritance-state .text-button { min-height: 44px; padding: 0 4px; color: var(--accent); }
 .session-persisted-details { min-width: 0; }
 .session-persisted-details > summary { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 10px; color: var(--ink-2); cursor: pointer; list-style: none; }
 .session-persisted-details > summary::-webkit-details-marker { display: none; }
