@@ -3,6 +3,7 @@ import { apiRequest, replayDecision, type DecisionReplayView, type DecisionStep,
 import { activityDecisionMetrics } from '../decision-metrics.ts';
 import { InfoTip } from '../components/InfoTip.tsx';
 import { decisionLabel, decisionTone } from '../labels.ts';
+import { TaskProgress, type TaskProgressItem } from '../components/TaskProgress.tsx';
 
 interface ChatEntry {
   id: number;
@@ -52,6 +53,17 @@ function interactionVerdictLabel(verdict: string): string {
 function hasInteractionAlert(entries: DecisionView['interactionTrace']): boolean {
   return entries.some((entry) => entry.verdict === 'failed' || entry.reason === 'failure_cooldown');
 }
+
+const TASK_PROGRESS: readonly TaskProgressItem[] = [
+  { id: 'I0', title: '准备与计划链接', detail: '交互施工计划已接入当前项目。', status: 'done' },
+  { id: 'I1', title: '事件核验与表情白名单', detail: '事件管线已核实，5 桶共 26 个白名单表情已取数。', status: 'done' },
+  { id: 'I2', title: '动作门控与追踪', detail: 'InteractionGate、限速、日志、配置和决策追踪已提交。', status: 'done' },
+  { id: 'I3', title: '贴表情与正反馈', detail: 'react()、安全规则、忙碌模式和入站正反馈已提交。', status: 'done' },
+  { id: 'P1', title: '测试群现场验收', detail: '等待观察 20 分钟，确认表情、去重、严肃话题、紧急闭嘴和决策记录。', status: 'active' },
+  { id: 'I4', title: '戳一戳', detail: '等待 P1 验收后再开始。', status: 'pending' },
+  { id: 'I5', title: '撤回', detail: '等待 P2 验收后再开始。', status: 'pending' },
+  { id: 'I6', title: '管理员动作', detail: '仅在明确要求后开工。', status: 'pending' },
+];
 
 function ReplayTraceList({ entries, emptyText }: { entries: PipelineStepTraceView[]; emptyText: string }) {
   if (!entries.length) return <p className="muted">{emptyText}</p>;
@@ -216,6 +228,10 @@ export function DecisionsPage() {
             {messages.length === 0 && <div className="chat-empty"><p>试聊从这里开始。</p><span className="muted">选择一个会话，输入消息查看模型回复与执行步骤。</span></div>}
             <div ref={chatEnd} />
           </div>
+          <TaskProgress
+            items={TASK_PROGRESS}
+            note="本轮跳过成员“不想被打扰”标记检查，已列为 P1 未完成项；它不等同于紧急闭嘴。"
+          />
           <form className="chat-compose" onSubmit={sendMessage}>
             <label className="visually-hidden" htmlFor="sandbox-message">输入试聊内容</label>
             <textarea id="sandbox-message" rows={2} value={draft} onChange={(event) => setDraft(event.currentTarget.value)} placeholder="写一条消息…" disabled={busy || !sessionId} />
