@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { InteractionSettingsView, SessionView } from '../api.ts';
 import { formatSavedAt } from '../panel-feedback.ts';
+import { sessionSettingsInheritanceCopy } from '../session-settings-copy.ts';
 import { createSessionSettingsTarget, type SessionSettingsTarget } from './SessionSettingsPanel.tsx';
 
 const FEATURES = [
@@ -53,23 +54,31 @@ export function InteractionSettingsPanel({
       {savedAt && <span className="saved-time">已保存 {savedAt}</span>}
     </div>
     <div className="interaction-toggle-list">
-      {FEATURES.map(({ key, label }) => <div className="interaction-toggle-row" key={key}>
-        <label className="interaction-toggle">
-          <span>{label}</span>
-          <input
-            type="checkbox"
-            checked={interactions[key].enabled}
-            disabled={busy}
-            onChange={(event) => toggle(key, event.currentTarget.checked)}
-          />
-        </label>
-        {session.interactionOverrides.includes(key) && <button
-          className="button button-secondary interaction-restore"
-          type="button"
-          disabled={busy}
-          onClick={() => restore(key)}
-        >恢复继承</button>}
-      </div>)}
+      {FEATURES.map(({ key, label }) => {
+        const overridden = session.interactionOverrides.includes(key);
+        const inheritance = sessionSettingsInheritanceCopy(session.kind, overridden);
+        return <div className="interaction-toggle-row" key={key}>
+          <label className="interaction-toggle">
+            <span>{label}</span>
+            <input
+              type="checkbox"
+              checked={interactions[key].enabled}
+              disabled={busy}
+              onChange={(event) => toggle(key, event.currentTarget.checked)}
+            />
+          </label>
+          {inheritance && <div className="field-inheritance-state" data-overridden={overridden}>
+            <span>{inheritance.statusLabel}</span>
+            {inheritance.restoreLabel && <button
+              className="text-button"
+              type="button"
+              aria-label={`${label}恢复继承`}
+              disabled={busy}
+              onClick={() => restore(key)}
+            >{inheritance.restoreLabel}</button>}
+          </div>}
+        </div>;
+      })}
     </div>
   </section>;
 }
