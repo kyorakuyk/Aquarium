@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest, patch, type DefaultsView, type SessionView } from '../api.ts';
+import { sessionPeerLabel } from '../session-display.ts';
 import { SleepSettingsPanel } from './SleepSettingsPanel.tsx';
 import { InteractionSettingsPanel } from './InteractionSettingsPanel.tsx';
 import {
@@ -200,7 +201,7 @@ export function SessionsPage({
                   <span className="avatar-initial">{Array.from(item.name)[0] ?? '会'}</span>
                   <span className="session-row-copy">
                     <span className="session-name-line"><strong>{item.name}</strong>{item.overrides.length > 0 && <span className="session-override-dot" role="img" title="有覆盖项" aria-label="有会话覆盖项" />}</span>
-                    <span className="mono muted">{item.sessionId}{item.memberCount === undefined ? '' : ` · ${item.memberCount} 人`}</span>
+                    <span className="mono muted">{sessionPeerLabel(item)}</span>
                   </span>
                 </button>
                 <span className={`session-state-dot ${item.enabled ? 'is-enabled' : 'is-disabled'}`} role="img" aria-label={`${item.name}${item.enabled ? '已启用' : '已停用'}`} />

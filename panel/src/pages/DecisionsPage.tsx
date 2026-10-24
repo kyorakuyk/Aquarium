@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { apiRequest, replayDecision, type DecisionReplayView, type DecisionStep, type DecisionView, type PanelStatus, type PipelineStepTraceView, type SessionView, type TraceView } from '../api.ts';
 import { activityDecisionMetrics } from '../decision-metrics.ts';
 import { InfoTip } from '../components/InfoTip.tsx';
+import { sessionOptionLabel } from '../session-display.ts';
 import { decisionLabel, decisionTone } from '../labels.ts';
 import { TaskProgress, type TaskProgressItem } from '../components/TaskProgress.tsx';
 
@@ -211,7 +212,7 @@ export function DecisionsPage() {
         <section className="chat-card panel-card">
           <div className="chat-toolbar">
             <label><span className="field-label">按哪个会话的设置</span><select value={sessionId} onChange={(event) => { setSessionId(event.currentTarget.value); clearChat(); }}>
-              {sessions.map((item) => <option value={item.sessionId} key={item.sessionId}>{item.name} · {item.sessionId}</option>)}
+              {sessions.map((item) => <option value={item.sessionId} key={item.sessionId}>{sessionOptionLabel(item)}</option>)}
             </select></label>
             <label><span className="field-label">我扮演</span><select value={asOwner ? 'owner' : 'friend'} onChange={(event) => { setAsOwner(event.currentTarget.value === 'owner'); clearChat(); }}><option value="owner" disabled={!ownerAvailable}>{ownerAvailable ? '主人' : '主人（未配置）'}</option><option value="friend">普通群友</option></select></label>
             <button className="button button-secondary" type="button" onClick={clearChat}>清空对话</button>
