@@ -7,10 +7,16 @@ test('global session settings avoid duplicate headings and label shared fields',
     noteTitle: '补充说明（全部会话）',
     nicknameTitle: '触发昵称（全部会话）',
   });
-  assert.deepEqual(sessionSettingsPanelCopy('group', '900000001:group:123456'), {
+  assert.deepEqual(sessionSettingsPanelCopy('group', '900000001:group:123456', 17), {
     eyebrow: '群聊',
-    identifier: '900000001:group:123456',
+    identifier: '123456 · 17 人',
     noteTitle: '在这个群里的补充说明',
+    nicknameTitle: '叫它的名字',
+  });
+  assert.deepEqual(sessionSettingsPanelCopy('private', '900000001:private:654321'), {
+    eyebrow: '好友',
+    identifier: '654321',
+    noteTitle: '对这个人的补充说明',
     nicknameTitle: '叫它的名字',
   });
 });

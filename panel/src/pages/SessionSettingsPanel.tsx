@@ -16,6 +16,7 @@ export interface SessionSettingsTarget {
   id: string;
   name: string;
   kind: 'global' | 'group' | 'private';
+  memberCount?: number;
   enabled: boolean;
   overrides: string[];
   settings: SessionSettings;
@@ -38,6 +39,7 @@ export function createSessionSettingsTarget(session: SessionView): SessionSettin
     id: session.sessionId,
     name: session.name,
     kind: session.kind,
+    memberCount: session.memberCount,
     enabled: session.enabled,
     overrides: session.overrides,
     settings: session.effective,
@@ -177,7 +179,7 @@ export function SessionSettingsPanel({
   }
 
   const selectedMode = SESSION_MODE_OPTIONS.find((option) => option.mode === target.settings.mode);
-  const copy = sessionSettingsPanelCopy(target.kind, target.id);
+  const copy = sessionSettingsPanelCopy(target.kind, target.id, target.memberCount);
 
   return (
     <>

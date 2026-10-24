@@ -1,3 +1,5 @@
+import { sessionPeerLabel } from './session-display.ts';
+
 export type SessionSettingsPanelKind = 'global' | 'group' | 'private';
 
 export interface SessionSettingsPanelCopy {
@@ -7,7 +9,7 @@ export interface SessionSettingsPanelCopy {
   nicknameTitle: string;
 }
 
-export function sessionSettingsPanelCopy(kind: SessionSettingsPanelKind, id: string): SessionSettingsPanelCopy {
+export function sessionSettingsPanelCopy(kind: SessionSettingsPanelKind, id: string, memberCount?: number): SessionSettingsPanelCopy {
   if (kind === 'global') {
     return {
       noteTitle: '补充说明（全部会话）',
@@ -16,7 +18,7 @@ export function sessionSettingsPanelCopy(kind: SessionSettingsPanelKind, id: str
   }
   return {
     eyebrow: kind === 'group' ? '群聊' : '好友',
-    identifier: id,
+    identifier: sessionPeerLabel({ sessionId: id, kind, memberCount }),
     noteTitle: kind === 'private' ? '对这个人的补充说明' : '在这个群里的补充说明',
     nicknameTitle: '叫它的名字',
   };
