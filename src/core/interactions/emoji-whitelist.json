@@ -1,5 +1,5 @@
 {
-  "low": [
+  "oppressed": [
     {
       "emoji_id": "49",
       "name": "拥抱"
@@ -17,7 +17,7 @@
       "name": "可怜"
     }
   ],
-  "annoyed": [
+  "unpleasant": [
     {
       "emoji_id": "174",
       "name": "无奈"
@@ -61,7 +61,7 @@
       "name": "敬礼"
     }
   ],
-  "happy": [
+  "aroused": [
     {
       "emoji_id": "13",
       "name": "呲牙"

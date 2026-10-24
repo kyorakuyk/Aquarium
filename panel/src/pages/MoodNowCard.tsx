@@ -3,20 +3,12 @@ import { apiRequest, type MoodBand } from '../api.ts';
 import type { MoodSeriesPoint, MoodSeriesView } from '../mood-series-api.ts';
 
 const bandLabels: Record<MoodBand, string> = {
-  low: '低落',
-  annoyed: '不爽',
+  unpleasant: '不愉快',
+  oppressed: '压抑',
   calm: '平静',
-  happy: '开心',
-  excited: '很开心',
+  aroused: '唤醒',
+  excited: '兴奋',
 };
-
-const bandRanges: Array<{ band: MoodBand; min: number; max: number }> = [
-  { band: 'low', min: -1, max: -0.5 },
-  { band: 'annoyed', min: -0.5, max: -0.15 },
-  { band: 'calm', min: -0.15, max: 0.15 },
-  { band: 'happy', min: 0.15, max: 0.5 },
-  { band: 'excited', min: 0.5, max: 1 },
-];
 
 function fullTime(time: number): string {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -57,20 +49,17 @@ function MoodChart({ series }: { series: MoodSeriesView }) {
   const innerHeight = height - top - bottom;
   const x = (time: number) => left + ((time - series.from) / Math.max(1, series.to - series.from)) * innerWidth;
   const y = (value: number) => top + ((1 - value) / 2) * innerHeight;
-  const line = series.points.map((point) => `${x(point.time).toFixed(1)},${y(point.valence).toFixed(1)}`).join(' ');
+  const segments = series.points.slice(1).map((point, index) => {
+    const previous = series.points[index]!;
+    return {
+      region: point.region,
+      key: `${previous.time}-${point.time}`,
+      path: `M${x(previous.time).toFixed(1)},${y(previous.valence).toFixed(1)} L${x(point.time).toFixed(1)},${y(point.valence).toFixed(1)}`,
+    };
+  });
 
   return (
-    <svg className="mood-now-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="过去 24 小时愉悦度曲线，背景分为五个心情档位">
-      {bandRanges.map(({ band, min, max }) => (
-        <rect
-          className={`mood-now-band mood-now-band-${band}${series.current.band === band ? ' is-current' : ''}`}
-          key={band}
-          x={left}
-          y={y(max)}
-          width={innerWidth}
-          height={Math.max(1, y(min) - y(max))}
-        />
-      ))}
+    <svg className="mood-now-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="过去 24 小时愉悦度曲线，线条颜色表示五个心情区域">
       {[1, 0, -1].map((value) => (
         <g key={value}>
           <line className="mood-now-axis" x1={left} x2={left + innerWidth} y1={y(value)} y2={y(value)} />
@@ -87,10 +76,10 @@ function MoodChart({ series }: { series: MoodSeriesView }) {
           y2={top + innerHeight}
         />
       ))}
-      <polyline className="mood-now-valence-line" points={line} />
+      {segments.map((segment) => <path className={`mood-now-valence-line mood-now-region-${segment.region}`} d={segment.path} key={segment.key} />)}
       {series.points.filter((point) => point.event).map((point) => (
         <circle
-          className={`mood-now-event-point${point.absorbed > 0 ? ' is-absorbed' : ''}`}
+          className={`mood-now-event-point mood-now-region-${point.region}${point.absorbed > 0 ? ' is-absorbed' : ''}`}
           key={point.time}
           cx={x(point.time)}
           cy={y(point.valence)}
@@ -182,15 +171,19 @@ export function MoodNowCard({ onOpenSleepSettings }: { onOpenSleepSettings: () =
         <>
           <div className="mood-now-current">
             <div>
-              <span className="muted">当前档位</span>
+              <span className="muted">当前区域</span>
               <strong>{bandLabels[series.current.band]}</strong>
               <span className="muted">{series.current.bandSince === null ? '基线状态' : `从 ${fullTime(series.current.bandSince)} 起`}</span>
             </div>
-            <div className="mood-now-distance">
-              距{series.current.distanceToNextBand.direction === 'up' ? '升档' : '降档'}至 {bandLabels[series.current.distanceToNextBand.targetBand]}：
-              <strong className="mono">{series.current.distanceToNextBand.amount.toFixed(2)}</strong>
-              <span className="muted">{series.current.distanceToNextBand.friction === 'sliding' ? '滑动摩擦' : '静摩擦'}</span>
+            <div className="mood-now-emotions">
+              <span className="muted">主情绪</span><strong>{series.current.mainEmotion}</strong>
+              <span className="muted">副情绪：{series.current.subEmotions.length ? series.current.subEmotions.join('、') : '无明显副情绪'}</span>
             </div>
+          </div>
+          <div className="mood-now-region-key" aria-label="心情区域图例">
+            {(Object.entries(bandLabels) as Array<[MoodBand, string]>).map(([region, label]) => (
+              <span className={`mood-now-region-key-item mood-now-region-${region}`} key={region}>{label}</span>
+            ))}
           </div>
           <MoodChart series={series} />
           <div className="mood-now-metrics">
@@ -200,6 +193,13 @@ export function MoodNowCard({ onOpenSleepSettings }: { onOpenSleepSettings: () =
                 <span style={{ width: `${Math.round(series.current.arousal * 100)}%` }} />
               </div>
               <Sparkline values={arousalTrend} label="兴奋度七点趋势" />
+            </div>
+            <div className="mood-now-metric">
+              <div className="metric-row"><span>掌控感</span><strong className="mono">{series.current.dominance >= 0 ? '+' : ''}{series.current.dominance.toFixed(2)}</strong></div>
+              <div className="progress-track" role="progressbar" aria-label="当前掌控感" aria-valuenow={Math.round((series.current.dominance + 1) * 50)} aria-valuemin={0} aria-valuemax={100}>
+                <span style={{ width: `${Math.round((series.current.dominance + 1) * 50)}%` }} />
+              </div>
+              <Sparkline values={series.points.map((point) => (point.dominance + 1) / 2)} label="掌控感七点趋势" />
             </div>
             <div className="mood-now-metric">
               <div className="metric-row"><span>精力 · {energyStatus(series.energy.status)}</span><strong className="mono">{series.energy.value === null ? '—' : `${Math.round(series.energy.value * 100)}%`}</strong></div>

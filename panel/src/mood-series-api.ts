@@ -4,6 +4,8 @@ export interface MoodSeriesPoint {
   time: number;
   valence: number;
   arousal: number;
+  dominance: number;
+  region: MoodBand;
   reserve: number;
   absorbed: number;
   event: boolean;
@@ -16,19 +18,15 @@ export interface MoodSeriesView {
   current: {
     valence: number;
     arousal: number;
+    dominance: number;
+    mainEmotion: string;
+    subEmotions: string[];
     reserve: number;
     reserveBand: 'full' | 'tired' | 'drained';
     reserveBandSince: number | null;
     energySource: 'inner' | 'outer' | 'mixed';
     band: MoodBand;
     bandSince: number | null;
-    distanceToNextBand: {
-      amount: number;
-      direction: 'up' | 'down';
-      targetBand: MoodBand;
-      margin: number;
-      friction: 'static' | 'sliding';
-    };
   };
   bandChanges: Array<{ time: number; from: MoodBand; to: MoodBand }>;
   energy: {

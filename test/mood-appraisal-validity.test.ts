@@ -20,6 +20,9 @@ test('mood events persist explicit appraisal validity independently of free-text
       arousalAfter: 0.4,
       dr: 0,
       appliedDr: 0,
+      dd: 0,
+      appliedDd: 0,
+      dominanceAfter: 0,
       absorbed: 0,
       reserveAfter: 0.8,
     };
@@ -27,8 +30,9 @@ test('mood events persist explicit appraisal validity independently of free-text
       ...base,
       time,
       reason,
+      causeTag: appraisalValid ? '中性事件' : null,
       appraisalValid,
-    } as Parameters<typeof repository.recordMoodEvent>[0] & { appraisalValid: boolean });
+    });
 
     record('budget', true, 1000);
     record('appraise_error', false, 2000);
@@ -38,5 +42,6 @@ test('mood events persist explicit appraisal validity independently of free-text
       ['appraise_error', false],
       ['budget', true],
     ]);
+    assert.deepEqual(events.map((event) => event.causeTag), [null, '中性事件']);
   });
 });

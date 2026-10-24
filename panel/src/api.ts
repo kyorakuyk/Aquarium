@@ -128,7 +128,7 @@ export interface DecisionView {
   hasPipelineTrace: boolean;
 }
 
-export type MoodBand = 'low' | 'annoyed' | 'calm' | 'happy' | 'excited';
+export type MoodBand = 'unpleasant' | 'oppressed' | 'calm' | 'aroused' | 'excited';
 
 export interface MoodEventView {
   id: number;
@@ -138,8 +138,12 @@ export interface MoodEventView {
   senderId: number | null;
   dv: number;
   da: number;
+  dd: number;
   appliedDv: number;
   appliedDa: number;
+  appliedDd: number;
+  dominanceAfter: number;
+  causeTag: string | null;
   reason: string;
   bandBefore: MoodBand | null;
   bandAfter: MoodBand | null;
@@ -148,10 +152,21 @@ export interface MoodEventView {
 }
 
 export interface MoodView {
+  account: number;
   valence: number;
   arousal: number;
+  dominance: number;
   band: MoodBand;
   bandSince: number | null;
+  mainEmotion: string;
+  subEmotions: string[];
+  emotionSince: number | null;
+  settings: {
+    surfaceHalfLifeMin: number;
+    arousalHalfLifeMin: number;
+    baseline: { valence: number; arousal: number };
+    senderHourlyCap: number;
+  };
   events: MoodEventView[];
 }
 

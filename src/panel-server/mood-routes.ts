@@ -1,19 +1,21 @@
 import { Hono } from 'hono';
 import type { AquariumConfig } from '../config/schema.ts';
-import { nextBand, nextReserveBand, type EnergySource } from '../core/mood/core.ts';
+import { SENDER_VALENCE_CAP, bandOf, nextReserveBand, resolveConfiguredMoodEmotions, type EnergySource } from '../core/mood/core.ts';
 import { resolveMoodState } from '../core/mood/state.ts';
-import { buildMoodSeriesPoints, distanceToNextBand } from '../core/mood/series.ts';
+import { buildMoodSeriesPoints } from '../core/mood/series.ts';
 import { sleepEnergy, sleepPlan, type SleepWakeState } from '../core/sleep/index.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
 import type { MoodBand, StoredMoodEvent } from '../store/affect-repo.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import type { PersonaEnergyMultipliers } from '../persona/energy.ts';
+import { DEFAULT_PERSONA_MOOD, type PersonaMoodSettings } from '../persona/mood.ts';
 import type { PanelAccountRuntime } from './types.ts';
 
 export interface MoodRouteOptions {
   getConfig: () => AquariumConfig;
   getEnergySource?: (account: number) => EnergySource;
   getEnergyMultipliers?: (account: number) => PersonaEnergyMultipliers;
+  getPersonaMoodSettings?: (account: number) => PersonaMoodSettings;
   repository: StoreRepository;
   accounts: () => PanelAccountRuntime[];
   sleepWakeState?: SleepWakeState;
@@ -91,17 +93,33 @@ export function registerMoodRoutes(app: Hono, options: MoodRouteOptions): void {
       appraisalEvents: stored ? options.repository.moodEventsSince(account, historyFrom) : [],
       replyTimes: stored ? options.repository.replyTimesForAccount(account, historyFrom, resolvedAt) : [],
     });
-    const band = nextBand(resolved, resolved.valence, at, 'decay');
+    let personaMood = DEFAULT_PERSONA_MOOD;
+    try { personaMood = options.getPersonaMoodSettings?.(account) ?? DEFAULT_PERSONA_MOOD; } catch { /* 缺失人设时退回默认情绪库 */ }
+    const band = bandOf(resolved.valence, resolved.arousal);
     const reserveBand = nextReserveBand({
       band: resolved.reserveBand,
       bandSince: resolved.reserveBandSince,
       lastBandChangeAt: resolved.reserveLastChangeAt,
     }, resolved.reserve, at, 'decay');
+    const emotions = resolveConfiguredMoodEmotions({
+      state: resolved,
+      settings: personaMood,
+      currentEmotion: resolved.mainEmotion,
+      emotionSince: resolved.emotionSince,
+      lastEmotionChangeAt: resolved.lastEmotionChangeAt,
+      now: at,
+      messageId: '',
+    });
+    const { mainEmotion, subEmotions, emotionSince, lastEmotionChangeAt } = emotions;
     return {
       ...resolved,
       band,
       bandSince: band === resolved.band ? resolved.bandSince : at,
       lastBandChangeAt: band === resolved.band ? resolved.lastBandChangeAt : at,
+      mainEmotion,
+      subEmotions,
+      emotionSince,
+      lastEmotionChangeAt,
       reserveBand,
       reserveBandSince: reserveBand === resolved.reserveBand ? resolved.reserveBandSince : at,
       reserveLastChangeAt: reserveBand === resolved.reserveBand ? resolved.reserveLastChangeAt : at,
@@ -113,19 +131,34 @@ export function registerMoodRoutes(app: Hono, options: MoodRouteOptions): void {
     const at = now();
     const account = requestedAccount(context.req.query('account'));
     if (account === null) return context.json({ error: 'Invalid mood account' }, 400);
+    const config = options.getConfig();
     const stored = options.repository.getMoodState(account);
     const state = currentMoodState(account, at);
     return context.json({
       account,
       valence: state.valence,
       arousal: state.arousal,
+      dominance: state.dominance,
       band: state.band,
       bandSince: stored ? state.bandSince : null,
+      mainEmotion: state.mainEmotion,
+      subEmotions: state.subEmotions,
+      emotionSince: stored ? state.emotionSince : null,
       reserve: state.reserve,
       reserveBand: state.reserveBand,
       reserveBandSince: stored ? state.reserveBandSince : null,
       energySource: state.energySource,
-      events: options.repository.recentMoodEvents(account, 20),
+      settings: {
+        surfaceHalfLifeMin: config.mood.surfaceHalfLifeMin,
+        arousalHalfLifeMin: config.mood.arousalHalfLifeMin,
+        baseline: config.mood.baseline,
+        senderHourlyCap: SENDER_VALENCE_CAP,
+      },
+      events: options.repository.recentMoodEvents(account, 20).map((event) => ({
+        ...event,
+        reason: redactSensitiveText(event.reason),
+        causeTag: event.causeTag === null ? null : redactSensitiveText(event.causeTag),
+      })),
     });
   });
 
@@ -162,11 +195,9 @@ export function registerMoodRoutes(app: Hono, options: MoodRouteOptions): void {
 
     const stored = options.repository.getMoodState(account);
     const current = currentMoodState(account, at);
-    const { valence, arousal, reserve, band } = current;
+    const { valence, arousal, dominance, reserve, band, mainEmotion, subEmotions } = current;
     const projectedBandChange = stored !== undefined && band !== stored.band;
     const bandSince = stored ? projectedBandChange ? at : current.bandSince : null;
-    const lastBandChangeAt = stored ? projectedBandChange ? at : current.lastBandChangeAt : null;
-    const distance = distanceToNextBand({ band, valence, now: at, lastBandChangeAt });
 
     const energyAt = (time: number, includeWakeOverride: boolean) => {
       if (!config.sleep.enabled) return { value: 1, status: 'awake' as const };
@@ -215,13 +246,15 @@ export function registerMoodRoutes(app: Hono, options: MoodRouteOptions): void {
       current: {
         valence,
         arousal,
+        dominance,
+        mainEmotion,
+        subEmotions,
         reserve,
         reserveBand: current.reserveBand,
         reserveBandSince: stored ? current.reserveBandSince : null,
         energySource,
         band,
         bandSince,
-        distanceToNextBand: distance,
       },
       bandChanges: moodBandChanges(events, from, at),
       energy: { ...currentEnergy, points: energyPoints },

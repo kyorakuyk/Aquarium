@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { recoverReserve } from '../src/core/mood/core.ts';
 import { sessionId } from '../src/core/shared/events.ts';
+import type { MoodBand } from '../src/store/affect-repo.ts';
 import { account, authHeaders, groupSession, now, withPanel } from './panel-test-helpers.ts';
 
 const hourMs = 60 * 60_000;
@@ -15,8 +16,10 @@ function addMoodEvent(
     reason: string;
     valenceAfter: number;
     arousalAfter: number;
-    bandBefore?: 'low' | 'annoyed' | 'calm' | 'happy' | 'excited' | null;
-    bandAfter?: 'low' | 'annoyed' | 'calm' | 'happy' | 'excited' | null;
+    bandBefore?: MoodBand | null;
+    bandAfter?: MoodBand | null;
+    dominanceAfter?: number;
+    causeTag?: string | null;
     reserveAfter?: number | null;
     absorbed?: number;
     appraisalValid?: boolean | null;
@@ -39,13 +42,17 @@ function addMoodEvent(
     arousalAfter: input.arousalAfter,
     dr: 0,
     appliedDr: 0,
+    dd: 0,
+    appliedDd: 0,
+    dominanceAfter: input.dominanceAfter ?? 0,
+    causeTag: input.causeTag ?? null,
     absorbed: input.absorbed ?? 0,
     reserveAfter: input.reserveAfter === undefined ? 0.8 : input.reserveAfter,
     appraisalValid: input.appraisalValid ?? (input.source === 'appraise'),
-  } as Parameters<typeof repository.recordMoodEvent>[0] & { appraisalValid: boolean | null });
+  });
 }
 
-test('mood series samples decay, friction distance and the latest reply injection trace', async () => {
+test('mood series samples decay, five regions, and the latest reply injection trace', async () => {
   await withPanel(async ({ app, repository }) => {
     assert.equal((await app.request('/api/mood/series?hours=24')).status, 401);
 
@@ -72,17 +79,21 @@ test('mood series samples decay, friction distance and the latest reply injectio
       reason: 'event',
       valenceAfter: -0.4,
       arousalAfter: 0.5,
-      bandBefore: 'happy',
-      bandAfter: 'annoyed',
+      bandBefore: 'excited',
+      bandAfter: 'oppressed',
     });
     repository.saveMoodState({
       account,
       valence: -0.4,
       arousal: 0.5,
+      dominance: 0,
       updatedAt: now,
-      band: 'annoyed',
+      band: 'oppressed',
       bandSince: now - 2 * hourMs,
       lastBandChangeAt: now - 2 * hourMs,
+      mainEmotion: '心疼',
+      emotionSince: now - 2 * hourMs,
+      lastEmotionChangeAt: now - 2 * hourMs,
       reserve: 0.8,
       reserveBand: 'full',
       reserveBandSince: null,
@@ -134,16 +145,18 @@ test('mood series samples decay, friction distance and the latest reply injectio
     const body = await response.json() as {
       from: number;
       to: number;
-      points: Array<{ time: number; valence: number; arousal: number; reserve: number; absorbed: number; event: boolean }>;
+      points: Array<{ time: number; valence: number; arousal: number; dominance: number; region: string; reserve: number; absorbed: number; event: boolean }>;
       current: {
         valence: number;
         arousal: number;
+        dominance: number;
         reserve: number;
         reserveBand: string;
         energySource: string;
         band: string;
         bandSince: number | null;
-        distanceToNextBand: { amount: number; direction: string; targetBand: string; margin: number; friction: string };
+        mainEmotion: string;
+        subEmotions: string[];
       };
       bandChanges: Array<{ time: number; from: string; to: string }>;
       energy: { value: number | null; status: string; points: Array<{ time: number; value: number | null }> };
@@ -165,19 +178,19 @@ test('mood series samples decay, friction distance and the latest reply injectio
     assert.ok(Math.abs((interpolated?.valence ?? 0) - interpolatedValence) < 1e-9);
     assert.ok(Math.abs((interpolated?.reserve ?? 0) - interpolatedReserve) < 1e-9);
     assert.equal(body.points.find((point) => point.time === now - hourMs)?.event, true);
-    assert.deepEqual(body.bandChanges, [{ time: now - hourMs, from: 'happy', to: 'annoyed' }]);
+    assert.equal(body.points.find((point) => point.time === now - hourMs)?.dominance, 0);
+    assert.equal(body.points.find((point) => point.time === now - hourMs)?.region, 'oppressed');
+    assert.deepEqual(body.bandChanges, [{ time: now - hourMs, from: 'excited', to: 'oppressed' }]);
     assert.equal(body.current.valence, -0.4);
     assert.equal(body.current.arousal, 0.5);
+    assert.equal(body.current.dominance, 0);
     assert.equal(body.current.reserve, 0.8);
     assert.equal(body.current.reserveBand, 'full');
     assert.equal(body.current.energySource, 'mixed');
-    assert.equal(body.current.band, 'annoyed');
+    assert.equal(body.current.band, 'oppressed');
     assert.equal(body.current.bandSince, now - 2 * hourMs);
-    assert.ok(Math.abs(body.current.distanceToNextBand.amount - 0.15) < 1e-9);
-    assert.equal(body.current.distanceToNextBand.direction, 'down');
-    assert.equal(body.current.distanceToNextBand.targetBand, 'low');
-    assert.equal(body.current.distanceToNextBand.margin, 0.05);
-    assert.equal(body.current.distanceToNextBand.friction, 'static');
+    assert.equal(body.current.mainEmotion, '心疼');
+    assert.ok(Array.isArray(body.current.subEmotions));
     assert.equal(body.energy.status, 'awake');
     assert.equal(body.energy.value, 1);
     assert.equal(body.energy.points.length, 7);
@@ -194,10 +207,14 @@ test('mood series samples decay, friction distance and the latest reply injectio
       account,
       valence: 0.1,
       arousal: 0.5,
+      dominance: 0,
       updatedAt: now,
-      band: 'calm',
+      band: 'aroused',
       bandSince: now - 4 * 60_000,
       lastBandChangeAt: now - 4 * 60_000,
+      mainEmotion: '平静',
+      emotionSince: now - 4 * 60_000,
+      lastEmotionChangeAt: now - 4 * 60_000,
       reserve: 0.8,
       reserveBand: 'full',
       reserveBandSince: null,
@@ -206,10 +223,8 @@ test('mood series samples decay, friction distance and the latest reply injectio
     });
     const slidingResponse = await app.request('/api/mood/series?hours=24', { headers: authHeaders() });
     const slidingBody = await slidingResponse.json() as typeof body;
-    assert.equal(slidingBody.current.distanceToNextBand.friction, 'sliding');
-    assert.equal(slidingBody.current.distanceToNextBand.margin, 0.02);
-    assert.equal(slidingBody.current.distanceToNextBand.direction, 'up');
-    assert.ok(Math.abs(slidingBody.current.distanceToNextBand.amount - 0.07) < 1e-9);
+    assert.equal(slidingBody.current.band, 'aroused');
+    assert.equal(slidingBody.current.bandSince, now - 4 * 60_000);
     assert.equal((await app.request('/api/mood/series?hours=0', { headers: authHeaders() })).status, 400);
   });
 });

@@ -23,6 +23,10 @@ test('panel persona sections stay compatible with server parsing and building', 
     '---',
     'owner: aquarium',
     'energySource: outer',
+    'mood:',
+    '  emotions: [平静]',
+    '  coordinates:',
+    '    平静: { valence: 0.1, arousal: 0.4, dominance: 0 }',
     'traits:',
     '  order: 1.3',
     '  morality: -1.2',
@@ -55,6 +59,10 @@ test('panel persona sections stay compatible with server parsing and building', 
   assert.deepEqual(panelForm, serverForm);
   assert.deepEqual(panelForm.traits, { order: 1.3, morality: -1.2, talk: 0, mind: 2, humor: 0, openness: 0, imitation: 0 });
   assert.equal(panelForm.metadata.energySource, 'outer');
+  assert.deepEqual(panelForm.metadata.mood, {
+    emotions: ['平静'],
+    coordinates: { 平静: { valence: 0.1, arousal: 0.4, dominance: 0 } },
+  });
   assert.deepEqual(
     renderPersonaSectionBlocks(panelForm).map(({ id, label }) => ({ id, label })),
     renderServerPersonaSectionBlocks(serverForm).map(({ id, label }) => ({ id, label })),
@@ -102,6 +110,13 @@ test('panel persona affinity metadata is validated and round-trips', () => {
     '---',
     '# {{name}}',
   ].join('\n')), /energy/u);
+  assert.throws(() => parseSections([
+    '---',
+    'mood:',
+    '  subMax: 5',
+    '---',
+    '# {{name}}',
+  ].join('\n')), /mood/u);
 });
 
 test('editing a form field in source mode serializes the same form before save', () => {

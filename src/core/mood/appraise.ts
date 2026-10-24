@@ -1,6 +1,6 @@
 import type OpenAI from 'openai';
 import type { AppraisePromptTemplate } from '../prompt/templates.ts';
-import { MAX_AROUSAL_DELTA, MAX_RESERVE_DELTA, MAX_VALENCE_DELTA } from './core.ts';
+import { MAX_AROUSAL_DELTA, MAX_DOMINANCE_DELTA, MAX_RESERVE_DELTA, MAX_VALENCE_DELTA } from './core.ts';
 
 export interface AppraiseContextMessage {
   time: number;
@@ -13,11 +13,13 @@ export interface ParsedAppraiseResponse {
   valence: number;
   reserve: number;
   arousal: number;
+  dominance: number;
+  causeTag: string;
   reason: string;
 }
 
 export type AppraiseResult =
-  | { ok: true; valence: number; reserve: number; arousal: number; reason: string }
+  | { ok: true; valence: number; reserve: number; arousal: number; dominance: number; causeTag: string; reason: string }
   | { ok: false; reason: 'appraise_parse_error' | 'appraise_error' };
 
 export type AppraiseSlotCall = (
@@ -43,7 +45,8 @@ export function buildAppraiseMessages(
   const system = template.system
     .replaceAll('{{MAX_VALENCE_DELTA}}', String(MAX_VALENCE_DELTA))
     .replaceAll('{{MAX_RESERVE_DELTA}}', String(MAX_RESERVE_DELTA))
-    .replaceAll('{{MAX_AROUSAL_DELTA}}', String(MAX_AROUSAL_DELTA));
+    .replaceAll('{{MAX_AROUSAL_DELTA}}', String(MAX_AROUSAL_DELTA))
+    .replaceAll('{{MAX_DOMINANCE_DELTA}}', String(MAX_DOMINANCE_DELTA));
 
   return [
     { role: 'system', content: system },
@@ -51,7 +54,7 @@ export function buildAppraiseMessages(
   ];
 }
 
-// 严格解析：缺字段、越界或超长 reason 都视为解析失败。
+// 严格解析：缺字段、越界或标签过长都视为解析失败。
 export function parseAppraiseResponse(text: string): ParsedAppraiseResponse | undefined {
   let parsed: unknown;
   try {
@@ -63,10 +66,12 @@ export function parseAppraiseResponse(text: string): ParsedAppraiseResponse | un
 
   const record = parsed as Record<string, unknown>;
   const keys = Object.keys(record);
-  if (keys.length !== 4
+  if (keys.length !== 6
     || !Object.hasOwn(record, 'valence')
     || !Object.hasOwn(record, 'reserve')
     || !Object.hasOwn(record, 'arousal')
+    || !Object.hasOwn(record, 'dominance')
+    || !Object.hasOwn(record, 'causeTag')
     || !Object.hasOwn(record, 'reason')) {
     return undefined;
   }
@@ -76,9 +81,19 @@ export function parseAppraiseResponse(text: string): ParsedAppraiseResponse | un
     && value <= maximum;
   if (!deltaInRange(record.valence, MAX_VALENCE_DELTA)
     || !deltaInRange(record.reserve, MAX_RESERVE_DELTA)
-    || !deltaInRange(record.arousal, MAX_AROUSAL_DELTA)) return undefined;
+    || !deltaInRange(record.arousal, MAX_AROUSAL_DELTA)
+    || !deltaInRange(record.dominance, MAX_DOMINANCE_DELTA)) return undefined;
+  if (typeof record.causeTag !== 'string' || record.causeTag.trim().length === 0
+    || Array.from(record.causeTag).length > 20) return undefined;
   if (typeof record.reason !== 'string' || Array.from(record.reason).length > 20) return undefined;
-  return { valence: record.valence, reserve: record.reserve, arousal: record.arousal, reason: record.reason };
+  return {
+    valence: record.valence,
+    reserve: record.reserve,
+    arousal: record.arousal,
+    dominance: record.dominance,
+    causeTag: record.causeTag,
+    reason: record.reason,
+  };
 }
 
 export async function runAppraise(

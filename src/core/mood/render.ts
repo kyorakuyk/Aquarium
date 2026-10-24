@@ -1,5 +1,5 @@
 import type { AffectPromptTemplate } from '../prompt/templates.ts';
-import type { MoodBand, ReserveBand } from '../../store/affect-repo.ts';
+import type { ReserveBand } from '../../store/affect-repo.ts';
 import type { EnergySource } from './core.ts';
 
 export interface MoodPromptBlocks {
@@ -11,13 +11,15 @@ export interface MoodPromptBlocks {
 // 渲染情绪块与浮动值块：浮动值不做防抖，直接按当前 arousal 取词。
 export function renderMoodBlocks(
   template: AffectPromptTemplate,
-  band: MoodBand,
+  emotions: { mainEmotion: string; subEmotions: readonly string[] },
   arousal: number,
   energy = 1,
   reserveBand: ReserveBand = 'full',
   energySource: EnergySource = 'mixed',
 ): MoodPromptBlocks {
-  const mood = template.mood[band];
+  const mood = template.mood.wrap
+    .replaceAll('{{mainEmotion}}', emotions.mainEmotion)
+    .replaceAll('{{subEmotions}}', emotions.subEmotions.length > 0 ? emotions.subEmotions.join('、') : '无明显副情绪');
   const float = renderFloatBlock(template, arousal, energy);
   const reserve = reserveBand === 'full' ? undefined : template.reserve[energySource][reserveBand];
   return {

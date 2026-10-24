@@ -254,6 +254,8 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
           account: message.session.account,
           sessionId: currentSessionId,
           senderId: message.senderId,
+          messageId: message.messageId,
+          moodSettings: ctx.state.personaMood,
           now: now(),
           template: promptTemplates.appraise,
           energySource: ctx.state.personaEnergySource ?? 'mixed',

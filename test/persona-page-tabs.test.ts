@@ -55,7 +55,7 @@ test('persona page tab shells and future-phase cards match the design plan', () 
   assert.deepEqual(PERSONA_EDITOR_TABS.map(({ label }) => label), ['我是谁', '待人接物', '参数', '其他小节']);
   assert.deepEqual(PERSONA_PARAMETER_TABS.map(({ label }) => label), ['好感', '心灵能量', '心情', '作息', '主动性', '记忆']);
   assert.deepEqual(PERSONA_PREVIEW_TABS.map(({ label }) => label), ['实际注入', '性格的变化', '版本']);
-  assert.deepEqual(Object.keys(PERSONA_PARAMETER_PLACEHOLDERS), ['mood', 'sleep', 'initiative', 'memory']);
+  assert.deepEqual(Object.keys(PERSONA_PARAMETER_PLACEHOLDERS), ['sleep', 'initiative', 'memory']);
   assert.ok(pageSource.includes('readPersonaPageTabs'), 'page restores the selected tabs');
   assert.ok(pageSource.includes('writePersonaPageTabs'), 'page persists the selected tabs');
   assert.ok(pageSource.includes('PersonaEditorToolbar'), 'page delegates the sticky save/tab bar');
@@ -78,5 +78,4 @@ test('persona page tab shells and future-phase cards match the design plan', () 
   assert.equal(PERSONA_PARAMETER_PLACEHOLDERS.sleep.items[0]?.current, '总览「作息」卡片里的值');
   assert.match(PERSONA_PARAMETER_PLACEHOLDERS.initiative.dependency, /src\/config\/schema\.ts/u);
   assert.match(PERSONA_PARAMETER_PLACEHOLDERS.memory.dependency, /KNOWLEDGE-IMPRESSION-SPLIT/u);
-  assert.equal(PERSONA_PARAMETER_PLACEHOLDERS.mood.items[0]?.current, '半衰期 40 分钟');
 });

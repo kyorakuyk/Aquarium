@@ -60,19 +60,19 @@ test('表情候选按二元组、心情与近期使用评分，同分顺序按�
     config: offerConfig({ candidates: 4 }),
     stickers: [
       sticker(1, '开心', ['开心']),
-      sticker(2, '伤心', ['难过']),
+      sticker(2, '开心', ['兴奋']),
       sticker(3, '开心', ['难过']),
       sticker(4, '开心', ['快乐']),
     ],
     history,
     messageText: '开心',
-    moodBand: 'happy' as const,
+    moodBand: 'excited' as const,
     sessionId: '10001:group:123',
     now,
   };
 
   const selected = selectStickerCandidates(input);
-  assert.deepEqual(selected?.candidates.map((candidate) => candidate.id), [1, 4, 2, 3]);
+  assert.deepEqual(selected?.candidates.map((candidate) => candidate.id), [2, 4, 1, 3]);
 
   const tieInput = {
     ...input,
@@ -94,7 +94,7 @@ test('候选机会受启用、库存、两小时比例和冷却共同限制', ()
     stickers,
     history: [] as StoredDecision[],
     messageText: '开心',
-    moodBand: 'happy' as const,
+    moodBand: 'excited' as const,
     sessionId: '10001:group:123',
     now,
   };

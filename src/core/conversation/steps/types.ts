@@ -21,6 +21,7 @@ import type { PrivateMentionService } from '../../privacy/mentions.ts';
 import type { PersonaEnergySource, PersonaTraits, StructuredPersona } from '../../../persona/load.ts';
 import type { PersonaEnergyMultipliers } from '../../../persona/energy.ts';
 import type { PersonaAffinitySettings } from '../../../persona/affinity.ts';
+import type { PersonaMoodSettings } from '../../../persona/mood.ts';
 import type { SleepWakeState } from '../../sleep/index.ts';
 import type { PersonaMemoryService } from '../../persona-memory.ts';
 import type { StickerService } from '../../stickers/service.ts';
@@ -113,6 +114,7 @@ export interface PipelineState {
   personaEnergySource?: PersonaEnergySource;
   personaEnergy?: PersonaEnergyMultipliers;
   personaAffinity?: PersonaAffinitySettings;
+  personaMood?: PersonaMoodSettings;
   callOptions?: SlotCallOptions;
   prompt?: OpenAI.ChatCompletionMessageParam[];
   promptBlocks?: PromptBlockHash[];

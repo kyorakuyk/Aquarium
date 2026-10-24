@@ -290,3 +290,84 @@ html:has(.personas-page)::-webkit-scrollbar-track { background: transparent; }
   .persona-energy-row { grid-template-columns: minmax(0, 1fr); }
   .persona-energy-readout { text-align: left; }
 }
+
+.persona-mood-editor { display: grid; gap: 14px; min-width: 0; }
+.persona-mood-card { display: grid; gap: 13px; min-width: 0; }
+.persona-mood-card-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.persona-mood-card-heading h3 { margin: 0; font-size: 15px; }
+.persona-mood-card-heading p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.persona-mood-emotion-tags { display: flex; flex-wrap: wrap; gap: 7px; }
+.persona-mood-emotion-tag { display: inline-flex; min-height: 44px; align-items: center; gap: 9px; padding: 0 12px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.persona-mood-emotion-tag span { color: var(--muted); font-size: 16px; }
+.persona-mood-add-form { display: flex; gap: 8px; }
+.persona-mood-add-form input { min-width: 0; min-height: 44px; flex: 1; }
+.persona-mood-missing-defaults { display: flex; align-items: center; flex-wrap: wrap; gap: 7px 10px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.persona-mood-missing-defaults button { min-height: 44px; padding: 0 8px; border: 0; background: transparent; color: var(--accent); cursor: pointer; }
+.persona-mood-restore-all { font-weight: 600; }
+.persona-mood-error, .persona-mood-message { margin: 0; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; }
+.persona-mood-error { border-color: var(--warn); background: var(--warn-soft); color: var(--warn-ink); }
+.persona-mood-chart { display: block; width: 100%; height: auto; aspect-ratio: 5 / 3; border: 1px solid var(--line); border-radius: 10px; touch-action: none; }
+.persona-mood-region { stroke: none; opacity: .48; }
+.persona-mood-region-unpleasant { fill: var(--warn-soft); }
+.persona-mood-region-oppressed { fill: color-mix(in srgb, var(--warn-soft) 58%, var(--surface)); }
+.persona-mood-region-aroused { fill: var(--accent-soft); }
+.persona-mood-region-excited { fill: color-mix(in srgb, var(--accent-soft) 64%, var(--accent)); }
+.persona-mood-region-calm { fill: var(--surface-2); }
+.persona-mood-region-label { fill: var(--muted); font-size: 11px; text-anchor: middle; }
+.persona-mood-axis { stroke: var(--line); stroke-width: 1.2; }
+.persona-mood-axis-label, .persona-mood-axis-title { fill: var(--muted); font-size: 10px; }
+.persona-mood-edge { cursor: pointer; }
+.persona-mood-edge line { stroke: var(--muted); stroke-width: 1.5; opacity: .62; }
+.persona-mood-edge.is-blocked line:not(.persona-mood-edge-hit) { stroke-dasharray: 4 3; }
+.persona-mood-edge.is-selected line:not(.persona-mood-edge-hit), .persona-mood-edge:focus-visible line:not(.persona-mood-edge-hit) { stroke: var(--accent); stroke-width: 2.7; opacity: 1; }
+.persona-mood-edge .persona-mood-edge-hit { stroke: transparent; stroke-width: 14; opacity: 0; pointer-events: stroke; }
+.persona-mood-arrow-muted { fill: var(--muted); }
+.persona-mood-arrow-selected-fill { fill: var(--accent); }
+.persona-mood-point { cursor: grab; touch-action: none; }
+.persona-mood-point-hit { fill: transparent; stroke: transparent; pointer-events: all; }
+.persona-mood-point circle:not(.persona-mood-point-hit) { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.5; }
+.persona-mood-point.is-selected circle:not(.persona-mood-point-hit), .persona-mood-point:focus-visible circle:not(.persona-mood-point-hit) { stroke: var(--accent); stroke-width: 3; }
+.persona-mood-point.is-dragging { cursor: grabbing; }
+.persona-mood-point text { fill: var(--ink); font-size: 10px; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
+.persona-mood-edge-editor { display: grid; gap: 12px; padding: 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.persona-mood-edge-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.persona-mood-edge-heading strong { font-family: var(--serif); font-size: 16px; }
+.persona-mood-edge-heading span { color: var(--muted); font-size: 12px; }
+.persona-mood-edge-heading .is-custom { color: var(--accent); }
+.persona-mood-edge-controls, .persona-mood-sub-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
+.persona-mood-slider { display: grid; gap: 6px; min-width: 0; color: var(--ink-2); font-size: 12px; }
+.persona-mood-slider-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.persona-mood-slider output { color: var(--ink); font-family: var(--mono); }
+.persona-mood-slider input[type="range"] { width: 100%; }
+.persona-mood-slider select { min-height: 44px; }
+.persona-mood-jump-toggle { display: flex; min-height: 44px; align-items: center; gap: 9px; color: var(--ink-2); font-size: 12px; }
+.persona-mood-jump-toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
+.persona-mood-coordinate-readout { display: grid; gap: 9px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.persona-mood-empty-edge, .persona-mood-preview-source, .persona-mood-global-note { margin: 0; color: var(--muted); font-size: 12px; }
+.persona-mood-matrix-scroll { max-width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; }
+.persona-mood-matrix { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 3px; font-size: 11px; }
+.persona-mood-matrix th { min-width: 54px; padding: 4px; background: var(--surface); color: var(--ink-2); font-weight: 500; }
+.persona-mood-matrix tbody th { position: sticky; left: 0; z-index: 1; }
+.persona-mood-matrix thead th { position: sticky; top: 0; z-index: 1; }
+.persona-mood-matrix thead th:first-child { left: 0; z-index: 2; }
+.persona-mood-matrix-cell { position: relative; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); font-family: var(--mono); cursor: pointer; }
+.persona-mood-matrix-cell.is-easy { background: color-mix(in srgb, var(--accent-soft) 18%, var(--surface)); }
+.persona-mood-matrix-cell.is-medium { background: color-mix(in srgb, var(--accent-soft) 38%, var(--surface)); }
+.persona-mood-matrix-cell.is-hard { background: color-mix(in srgb, var(--accent-soft) 62%, var(--surface)); }
+.persona-mood-matrix-cell.is-blocked { background-image: repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--muted) 25%, transparent) 5px 7px); }
+.persona-mood-matrix-cell.is-selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+.persona-mood-matrix-cell i { position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.persona-mood-matrix-diagonal { background: var(--surface-2); }
+.persona-mood-matrix-hint { margin: 7px 0 0; color: var(--muted); font-size: 11px; }
+.persona-mood-preview-example { margin: 8px 0 0; color: var(--ink-2); font-size: 13px; }
+.persona-mood-preview-example strong { color: var(--accent); font-family: var(--serif); }
+.persona-mood-other-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.persona-mood-other-grid > div { display: grid; align-content: start; gap: 5px; padding: 11px; border: 1px solid var(--line); border-radius: 9px; }
+.persona-mood-other-grid strong { font-size: 12px; }
+.persona-mood-other-grid span { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.persona-mood-other-grid b { font-family: var(--mono); font-size: 11px; font-weight: 500; }
+
+@media (max-width: 760px) {
+  .persona-mood-card-heading { align-items: flex-start; flex-direction: column; }
+  .persona-mood-edge-controls, .persona-mood-sub-controls, .persona-mood-other-grid { grid-template-columns: minmax(0, 1fr); }
+}

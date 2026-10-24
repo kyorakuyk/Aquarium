@@ -1,6 +1,7 @@
 import type { MoodBand, ReserveBand } from '../../store/affect-repo.ts';
 import { nextLevel, type HysteresisParams } from '../shared/hysteresis.ts';
 import { resolveEnergyMultiplier, type PersonaEnergyMultipliers } from '../../persona/energy.ts';
+import { moodRegionOf } from './emotions.ts';
 
 // 情绪基线：valence 愉悦度 [-1, 1]，arousal 兴奋度 [0, 1]。
 export const MOOD_BASELINE = { valence: 0.1, arousal: 0.4 } as const;
@@ -18,6 +19,7 @@ export const RESERVE_STEP_MS = 15 * 60_000;
 export const MAX_EVENT_DELTA = 0.3;
 export const MAX_VALENCE_DELTA = MAX_EVENT_DELTA;
 export const MAX_AROUSAL_DELTA = 0.3;
+export const MAX_DOMINANCE_DELTA = 0.3;
 export const MAX_RESERVE_DELTA = 0.15;
 export const SENDER_VALENCE_WINDOW_MS = 60 * 60 * 1000;
 export const SENDER_VALENCE_CAP = 0.8;
@@ -29,17 +31,9 @@ export const SLIDING_FRICTION = 0.02;
 export const SLIDING_FRICTION_WINDOW_MS = 5 * 60 * 1000;
 export const MIN_BAND_DWELL_MS = 10 * 60 * 1000;
 
-export const BAND_ORDER: readonly MoodBand[] = ['low', 'annoyed', 'calm', 'happy', 'excited'];
-export const MOOD_BAND_BOUNDS = [-0.5, -0.15, 0.15, 0.5] as const;
+export const MOOD_REGION_ORDER: readonly MoodBand[] = ['unpleasant', 'oppressed', 'calm', 'aroused', 'excited'];
 export const RESERVE_BAND_ORDER: readonly ReserveBand[] = ['drained', 'tired', 'full'];
 export const RESERVE_BAND_BOUNDS = [0.3, 0.6] as const;
-const MOOD_HYSTERESIS_PARAMS: HysteresisParams = {
-  bounds: MOOD_BAND_BOUNDS,
-  staticMargin: STATIC_FRICTION,
-  slidingMargin: SLIDING_FRICTION,
-  slidingWindowMs: SLIDING_FRICTION_WINDOW_MS,
-  decayDwellMs: MIN_BAND_DWELL_MS,
-};
 const RESERVE_HYSTERESIS_PARAMS: HysteresisParams = {
   bounds: RESERVE_BAND_BOUNDS,
   staticMargin: 0.05,
@@ -65,6 +59,7 @@ export interface ReserveBandState {
 export interface MoodDynamicsState {
   valence: number;
   arousal: number;
+  dominance: number;
   reserve: number;
 }
 
@@ -98,12 +93,8 @@ export interface BufferedMoodDelta {
   reserve: number;
 }
 
-export function bandOf(valence: number): MoodBand {
-  if (valence < -0.5) return 'low';
-  if (valence < -0.15) return 'annoyed';
-  if (valence < 0.15) return 'calm';
-  if (valence < 0.5) return 'happy';
-  return 'excited';
+export function bandOf(valence: number, arousal: number): MoodBand {
+  return moodRegionOf(valence, arousal);
 }
 
 // 读取时按真实时间衰减：x = base + (x0 − base) × 2^(−Δt / halfLife)。
@@ -180,6 +171,10 @@ export function applyArousalDelta(current: number, delta: number): number {
   return Math.max(0, Math.min(1, current + applied));
 }
 
+export function applyDominanceDelta(current: number, delta: number): number {
+  return Math.max(-1, Math.min(1, current + delta));
+}
+
 export function recoverReserve(input: {
   reserve: number;
   energySource: EnergySource;
@@ -229,6 +224,7 @@ export function advanceMoodState(state: MoodDynamicsState, input: AdvanceMoodSta
   let current = {
     valence: state.valence,
     arousal: state.arousal,
+    dominance: state.dominance,
     reserve: Math.max(0, Math.min(1, state.reserve)),
   };
   let cursor = input.from;
@@ -246,6 +242,7 @@ export function advanceMoodState(state: MoodDynamicsState, input: AdvanceMoodSta
       surfaceHalfLifeMin(current.reserve, input.surfaceHalfLifeMin),
     );
     current.arousal = decayValue(current.arousal, input.baseline.arousal, elapsedMs, input.arousalHalfLifeMin);
+    current.dominance = decayValue(current.dominance, 0, elapsedMs, input.arousalHalfLifeMin);
     if (previousValence < input.baseline.valence) {
       const recovered = Math.max(0, current.valence - previousValence);
       current.reserve = Math.max(0, current.reserve - recovered * RESERVE_RECOVERY_COST
@@ -289,25 +286,35 @@ export function nextReserveBand(
   return RESERVE_BAND_ORDER[next] ?? state.band;
 }
 
-export function clampMood(valence: number, arousal: number): { valence: number; arousal: number } {
+export function clampMood(valence: number, arousal: number, dominance = 0): { valence: number; arousal: number; dominance: number } {
   return {
     valence: Math.max(-1, Math.min(1, valence)),
     arousal: Math.max(0, Math.min(1, arousal)),
+    dominance: Math.max(-1, Math.min(1, dominance)),
   };
 }
 
-// 档位防抖：只有越过当前档位边界并超出摩擦余量才换档，新档位取 v 实际所在档位（可以一次跨多档）。
-export function nextBand(
-  state: MoodBandState,
-  valence: number,
-  now: number,
-  cause: 'event' | 'decay',
-): MoodBand {
-  const current = BAND_ORDER.indexOf(state.band);
-  const next = nextLevel({
-    current,
-    since: state.bandSince,
-    lastChangeAt: state.lastBandChangeAt,
-  }, valence, now, cause, MOOD_HYSTERESIS_PARAMS);
-  return BAND_ORDER[next] ?? state.band;
-}
+export {
+  buildEmotionLibrary,
+  resolveConfiguredMoodEmotions,
+  defaultEmotionEdge,
+  dwellMultiplierForMessageId,
+  emotionIntensity,
+  moodRegionOf,
+  padDistance,
+  resolveMoodEmotions,
+  DEFAULT_CUSTOM_EMOTION_POINT,
+  DEFAULT_EMOTION_LIBRARY,
+  DEFAULT_SUB_MAX,
+  DEFAULT_SUB_THRESHOLD,
+} from './emotions.ts';
+export type {
+  EmotionCoordinateOverrides,
+  EmotionEdge,
+  EmotionEdgeOverrides,
+  ConfiguredMoodSettings,
+  PadEmotion,
+  MoodRegion,
+  ResolveMoodEmotionsInput,
+  ResolvedMoodEmotions,
+} from './emotions.ts';

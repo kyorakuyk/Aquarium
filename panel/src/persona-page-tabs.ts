@@ -43,19 +43,7 @@ export const PERSONA_PREVIEW_TABS = [
   { id: 'versions', label: '版本' },
 ] as const satisfies ReadonlyArray<{ id: PersonaPreviewTab; label: string }>;
 
-export const PERSONA_PARAMETER_PLACEHOLDERS: Record<Exclude<PersonaParameterTab, 'affinity' | 'energy'>, PersonaParameterPlaceholder> = {
-  // TODO（阶段 5）：用人设情绪集合、PAD 坐标与逐边规则替换此说明卡。
-  mood: {
-    title: '心情',
-    description: '心情的回落速度、底色和各档的门槛决定我情绪起伏有多大。和心灵能量是同一套系统，放在它旁边。',
-    items: [
-      { name: '回落速度', note: '心情多久回到底色；心灵能量越满回得越快', current: '半衰期 40 分钟' },
-      { name: '心情底色', note: '没人说话时我默认的心情和兴奋度', current: '愉悦 0.1 · 兴奋 0.4' },
-      { name: '变档难度', note: '多难从「平静」变成「烦躁」或「开心」，以及至少停留多久', current: '静摩擦 0.05 · 停留 10 分钟' },
-      { name: '单人影响上限', note: '同一个人一小时内最多能把我的心情拉动多少', current: '0.8 / 小时' },
-    ],
-    dependency: '依赖：心情振幅调整（MOOD-AMPLITUDE-TUNING）先落地，这里的默认值以它为准。代码在 src/core/mood/core.ts。',
-  },
+export const PERSONA_PARAMETER_PLACEHOLDERS: Record<Exclude<PersonaParameterTab, 'affinity' | 'energy' | 'mood'>, PersonaParameterPlaceholder> = {
   // TODO：确认作息归属（全局还是按账号）后，再决定是否移入人设。
   sleep: {
     title: '作息',

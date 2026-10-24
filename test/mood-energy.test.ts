@@ -28,11 +28,12 @@ test('人设倍率分别缩放正向充能和负向消耗，水位保持在 0 �
       repository,
       getConfig: () => config,
       getEnergyMultipliers: () => loadPersona('default', '', { root: personaRoot }).energy,
+      getPersonaMoodSettings: () => loadPersona('default', '', { root: personaRoot }).mood,
       now: () => clock,
       callModel: async () => ({
         text: appraisalCount++ === 0
-          ? '{"valence":0,"reserve":0.15,"arousal":0,"reason":"暖心"}'
-          : '{"valence":0,"reserve":-0.15,"arousal":0,"reason":"伤人"}',
+          ? '{"valence":0,"reserve":0.15,"arousal":0,"dominance":0,"causeTag":"被关心","reason":"暖心"}'
+          : '{"valence":0,"reserve":-0.15,"arousal":0,"dominance":0,"causeTag":"对方受伤","reason":"伤人"}',
         provider: 'fake',
         model: 'fake-model',
         usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
@@ -42,14 +43,14 @@ test('人设倍率分别缩放正向充能和负向消耗，水位保持在 0 �
     const session = sessionId(groupSession);
     const template = promptTemplateStore.get().appraise;
 
-    await service.afterReply({ account, sessionId: session, senderId: 42, now: clock, template, energySource: 'mixed' });
+    await service.afterReply({ account, sessionId: session, senderId: 42, messageId: 'energy-positive', now: clock, template, energySource: 'mixed' });
     await service.idle();
     const positive = repository.recentMoodEvents(account, 10).find((event) => event.source === 'appraise');
     assert.ok(Math.abs((positive?.appliedDr ?? 0) - 0.9) < 1e-9);
     assert.equal(positive?.reserveAfter, 1);
 
     clock += 100_000;
-    await service.afterReply({ account, sessionId: session, senderId: 43, now: clock, template, energySource: 'mixed' });
+    await service.afterReply({ account, sessionId: session, senderId: 43, messageId: 'energy-negative', now: clock, template, energySource: 'mixed' });
     await service.idle();
     const negative = repository.recentMoodEvents(account, 10)
       .find((event) => event.source === 'appraise' && event.senderId === 43);

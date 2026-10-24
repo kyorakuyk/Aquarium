@@ -9,6 +9,7 @@ import type { ContactFriend, ContactGroup, ProtocolAdapter } from '../adapters/t
 import type { AquariumConfig } from '../config/schema.ts';
 import type { EnergySource } from '../core/mood/core.ts';
 import type { PersonaEnergyMultipliers } from '../persona/energy.ts';
+import type { PersonaMoodSettings } from '../persona/mood.ts';
 import { resolveSession } from '../config/resolve.ts';
 import { parseSessionId, listEnabledSessions } from '../core/conversation/sessions.ts';
 import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../core/shared/events.ts';
@@ -58,6 +59,7 @@ export interface PanelServerOptions {
   getConfig: () => AquariumConfig;
   getEnergySource?: (account: number) => EnergySource;
   getEnergyMultipliers?: (account: number) => PersonaEnergyMultipliers;
+  getPersonaMoodSettings?: (account: number) => PersonaMoodSettings;
   saveConfig: (config: AquariumConfig) => void | Promise<void>;
   repository: StoreRepository;
   interactionLogRepository?: InteractionLogRepository;
@@ -281,6 +283,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     getConfig: options.getConfig,
     getEnergySource: options.getEnergySource,
     getEnergyMultipliers: options.getEnergyMultipliers,
+    getPersonaMoodSettings: options.getPersonaMoodSettings,
     repository: options.repository,
     accounts: options.accounts,
     sleepWakeState: options.sleepWakeState,

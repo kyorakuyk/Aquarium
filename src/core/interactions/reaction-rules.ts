@@ -13,7 +13,7 @@ export interface EmojiWhitelistEntry {
 
 export type EmojiWhitelist = Record<MoodBand, readonly EmojiWhitelistEntry[]>;
 
-const MOOD_BANDS: readonly MoodBand[] = ['low', 'annoyed', 'calm', 'happy', 'excited'];
+const MOOD_BANDS: readonly MoodBand[] = ['oppressed', 'unpleasant', 'calm', 'aroused', 'excited'];
 const SERIOUS_TOPIC_PATTERN = /生病|发烧|重病|癌症|住院|手术|去世|过世|死亡|丧事|吵架|争吵|冲突|分手|离婚|自杀|抑郁|崩溃|绝望|被欺负|霸凌|事故|失业|被裁员|坏消息|没(?:有)?好消息|失败|没通过|没成功|落选|被拒|遗憾|难过|伤心|失望|出问题|故障|受伤|急诊|家暴|不想活|想死|\b(?:cancer|hospitalized|surgery|passed away|died|suicide|depressed|abuse)\b/iu;
 const NEGATIVE_SOCIAL_PATTERN = /不想分享|不愿分享|不能分享|没什么好分享|没有什么好分享/u;
 const POSITIVE_PATTERNS = [

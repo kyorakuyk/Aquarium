@@ -2,6 +2,7 @@ import { PERSONA_PARAMETER_PLACEHOLDERS, PERSONA_PARAMETER_TABS, type PersonaPar
 import type { PersonaSectionsForm } from '../persona-sections.ts';
 import { PersonaAffinityEditor } from './PersonaAffinityEditor.tsx';
 import { PersonaEnergyEditor } from './PersonaEnergyEditor.tsx';
+import { PersonaMoodEditor } from './PersonaMoodEditor.tsx';
 
 export function PersonaParametersPanel({
   parameterTab,
@@ -22,7 +23,7 @@ export function PersonaParametersPanel({
   disabled: boolean;
   active: boolean;
 }) {
-  const placeholder = parameterTab === 'affinity' || parameterTab === 'energy'
+  const placeholder = parameterTab === 'affinity' || parameterTab === 'energy' || parameterTab === 'mood'
     ? undefined
     : PERSONA_PARAMETER_PLACEHOLDERS[parameterTab];
 
@@ -45,7 +46,9 @@ export function PersonaParametersPanel({
         ? active && <PersonaAffinityEditor form={form} onChange={onChange} personaId={personaId} previewAccountId={previewAccountId} disabled={disabled} />
         : parameterTab === 'energy'
           ? active && <PersonaEnergyEditor form={form} onChange={onChange} previewAccountId={previewAccountId} disabled={disabled} />
-          : placeholder && <section className="persona-form-card persona-parameter-placeholder" aria-labelledby="persona-parameter-placeholder-title">
+          : parameterTab === 'mood'
+            ? active && <PersonaMoodEditor form={form} onChange={onChange} previewAccountId={previewAccountId} disabled={disabled} />
+            : placeholder && <section className="persona-form-card persona-parameter-placeholder" aria-labelledby="persona-parameter-placeholder-title">
           <header className="persona-parameter-placeholder-heading">
             <h3 id="persona-parameter-placeholder-title">{placeholder.title}</h3>
             <span className="muted">占位 · 还没做</span>

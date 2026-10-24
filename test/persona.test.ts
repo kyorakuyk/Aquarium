@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { loadPersona, parsePersonaMarkdown } from '../src/persona/load.ts';
+import { DEFAULT_PERSONA_MOOD } from '../src/persona/mood.ts';
 
 const defaultEnergy = {
   aloneRecovery: 1,
@@ -33,6 +34,7 @@ test('loadPersona 优先读取 data/personas 并替换 {{name}}', () => {
       energySource: 'mixed',
       energy: defaultEnergy,
       affinity: { mode: 'inherit' },
+      mood: DEFAULT_PERSONA_MOOD,
     });
     const exactSource = '\r\n  原样保留  \r\n';
     fs.writeFileSync(path.join(root, 'data', 'personas', 'plain.md'), exactSource, 'utf8');
@@ -41,6 +43,7 @@ test('loadPersona 优先读取 data/personas 并替换 {{name}}', () => {
     assert.deepEqual(plain.traits, { order: 0, morality: 0, talk: 0, mind: 0, humor: 0, openness: 0, imitation: 0 });
     assert.deepEqual(plain.energy, defaultEnergy);
     assert.deepEqual(plain.affinity, { mode: 'inherit' });
+    assert.deepEqual(plain.mood, DEFAULT_PERSONA_MOOD);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -84,6 +87,15 @@ test('loadPersona 解析并剥离性格文件头，缺省维度为零且保留�
       '      points:',
       '        - x: 0.5',
       '          dy: 0.2',
+      'mood:',
+      '  emotions: [平静, 委屈, 自定义]',
+      '  coordinates:',
+      '    委屈: { valence: -0.45, arousal: 0.52, dominance: -0.4 }',
+      '  edgeOverrides:',
+      '    平静:',
+      '      委屈: { margin: 0.2, dwell: 15, jump: false }',
+      '  subMax: 3',
+      '  subTh: 0.7',
       '---',
       '',
       '第一行  {{name}}  ',
@@ -97,6 +109,13 @@ test('loadPersona 解析并剥离性格文件头，缺省维度为零且保留�
       mode: 'independent',
       tiers: { positive: [20, 40, 65, 90], negative: [-90, -65, -40, -20] },
       curves: { posGain: { preset: 'flat', points: [{ x: 0.5, dy: 0.2 }] } },
+    });
+    assert.deepEqual(loaded.mood, {
+      emotions: ['平静', '委屈', '自定义'],
+      coordinates: { 委屈: { valence: -0.45, arousal: 0.52, dominance: -0.4 } },
+      edgeOverrides: { 平静: { 委屈: { margin: 0.2, dwell: 15, jump: false } } },
+      subMax: 3,
+      subTh: 0.7,
     });
     assert.equal(loaded.text, '\n第一行  小鱼  \n');
   } finally {

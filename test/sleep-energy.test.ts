@@ -9,19 +9,19 @@ import { groupSession, withRepository } from './pipeline-test-helpers.ts';
 
 test('energy 低于 0.35 时浮动词把困意与 arousal 词用顿号连接', () => {
   const template = promptTemplateStore.get().affect;
-  const tired = renderMoodBlocks(template, 'calm', 0.2, 0.34);
+  const tired = renderMoodBlocks(template, { mainEmotion: '平静', subEmotions: [] }, 0.2, 0.34);
   const expected = template.float.wrap.replaceAll('{{floats}}', `${template.float.arousalLow}、有点困`);
   assert.equal(tired.float, expected);
 
-  const boundary = renderMoodBlocks(template, 'calm', 0.2, 0.35);
+  const boundary = renderMoodBlocks(template, { mainEmotion: '平静', subEmotions: [] }, 0.2, 0.35);
   assert.equal(boundary.float, template.float.wrap.replaceAll('{{floats}}', template.float.arousalLow));
 });
 
 test('心灵能量只按档位与人格来源注入文字，充沛时不输出', () => {
   const template = promptTemplateStore.get().affect;
-  const innerTired = renderMoodBlocks(template, 'calm', 0.5, 1, 'tired', 'inner');
-  const outerDrained = renderMoodBlocks(template, 'calm', 0.5, 1, 'drained', 'outer');
-  const mixedFull = renderMoodBlocks(template, 'calm', 0.5, 1, 'full', 'mixed');
+  const innerTired = renderMoodBlocks(template, { mainEmotion: '平静', subEmotions: [] }, 0.5, 1, 'tired', 'inner');
+  const outerDrained = renderMoodBlocks(template, { mainEmotion: '平静', subEmotions: [] }, 0.5, 1, 'drained', 'outer');
+  const mixedFull = renderMoodBlocks(template, { mainEmotion: '平静', subEmotions: [] }, 0.5, 1, 'full', 'mixed');
 
   assert.equal(innerTired.reserve, '有点累，想一个人待会儿');
   assert.equal(outerDrained.reserve, '很累，很需要有人陪');

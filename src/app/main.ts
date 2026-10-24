@@ -42,6 +42,7 @@ import { createProfileActivityService } from '../core/profiles/presence-service.
 import { createPersonaMemoryService } from '../core/persona-memory.ts';
 import { loadPersona } from '../persona/load.ts';
 import { createPersonaEnergyResolver } from './persona-energy.ts';
+import { createPersonaMoodResolver } from './persona-mood.ts';
 import { startProfileActivitySchedule } from './profile-activity.ts';
 import {
   createHostLifecycleQueue,
@@ -132,11 +133,13 @@ const affinityService = createAffinityService({
   getPersonaAffinity: (personaId) => loadPersona(personaId, '').affinity,
 });
 const personaEnergy = createPersonaEnergyResolver(() => configWatcher.getConfig());
+const personaMood = createPersonaMoodResolver(() => configWatcher.getConfig());
 const moodService = createMoodService({
   repository,
   getConfig: () => configWatcher.getConfig(),
   getEnergySource: personaEnergy.energySourceForAccount,
   getEnergyMultipliers: personaEnergy.multipliersForAccount,
+  getPersonaMoodSettings: personaMood.moodSettingsForAccount,
   affinityService,
   onError: (error) => {
     logger.error(`情绪后台任务失败：${describeError(error)}`);
@@ -549,6 +552,7 @@ await startPanelWhileAccountStartupRuns(accountStartup, () => {
           getConfig: () => configWatcher.getConfig(),
           getEnergySource: personaEnergy.energySourceForAccount,
           getEnergyMultipliers: personaEnergy.multipliersForAccount,
+          getPersonaMoodSettings: personaMood.moodSettingsForAccount,
           saveConfig: (config) => {
             writeConfig(config, configPath);
             configWatcher.replaceConfig(config);

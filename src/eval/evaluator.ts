@@ -62,7 +62,7 @@ function createUnusedTemplates(): PromptTemplateSet {
     affect: {
       source: '',
       version: '',
-      mood: { low: '', annoyed: '', calm: '', happy: '', excited: '' },
+      mood: { wrap: '{{mainEmotion}} {{subEmotions}}' },
       float: { arousalLow: '', arousalHigh: '', wrap: '{{floats}}' },
       affinity: {
         enemy: '', loathe: '', dislike: '', uncomfortable: '', distant: '',

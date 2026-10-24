@@ -15,7 +15,16 @@ test('心情 API 返回衰减后的值、档位与最近事件', async () => {
     const baseline = await (await app.request('/api/mood', { headers: authHeaders() })).json() as {
       valence: number;
       arousal: number;
+      dominance: number;
       band: string;
+      mainEmotion: string;
+      subEmotions: string[];
+      settings: {
+        surfaceHalfLifeMin: number;
+        arousalHalfLifeMin: number;
+        baseline: { valence: number; arousal: number };
+        senderHourlyCap: number;
+      };
       bandSince: number | null;
       reserve: number;
       reserveBand: string;
@@ -24,6 +33,12 @@ test('心情 API 返回衰减后的值、档位与最近事件', async () => {
     };
     assert.equal(baseline.valence, 0.1);
     assert.equal(baseline.arousal, 0.4);
+    assert.equal(baseline.dominance, 0);
+    assert.equal(baseline.mainEmotion, '平静');
+    assert.equal(baseline.settings.surfaceHalfLifeMin, 40);
+    assert.equal(baseline.settings.arousalHalfLifeMin, 40);
+    assert.deepEqual(baseline.settings.baseline, { valence: 0.1, arousal: 0.4 });
+    assert.equal(baseline.settings.senderHourlyCap, 0.8);
     assert.equal(baseline.reserve, 0.8);
     assert.equal(baseline.reserveBand, 'full');
     assert.equal(baseline.energySource, 'mixed');
@@ -39,10 +54,14 @@ test('心情 API 返回衰减后的值、档位与最近事件', async () => {
       account,
       valence: 0.6,
       arousal: 0.9,
+      dominance: 0,
       updatedAt: now - 30 * 60_000,
-      band: 'happy',
+      band: 'excited',
       bandSince: now - 3_600_000,
       lastBandChangeAt: now - 1_800_000,
+      mainEmotion: '兴奋',
+      emotionSince: now - 3_600_000,
+      lastEmotionChangeAt: now - 3_600_000,
       reserve: 0.8,
       reserveBand: 'full',
       reserveBandSince: null,
@@ -66,6 +85,10 @@ test('心情 API 返回衰减后的值、档位与最近事件', async () => {
       arousalAfter: 0.65,
       dr: 0,
       appliedDr: 0,
+      dd: 0,
+      appliedDd: 0,
+      dominanceAfter: 0,
+      causeTag: '被夸',
       absorbed: 0,
       reserveAfter: 0.8,
       appraisalValid: true,
@@ -74,12 +97,15 @@ test('心情 API 返回衰减后的值、档位与最近事件', async () => {
     const body = await (await app.request('/api/mood', { headers: authHeaders() })).json() as {
       valence: number;
       arousal: number;
+      dominance: number;
       reserve: number;
       reserveBand: string;
       energySource: string;
       band: string;
       bandSince: number;
-      events: Array<{ reason: string; source: string }>;
+      mainEmotion: string;
+      subEmotions: string[];
+      events: Array<{ reason: string; source: string; causeTag: string | null }>;
     };
     const stored = repository.getMoodState(account);
     const historyFrom = stored ? stored.updatedAt - 15 * 60_000 : now - 15 * 60_000;
@@ -93,14 +119,18 @@ test('心情 API 返回衰减后的值、档位与最近事件', async () => {
     });
     assert.ok(Math.abs(body.valence - expected.valence) < 1e-9);
     assert.ok(Math.abs(body.arousal - expected.arousal) < 1e-9);
+    assert.ok(Math.abs(body.dominance - expected.dominance) < 1e-9);
+    assert.ok(body.mainEmotion.length > 0);
+    assert.ok(Array.isArray(body.subEmotions));
     assert.ok(Math.abs(body.reserve - expected.reserve) < 1e-9);
     assert.equal(body.reserveBand, 'full');
     assert.equal(body.energySource, 'mixed');
-    assert.equal(body.band, 'happy');
+    assert.equal(body.band, 'excited');
     assert.equal(body.bandSince, now - 3_600_000);
     assert.equal(body.events.length, 1);
     assert.equal(body.events[0]?.reason, '被夸了');
     assert.equal(body.events[0]?.source, 'appraise');
+    assert.equal(body.events[0]?.causeTag, '被夸');
   });
 });
 
@@ -115,6 +145,10 @@ test('budget skipped appraisals do not trigger projected reserve recovery', asyn
       band: 'calm',
       bandSince: start - 30 * 60_000,
       lastBandChangeAt: start - 30 * 60_000,
+      dominance: 0,
+      mainEmotion: '平静',
+      emotionSince: start - 30 * 60_000,
+      lastEmotionChangeAt: start - 30 * 60_000,
       reserve: 0.63,
       reserveBand: 'tired',
       reserveBandSince: start - 30 * 60_000,
@@ -138,6 +172,10 @@ test('budget skipped appraisals do not trigger projected reserve recovery', asyn
       arousalAfter: 0.4,
       dr: 0,
       appliedDr: 0,
+      dd: 0,
+      appliedDd: 0,
+      dominanceAfter: 0,
+      causeTag: null,
       absorbed: 0,
       reserveAfter: 0.63,
       appraisalValid: false,

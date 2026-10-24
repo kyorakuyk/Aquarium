@@ -4,21 +4,22 @@ import type { PageId } from '../components/Sidebar.tsx';
 import { decisionLabel, decisionTone } from '../labels.ts';
 import { MoodNowCard } from './MoodNowCard.tsx';
 
-const MOOD_BAND_LABELS: Record<MoodBand, string> = {
-  low: '低落',
-  annoyed: '不爽',
+const MOOD_REGION_LABELS: Record<MoodBand, string> = {
+  unpleasant: '不愉快',
+  oppressed: '压抑',
   calm: '平静',
-  happy: '开心',
-  excited: '很开心',
+  aroused: '唤醒',
+  excited: '兴奋',
 };
 
 function moodEventLabel(event: MoodEventView): string {
   if (event.source === 'band') {
-    const before = event.bandBefore ? MOOD_BAND_LABELS[event.bandBefore] : '未知';
-    const after = event.bandAfter ? MOOD_BAND_LABELS[event.bandAfter] : '未知';
-    return `换档：${before} → ${after}`;
+    const before = event.bandBefore ? MOOD_REGION_LABELS[event.bandBefore] : '未知';
+    const after = event.bandAfter ? MOOD_REGION_LABELS[event.bandAfter] : '未知';
+    return `区域变化：${before} → ${after}`;
   }
   if (event.source === 'rule') return '被叫到了';
+  if (event.causeTag) return event.causeTag;
   const known: Record<string, string> = {
     budget: '预算已满，跳过评估',
     appraise_parse_error: '评估解析失败',
@@ -195,9 +196,14 @@ export function OverviewPage({ onNavigate, onOpenSleepSettings }: {
         {mood && (
           <div className="mood-layout">
             <div className="mood-summary">
-              <div className="mood-band-name">{MOOD_BAND_LABELS[mood.band]}</div>
+              <div className="mood-band-name">{MOOD_REGION_LABELS[mood.band]}</div>
+              <div className="mood-overview-emotions">
+                <strong>{mood.mainEmotion}</strong>
+                <span>副情绪：{mood.subEmotions.length > 0 ? mood.subEmotions.join('、') : '无明显副情绪'}</span>
+              </div>
               <div className="metric-row"><span>愉悦度</span><strong className="mono">{mood.valence.toFixed(2)}</strong></div>
               <div className="metric-row"><span>兴奋度</span><strong className="mono">{mood.arousal.toFixed(2)}</strong></div>
+              <div className="metric-row"><span>掌控感</span><strong className="mono">{mood.dominance >= 0 ? '+' : ''}{mood.dominance.toFixed(2)}</strong></div>
             </div>
             <div className="mood-events">
               <div className="small-heading">最近事件</div>
@@ -205,7 +211,7 @@ export function OverviewPage({ onNavigate, onOpenSleepSettings }: {
                 <div className="mood-event" key={event.id}>
                   <span className="mono muted">{fullTime(event.time)}</span>
                   <span>{moodEventLabel(event)}</span>
-                  <span className="mono muted">{signed(event.appliedDv)} / {signed(event.appliedDa)}</span>
+                  <span className="mono muted">V {signed(event.appliedDv)} · A {signed(event.appliedDa)} · D {signed(event.appliedDd)}</span>
                 </div>
               ))}
               {mood.events.length === 0 && <p className="muted">还没有评估记录。</p>}

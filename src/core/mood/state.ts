@@ -15,10 +15,14 @@ export type MoodSettings = Pick<AquariumConfig['mood'],
 export interface ResolvedMoodState {
   valence: number;
   arousal: number;
+  dominance: number;
   reserve: number;
   band: MoodBand;
   bandSince: number;
   lastBandChangeAt: number;
+  mainEmotion: string | null;
+  emotionSince: number | null;
+  lastEmotionChangeAt: number | null;
   reserveBand: ReserveBand;
   reserveBandSince: number;
   reserveLastChangeAt: number;
@@ -40,10 +44,14 @@ export function resolveMoodState(input: {
     return {
       valence: settings.baseline.valence,
       arousal: settings.baseline.arousal,
+      dominance: 0,
       reserve: settings.reserve.initial,
-      band: bandOf(settings.baseline.valence),
+      band: bandOf(settings.baseline.valence, settings.baseline.arousal),
       bandSince: at,
       lastBandChangeAt: at,
+      mainEmotion: null,
+      emotionSince: null,
+      lastEmotionChangeAt: null,
       reserveBand: reserveBandOf(settings.reserve.initial),
       reserveBandSince: at,
       reserveLastChangeAt: at,
@@ -67,6 +75,7 @@ export function resolveMoodState(input: {
     time: stored.updatedAt,
     valence: stored.valence,
     arousal: stored.arousal,
+    dominance: stored.dominance,
     reserve: stored.reserve,
     lastReplyAt: priorReplies.at(-1) !== undefined
       && (stored.lastReplyAt === null || (priorReplies.at(-1) ?? -Infinity) > stored.lastReplyAt)
@@ -101,6 +110,7 @@ export function resolveMoodState(input: {
       const dynamics = advanceMoodState({
         valence: state.valence,
         arousal: state.arousal,
+        dominance: state.dominance,
         reserve: state.reserve,
       }, {
         from,
@@ -130,10 +140,14 @@ export function resolveMoodState(input: {
   return {
     valence: state.valence,
     arousal: state.arousal,
+    dominance: state.dominance,
     reserve: state.reserve,
     band: stored.band,
     bandSince: stored.bandSince,
     lastBandChangeAt: stored.lastBandChangeAt,
+    mainEmotion: stored.mainEmotion,
+    emotionSince: stored.emotionSince,
+    lastEmotionChangeAt: stored.lastEmotionChangeAt,
     reserveBand: stored.reserveBand,
     reserveBandSince: stored.reserveBandSince ?? stored.updatedAt,
     reserveLastChangeAt: stored.reserveLastChangeAt ?? stored.updatedAt,

@@ -311,39 +311,6 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .affinity-manual-form label { display: grid; flex: 1; gap: 4px; }
 .affinity-manual-form input { min-height: 44px; }
 
-.mood-now-card { padding: 20px; }
-.mood-now-card .section-heading { margin-bottom: 12px; }
-.mood-now-card .section-heading p { margin: 3px 0 0; font-size: 12px; }
-.mood-now-heading-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 10px 16px; }
-.mood-now-current { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; padding: 12px 0; border-bottom: 1px solid var(--line); }
-.mood-now-current > div:first-child { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
-.mood-now-current > div:first-child strong { color: var(--accent); font-family: var(--serif); font-size: 19px; }
-.mood-now-current .muted, .mood-now-distance { font-size: 12px; }
-.mood-now-distance { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; color: var(--ink-2); }
-.mood-now-chart { display: block; width: 100%; height: auto; margin: 10px 0 3px; overflow: visible; }
-.mood-now-band { opacity: .06; }
-.mood-now-band.is-current { opacity: .2; }
-.mood-now-band-low { fill: var(--warn); }
-.mood-now-band-annoyed { fill: var(--warn-ink); }
-.mood-now-band-calm { fill: var(--muted); }
-.mood-now-band-happy { fill: var(--accent-soft); }
-.mood-now-band-excited { fill: var(--accent); }
-.mood-now-axis { stroke: var(--line); stroke-width: 1; }
-.mood-now-axis-label { fill: var(--muted); font-family: var(--mono); font-size: 12px; }
-.mood-now-transition { stroke: var(--warn-ink); stroke-dasharray: 4 4; stroke-width: 1.5; }
-.mood-now-valence-line { fill: none; stroke: var(--accent); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; }
-.mood-now-event-point { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
-.mood-now-event-point.is-absorbed { fill: none; stroke-width: 2.5; }
-.mood-now-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; padding: 12px 0; }
-.mood-now-metric { display: grid; align-content: start; gap: 7px; }
-.mood-now-metric .metric-row { margin: 0; }
-.mood-now-sparkline { display: block; width: 100%; height: 30px; overflow: visible; }
-.mood-now-sparkline path { fill: none; stroke: var(--accent); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
-.mood-now-injections { padding-top: 13px; border-top: 1px solid var(--line); }
-.mood-now-injections > .small-heading { margin-bottom: 9px; }
-.mood-now-blocks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
-.mood-now-block { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
-.mood-now-block pre { margin: 7px 0 0; color: var(--ink-2); font-family: var(--mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 .impressions-group-tools { display: flex; align-items: center; gap: 8px; }
 .impressions-group-tools .impressions-group-select { flex: 1; min-width: 0; }
 .impressions-group-tools > .button { min-height: 44px; white-space: nowrap; }
@@ -375,8 +342,6 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .interaction-toggle input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; flex: none; margin: 0; padding: 0; border: 0; accent-color: var(--accent); }
 .interaction-restore { min-height: 44px; white-space: nowrap; }
 @media (max-width: 760px) {
-  .mood-now-metrics, .mood-now-blocks { grid-template-columns: 1fr; }
-  .mood-now-card .section-heading { align-items: flex-start; }
   .impressions-group-tools { width: 100%; }
   .history-import-dialog { padding: 16px; }
 }

@@ -1,0 +1,52 @@
+.mood-overview-emotions { display: grid; gap: 3px; padding-bottom: 5px; color: var(--ink-2); font-size: 12px; }
+.mood-overview-emotions strong { color: var(--accent); font-family: var(--serif); font-size: 16px; }
+.mood-overview-emotions span { overflow-wrap: anywhere; }
+.mood-now-card { padding: 20px; }
+.mood-now-card .section-heading { margin-bottom: 12px; }
+.mood-now-card .section-heading p { margin: 3px 0 0; font-size: 12px; }
+.mood-now-heading-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 10px 16px; }
+.mood-now-current { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.mood-now-current > div:first-child { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
+.mood-now-current > div:first-child strong { color: var(--accent); font-family: var(--serif); font-size: 19px; }
+.mood-now-current .muted, .mood-now-emotions { font-size: 12px; }
+.mood-now-emotions { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; color: var(--ink-2); }
+.mood-now-emotions strong { color: var(--accent); font-family: var(--serif); font-size: 16px; }
+.mood-now-region-key { display: flex; flex-wrap: wrap; gap: 8px 14px; padding-top: 9px; }
+.mood-now-region-key-item { font-size: 11px; }
+.mood-now-region-key-item.mood-now-region-unpleasant { color: var(--warn-ink); }
+.mood-now-region-key-item.mood-now-region-oppressed { color: var(--warn); }
+.mood-now-region-key-item.mood-now-region-calm { color: var(--muted); }
+.mood-now-region-key-item.mood-now-region-aroused { color: var(--accent-soft); }
+.mood-now-region-key-item.mood-now-region-excited { color: var(--accent); }
+.mood-now-chart { display: block; width: 100%; height: auto; margin: 10px 0 3px; overflow: visible; }
+.mood-now-axis { stroke: var(--line); stroke-width: 1; }
+.mood-now-axis-label { fill: var(--muted); font-family: var(--mono); font-size: 12px; }
+.mood-now-transition { stroke: var(--warn-ink); stroke-dasharray: 4 4; stroke-width: 1.5; }
+.mood-now-valence-line { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; }
+.mood-now-valence-line.mood-now-region-unpleasant { stroke: var(--warn-ink); }
+.mood-now-valence-line.mood-now-region-oppressed { stroke: var(--warn); }
+.mood-now-valence-line.mood-now-region-calm { stroke: var(--muted); }
+.mood-now-valence-line.mood-now-region-aroused { stroke: var(--accent-soft); }
+.mood-now-valence-line.mood-now-region-excited { stroke: var(--accent); }
+.mood-now-event-point { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.mood-now-event-point.mood-now-region-unpleasant { stroke: var(--warn-ink); }
+.mood-now-event-point.mood-now-region-oppressed { stroke: var(--warn); }
+.mood-now-event-point.mood-now-region-calm { stroke: var(--muted); }
+.mood-now-event-point.mood-now-region-aroused { stroke: var(--accent-soft); }
+.mood-now-event-point.mood-now-region-excited { stroke: var(--accent); }
+.mood-now-event-point.is-absorbed { fill: none; stroke-width: 2.5; }
+.mood-now-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; padding: 12px 0; }
+.mood-now-metric { display: grid; align-content: start; gap: 7px; }
+.mood-now-metric .metric-row { margin: 0; }
+.mood-now-sparkline { display: block; width: 100%; height: 30px; overflow: visible; }
+.mood-now-sparkline path { fill: none; stroke: var(--accent); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
+.mood-now-injections { padding-top: 13px; border-top: 1px solid var(--line); }
+.mood-now-injections > .small-heading { margin-bottom: 9px; }
+.mood-now-blocks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.mood-now-block { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.mood-now-block pre { margin: 7px 0 0; color: var(--ink-2); font-family: var(--mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+@media (max-width: 760px) {
+  .mood-now-metrics, .mood-now-blocks { grid-template-columns: 1fr; }
+  .mood-now-card .section-heading { align-items: flex-start; }
+}

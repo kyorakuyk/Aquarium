@@ -40,6 +40,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   ctx.state.callOptions = callOptions;
   ctx.state.nickname = nickname;
   ctx.state.persona = persona;
+  ctx.state.personaMood = loadedPersona.mood;
 
   // TODO(M2): 引入私密信息分级后，调试记录必须对 L0 内容脱敏（DESIGN §10.1）
   await captionIncomingImages({
@@ -140,6 +141,8 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   });
   const moodBlocks = ctx.options.moodService?.promptBlocks({
     account: ctx.message.session.account,
+    messageId: ctx.message.messageId,
+    moodSettings: loadedPersona.mood,
     now: ctx.now(),
     template: ctx.state.promptTemplates.affect,
     energy: ctx.state.energy ?? 1,

@@ -1,10 +1,6 @@
 ---
 mood:
-  low: 你现在情绪低落，话少，不太想接梗，但不迁怒别人。
-  annoyed: 你现在有点不爽，说话更冲、更短，容易吐槽。
-  calm: ''
-  happy: 你现在心情不错，更愿意接话和开玩笑。
-  excited: 你现在心情很好，有点兴奋，话多一点，语气更跳。
+  wrap: 你的主情绪是「{{mainEmotion}}」。同时存在的副情绪：{{subEmotions}}。
 float:
   arousalLow: 有点懒洋洋
   arousalHigh: 很来劲

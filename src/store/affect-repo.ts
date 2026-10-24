@@ -7,7 +7,8 @@ import { createPersonaAffinityQueries } from './persona-affinity-repo.ts';
 export type { StoredTag, TagEvidence, TagRecord, TagRunRecord, TagSource, TagStatus, TagUpdate } from './tag-repo.ts';
 export type { TagKind } from '../core/impressions/tag-model.ts';
 
-export type MoodBand = 'low' | 'annoyed' | 'calm' | 'happy' | 'excited';
+export type MoodBand = 'unpleasant' | 'oppressed' | 'calm' | 'aroused' | 'excited';
+export type MoodRegion = MoodBand;
 export type ReserveBand = 'full' | 'tired' | 'drained';
 export type MoodEventSource = 'appraise' | 'rule' | 'band';
 export type AffinityLevel =
@@ -19,10 +20,14 @@ export interface MoodStateRecord {
   account: number;
   valence: number;
   arousal: number;
+  dominance: number;
   updatedAt: number;
   band: MoodBand;
   bandSince: number;
   lastBandChangeAt: number;
+  mainEmotion: string | null;
+  emotionSince: number | null;
+  lastEmotionChangeAt: number | null;
   reserve: number;
   reserveBand: ReserveBand;
   reserveBandSince: number | null;
@@ -38,8 +43,12 @@ export interface MoodEventRecord {
   senderId: number | null;
   dv: number;
   da: number;
+  dd: number;
   appliedDv: number;
   appliedDa: number;
+  appliedDd: number;
+  dominanceAfter: number;
+  causeTag: string | null;
   reason: string;
   bandBefore: MoodBand | null;
   bandAfter: MoodBand | null;
@@ -131,10 +140,14 @@ function moodStateRecord(row: Record<string, unknown>): MoodStateRecord {
     account: numberValue(row.account, 'account'),
     valence: numberValue(row.valence, 'valence'),
     arousal: numberValue(row.arousal, 'arousal'),
+    dominance: numberValue(row.dominance, 'dominance'),
     updatedAt: numberValue(row.updated_at, 'updated_at'),
     band: stringValue(row.band, 'band') as MoodBand,
     bandSince: numberValue(row.band_since, 'band_since'),
     lastBandChangeAt: numberValue(row.last_band_change_at, 'last_band_change_at'),
+    mainEmotion: nullableString(row.main_emotion, 'main_emotion'),
+    emotionSince: nullableNumber(row.emotion_since, 'emotion_since'),
+    lastEmotionChangeAt: nullableNumber(row.last_emotion_change_at, 'last_emotion_change_at'),
     reserve: numberValue(row.reserve, 'reserve'),
     reserveBand: stringValue(row.reserve_band, 'reserve_band') as ReserveBand,
     reserveBandSince: nullableNumber(row.reserve_band_since, 'reserve_band_since'),
@@ -153,8 +166,12 @@ function moodEventRecord(row: Record<string, unknown>): StoredMoodEvent {
     senderId: nullableNumber(row.sender_id, 'sender_id'),
     dv: numberValue(row.dv, 'dv'),
     da: numberValue(row.da, 'da'),
+    dd: numberValue(row.dd, 'dd'),
     appliedDv: numberValue(row.applied_dv, 'applied_dv'),
     appliedDa: numberValue(row.applied_da, 'applied_da'),
+    appliedDd: numberValue(row.applied_dd, 'applied_dd'),
+    dominanceAfter: numberValue(row.dominance_after, 'dominance_after'),
+    causeTag: nullableString(row.cause_tag, 'cause_tag'),
     reason: stringValue(row.reason, 'reason'),
     bandBefore: nullableString(row.band_before, 'band_before') as MoodBand | null,
     bandAfter: nullableString(row.band_after, 'band_after') as MoodBand | null,
@@ -202,24 +219,30 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
   const tagVetoes = createTagVetoQueries(database, tags);
   const personaAffinity = createPersonaAffinityQueries(database);
   const selectMoodState = database.prepare(`
-    SELECT account, valence, arousal, updated_at, band, band_since, last_band_change_at,
+    SELECT account, valence, arousal, dominance, updated_at, band, band_since, last_band_change_at,
+      main_emotion, emotion_since, last_emotion_change_at,
       reserve, reserve_band, reserve_band_since, reserve_last_change_at, last_reply_at
     FROM mood_state
     WHERE account = ?
   `);
   const upsertMoodState = database.prepare(`
     INSERT INTO mood_state (
-      account, valence, arousal, updated_at, band, band_since, last_band_change_at,
+      account, valence, arousal, dominance, updated_at, band, band_since, last_band_change_at,
+      main_emotion, emotion_since, last_emotion_change_at,
       reserve, reserve_band, reserve_band_since, reserve_last_change_at, last_reply_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(account) DO UPDATE SET
       valence = excluded.valence,
       arousal = excluded.arousal,
+      dominance = excluded.dominance,
       updated_at = excluded.updated_at,
       band = excluded.band,
       band_since = excluded.band_since,
       last_band_change_at = excluded.last_band_change_at,
+      main_emotion = excluded.main_emotion,
+      emotion_since = excluded.emotion_since,
+      last_emotion_change_at = excluded.last_emotion_change_at,
       reserve = excluded.reserve,
       reserve_band = excluded.reserve_band,
       reserve_band_since = excluded.reserve_band_since,
@@ -228,28 +251,32 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
   `);
   const insertMoodEvent = database.prepare(`
     INSERT INTO mood_events
-      (account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da, reason,
-        band_before, band_after, valence_after, arousal_after, dr, applied_dr, absorbed, reserve_after, appraisal_valid)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (account, time, source, session_id, sender_id, dv, da, dd, applied_dv, applied_da, applied_dd,
+        reason, cause_tag, band_before, band_after, valence_after, arousal_after, dominance_after,
+        dr, applied_dr, absorbed, reserve_after, appraisal_valid)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const selectRecentMoodEvents = database.prepare(`
-    SELECT id, account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da, reason,
-      band_before, band_after, valence_after, arousal_after, dr, applied_dr, absorbed, reserve_after, appraisal_valid
+    SELECT id, account, time, source, session_id, sender_id, dv, da, dd, applied_dv, applied_da, applied_dd,
+      reason, cause_tag, band_before, band_after, valence_after, arousal_after, dominance_after,
+      dr, applied_dr, absorbed, reserve_after, appraisal_valid
     FROM mood_events
     WHERE account = ?
     ORDER BY time DESC, id DESC
     LIMIT ?
   `);
   const selectMoodEventsSince = database.prepare(`
-    SELECT id, account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da, reason,
-      band_before, band_after, valence_after, arousal_after, dr, applied_dr, absorbed, reserve_after, appraisal_valid
+    SELECT id, account, time, source, session_id, sender_id, dv, da, dd, applied_dv, applied_da, applied_dd,
+      reason, cause_tag, band_before, band_after, valence_after, arousal_after, dominance_after,
+      dr, applied_dr, absorbed, reserve_after, appraisal_valid
     FROM mood_events
     WHERE account = ? AND time >= ?
     ORDER BY time, id
   `);
   const selectLatestMoodEventAtOrBefore = database.prepare(`
-    SELECT id, account, time, source, session_id, sender_id, dv, da, applied_dv, applied_da,
-      reason, band_before, band_after, valence_after, arousal_after, dr, applied_dr, absorbed, reserve_after, appraisal_valid
+    SELECT id, account, time, source, session_id, sender_id, dv, da, dd, applied_dv, applied_da, applied_dd,
+      reason, cause_tag, band_before, band_after, valence_after, arousal_after, dominance_after,
+      dr, applied_dr, absorbed, reserve_after, appraisal_valid
     FROM mood_events
     WHERE account = ? AND time <= ? AND valence_after IS NOT NULL AND arousal_after IS NOT NULL
     ORDER BY time DESC, id DESC
@@ -318,10 +345,14 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
         state.account,
         state.valence,
         state.arousal,
+        state.dominance,
         state.updatedAt,
         state.band,
         state.bandSince,
         state.lastBandChangeAt,
+        state.mainEmotion,
+        state.emotionSince,
+        state.lastEmotionChangeAt,
         state.reserve ?? 0.8,
         state.reserveBand ?? 'full',
         state.reserveBandSince ?? null,
@@ -339,13 +370,17 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
         event.senderId,
         event.dv,
         event.da,
+        event.dd,
         event.appliedDv,
         event.appliedDa,
+        event.appliedDd,
         event.reason,
+        event.causeTag,
         event.bandBefore,
         event.bandAfter,
         event.valenceAfter,
         event.arousalAfter,
+        event.dominanceAfter,
         event.dr ?? 0,
         event.appliedDr ?? 0,
         event.absorbed ?? 0,

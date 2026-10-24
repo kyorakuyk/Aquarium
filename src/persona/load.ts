@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import yaml from 'yaml';
 import { parsePersonaAffinity, type PersonaAffinitySettings } from './affinity.ts';
 import { parsePersonaEnergy, type PersonaEnergyMultipliers } from './energy.ts';
+import { parsePersonaMood, type PersonaMoodSettings } from './mood.ts';
 import { validPersonaId } from './persona-id.ts';
 
 export interface PersonaTraits {
@@ -74,6 +75,7 @@ export interface LoadedPersona {
   energySource: PersonaEnergySource;
   energy: PersonaEnergyMultipliers;
   affinity: PersonaAffinitySettings;
+  mood: PersonaMoodSettings;
   profile?: StructuredPersona;
 }
 
@@ -304,6 +306,7 @@ export function parsePersonaMarkdown(source: string): LoadedPersona {
   const energySource = match ? parseEnergySource(header.energySource) : 'mixed';
   const energy = parsePersonaEnergy(match ? header.energy : undefined);
   const affinity = parsePersonaAffinity(match ? header.affinity : undefined);
+  const mood = parsePersonaMood(match ? header.mood : undefined);
   const profile = match ? parseStructuredPersona(header, text, traits, energySource) : undefined;
   return {
     text,
@@ -311,6 +314,7 @@ export function parsePersonaMarkdown(source: string): LoadedPersona {
     energySource,
     energy,
     affinity,
+    mood,
     ...(profile === undefined ? {} : { profile }),
   };
 }
@@ -323,6 +327,7 @@ export function validatePersonaSettingsFrontmatter(source: string): void {
   catch { return; }
   parsePersonaAffinity(header.affinity);
   parsePersonaEnergy(header.energy);
+  parsePersonaMood(header.mood);
 }
 
 export function updatePersonaTraits(source: string, traits: PersonaTraits): string {
@@ -369,6 +374,7 @@ export function loadPersona(
     energySource: loaded.energySource,
     energy: loaded.energy,
     affinity: loaded.affinity,
+    mood: loaded.mood,
     ...(loaded.profile === undefined
       ? {}
       : { profile: replaceNameTokens(loaded.profile, displayName) as StructuredPersona }),

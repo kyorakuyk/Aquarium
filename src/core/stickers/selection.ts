@@ -56,9 +56,9 @@ function overlapScore(messageBigrams: Set<string>, sticker: StickerRecord): numb
 
 function moodBonus(sticker: StickerRecord, moodBand: MoodBand): number {
   const words: Record<Exclude<MoodBand, 'calm'>, string[]> = {
-    low: ['低落', '难过'],
-    annoyed: ['无语', '生气'],
-    happy: ['开心', '好耶'],
+    unpleasant: ['无语', '生气', '烦躁'],
+    oppressed: ['低落', '难过', '委屈'],
+    aroused: ['惊讶', '害羞', '激动'],
     excited: ['激动', '兴奋'],
   };
   if (moodBand === 'calm') return 0;

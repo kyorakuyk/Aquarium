@@ -8,19 +8,15 @@ import {
   clampMood,
   decayValue,
   isCompanionshipActive,
-  nextBand,
+  bandOf,
   bufferNegativeDelta,
   surfaceHalfLifeMin,
   applyArousalDelta,
+  applyDominanceDelta,
   SENDER_VALENCE_CAP,
-  type MoodBandState,
 } from '../src/core/mood/core.ts';
 
 const minute = 60 * 1000;
-
-function bandState(overrides: Partial<MoodBandState> = {}): MoodBandState {
-  return { band: 'calm', bandSince: 0, lastBandChangeAt: 0, ...overrides };
-}
 
 test('衰减数值按半衰期折半逼近基线', () => {
   assert.ok(Math.abs(decayValue(0.5, 0.1, 30 * minute, 30) - 0.3) < 1e-12);
@@ -47,8 +43,10 @@ test('同一发送者的软上限按 60 分钟累计变化递减', () => {
   const reserveHistory = [{ time: now - minute, senderId: 42, appliedDr: 0.15 }];
   assert.equal(capSenderReserveDelta(0.1, 42, reserveHistory, now, { senderHourlyCap: 0 }), 0);
   assert.ok(capSenderReserveDelta(0.1, 42, reserveHistory, now, { senderHourlyCap: 3 }) > 0.05);
-  assert.deepEqual(clampMood(1.4, -0.2), { valence: 1, arousal: 0 });
-  assert.deepEqual(clampMood(-0.3, 0.9), { valence: -0.3, arousal: 0.9 });
+  assert.deepEqual(clampMood(1.4, -0.2), { valence: 1, arousal: 0, dominance: 0 });
+  assert.deepEqual(clampMood(-0.3, 0.9, -1.4), { valence: -0.3, arousal: 0.9, dominance: -1 });
+  assert.equal(applyDominanceDelta(0.9, 0.3), 1);
+  assert.equal(applyDominanceDelta(-0.9, -0.3), -1);
 });
 
 test('软上限让同一发送者连续六次负向事件逐步减弱但不会提前归零', () => {
@@ -125,32 +123,33 @@ test('动态水位控制表层恢复速度，低于难过阈值时恢复水位�
     lastReplyAt: null,
     companionshipPositive: false,
   };
-  const fullWater = advanceMoodState({ valence: -0.15, arousal: 0.4, reserve: 1 }, common);
-  const lowWater = advanceMoodState({ valence: -0.15, arousal: 0.4, reserve: 0.2 }, common);
-  const sad = advanceMoodState({ valence: -0.1, arousal: 0.4, reserve: 0.2 }, { ...common, to: 15 * minute });
-  const noCalmCost = advanceMoodState({ valence: -0.1, arousal: 0.4, reserve: 0.2 }, {
+  const fullWater = advanceMoodState({ valence: -0.15, arousal: 0.4, dominance: 0, reserve: 1 }, common);
+  const lowWater = advanceMoodState({ valence: -0.15, arousal: 0.4, dominance: 0, reserve: 0.2 }, common);
+  const dominant = advanceMoodState({ valence: 0.1, arousal: 0.4, dominance: 0.8, reserve: 0.5 }, common);
+  const sad = advanceMoodState({ valence: -0.1, arousal: 0.4, dominance: 0, reserve: 0.2 }, { ...common, to: 15 * minute });
+  const noCalmCost = advanceMoodState({ valence: -0.1, arousal: 0.4, dominance: 0, reserve: 0.2 }, {
     ...common,
     to: 15 * minute,
     energyMultipliers: { calmRecoveryCost: 0 },
   });
-  const highCalmCost = advanceMoodState({ valence: -0.1, arousal: 0.4, reserve: 0.2 }, {
+  const highCalmCost = advanceMoodState({ valence: -0.1, arousal: 0.4, dominance: 0, reserve: 0.2 }, {
     ...common,
     to: 15 * minute,
     energyMultipliers: { calmRecoveryCost: 3 },
   });
 
   assert.ok(fullWater.valence > lowWater.valence);
+  assert.ok(dominant.dominance > 0 && dominant.dominance < 0.8);
   assert.ok(sad.valence > -0.1);
   assert.ok(sad.reserve < 0.2);
   assert.ok(noCalmCost.reserve > sad.reserve);
   assert.ok(highCalmCost.reserve < sad.reserve && highCalmCost.reserve >= 0);
 });
 
-test('水位为零时四次负向事件后进入 annoyed', () => {
+test('水位为零时连续负向事件进入压抑区域', () => {
   const baseline = { valence: 0.1, arousal: 0.4 };
-  const dynamics = { valence: 0.1, arousal: 0.4, reserve: 0 };
+  const dynamics = { valence: 0.1, arousal: 0.4, dominance: 0, reserve: 0 };
   let value = dynamics;
-  let band = bandState({ band: 'calm', bandSince: -30 * minute, lastBandChangeAt: -30 * minute });
 
   for (let index = 1; index <= 4; index += 1) {
     const time = index * 2 * minute;
@@ -168,42 +167,37 @@ test('水位为零时四次负向事件后进入 annoyed', () => {
     }
     const buffered = bufferNegativeDelta(-0.15, value.reserve);
     value = { ...value, valence: value.valence + buffered.surfaceDelta, reserve: buffered.reserve };
-    const next = nextBand(band, value.valence, time, 'event');
-    if (next !== band.band) band = { ...band, band: next, bandSince: time, lastBandChangeAt: time };
   }
 
-  assert.equal(band.band, 'annoyed');
+  assert.equal(bandOf(value.valence, value.arousal), 'oppressed');
 });
 
-test('满水位起每三分钟的小事前五次保持 calm，第十一次进入 annoyed', () => {
+test('满水位会延后负向事件进入压抑区域', () => {
   const baseline = { valence: 0.1, arousal: 0.4 };
-  let value = { valence: 0.1, arousal: 0.4, reserve: 1 };
-  let band = bandState({ band: 'calm', bandSince: -30 * minute, lastBandChangeAt: -30 * minute });
-  const bands: string[] = [];
-
-  for (let index = 1; index <= 11; index += 1) {
-    const time = index * 3 * minute;
-    if (index > 1) {
-      value = advanceMoodState(value, {
-        from: (index - 1) * 3 * minute,
-        to: time,
-        baseline,
-        surfaceHalfLifeMin: 40,
-        arousalHalfLifeMin: 40,
-        energySource: 'mixed',
-        lastReplyAt: null,
-        companionshipPositive: false,
-      });
+  const firstSuppressedIndex = (initialReserve: number) => {
+    let value = { valence: baseline.valence, arousal: baseline.arousal, dominance: 0, reserve: initialReserve };
+    for (let index = 1; index <= 11; index += 1) {
+      const time = index * 3 * minute;
+      if (index > 1) {
+        value = advanceMoodState(value, {
+          from: (index - 1) * 3 * minute,
+          to: time,
+          baseline,
+          surfaceHalfLifeMin: 40,
+          arousalHalfLifeMin: 40,
+          energySource: 'mixed',
+          lastReplyAt: null,
+          companionshipPositive: false,
+        });
+      }
+      const buffered = bufferNegativeDelta(-0.08, value.reserve);
+      value = { ...value, valence: value.valence + buffered.surfaceDelta, reserve: buffered.reserve };
+      if (bandOf(value.valence, value.arousal) === 'oppressed') return index;
     }
-    const buffered = bufferNegativeDelta(-0.08, value.reserve);
-    value = { ...value, valence: value.valence + buffered.surfaceDelta, reserve: buffered.reserve };
-    const next = nextBand(band, value.valence, time, 'event');
-    if (next !== band.band) band = { ...band, band: next, bandSince: time, lastBandChangeAt: time };
-    bands.push(band.band);
-  }
+    return Infinity;
+  };
 
-  assert.ok(bands.slice(0, 5).every((item) => item === 'calm'));
-  assert.equal(bands.findIndex((item) => item === 'annoyed') + 1, 11);
+  assert.ok(firstSuppressedIndex(1) > firstSuppressedIndex(0));
 });
 
 test('同一次负向事件在高水位后一小时恢复得比低水位更高', () => {
@@ -213,6 +207,7 @@ test('同一次负向事件在高水位后一小时恢复得比低水位更高',
     return advanceMoodState({
       valence: baseline.valence + buffered.surfaceDelta,
       arousal: baseline.arousal,
+      dominance: 0,
       reserve: buffered.reserve,
     }, {
       from: 0,
@@ -252,43 +247,135 @@ test('有人陪必须有最近回复且最近评估平均不为负', () => {
   assert.equal(isCompanionshipActive(null, now, 0.2), false);
 });
 
-test('静摩擦：越过当前档位边界 0.05 才换档', () => {
-  const now = 100 * minute;
-  const calm = bandState({ band: 'calm', bandSince: now - 30 * minute, lastBandChangeAt: now - 30 * minute });
-
-  assert.equal(nextBand(calm, 0.19, now, 'event'), 'calm');
-  assert.equal(nextBand(calm, 0.2, now, 'event'), 'happy');
-
-  const happy = bandState({ band: 'happy', bandSince: now - 30 * minute, lastBandChangeAt: now - 30 * minute });
-  assert.equal(nextBand(happy, 0.11, now, 'event'), 'happy');
-  assert.equal(nextBand(happy, 0.09, now, 'event'), 'calm');
+test('负向区域在唤醒度 0.55 处分为不愉快和压抑', () => {
+  assert.equal(bandOf(-0.15, 0.55), 'unpleasant');
+  assert.equal(bandOf(-0.15, 0.54), 'oppressed');
 });
 
-test('滑动摩擦：上次换档 5 分钟内余量降为 0.02', () => {
-  const now = 100 * minute;
-  const sliding = bandState({ band: 'calm', bandSince: now - 1 * minute, lastBandChangeAt: now - 1 * minute });
-  assert.equal(nextBand(sliding, 0.17, now, 'event'), 'happy');
-
-  const staticState = bandState({ band: 'calm', bandSince: now - 6 * minute, lastBandChangeAt: now - 6 * minute });
-  assert.equal(nextBand(staticState, 0.17, now, 'event'), 'calm');
+test('正向区域在唤醒度 0.5 处分为平静与高唤醒', () => {
+  assert.equal(bandOf(0, 0.49), 'calm');
+  assert.equal(bandOf(0, 0.5), 'aroused');
 });
 
-test('decay 换档受 10 分钟最短停留限制，event 不受限制', () => {
-  const now = 100 * minute;
-  const young = bandState({ band: 'calm', bandSince: now - 9 * minute, lastBandChangeAt: now - 30 * minute });
-  assert.equal(nextBand(young, 0.4, now, 'decay'), 'calm');
-  assert.equal(nextBand(young, 0.4, now, 'event'), 'happy');
-
-  const settled = bandState({ band: 'calm', bandSince: now - 10 * minute, lastBandChangeAt: now - 30 * minute });
-  assert.equal(nextBand(settled, 0.4, now, 'decay'), 'happy');
+test('高唤醒正向区域在愉悦度 0.3 处分为唤醒与兴奋', () => {
+  assert.equal(bandOf(0.299, 0.5), 'aroused');
+  assert.equal(bandOf(0.3, 0.5), 'excited');
 });
 
-test('满足条件时一次可以跨多档', () => {
-  const now = 100 * minute;
-  const low = bandState({ band: 'low', bandSince: now - 30 * minute, lastBandChangeAt: now - 30 * minute });
-  assert.equal(nextBand(low, 0.6, now, 'event'), 'excited');
+test('区域由当前 PAD 坐标决定，不受旧换档停留状态影响', () => {
+  assert.equal(bandOf(0.6, 0.8), 'excited');
+  assert.equal(bandOf(-0.8, 0.2), 'oppressed');
+  assert.equal(bandOf(-0.8, 0.8), 'unpleasant');
+});
 
-  const excited = bandState({ band: 'excited', bandSince: now - 30 * minute, lastBandChangeAt: now - 30 * minute });
-  assert.equal(nextBand(excited, -0.8, now, 'event'), 'low');
-  assert.equal(nextBand(excited, 0.45, now, 'event'), 'excited');
+test('PAD 情绪按五区域、默认库和逐边滞回解析', () => {
+  const library = Reflect.get(moodCore, 'DEFAULT_EMOTION_LIBRARY') as Array<{
+    name: string; valence: number; arousal: number; dominance: number;
+  }> | undefined;
+  const regionOf = Reflect.get(moodCore, 'moodRegionOf') as ((valence: number, arousal: number) => string) | undefined;
+  const intensity = Reflect.get(moodCore, 'emotionIntensity') as ((state: {
+    valence: number; arousal: number; dominance: number;
+  }, emotion: { valence: number; arousal: number; dominance: number }) => number) | undefined;
+  const edgeOf = Reflect.get(moodCore, 'defaultEmotionEdge') as ((from: {
+    name: string; valence: number; arousal: number; dominance: number;
+  }, to: { name: string; valence: number; arousal: number; dominance: number }) => {
+    margin: number; dwell: number; jump: boolean;
+  }) | undefined;
+  const resolve = Reflect.get(moodCore, 'resolveMoodEmotions') as ((input: {
+    valence: number; arousal: number; dominance: number;
+    emotions: typeof library;
+    edgeOverrides: Record<string, Record<string, { margin?: number; dwell?: number; jump?: boolean }>>;
+    currentEmotion: string | null; emotionSince: number | null; lastEmotionChangeAt: number | null;
+    now: number; messageId: string; subMax: number; subTh: number;
+  }) => { region: string; mainEmotion: string; subEmotions: string[] }) | undefined;
+  const dwellScale = Reflect.get(moodCore, 'dwellMultiplierForMessageId') as ((messageId: string) => number) | undefined;
+
+  assert.equal(typeof library, 'object');
+  assert.equal(typeof regionOf, 'function');
+  assert.equal(typeof intensity, 'function');
+  assert.equal(typeof edgeOf, 'function');
+  assert.equal(typeof resolve, 'function');
+  assert.equal(typeof dwellScale, 'function');
+  if (!library || !regionOf || !intensity || !edgeOf || !resolve || !dwellScale) return;
+
+  assert.equal(library.length, 16);
+  assert.equal(regionOf(-0.15, 0.55), 'unpleasant');
+  assert.equal(regionOf(-0.15, 0.54), 'oppressed');
+  assert.equal(regionOf(-0.149, 0.5), 'aroused');
+  assert.equal(regionOf(0.3, 0.5), 'excited');
+  assert.equal(regionOf(0.29, 0.49), 'calm');
+
+  const excited = library.find((emotion) => emotion.name === '兴奋')!;
+  const calm = library.find((emotion) => emotion.name === '平静')!;
+  const shy = library.find((emotion) => emotion.name === '害羞')!;
+  const angry = library.find((emotion) => emotion.name === '生气')!;
+  assert.equal(intensity(excited, excited), 1);
+  assert.equal(edgeOf(calm, excited).dwell, 10);
+  assert.equal(edgeOf(shy, angry).jump, false);
+  assert.equal(edgeOf(angry, shy).jump, false);
+  assert.equal(dwellScale('mood-5'), dwellScale('mood-5'));
+  assert.ok(dwellScale('mood-5') >= 0.8 && dwellScale('mood-5') <= 1.4);
+
+  const selected = resolve({
+    valence: excited.valence,
+    arousal: excited.arousal,
+    dominance: excited.dominance,
+    emotions: library,
+    edgeOverrides: {},
+    currentEmotion: '平静',
+    emotionSince: 0,
+    lastEmotionChangeAt: 0,
+    now: 60 * minute,
+    messageId: 'mood-5',
+    subMax: 2,
+    subTh: 0.5,
+  });
+  assert.equal(selected.region, 'excited');
+  assert.equal(selected.mainEmotion, '兴奋');
+  assert.ok(selected.subEmotions.length <= 2);
+
+  const blocked = resolve({
+    valence: angry.valence,
+    arousal: angry.arousal,
+    dominance: angry.dominance,
+    emotions: library,
+    edgeOverrides: {},
+    currentEmotion: '害羞',
+    emotionSince: 0,
+    lastEmotionChangeAt: 0,
+    now: 60 * minute,
+    messageId: 'mood-6',
+    subMax: 2,
+    subTh: 0.5,
+  });
+  assert.equal(blocked.mainEmotion, '害羞');
+
+  const source = { name: '来源', valence: 0, arousal: 0.3, dominance: 0 };
+  const target = { name: '目标', valence: 0.2, arousal: 0.5, dominance: 0 };
+  const resolveEdge = (
+    edge: { margin?: number; dwell?: number; jump?: boolean },
+    now: number,
+  ) => resolve({
+    valence: 0.12,
+    arousal: 0.4,
+    dominance: 0,
+    emotions: [source, target],
+    edgeOverrides: { 来源: { 目标: edge } },
+    currentEmotion: '来源',
+    emotionSince: 0,
+    lastEmotionChangeAt: 0,
+    now,
+    messageId: 'per-edge-dwell',
+    subMax: 0,
+    subTh: 0.5,
+  });
+  const marginNotScaled = resolveEdge({ margin: 0.02, dwell: 0, jump: true }, 1_000);
+  const marginBlocks = resolveEdge({ margin: 0.03, dwell: 0, jump: true }, 1_000);
+  assert.equal(marginNotScaled.mainEmotion, '目标');
+  assert.equal(marginBlocks.mainEmotion, '来源');
+
+  const dwellMs = 10 * dwellScale('per-edge-dwell') * minute;
+  assert.equal(resolveEdge({ margin: 0, dwell: 10, jump: true }, dwellMs - 1).mainEmotion, '来源');
+  assert.equal(resolveEdge({ margin: 0, dwell: 10, jump: true }, dwellMs).mainEmotion, '目标');
+  assert.equal(resolveEdge({ margin: 0, dwell: 0, jump: false }, dwellMs).mainEmotion, '来源');
 });

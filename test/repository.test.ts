@@ -268,10 +268,14 @@ test('情绪状态与事件读写往返一致', () => {
       account: 900000001,
       valence: 0.32,
       arousal: 0.55,
+      dominance: -0.12,
       updatedAt: 5_000,
-      band: 'happy',
+      band: 'excited',
       bandSince: 4_000,
       lastBandChangeAt: 3_000,
+      mainEmotion: '开心',
+      emotionSince: 4_000,
+      lastEmotionChangeAt: 3_000,
       reserve: 0.75,
       reserveBand: 'tired',
       reserveBandSince: 4_500,
@@ -282,10 +286,14 @@ test('情绪状态与事件读写往返一致', () => {
       account: 900000001,
       valence: -0.28,
       arousal: 0.71,
+      dominance: 0.45,
       updatedAt: 6_000,
-      band: 'annoyed',
+      band: 'unpleasant',
       bandSince: 6_000,
       lastBandChangeAt: 6_000,
+      mainEmotion: '委屈',
+      emotionSince: 6_000,
+      lastEmotionChangeAt: 6_000,
       reserve: 0.42,
       reserveBand: 'drained',
       reserveBandSince: 5_500,
@@ -296,10 +304,14 @@ test('情绪状态与事件读写往返一致', () => {
       account: 900000001,
       valence: -0.28,
       arousal: 0.71,
+      dominance: 0.45,
       updatedAt: 6_000,
-      band: 'annoyed',
+      band: 'unpleasant',
       bandSince: 6_000,
       lastBandChangeAt: 6_000,
+      mainEmotion: '委屈',
+      emotionSince: 6_000,
+      lastEmotionChangeAt: 6_000,
       reserve: 0.42,
       reserveBand: 'drained',
       reserveBandSince: 5_500,
@@ -315,11 +327,15 @@ test('情绪状态与事件读写往返一致', () => {
       senderId: 42,
       dv: 0.12,
       da: -0.05,
+      dd: 0.18,
       appliedDv: 0.12,
       appliedDa: -0.05,
+      appliedDd: 0.14,
+      dominanceAfter: 0.45,
+      causeTag: '被夸',
       reason: '被说好话',
       bandBefore: 'calm',
-      bandAfter: 'happy',
+      bandAfter: 'aroused',
       valenceAfter: 0.16,
       arousalAfter: 0.66,
       dr: 0.04,
@@ -336,8 +352,12 @@ test('情绪状态与事件读写往返一致', () => {
       senderId: null,
       dv: 0,
       da: 0.05,
+      dd: 0,
       appliedDv: 0,
       appliedDa: 0.05,
+      appliedDd: 0,
+      dominanceAfter: 0.45,
+      causeTag: null,
       reason: '被叫',
       bandBefore: null,
       bandAfter: null,
@@ -355,9 +375,13 @@ test('情绪状态与事件读写往返一致', () => {
     assert.equal(recent[0]?.time, 8_000);
     assert.equal(recent[1]?.senderId, 42);
     assert.equal(recent[1]?.bandBefore, 'calm');
-    assert.equal(recent[1]?.bandAfter, 'happy');
+    assert.equal(recent[1]?.bandAfter, 'aroused');
     assert.equal(recent[1]?.valenceAfter, 0.16);
     assert.equal(recent[1]?.arousalAfter, 0.66);
+    assert.equal(recent[1]?.dd, 0.18);
+    assert.equal(recent[1]?.appliedDd, 0.14);
+    assert.equal(recent[1]?.dominanceAfter, 0.45);
+    assert.equal(recent[1]?.causeTag, '被夸');
     assert.equal(recent[1]?.appliedDr, 0.08);
     assert.equal(recent[1]?.reserveAfter, 0.58);
     assert.equal(recent[0]?.absorbed, 0);

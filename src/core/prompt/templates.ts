@@ -55,13 +55,7 @@ export interface PersonaImportPromptTemplate extends PromptTemplate {
 }
 
 export interface AffectPromptTemplate extends PromptTemplate {
-  mood: {
-    low: string;
-    annoyed: string;
-    calm: string;
-    happy: string;
-    excited: string;
-  };
+  mood: { wrap: string };
   float: {
     arousalLow: string;
     arousalHigh: string;
@@ -179,13 +173,12 @@ function parseAppraiseTemplate(template: PromptTemplate): AppraisePromptTemplate
     throw new Error('appraise.md 必须包含非空 system 和 user 文本');
   }
   const appraise = { ...template, system: fields.system, user: fields.user };
-  const deltaPlaceholders = ['MAX_VALENCE_DELTA', 'MAX_RESERVE_DELTA', 'MAX_AROUSAL_DELTA'];
+  const deltaPlaceholders = ['MAX_VALENCE_DELTA', 'MAX_RESERVE_DELTA', 'MAX_AROUSAL_DELTA', 'MAX_DOMINANCE_DELTA'];
   validatePlaceholders('appraise.md', appraise.system, deltaPlaceholders, deltaPlaceholders);
   validatePlaceholders('appraise.md', appraise.user, ['context'], ['context']);
   return appraise;
 }
 
-const affectMoodKeys = ['low', 'annoyed', 'calm', 'happy', 'excited'] as const;
 const traitPromptLevels = ['m2', 'm1', 'p1', 'p2'] as const;
 
 function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
@@ -201,12 +194,8 @@ function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
     throw new Error('affect.md 必须包含 mood、float、affinity 与 reserve 字段');
   }
   const moodRecord = moodField as Record<string, unknown>;
-  const mood = {} as AffectPromptTemplate['mood'];
-  for (const key of affectMoodKeys) {
-    const value = moodRecord[key];
-    if (typeof value !== 'string') throw new Error(`affect.md 缺少 mood.${key} 文本`);
-    mood[key] = value;
-  }
+  if (typeof moodRecord.wrap !== 'string') throw new Error('affect.md 缺少 mood.wrap 文本');
+  const mood = { wrap: moodRecord.wrap };
   const floatRecord = floatField as Record<string, unknown>;
   if (typeof floatRecord.arousalLow !== 'string' || typeof floatRecord.arousalHigh !== 'string'
     || typeof floatRecord.wrap !== 'string') {
@@ -244,6 +233,7 @@ function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
     affinity,
     reserve,
   };
+  validatePlaceholders('affect.md', affect.mood.wrap, ['mainEmotion', 'subEmotions'], ['mainEmotion', 'subEmotions']);
   validatePlaceholders('affect.md', affect.float.wrap, ['floats'], ['floats']);
   return affect;
 }

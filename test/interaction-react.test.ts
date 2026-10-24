@@ -33,7 +33,7 @@ import {
 
 function verifyWhitelistAndClassifiers(): void {
   const whitelist = loadEmojiWhitelist();
-  const bands: MoodBand[] = ['low', 'annoyed', 'calm', 'happy', 'excited'];
+  const bands: MoodBand[] = ['oppressed', 'unpleasant', 'calm', 'aroused', 'excited'];
   assert.deepEqual(Object.keys(whitelist), bands);
   assert.deepEqual(bands.map((band) => whitelist[band].length), [4, 4, 6, 6, 6]);
   const ids = bands.flatMap((band) => whitelist[band].map((entry) => entry.emoji_id));
@@ -80,7 +80,7 @@ async function verifyRuleServiceAndLogging(): Promise<void> {
   const attempt = (message: ReturnType<typeof makeIncoming>, trigger: ReactionAttempt['trigger']) => ({
     message,
     trigger,
-    moodBand: 'happy' as const,
+    moodBand: 'excited' as const,
     affinityLevel: 'more_than_friends' as const,
     random: () => 0,
     rateLimiter: createRateLimiter(() => baseTime),
@@ -144,7 +144,7 @@ async function verifyRuleServiceAndLogging(): Promise<void> {
   assert.equal(serious?.verdict, 'blocked');
   assert.equal(serious?.reason, 'serious_topic');
   assert.equal(gateCalls[7]?.context.policyBlockedReason, 'serious_topic');
-  assert.deepEqual(Object.keys(whitelist), ['low', 'annoyed', 'calm', 'happy', 'excited']);
+  assert.deepEqual(Object.keys(whitelist), ['oppressed', 'unpleasant', 'calm', 'aroused', 'excited']);
 }
 
 async function verifyRuntimeTargetProtection(): Promise<void> {
@@ -177,7 +177,7 @@ async function verifyRuntimeTargetProtection(): Promise<void> {
       time: 1_800_000_000_000,
     });
     const config = makeConfig({ sessions: { [id]: { interactions: { react: { enabled: true } } } } });
-    const emojiId = loadEmojiWhitelist().happy[0]!.emoji_id;
+    const emojiId = loadEmojiWhitelist().excited[0]!.emoji_id;
     const adapterCalls: Array<{ messageId: string; emojiId: string }> = [];
     const adapter = {
       account: groupSession.account,
@@ -212,7 +212,7 @@ async function verifyRuntimeTargetProtection(): Promise<void> {
         mentionsSelf: true, time: executionTime - 100,
       }),
       trigger: 'closing_mention',
-      moodBand: 'happy',
+      moodBand: 'excited',
       random: () => 0,
       rateLimiter: createRateLimiter(() => executionTime),
       limits: { perUserPerMinute: 100, perSessionPerMinute: 100, minIntervalSec: 0 },
@@ -241,7 +241,7 @@ async function verifyRuntimeTargetProtection(): Promise<void> {
         mentionsSelf: true, time: executionTime,
       }),
       trigger: 'closing_mention',
-      moodBand: 'happy',
+      moodBand: 'excited',
       random: () => 0,
       rateLimiter: createRateLimiter(() => executionTime + 1),
       limits: { perUserPerMinute: 100, perSessionPerMinute: 100, minIntervalSec: 0 },

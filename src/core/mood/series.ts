@@ -1,15 +1,11 @@
 import type { MoodBand, StoredMoodEvent } from '../../store/affect-repo.ts';
 import {
   advanceMoodState,
-  BAND_ORDER,
   isCompanionshipActive,
   isSuccessfulAppraisal,
-  MOOD_BAND_BOUNDS,
-  SLIDING_FRICTION,
-  SLIDING_FRICTION_WINDOW_MS,
-  STATIC_FRICTION,
   type EnergySource,
 } from './core.ts';
+import { moodRegionOf } from './emotions.ts';
 import type { PersonaEnergyMultipliers } from '../../persona/energy.ts';
 
 export const MOOD_SERIES_INTERVAL_MS = 15 * 60_000;
@@ -18,6 +14,8 @@ export interface MoodSeriesPoint {
   time: number;
   valence: number;
   arousal: number;
+  dominance: number;
+  region: MoodBand;
   reserve: number;
   absorbed: number;
   event: boolean;
@@ -27,6 +25,7 @@ export interface MoodSeriesAnchor {
   time: number;
   valenceAfter: number | null;
   arousalAfter: number | null;
+  dominanceAfter?: number | null;
   reserveAfter?: number | null;
   source?: StoredMoodEvent['source'];
   appraisalValid?: boolean | null;
@@ -88,6 +87,9 @@ export function buildMoodSeriesPoints(input: {
     arousal: input.previous?.time !== undefined && input.previous.time <= input.from && input.previous.arousalAfter !== null
       ? input.previous.arousalAfter
       : input.baseline.arousal,
+    dominance: input.previous?.time !== undefined && input.previous.time <= input.from
+      ? input.previous.dominanceAfter ?? 0
+      : 0,
     reserve: input.previous?.time !== undefined && input.previous.time <= input.from
       ? input.previous.reserveAfter ?? 0.8
       : input.initialReserve,
@@ -128,6 +130,7 @@ export function buildMoodSeriesPoints(input: {
       const dynamics = advanceMoodState({
         valence: state.valence,
         arousal: state.arousal,
+        dominance: state.dominance,
         reserve: state.reserve,
       }, {
         from,
@@ -164,6 +167,7 @@ export function buildMoodSeriesPoints(input: {
         time: event.time,
         valence: event.valenceAfter ?? state.valence,
         arousal: event.arousalAfter ?? state.arousal,
+        dominance: event.dominanceAfter,
         reserve: event.reserveAfter ?? 0.8,
       };
       if (isSuccessfulAppraisal(event)) {
@@ -176,53 +180,12 @@ export function buildMoodSeriesPoints(input: {
       time,
       valence: state.valence,
       arousal: state.arousal,
+      dominance: state.dominance,
+      region: moodRegionOf(state.valence, state.arousal),
       reserve: state.reserve,
       absorbed: absorbedAt.get(time) ?? 0,
       event: eventTimes.has(time),
     });
   }
   return points;
-}
-
-export interface MoodBandDistance {
-  amount: number;
-  direction: 'up' | 'down';
-  targetBand: MoodBand;
-  margin: number;
-  friction: 'static' | 'sliding';
-}
-
-export function distanceToNextBand(input: {
-  band: MoodBand;
-  valence: number;
-  now: number;
-  lastBandChangeAt: number | null;
-}): MoodBandDistance {
-  const index = BAND_ORDER.indexOf(input.band);
-  const sliding = input.lastBandChangeAt !== null
-    && input.now - input.lastBandChangeAt < SLIDING_FRICTION_WINDOW_MS;
-  const margin = sliding ? SLIDING_FRICTION : STATIC_FRICTION;
-  const candidates: MoodBandDistance[] = [];
-  if (index < BAND_ORDER.length - 1) {
-    candidates.push({
-      amount: Math.max(0, (MOOD_BAND_BOUNDS[index] ?? Infinity) + margin - input.valence),
-      direction: 'up',
-      targetBand: BAND_ORDER[index + 1] ?? input.band,
-      margin,
-      friction: sliding ? 'sliding' : 'static',
-    });
-  }
-  if (index > 0) {
-    candidates.push({
-      amount: Math.max(0, input.valence - ((MOOD_BAND_BOUNDS[index - 1] ?? -Infinity) - margin)),
-      direction: 'down',
-      targetBand: BAND_ORDER[index - 1] ?? input.band,
-      margin,
-      friction: sliding ? 'sliding' : 'static',
-    });
-  }
-  candidates.sort((left, right) => left.amount - right.amount);
-  const nearest = candidates[0];
-  if (!nearest) throw new Error('未知情绪档位');
-  return nearest;
 }
