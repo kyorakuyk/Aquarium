@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest, patch, type DefaultsView, type SessionView } from '../api.ts';
 import { sessionPeerLabel } from '../session-display.ts';
+import { sessionListMessage, type SessionListLoadState } from '../session-list-state.ts';
 import { SleepSettingsPanel } from './SleepSettingsPanel.tsx';
 import { InteractionSettingsPanel } from './InteractionSettingsPanel.tsx';
 import {
@@ -60,6 +61,7 @@ export function SessionsPage({
 }) {
   const [savedSelection] = useState(readSavedSessionSelection);
   const [sessions, setSessions] = useState<SessionView[]>([]);
+  const [sessionsLoadState, setSessionsLoadState] = useState<SessionListLoadState>('loading');
   const [defaults, setDefaults] = useState<DefaultsView | null>(null);
   const [selectedId, setSelectedId] = useState(savedSelection?.sessionId ?? GLOBAL_DEFAULT_ID);
   const [kind, setKind] = useState<SavedSessionSelection['kind']>(savedSelection?.kind ?? 'group');
@@ -95,7 +97,13 @@ export function SessionsPage({
   }
 
   useEffect(() => {
-    void Promise.all([loadSessions(), loadDefaults()]).catch((reason: unknown) => {
+    const sessionRequest = loadSessions().then(() => {
+      setSessionsLoadState('ready');
+    }, (reason: unknown) => {
+      setSessionsLoadState('error');
+      throw reason;
+    });
+    void Promise.all([sessionRequest, loadDefaults()]).catch((reason: unknown) => {
       setError(reason instanceof Error ? reason.message : '读取会话设置失败');
     });
   }, []);
@@ -156,6 +164,7 @@ export function SessionsPage({
 
   const groupCount = sessions.filter((item) => item.kind === 'group').length;
   const friendCount = sessions.filter((item) => item.kind === 'private').length;
+  const sessionListEmptyMessage = sessionListMessage(sessionsLoadState, visible.length);
 
   return (
     <div className="page">
@@ -207,7 +216,7 @@ export function SessionsPage({
                 <span className={`session-state-dot ${item.enabled ? 'is-enabled' : 'is-disabled'}`} role="img" aria-label={`${item.name}${item.enabled ? '已启用' : '已停用'}`} />
               </div>
             ))}
-            {visible.length === 0 && <p className="empty-state">没有找到会话。</p>}
+            {sessionListEmptyMessage && <p className="empty-state" role={sessionsLoadState === 'loading' ? 'status' : undefined}>{sessionListEmptyMessage}</p>}
           </div>
         </section>
 
