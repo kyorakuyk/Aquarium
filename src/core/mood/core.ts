@@ -1,5 +1,6 @@
 import type { MoodBand, ReserveBand } from '../../store/affect-repo.ts';
 import { nextLevel, type HysteresisParams } from '../shared/hysteresis.ts';
+import { resolveEnergyMultiplier, type PersonaEnergyMultipliers } from '../../persona/energy.ts';
 
 // 情绪基线：valence 愉悦度 [-1, 1]，arousal 兴奋度 [0, 1]。
 export const MOOD_BASELINE = { valence: 0.1, arousal: 0.4 } as const;
@@ -74,6 +75,7 @@ export interface AdvanceMoodStateOptions {
   surfaceHalfLifeMin: number;
   arousalHalfLifeMin: number;
   energySource: EnergySource;
+  energyMultipliers?: Partial<PersonaEnergyMultipliers>;
   lastReplyAt: number | null;
   companionshipPositive: boolean;
 }
@@ -132,17 +134,24 @@ export function capSenderReserveDelta(
   senderId: number | null,
   history: readonly ReserveHistoryEntry[],
   now: number,
+  energyMultipliers?: Partial<PersonaEnergyMultipliers>,
 ): number {
   if (senderId === null || delta === 0) return delta;
+  const cap = SENDER_RESERVE_CAP * resolveEnergyMultiplier(energyMultipliers, 'senderHourlyCap');
+  if (cap <= 0) return 0;
   const used = history
     .filter((entry) => entry.senderId === senderId
       && entry.time >= now - SENDER_VALENCE_WINDOW_MS
       && entry.time <= now)
     .reduce((sum, entry) => sum + Math.abs(entry.appliedDr), 0);
-  return delta * Math.max(0, 1 - used / SENDER_RESERVE_CAP);
+  return delta * Math.max(0, 1 - used / cap);
 }
 
-export function bufferNegativeDelta(delta: number, reserve: number): BufferedMoodDelta {
+export function bufferNegativeDelta(
+  delta: number,
+  reserve: number,
+  energyMultipliers?: Partial<PersonaEnergyMultipliers>,
+): BufferedMoodDelta {
   const water = Math.max(0, Math.min(1, reserve));
   if (delta >= 0) return { surfaceDelta: delta, absorbed: 0, reserve: water };
   const absorbed = Math.min(
@@ -152,7 +161,8 @@ export function bufferNegativeDelta(delta: number, reserve: number): BufferedMoo
   return {
     surfaceDelta: delta + absorbed,
     absorbed,
-    reserve: Math.max(0, water - absorbed * RESERVE_BUFFER_WATER_COST),
+    reserve: Math.max(0, water - absorbed * RESERVE_BUFFER_WATER_COST
+      * resolveEnergyMultiplier(energyMultipliers, 'bufferCost')),
   };
 }
 
@@ -176,6 +186,7 @@ export function recoverReserve(input: {
   elapsedMs: number;
   company: boolean;
   sad: boolean;
+  energyMultipliers?: Partial<PersonaEnergyMultipliers>;
 }): number {
   const reserve = Math.max(0, Math.min(1, input.reserve));
   if (input.sad || input.elapsedMs <= 0) return reserve;
@@ -185,7 +196,12 @@ export function recoverReserve(input: {
       ? input.company ? 2 : 8
       : 4;
   if (halfLifeHours === null) return reserve;
-  const next = 1 - (1 - reserve) * 2 ** (-input.elapsedMs / (halfLifeHours * 60 * 60_000));
+  const multiplier = resolveEnergyMultiplier(
+    input.energyMultipliers,
+    input.company ? 'companyRecovery' : 'aloneRecovery',
+  );
+  if (multiplier <= 0) return reserve;
+  const next = 1 - (1 - reserve) * 2 ** (-input.elapsedMs / (halfLifeHours / multiplier * 60 * 60_000));
   return Math.max(0, Math.min(1, next));
 }
 
@@ -232,7 +248,8 @@ export function advanceMoodState(state: MoodDynamicsState, input: AdvanceMoodSta
     current.arousal = decayValue(current.arousal, input.baseline.arousal, elapsedMs, input.arousalHalfLifeMin);
     if (previousValence < input.baseline.valence) {
       const recovered = Math.max(0, current.valence - previousValence);
-      current.reserve = Math.max(0, current.reserve - recovered * RESERVE_RECOVERY_COST);
+      current.reserve = Math.max(0, current.reserve - recovered * RESERVE_RECOVERY_COST
+        * resolveEnergyMultiplier(input.energyMultipliers, 'calmRecoveryCost'));
     }
     const company = input.companionshipPositive
       && input.lastReplyAt !== null
@@ -244,6 +261,7 @@ export function advanceMoodState(state: MoodDynamicsState, input: AdvanceMoodSta
       elapsedMs,
       company,
       sad: previousValence < input.baseline.valence - 0.15,
+      energyMultipliers: input.energyMultipliers,
     });
     cursor = end;
   }

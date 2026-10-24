@@ -18,7 +18,7 @@ import { promptTemplateStore } from '../core/prompt/templates.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
 import { callSlot } from '../llm/slots.ts';
 import { effectiveTalkLevel, renderTraitsBlock } from '../persona/traits.ts';
-import { loadPersona, parsePersonaMarkdown, updatePersonaTraits, validatePersonaAffinityFrontmatter, type PersonaTraits } from '../persona/load.ts';
+import { loadPersona, parsePersonaMarkdown, updatePersonaTraits, validatePersonaSettingsFrontmatter, type PersonaTraits } from '../persona/load.ts';
 import {
   buildSections,
   parseSections,
@@ -284,8 +284,8 @@ export function registerPersonaRoutes(app: Hono, root: string, options: PersonaR
       try { markdown = updatePersonaTraits(body.markdown, body.traits); }
       catch { return context.json({ error: 'Invalid persona YAML front matter' }, 400); }
     }
-    try { validatePersonaAffinityFrontmatter(markdown); }
-    catch { return context.json({ error: 'Invalid persona affinity' }, 400); }
+    try { validatePersonaSettingsFrontmatter(markdown); }
+    catch { return context.json({ error: 'Invalid persona settings' }, 400); }
     writeTextAtomic(personaPath(root, 'data/personas', id), markdown);
     recordPersonaVersionOnSave(options.repository, id, markdown);
     return context.json({ id, saved: true });

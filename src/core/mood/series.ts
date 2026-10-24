@@ -10,6 +10,7 @@ import {
   STATIC_FRICTION,
   type EnergySource,
 } from './core.ts';
+import type { PersonaEnergyMultipliers } from '../../persona/energy.ts';
 
 export const MOOD_SERIES_INTERVAL_MS = 15 * 60_000;
 
@@ -39,6 +40,7 @@ export function buildMoodSeriesPoints(input: {
   surfaceHalfLifeMin: number;
   arousalHalfLifeMin: number;
   energySource: EnergySource;
+  energyMultipliers?: Partial<PersonaEnergyMultipliers>;
   baseline: { valence: number; arousal: number };
   initialReserve: number;
   previous?: MoodSeriesAnchor;
@@ -134,6 +136,7 @@ export function buildMoodSeriesPoints(input: {
         surfaceHalfLifeMin: input.surfaceHalfLifeMin,
         arousalHalfLifeMin: input.arousalHalfLifeMin,
         energySource: input.energySource,
+        energyMultipliers: input.energyMultipliers,
         lastReplyAt: state.lastReplyAt,
         companionshipPositive,
       });

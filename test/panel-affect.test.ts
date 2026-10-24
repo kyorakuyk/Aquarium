@@ -30,6 +30,10 @@ test('心情 API 返回衰减后的值、档位与最近事件', async () => {
     assert.equal(baseline.band, 'calm');
     assert.equal(baseline.bandSince, null);
     assert.deepEqual(baseline.events, []);
+    const selectedAccountResponse = await app.request(`/api/mood?account=${account}`, { headers: authHeaders() });
+    assert.equal(selectedAccountResponse.status, 200);
+    assert.equal((await selectedAccountResponse.json() as { account: number }).account, account);
+    assert.equal((await app.request('/api/mood?account=not-a-uin', { headers: authHeaders() })).status, 400);
 
     repository.saveMoodState({
       account,

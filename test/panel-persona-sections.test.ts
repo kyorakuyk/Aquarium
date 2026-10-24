@@ -67,6 +67,9 @@ test('panel persona sections stay compatible with server parsing and building', 
 test('panel persona affinity metadata is validated and round-trips', () => {
   const source = [
     '---',
+    'energy:',
+    '  aloneRecovery: 0',
+    '  companyRecovery: 3',
     'affinity:',
     '  mode: independent',
     '  tiers:',
@@ -82,6 +85,7 @@ test('panel persona affinity metadata is validated and round-trips', () => {
   ].join('\n');
   const form = parseSections(source);
   assert.equal((form.metadata.affinity as { mode: string }).mode, 'independent');
+  assert.deepEqual(form.metadata.energy, { aloneRecovery: 0, companyRecovery: 3 });
   assert.deepEqual(parseSections(buildSections(form)), form);
 
   assert.throws(() => parseSections([
@@ -91,6 +95,13 @@ test('panel persona affinity metadata is validated and round-trips', () => {
     '---',
     '# {{name}}',
   ].join('\n')), /affinity/u);
+  assert.throws(() => parseSections([
+    '---',
+    'energy:',
+    '  aloneRecovery: 3.1',
+    '---',
+    '# {{name}}',
+  ].join('\n')), /energy/u);
 });
 
 test('editing a form field in source mode serializes the same form before save', () => {

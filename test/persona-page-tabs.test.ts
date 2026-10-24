@@ -16,6 +16,7 @@ const pageSource = readFileSync(new URL('../panel/src/pages/PersonasPage.tsx', i
 const editorToolbarSource = readFileSync(new URL('../panel/src/pages/PersonaEditorToolbar.tsx', import.meta.url), 'utf8');
 const fieldsSource = readFileSync(new URL('../panel/src/pages/PersonaFields.tsx', import.meta.url), 'utf8');
 const parameterPanelSource = readFileSync(new URL('../panel/src/pages/PersonaParametersPanel.tsx', import.meta.url), 'utf8');
+const energyEditorSource = readFileSync(new URL('../panel/src/pages/PersonaEnergyEditor.tsx', import.meta.url), 'utf8');
 const libraryToolbarSource = readFileSync(new URL('../panel/src/pages/PersonaLibraryToolbar.tsx', import.meta.url), 'utf8');
 const previewSource = readFileSync(new URL('../panel/src/pages/PersonaPreview.tsx', import.meta.url), 'utf8');
 const personaStyles = readFileSync(new URL('../panel/src/styles/personas.css', import.meta.url), 'utf8');
@@ -54,7 +55,7 @@ test('persona page tab shells and future-phase cards match the design plan', () 
   assert.deepEqual(PERSONA_EDITOR_TABS.map(({ label }) => label), ['我是谁', '待人接物', '参数', '其他小节']);
   assert.deepEqual(PERSONA_PARAMETER_TABS.map(({ label }) => label), ['好感', '心灵能量', '心情', '作息', '主动性', '记忆']);
   assert.deepEqual(PERSONA_PREVIEW_TABS.map(({ label }) => label), ['实际注入', '性格的变化', '版本']);
-  assert.deepEqual(Object.keys(PERSONA_PARAMETER_PLACEHOLDERS), ['energy', 'mood', 'sleep', 'initiative', 'memory']);
+  assert.deepEqual(Object.keys(PERSONA_PARAMETER_PLACEHOLDERS), ['mood', 'sleep', 'initiative', 'memory']);
   assert.ok(pageSource.includes('readPersonaPageTabs'), 'page restores the selected tabs');
   assert.ok(pageSource.includes('writePersonaPageTabs'), 'page persists the selected tabs');
   assert.ok(pageSource.includes('PersonaEditorToolbar'), 'page delegates the sticky save/tab bar');
@@ -64,6 +65,8 @@ test('persona page tab shells and future-phase cards match the design plan', () 
   assert.ok(fieldsSource.includes('PersonaParametersPanel'), 'fields delegate their parameter page');
   assert.ok(parameterPanelSource.includes('PERSONA_PARAMETER_TABS'), 'parameter panel renders the sub-tabs');
   assert.ok(parameterPanelSource.includes('PersonaAffinityEditor'), 'affinity tab mounts its persisted curve editor');
+  assert.ok(parameterPanelSource.includes('PersonaEnergyEditor'), 'energy tab mounts its persisted multiplier editor');
+  assert.ok(energyEditorSource.includes('/api/mood?account='), 'energy estimate reads the selected preview account');
   assert.ok(fieldsSource.includes('scrollHeight'), 'long form textareas grow with their content');
   assert.ok(previewSource.includes('PERSONA_PREVIEW_TABS'), 'preview rail renders its three tabs');
   assert.ok(previewSource.includes('scrollIntoView'), 'preview follows the focused form section');

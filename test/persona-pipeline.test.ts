@@ -17,6 +17,7 @@ test('pipeline 人设缓存保留 frontmatter 中的好感模式', async () => {
   await withRepository(async (_repository, personaRoot) => {
     fs.writeFileSync(path.join(personaRoot, 'personas', 'default.md'), [
       '---',
+      'energy: { aloneRecovery: 0, warmCharge: 3 }',
       'affinity: { mode: independent }',
       '---',
       '人设正文',
@@ -33,6 +34,9 @@ test('pipeline 人设缓存保留 frontmatter 中的好感模式', async () => {
 
     assert.deepEqual(loaded.affinity, { mode: 'independent' });
     assert.deepEqual(cached.affinity, loaded.affinity);
+    assert.equal(loaded.energy.aloneRecovery, 0);
+    assert.equal(loaded.energy.warmCharge, 3);
+    assert.deepEqual(cached.energy, loaded.energy);
   });
 });
 

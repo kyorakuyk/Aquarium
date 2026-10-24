@@ -7,6 +7,7 @@ import {
   reserveBandOf,
   type EnergySource,
 } from './core.ts';
+import type { PersonaEnergyMultipliers } from '../../persona/energy.ts';
 
 export type MoodSettings = Pick<AquariumConfig['mood'],
   'baseline' | 'surfaceHalfLifeMin' | 'arousalHalfLifeMin' | 'reserve'>;
@@ -30,6 +31,7 @@ export function resolveMoodState(input: {
   at: number;
   settings: MoodSettings;
   energySource: EnergySource;
+  energyMultipliers?: Partial<PersonaEnergyMultipliers>;
   appraisalEvents: readonly Pick<StoredMoodEvent, 'time' | 'dv' | 'source' | 'appraisalValid'>[];
   replyTimes: readonly number[];
 }): ResolvedMoodState {
@@ -107,6 +109,7 @@ export function resolveMoodState(input: {
         surfaceHalfLifeMin: settings.surfaceHalfLifeMin,
         arousalHalfLifeMin: settings.arousalHalfLifeMin,
         energySource,
+        energyMultipliers: input.energyMultipliers,
         lastReplyAt: state.lastReplyAt,
         companionshipPositive: averageAppraiseValence !== undefined && averageAppraiseValence >= 0,
       });

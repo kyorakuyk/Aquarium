@@ -43,17 +43,7 @@ export const PERSONA_PREVIEW_TABS = [
   { id: 'versions', label: '版本' },
 ] as const satisfies ReadonlyArray<{ id: PersonaPreviewTab; label: string }>;
 
-export const PERSONA_PARAMETER_PLACEHOLDERS: Record<Exclude<PersonaParameterTab, 'affinity'>, PersonaParameterPlaceholder> = {
-  // TODO（阶段 4）：将心灵能量获得、消耗与界限倍率放入人设 frontmatter。
-  energy: {
-    title: '心灵能量',
-    description: '获得、消耗和单人影响上限将由人设倍率分别调节。',
-    items: [
-      { name: '恢复来源', note: '影响独处或有人陪伴时的能量恢复', current: '在「我是谁」中设置' },
-      { name: '倍率', note: '未来每项倍率以 ×1 为当前行为基准', current: '人设倍率尚未开放' },
-    ],
-    dependency: '依赖：阶段 4 增加人设 energy 配置，并按既有心灵能量计算顺序接入。',
-  },
+export const PERSONA_PARAMETER_PLACEHOLDERS: Record<Exclude<PersonaParameterTab, 'affinity' | 'energy'>, PersonaParameterPlaceholder> = {
   // TODO（阶段 5）：用人设情绪集合、PAD 坐标与逐边规则替换此说明卡。
   mood: {
     title: '心情',

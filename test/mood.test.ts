@@ -44,6 +44,9 @@ test('同一发送者的软上限按 60 分钟累计变化递减', () => {
   assert.equal(capSenderValenceDelta(0.15, null, history, now), 0.15);
   assert.equal(SENDER_VALENCE_CAP, 0.8);
   assert.equal(capSenderReserveDelta(0.1, 42, [{ time: now - minute, senderId: 42, appliedDr: 0.15 }], now), 0.05);
+  const reserveHistory = [{ time: now - minute, senderId: 42, appliedDr: 0.15 }];
+  assert.equal(capSenderReserveDelta(0.1, 42, reserveHistory, now, { senderHourlyCap: 0 }), 0);
+  assert.ok(capSenderReserveDelta(0.1, 42, reserveHistory, now, { senderHourlyCap: 3 }) > 0.05);
   assert.deepEqual(clampMood(1.4, -0.2), { valence: 1, arousal: 0 });
   assert.deepEqual(clampMood(-0.3, 0.9), { valence: -0.3, arousal: 0.9 });
 });
@@ -73,6 +76,9 @@ test('水库核心导出缓冲和半衰期函数供情绪状态计算复用', ()
     absorbed: 0,
     reserve: 0,
   });
+  assert.equal(bufferNegativeDelta(-0.08, 1, { bufferCost: 0 }).reserve, 1);
+  const expensiveBuffer = bufferNegativeDelta(-0.08, 1, { bufferCost: 3 });
+  assert.ok(expensiveBuffer.reserve < 0.925 && expensiveBuffer.reserve >= 0);
   assert.equal(surfaceHalfLifeMin(1), 40);
   assert.equal(surfaceHalfLifeMin(0), 140);
   assert.equal(applyArousalDelta(0.8, 0.3), 0.86);
@@ -86,6 +92,7 @@ test('I/E/mixed 回能按来源和陪伴切换半衰期，难过时暂停', () =
     elapsedMs: number;
     company: boolean;
     sad: boolean;
+    energyMultipliers?: { aloneRecovery?: number; companyRecovery?: number };
   }) => number) | undefined;
   assert.equal(typeof recoverReserve, 'function');
   if (!recoverReserve) return;
@@ -101,6 +108,8 @@ test('I/E/mixed 回能按来源和陪伴切换半衰期，难过时暂停', () =
   assert.equal(innerAlone, 0.6);
   assert.equal(innerCompany, 0.2);
   assert.ok(outerCompany > outerAlone);
+  assert.equal(recoverReserve({ reserve: 0.2, energySource: 'inner', elapsedMs: twoHours, company: false, sad: false, energyMultipliers: { aloneRecovery: 0 } }), 0.2);
+  assert.ok(recoverReserve({ reserve: 0.2, energySource: 'inner', elapsedMs: twoHours, company: false, sad: false, energyMultipliers: { aloneRecovery: 3 } }) > innerAlone);
   assert.equal(mixedAlone, mixedCompany);
   assert.equal(recoverReserve({ reserve: 0.2, energySource: 'outer', elapsedMs: twoHours, company: true, sad: true }), 0.2);
 });
@@ -119,10 +128,22 @@ test('动态水位控制表层恢复速度，低于难过阈值时恢复水位�
   const fullWater = advanceMoodState({ valence: -0.15, arousal: 0.4, reserve: 1 }, common);
   const lowWater = advanceMoodState({ valence: -0.15, arousal: 0.4, reserve: 0.2 }, common);
   const sad = advanceMoodState({ valence: -0.1, arousal: 0.4, reserve: 0.2 }, { ...common, to: 15 * minute });
+  const noCalmCost = advanceMoodState({ valence: -0.1, arousal: 0.4, reserve: 0.2 }, {
+    ...common,
+    to: 15 * minute,
+    energyMultipliers: { calmRecoveryCost: 0 },
+  });
+  const highCalmCost = advanceMoodState({ valence: -0.1, arousal: 0.4, reserve: 0.2 }, {
+    ...common,
+    to: 15 * minute,
+    energyMultipliers: { calmRecoveryCost: 3 },
+  });
 
   assert.ok(fullWater.valence > lowWater.valence);
   assert.ok(sad.valence > -0.1);
   assert.ok(sad.reserve < 0.2);
+  assert.ok(noCalmCost.reserve > sad.reserve);
+  assert.ok(highCalmCost.reserve < sad.reserve && highCalmCost.reserve >= 0);
 });
 
 test('水位为零时四次负向事件后进入 annoyed', () => {

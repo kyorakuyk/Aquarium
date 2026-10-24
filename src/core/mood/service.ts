@@ -4,6 +4,7 @@ import { callSlot } from '../../llm/slots.ts';
 import type { MoodBand, MoodEventRecord } from '../../store/affect-repo.ts';
 import type { StoreRepository } from '../../store/repository.ts';
 import type { AffinityService } from '../affinity/service.ts';
+import { resolveEnergyMultiplier, type PersonaEnergyMultipliers } from '../../persona/energy.ts';
 import type { AffectPromptTemplate, AppraisePromptTemplate } from '../prompt/templates.ts';
 import type { PipelineModelCall } from '../conversation/steps/types.ts';
 import { runAppraise } from './appraise.ts';
@@ -32,6 +33,7 @@ export interface MoodServiceOptions {
   repository: StoreRepository;
   getConfig: () => AquariumConfig;
   getEnergySource?: (account: number) => EnergySource;
+  getEnergyMultipliers?: (account: number) => PersonaEnergyMultipliers;
   callModel?: PipelineModelCall;
   affinityService?: AffinityService;
   now?: () => number;
@@ -78,6 +80,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
       at,
       settings: mood,
       energySource,
+      energyMultipliers: options.getEnergyMultipliers?.(account),
       appraisalEvents: stored ? options.repository.moodEventsSince(account, historyFrom) : [],
       replyTimes: stored ? options.repository.replyTimesForAccount(account, historyFrom, resolvedAt) : [],
     });
@@ -300,10 +303,21 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
           .filter(isSuccessfulAppraisal)
           .map((event) => ({ time: event.time, senderId: event.senderId, appliedDr: event.appliedDr }));
         const appliedDv = capSenderValenceDelta(result.valence, input.senderId, history, completedAt);
-        const appliedReserveDelta = capSenderReserveDelta(result.reserve * 2, input.senderId, reserveHistory, completedAt);
+        const energyMultipliers = options.getEnergyMultipliers?.(input.account);
+        const reserveMultiplier = resolveEnergyMultiplier(
+          energyMultipliers,
+          result.reserve >= 0 ? 'warmCharge' : 'hurtCost',
+        );
+        const appliedReserveDelta = capSenderReserveDelta(
+          result.reserve * 2 * reserveMultiplier,
+          input.senderId,
+          reserveHistory,
+          completedAt,
+          energyMultipliers,
+        );
         const positiveEnergyBonus = energySource === 'outer' ? Math.max(0, result.valence) * 0.5 : 0;
         const appliedDr = appliedReserveDelta + positiveEnergyBonus;
-        const buffered = bufferNegativeDelta(appliedDv, current.reserve);
+        const buffered = bufferNegativeDelta(appliedDv, current.reserve, energyMultipliers);
         const reserve = Math.max(0, Math.min(1, buffered.reserve + appliedDr));
         const valence = Math.max(-1, Math.min(1, current.valence + buffered.surfaceDelta));
         const arousal = applyArousalDelta(current.arousal, result.arousal);

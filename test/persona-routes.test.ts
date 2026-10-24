@@ -84,6 +84,12 @@ test('persona API accepts traits, preserves Markdown body, and reads back the sa
       body: JSON.stringify({ markdown: '---\naffinity:\n  mode: unexpected\n---\n# {{name}}\n' }),
     });
     assert.equal(invalidAffinity.status, 400);
+    const invalidEnergy = await app.request('/api/personas/invalid-energy', {
+      method: 'PUT',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markdown: '---\nenergy:\n  aloneRecovery: 3.1\n---\n# {{name}}\n' }),
+    });
+    assert.equal(invalidEnergy.status, 400);
   });
 });
 

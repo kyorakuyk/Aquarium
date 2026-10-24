@@ -1,5 +1,6 @@
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { PersonaAffinitySchema } from '../../src/persona/affinity.ts';
+import { PersonaEnergySchema } from '../../src/persona/energy.ts';
 import { parsePersonaTraits } from './persona-traits.ts';
 import type { PersonaTraits } from './api.ts';
 
@@ -143,6 +144,10 @@ function parseMetadata(source: string): Record<string, unknown> {
   if (metadata.affinity !== undefined && metadata.affinity !== null) {
     const affinity = PersonaAffinitySchema.safeParse(metadata.affinity);
     if (!affinity.success) throw new Error('人设好感字段 affinity 无效');
+  }
+  if (metadata.energy !== undefined && metadata.energy !== null) {
+    const energy = PersonaEnergySchema.safeParse(metadata.energy);
+    if (!energy.success) throw new Error('人设心灵能量字段 energy 无效');
   }
   return metadata;
 }

@@ -7,11 +7,13 @@ import { sleepEnergy, sleepPlan, type SleepWakeState } from '../core/sleep/index
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
 import type { MoodBand, StoredMoodEvent } from '../store/affect-repo.ts';
 import type { StoreRepository } from '../store/repository.ts';
+import type { PersonaEnergyMultipliers } from '../persona/energy.ts';
 import type { PanelAccountRuntime } from './types.ts';
 
 export interface MoodRouteOptions {
   getConfig: () => AquariumConfig;
   getEnergySource?: (account: number) => EnergySource;
+  getEnergyMultipliers?: (account: number) => PersonaEnergyMultipliers;
   repository: StoreRepository;
   accounts: () => PanelAccountRuntime[];
   sleepWakeState?: SleepWakeState;
@@ -65,9 +67,18 @@ export function registerMoodRoutes(app: Hono, options: MoodRouteOptions): void {
     return options.accounts()[0]?.adapter.account ?? options.getConfig().accounts[0]?.uin ?? 0;
   }
 
+  function requestedAccount(raw: string | undefined): number | null {
+    if (raw === undefined) return primaryAccount();
+    if (!/^[1-9]\d*$/u.test(raw)) return null;
+    const account = Number(raw);
+    if (!Number.isSafeInteger(account) || !options.getConfig().accounts.some((entry) => entry.uin === account)) return null;
+    return account;
+  }
+
   function currentMoodState(account: number, at: number) {
     const config = options.getConfig();
     const source = options.getEnergySource?.(account) ?? 'mixed';
+    const energyMultipliers = options.getEnergyMultipliers?.(account);
     const stored = options.repository.getMoodState(account);
     const resolvedAt = Math.max(at, stored?.updatedAt ?? at);
     const historyFrom = stored ? stored.updatedAt - 15 * 60_000 : resolvedAt - 15 * 60_000;
@@ -76,6 +87,7 @@ export function registerMoodRoutes(app: Hono, options: MoodRouteOptions): void {
       at,
       settings: config.mood,
       energySource: source,
+      energyMultipliers,
       appraisalEvents: stored ? options.repository.moodEventsSince(account, historyFrom) : [],
       replyTimes: stored ? options.repository.replyTimesForAccount(account, historyFrom, resolvedAt) : [],
     });
@@ -99,10 +111,12 @@ export function registerMoodRoutes(app: Hono, options: MoodRouteOptions): void {
 
   app.get('/api/mood', (context) => {
     const at = now();
-    const account = primaryAccount();
+    const account = requestedAccount(context.req.query('account'));
+    if (account === null) return context.json({ error: 'Invalid mood account' }, 400);
     const stored = options.repository.getMoodState(account);
     const state = currentMoodState(account, at);
     return context.json({
+      account,
       valence: state.valence,
       arousal: state.arousal,
       band: state.band,
@@ -127,6 +141,7 @@ export function registerMoodRoutes(app: Hono, options: MoodRouteOptions): void {
     const from = at - hours * 60 * 60_000;
     const account = primaryAccount();
     const energySource = options.getEnergySource?.(account) ?? 'mixed';
+    const energyMultipliers = options.getEnergyMultipliers?.(account);
     const previous = options.repository.latestMoodEventAtOrBefore(account, from);
     const historyFrom = Math.min(previous?.time ?? from, from) - 15 * 60_000;
     const events = options.repository.moodEventsSince(account, historyFrom);
@@ -137,6 +152,7 @@ export function registerMoodRoutes(app: Hono, options: MoodRouteOptions): void {
       surfaceHalfLifeMin: config.mood.surfaceHalfLifeMin,
       arousalHalfLifeMin: config.mood.arousalHalfLifeMin,
       energySource,
+      energyMultipliers,
       baseline: config.mood.baseline,
       initialReserve: config.mood.reserve.initial,
       ...(previous ? { previous } : {}),

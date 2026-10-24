@@ -1,4 +1,5 @@
 import { loadPersona, type LoadedPersona } from '../../../persona/load.ts';
+import { DEFAULT_PERSONA_ENERGY } from '../../../persona/energy.ts';
 import type { StepContext } from './types.ts';
 
 export function getPersonaForMessage(ctx: StepContext): LoadedPersona {
@@ -7,6 +8,7 @@ export function getPersonaForMessage(ctx: StepContext): LoadedPersona {
       text: ctx.state.persona,
       traits: ctx.state.personaTraits,
       energySource: ctx.state.personaEnergySource ?? 'mixed',
+      energy: ctx.state.personaEnergy ?? DEFAULT_PERSONA_ENERGY,
       affinity: ctx.state.personaAffinity ?? { mode: 'inherit' },
       ...(ctx.state.personaProfile === undefined ? {} : { profile: ctx.state.personaProfile }),
     };
@@ -21,6 +23,7 @@ export function getPersonaForMessage(ctx: StepContext): LoadedPersona {
   ctx.state.persona = loaded.text;
   ctx.state.personaTraits = loaded.traits;
   ctx.state.personaEnergySource = loaded.energySource;
+  ctx.state.personaEnergy = loaded.energy;
   ctx.state.personaAffinity = loaded.affinity;
   if (loaded.profile === undefined) delete ctx.state.personaProfile;
   else ctx.state.personaProfile = loaded.profile;

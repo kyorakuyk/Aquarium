@@ -8,6 +8,7 @@ import { z } from 'zod';
 import type { ContactFriend, ContactGroup, ProtocolAdapter } from '../adapters/types.ts';
 import type { AquariumConfig } from '../config/schema.ts';
 import type { EnergySource } from '../core/mood/core.ts';
+import type { PersonaEnergyMultipliers } from '../persona/energy.ts';
 import { resolveSession } from '../config/resolve.ts';
 import { parseSessionId, listEnabledSessions } from '../core/conversation/sessions.ts';
 import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../core/shared/events.ts';
@@ -56,6 +57,7 @@ export interface PanelServerOptions {
   password: string;
   getConfig: () => AquariumConfig;
   getEnergySource?: (account: number) => EnergySource;
+  getEnergyMultipliers?: (account: number) => PersonaEnergyMultipliers;
   saveConfig: (config: AquariumConfig) => void | Promise<void>;
   repository: StoreRepository;
   interactionLogRepository?: InteractionLogRepository;
@@ -278,6 +280,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
   registerMoodRoutes(app, {
     getConfig: options.getConfig,
     getEnergySource: options.getEnergySource,
+    getEnergyMultipliers: options.getEnergyMultipliers,
     repository: options.repository,
     accounts: options.accounts,
     sleepWakeState: options.sleepWakeState,
