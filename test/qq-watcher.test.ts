@@ -232,7 +232,7 @@ test('等待小号登录时未知身份只 WARN 首次，在线账号跳过，�
 
   await watcher.start();
   assert.deepEqual([...intervals.values()].map((timer) => timer.delay), [2_000]);
-  assert.deepEqual(warningMessages, ['QQ 目标进程 PID 301 身份未知；下一轮将重试。']);
+  assert.deepEqual(warningMessages, ['QQ 目标进程 PID 301 身份未知（已 0 秒 / 1 轮）；下一轮将重试。']);
   assert.equal(debugMessages.filter((message) => message.includes('PID 301')).length, 0);
   assert.deepEqual([...watcher.injectedUins()], [10001]);
 
@@ -241,7 +241,7 @@ test('等待小号登录时未知身份只 WARN 首次，在线账号跳过，�
   await new Promise<void>((resolve) => setImmediate(resolve));
   assert.deepEqual([...intervals.values()].map((timer) => timer.delay), [5_000]);
   assert.equal(warningMessages.length, 1);
-  assert.ok(debugMessages.some((message) => message.includes('PID 301 身份仍未知')));
+  assert.equal(debugMessages.filter((message) => message.includes('PID 301 身份仍未知')).length, 0);
   watcher.stop();
   assert.equal(intervals.size, 0);
 });

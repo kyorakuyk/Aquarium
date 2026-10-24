@@ -15,6 +15,7 @@ export interface QqWatcherOptions {
   onFatalError?: (error: SnowLumaWebUIError) => void;
   log?: (message: string) => void;
   debug?: (message: string) => void;
+  now?: () => number;
   setInterval?: typeof globalThis.setInterval;
   clearInterval?: typeof globalThis.clearInterval;
 }
@@ -22,6 +23,35 @@ export interface QqWatcherOptions {
 interface PidDisposition {
   kind: 'injected' | 'ignored';
   uin?: number;
+}
+
+interface UnknownIdentityState {
+  startedAtMs: number;
+  lastObservedAtMs: number;
+  rounds: number;
+  nextDebugAtMs: number;
+}
+
+const UNKNOWN_IDENTITY_FIRST_DEBUG_MS = 60_000;
+const UNKNOWN_IDENTITY_FIVE_MINUTES_MS = 5 * 60_000;
+const UNKNOWN_IDENTITY_THIRTY_MINUTES_MS = 30 * 60_000;
+const UNKNOWN_IDENTITY_HOUR_MS = 60 * 60_000;
+
+function nextUnknownIdentityDebugAtMs(elapsedMs: number): number {
+  if (elapsedMs < UNKNOWN_IDENTITY_FIRST_DEBUG_MS) return UNKNOWN_IDENTITY_FIRST_DEBUG_MS;
+  if (elapsedMs < UNKNOWN_IDENTITY_FIVE_MINUTES_MS) return UNKNOWN_IDENTITY_FIVE_MINUTES_MS;
+  if (elapsedMs < UNKNOWN_IDENTITY_THIRTY_MINUTES_MS) return UNKNOWN_IDENTITY_THIRTY_MINUTES_MS;
+  const hoursAfterThirtyMinutes = Math.floor((elapsedMs - UNKNOWN_IDENTITY_THIRTY_MINUTES_MS) / UNKNOWN_IDENTITY_HOUR_MS) + 1;
+  return UNKNOWN_IDENTITY_THIRTY_MINUTES_MS + hoursAfterThirtyMinutes * UNKNOWN_IDENTITY_HOUR_MS;
+}
+
+function formatUnknownDuration(elapsedMs: number): string {
+  const totalMinutes = Math.floor(elapsedMs / 60_000);
+  if (totalMinutes === 0) return `${Math.floor(elapsedMs / 1_000)} 秒`;
+  if (totalMinutes < 60) return `${totalMinutes} 分钟`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes === 0 ? `${hours} 小时` : `${hours} 小时 ${minutes} 分钟`;
 }
 
 function processUin(process: SnowLumaProcessInfo): string | undefined {
@@ -38,7 +68,8 @@ export function createQqWatcher(options: QqWatcherOptions) {
   }
   const targetUins = new Set(options.targetUins.filter((uin) => Number.isSafeInteger(uin) && uin > 0));
   const dispositions = new Map<number, PidDisposition>();
-  const unknownWarned = new Set<number>();
+  const unknownIdentities = new Map<number, UnknownIdentityState>();
+  const getNow = options.now ?? (() => globalThis.performance.now());
   const setTimer = options.setInterval ?? globalThis.setInterval;
   const clearTimer = options.clearInterval ?? globalThis.clearInterval;
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -47,6 +78,30 @@ export function createQqWatcher(options: QqWatcherOptions) {
   let startInFlight: Promise<void> | undefined;
   let startRequested = false;
   let stopRequested = false;
+
+  function recordUnknownIdentity(pid: number): void {
+    const observedAtMs = getNow();
+    const state = unknownIdentities.get(pid);
+    if (!state) {
+      const firstState: UnknownIdentityState = {
+        startedAtMs: observedAtMs,
+        lastObservedAtMs: observedAtMs,
+        rounds: 1,
+        nextDebugAtMs: UNKNOWN_IDENTITY_FIRST_DEBUG_MS,
+      };
+      unknownIdentities.set(pid, firstState);
+      options.log?.(`QQ 目标进程 PID ${pid} 身份未知（已 0 秒 / 1 轮）；下一轮将重试。`);
+      return;
+    }
+
+    state.lastObservedAtMs = Math.max(state.lastObservedAtMs, observedAtMs);
+    state.rounds += 1;
+    const elapsedMs = Math.max(0, state.lastObservedAtMs - state.startedAtMs);
+    if (elapsedMs < state.nextDebugAtMs) return;
+
+    state.nextDebugAtMs = nextUnknownIdentityDebugAtMs(elapsedMs);
+    options.debug?.(`QQ 目标进程 PID ${pid} 身份仍未知（已 ${formatUnknownDuration(elapsedMs)} / ${state.rounds} 轮）；下一轮继续重试。`);
+  }
 
   function notifyInjected(uin: number): void {
     try {
@@ -75,8 +130,8 @@ export function createQqWatcher(options: QqWatcherOptions) {
     for (const pid of dispositions.keys()) {
       if (!present.has(pid)) dispositions.delete(pid);
     }
-    for (const pid of unknownWarned) {
-      if (!present.has(pid)) unknownWarned.delete(pid);
+    for (const pid of unknownIdentities.keys()) {
+      if (!present.has(pid)) unknownIdentities.delete(pid);
     }
 
     for (const process of processes) {
@@ -84,11 +139,11 @@ export function createQqWatcher(options: QqWatcherOptions) {
       if (!Number.isSafeInteger(process.pid) || process.pid <= 0 || dispositions.has(process.pid)) continue;
       if (process.status === 'online') {
         const onlineUin = processUin(process);
+        if (onlineUin !== undefined) unknownIdentities.delete(process.pid);
         const matchedOnlineUin = onlineUin === undefined
           ? undefined
           : [...targetUins].find((targetUin) => String(targetUin) === onlineUin);
         if (matchedOnlineUin !== undefined) {
-          unknownWarned.delete(process.pid);
           dispositions.set(process.pid, { kind: 'injected', uin: matchedOnlineUin });
           options.debug?.(`PID ${process.pid} 状态为 online，已视为目标账号在线。`);
           notifyInjected(matchedOnlineUin);
@@ -97,15 +152,10 @@ export function createQqWatcher(options: QqWatcherOptions) {
       }
       const uin = processUin(process);
       if (uin === undefined) {
-        if (unknownWarned.has(process.pid)) {
-          options.debug?.(`QQ 目标进程 PID ${process.pid} 身份仍未知；下一轮继续重试。`);
-        } else {
-          unknownWarned.add(process.pid);
-          options.log?.(`QQ 目标进程 PID ${process.pid} 身份未知；下一轮将重试。`);
-        }
+        recordUnknownIdentity(process.pid);
         continue;
       }
-      unknownWarned.delete(process.pid);
+      unknownIdentities.delete(process.pid);
       const matchedUin = [...targetUins].find((targetUin) => String(targetUin) === uin);
       if (matchedUin === undefined) {
         options.debug?.(`PID ${process.pid} 探测结果：其他账号`);
@@ -193,7 +243,7 @@ export function createQqWatcher(options: QqWatcherOptions) {
 
   function reset(): void {
     dispositions.clear();
-    unknownWarned.clear();
+    unknownIdentities.clear();
   }
 
   function injectedUins(): Set<number> {

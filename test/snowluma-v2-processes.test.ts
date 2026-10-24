@@ -88,18 +88,20 @@ test('online status with a matching identity is already loaded and is not loaded
   assert.deepEqual([...watcher.injectedUins()], [10001]);
 });
 
-test('same PID unknown identity warns once per consecutive unknown streak', async () => {
+test('same PID unknown identity resets after absence and still injects when resolved', async () => {
   let resolved = false;
-  let unknownAgain = false;
+  let present = true;
+  let now = 0;
   const warnings: string[] = [];
   const debug: string[] = [];
   const loaded: number[] = [];
+  const injected: number[] = [];
   const process = { pid: 901, name: 'QQ.exe', status: 'available', loggedIn: false, uin: '10001' };
   const watcher = createQqWatcher({
     targetUins: [10001],
     scanIntervalSec: 5,
     getClient: () => ({
-      listProcesses: async () => [resolved && !unknownAgain ? { ...process, loggedIn: true } : process],
+      listProcesses: async () => present ? [resolved ? { ...process, loggedIn: true } : process] : [],
       load: async (pid: number) => {
         loaded.push(pid);
         return { success: true };
@@ -107,19 +109,74 @@ test('same PID unknown identity warns once per consecutive unknown streak', asyn
     }) as never,
     log: (message) => warnings.push(message),
     debug: (message) => debug.push(message),
+    now: () => now,
+    onInjected: (uin) => injected.push(uin),
   });
 
   await watcher.scanOnce();
+  now = 5_000;
   await watcher.scanOnce();
-  assert.equal(warnings.length, 1);
-  assert.equal(debug.length, 1);
+  assert.deepEqual(warnings, ['QQ 目标进程 PID 901 身份未知（已 0 秒 / 1 轮）；下一轮将重试。']);
+  assert.deepEqual(debug, []);
+
+  present = false;
+  now = 120_000;
+  await watcher.scanOnce();
+  present = true;
+  now = 125_000;
+  await watcher.scanOnce();
+  assert.deepEqual(warnings, [
+    'QQ 目标进程 PID 901 身份未知（已 0 秒 / 1 轮）；下一轮将重试。',
+    'QQ 目标进程 PID 901 身份未知（已 0 秒 / 1 轮）；下一轮将重试。',
+  ]);
 
   resolved = true;
+  now = 130_000;
   await watcher.scanOnce();
   assert.deepEqual(loaded, [901]);
+  assert.deepEqual(injected, [10001]);
+});
 
-  unknownAgain = true;
-  await watcher.scanOnce();
+test('unknown identity logs at elapsed milestones and then hourly without changing scans', async () => {
+  let now = 0;
+  const warnings: string[] = [];
+  const debug: string[] = [];
+  const process = { pid: 902, name: 'QQ.exe', status: 'available', loggedIn: false, uin: '10001' };
+  const watcher = createQqWatcher({
+    targetUins: [10001],
+    scanIntervalSec: 5,
+    getClient: () => ({
+      listProcesses: async () => [process],
+      load: async () => ({ success: true }),
+    }) as never,
+    log: (message) => warnings.push(message),
+    debug: (message) => debug.push(message),
+    now: () => now,
+  });
+
+  for (let round = 0; round < 100; round += 1) {
+    now = round * 5_000;
+    await watcher.scanOnce();
+  }
+
   assert.equal(warnings.length, 1);
-  assert.deepEqual(loaded, [901]);
+  assert.equal(debug.length, 2);
+  assert.deepEqual(debug, [
+    'QQ 目标进程 PID 902 身份仍未知（已 1 分钟 / 13 轮）；下一轮继续重试。',
+    'QQ 目标进程 PID 902 身份仍未知（已 5 分钟 / 61 轮）；下一轮继续重试。',
+  ]);
+
+  now = 30 * 60_000;
+  await watcher.scanOnce();
+  now = 90 * 60_000;
+  await watcher.scanOnce();
+  now = 150 * 60_000;
+  await watcher.scanOnce();
+  assert.deepEqual(debug, [
+    'QQ 目标进程 PID 902 身份仍未知（已 1 分钟 / 13 轮）；下一轮继续重试。',
+    'QQ 目标进程 PID 902 身份仍未知（已 5 分钟 / 61 轮）；下一轮继续重试。',
+    'QQ 目标进程 PID 902 身份仍未知（已 30 分钟 / 101 轮）；下一轮继续重试。',
+    'QQ 目标进程 PID 902 身份仍未知（已 1 小时 30 分钟 / 102 轮）；下一轮继续重试。',
+    'QQ 目标进程 PID 902 身份仍未知（已 2 小时 30 分钟 / 103 轮）；下一轮继续重试。',
+  ]);
 });
