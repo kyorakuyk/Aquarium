@@ -43,18 +43,7 @@ export const PERSONA_PREVIEW_TABS = [
   { id: 'versions', label: '版本' },
 ] as const satisfies ReadonlyArray<{ id: PersonaPreviewTab; label: string }>;
 
-export const PERSONA_PARAMETER_PLACEHOLDERS: Record<PersonaParameterTab, PersonaParameterPlaceholder> = {
-  // TODO（阶段 3）：确认好感历史数据迁移方式后，再接入人设范围与倍率曲线。
-  affinity: {
-    title: '好感',
-    description: '好感范围、分档和单次变化倍率将按人设调整；每日上限和滞回机制沿用现有规则。',
-    items: [
-      { name: '关系范围', note: '正负好感以 0 为中性中心', current: '0–100 · 基准 50' },
-      { name: '每日上限', note: '单日增加或减少的上限', current: '+5 / −8' },
-      { name: '关系回落', note: '久不说话后逐步回到关系起点', current: '3 天后每天 1 点' },
-    ],
-    dependency: '依赖：阶段 3 先确认既有好感数据换算或重置；确认前不改变现有数据规则。',
-  },
+export const PERSONA_PARAMETER_PLACEHOLDERS: Record<Exclude<PersonaParameterTab, 'affinity'>, PersonaParameterPlaceholder> = {
   // TODO（阶段 4）：将心灵能量获得、消耗与界限倍率放入人设 frontmatter。
   energy: {
     title: '心灵能量',

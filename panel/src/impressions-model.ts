@@ -242,7 +242,7 @@ export function memberRowPresentation(
   const hasHighlights = highlights.length > 0;
   return {
     subtitle: hasHighlights ? highlights.join(' · ') : `${messageCount.toLocaleString('zh-CN')} 条发言`,
-    showAffinity: hasHighlights || affinityLevel !== 'neutral',
+    showAffinity: hasHighlights || affinityLevel !== 'acquaintance',
   };
 }
 

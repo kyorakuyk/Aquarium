@@ -53,6 +53,8 @@ test('openDatabase 开启 WAL 并创建当前 schema 数据表', () => {
       'messages',
       'mood_events',
       'mood_state',
+      'persona_affinity_events',
+      'persona_affinity_state',
       'persona_diaries',
       'persona_memory_runs',
       'persona_memos',

@@ -470,7 +470,7 @@ test('好感度状态与事件读写往返一致', () => {
       account,
       userId,
       value: 72.5,
-      level: 'warm' as const,
+      level: 'more_than_friends' as const,
       levelSince: 2_000,
       lastLevelChangeAt: 2_000,
       lastInteractionAt: 3_000,
@@ -489,8 +489,8 @@ test('好感度状态与事件读写往返一致', () => {
       delta: 0.5,
       applied: 0.5,
       reason: '正向情绪事件',
-      levelBefore: 'neutral' as const,
-      levelAfter: 'warm' as const,
+      levelBefore: 'acquaintance' as const,
+      levelAfter: 'more_than_friends' as const,
     };
     repository.recordAffinityEvent(event);
     assert.deepEqual(repository.recentAffinityEvents(account, userId, 5), [{ id: 1, ...event }]);

@@ -46,17 +46,25 @@ test('被叫事件每天最多计 3 次并在本地日期切换后重置', () =>
   assert.equal(canCountCalledAffinity(history, new Date(2026, 9, 19, 0, 1).getTime()), true);
 });
 
-test('好感度在互动 3 天后按完整天数向 50 回落且不越过基线', () => {
+test('好感度在互动 3 天后按完整天数向起点 15 回落且不越过基线', () => {
   const lastInteractionAt = new Date(2026, 9, 10, 12).getTime();
-  assert.equal(decayAffinity(80, lastInteractionAt, lastInteractionAt + 3 * day), 80);
-  assert.equal(decayAffinity(80, lastInteractionAt, lastInteractionAt + 5 * day), 78);
-  assert.equal(decayAffinity(20, lastInteractionAt, lastInteractionAt + 8 * day), 25);
-  assert.equal(decayAffinity(20, lastInteractionAt, lastInteractionAt + 60 * day), 50);
+  assert.equal(decayAffinity(80, lastInteractionAt, lastInteractionAt + 3 * day, 15), 80);
+  assert.equal(decayAffinity(80, lastInteractionAt, lastInteractionAt + 5 * day, 15), 78);
+  assert.equal(decayAffinity(-20, lastInteractionAt, lastInteractionAt + 8 * day, 15), -15);
+  assert.equal(decayAffinity(-20, lastInteractionAt, lastInteractionAt + 60 * day, 15), 15);
 });
 
-test('好感档位使用 20 点边界并复用防抖余量', () => {
-  assert.deepEqual([19, 20, 40, 60, 80].map(affinityLevelOf), ['cold', 'cool', 'neutral', 'warm', 'close']);
-  const settled = { current: 2, since: 0, lastChangeAt: 0 };
-  assert.equal(nextAffinityLevel(settled, 62, day + 1, 'event'), 'neutral');
-  assert.equal(nextAffinityLevel(settled, 63, day + 1, 'event'), 'warm');
+test('好感十档采用自定义分界并复用防抖余量', () => {
+  const tiers = { positive: [15, 35, 60, 85], negative: [-85, -60, -35, -15] };
+  const samples = [-100, -85, -60, -35, -15, -14, 0, 14, 15, 35, 60, 85, 100];
+  assert.deepEqual(samples.map((value) => affinityLevelOf(value, tiers)), [
+    'enemy', 'loathe', 'dislike', 'uncomfortable', 'distant', 'distant', 'unfamiliar',
+    'unfamiliar', 'acquaintance', 'ordinary_friend', 'more_than_friends', 'lover', 'lover',
+  ]);
+  const settledPositive = { current: 7, since: 0, lastChangeAt: 0 };
+  assert.equal(nextAffinityLevel(settledPositive, 62, day + 1, 'event', tiers), 'ordinary_friend');
+  assert.equal(nextAffinityLevel(settledPositive, 63, day + 1, 'event', tiers), 'more_than_friends');
+  const settledNegative = { current: 2, since: 0, lastChangeAt: 0 };
+  assert.equal(nextAffinityLevel(settledNegative, -33, day + 1, 'event', tiers), 'dislike');
+  assert.equal(nextAffinityLevel(settledNegative, -32, day + 1, 'event', tiers), 'uncomfortable');
 });

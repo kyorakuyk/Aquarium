@@ -13,11 +13,12 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AquariumConfig } from '../config/schema.ts';
 import type { PipelineModelCall } from '../core/conversation/pipeline.ts';
+import { createAffinityService } from '../core/affinity/service.ts';
 import { promptTemplateStore } from '../core/prompt/templates.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
 import { callSlot } from '../llm/slots.ts';
 import { effectiveTalkLevel, renderTraitsBlock } from '../persona/traits.ts';
-import { parsePersonaMarkdown, updatePersonaTraits, type PersonaTraits } from '../persona/load.ts';
+import { loadPersona, parsePersonaMarkdown, updatePersonaTraits, validatePersonaAffinityFrontmatter, type PersonaTraits } from '../persona/load.ts';
 import {
   buildSections,
   parseSections,
@@ -91,6 +92,7 @@ interface PersonaRouteOptions {
   serializeConfigWrite: <T>(task: () => Promise<T>) => Promise<T>;
   repository: StoreRepository;
   callModel?: PipelineModelCall;
+  now?: () => number;
 }
 
 function listPersonaIds(directory: string): string[] {
@@ -223,6 +225,51 @@ export function registerPersonaRoutes(app: Hono, root: string, options: PersonaR
     return context.json({ id, markdown, traits });
   });
 
+  app.get('/api/personas/:id/affinity-preview', (context) => {
+    const id = context.req.param('id');
+    if (!validPersonaId(id.toLowerCase())) return context.json({ error: 'Invalid persona ID' }, 400);
+    const accountText = context.req.query('account');
+    if (!accountText || !/^[1-9]\d*$/u.test(accountText)) return context.json({ error: 'Invalid account' }, 400);
+    const account = Number(accountText);
+    const config = options.getConfig();
+    if (!Number.isSafeInteger(account) || !config.accounts.some((item) => item.uin === account)) {
+      return context.json({ error: 'Invalid account' }, 400);
+    }
+    const userPath = personaPath(root, 'data/personas', id);
+    const builtInPath = personaPath(root, 'personas', id);
+    if (!existsSync(userPath) && !existsSync(builtInPath)) return context.json({ error: 'Persona not found' }, 404);
+    let personaAffinity: ReturnType<typeof loadPersona>['affinity'];
+    try { personaAffinity = loadPersona(id, '', { root }).affinity; }
+    catch { return context.json({ error: 'Invalid persona affinity' }, 400); }
+
+    const previewConfig: AquariumConfig = {
+      ...config,
+      accounts: config.accounts.map((item) => item.uin === account ? { ...item, persona: id } : item),
+    };
+    function currentFor(mode: 'inherit' | 'independent'): number {
+      return createAffinityService({
+        repository: options.repository,
+        getConfig: () => previewConfig,
+        getPersonaAffinity: () => ({ ...personaAffinity, mode }),
+      }).getCurrent(account, config.owner, (options.now ?? Date.now)()).value;
+    }
+    const start = config.affinity.start;
+    const current = Number.isSafeInteger(config.owner) && config.owner > 0
+      ? {
+        inherit: currentFor('inherit'),
+        independent: currentFor('independent'),
+      }
+      : { inherit: start, independent: start };
+
+    return context.json({
+      account,
+      start,
+      current,
+      tiers: config.affinity.tiers,
+      curveDefaults: config.affinity.curveDefaults,
+    });
+  });
+
   registerPersonaVersionRoutes(app, root, options.repository);
 
   app.put('/api/personas/:id', async (context) => {
@@ -237,6 +284,8 @@ export function registerPersonaRoutes(app: Hono, root: string, options: PersonaR
       try { markdown = updatePersonaTraits(body.markdown, body.traits); }
       catch { return context.json({ error: 'Invalid persona YAML front matter' }, 400); }
     }
+    try { validatePersonaAffinityFrontmatter(markdown); }
+    catch { return context.json({ error: 'Invalid persona affinity' }, 400); }
     writeTextAtomic(personaPath(root, 'data/personas', id), markdown);
     recordPersonaVersionOnSave(options.repository, id, markdown);
     return context.json({ id, saved: true });

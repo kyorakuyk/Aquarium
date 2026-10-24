@@ -185,9 +185,10 @@ function renderBlocks(profile: StructuredPersona, context: PersonaPromptContext)
 }
 
 export function personaAudienceTierFromAffinity(level: string | undefined): PersonaAudienceTier | undefined {
-  if (level === 'cold' || level === 'cool') return 'stranger';
-  if (level === 'neutral' || level === 'warm') return 'acquaintance';
-  if (level === 'close') return 'close';
+  if (level === 'enemy' || level === 'loathe' || level === 'dislike'
+    || level === 'uncomfortable' || level === 'distant' || level === 'unfamiliar') return 'stranger';
+  if (level === 'acquaintance' || level === 'ordinary_friend') return 'acquaintance';
+  if (level === 'more_than_friends' || level === 'lover') return 'close';
   return undefined;
 }
 

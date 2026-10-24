@@ -248,7 +248,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
   });
   registerPersonaRoutes(app, root, {
     getConfig: options.getConfig, saveConfig: options.saveConfig, repository: options.repository,
-    callModel: options.callModel, serializeConfigWrite,
+    callModel: options.callModel, serializeConfigWrite, now,
   });
   registerSessionRoutes(app, {
     getConfig: options.getConfig,
@@ -287,6 +287,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
     getConfig: options.getConfig,
     repository: options.repository,
     accounts: options.accounts,
+    personaRoot: root,
     historyImports: options.historyImports,
     now,
   });

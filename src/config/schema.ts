@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  AffinityCurveCollectionSchema,
+  AffinityTiersSchema,
+  DEFAULT_AFFINITY_TIERS,
+  defaultAffinityCurveSettings,
+} from '../persona/affinity.ts';
 
 const rateSchema = z.object({
   perUserPerMinute: z.number().int().positive(),
@@ -237,10 +243,32 @@ const moodSchema = z.preprocess((value: unknown) => {
   reserve: { initial: 0.8 },
 }));
 
-const affinitySchema = z.object({
+const defaultAffinityCurves = defaultAffinityCurveSettings();
+const affinityCurveDefaultsSchema = AffinityCurveCollectionSchema.default(defaultAffinityCurves);
+
+const affinitySchema = z.preprocess((value: unknown) => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return value;
+  const input = value as Record<string, unknown>;
+  const { initial, ...current } = input;
+  if (current.start !== undefined || typeof initial !== 'number') return current;
+  return {
+    ...current,
+    start: initial === 50 ? 15 : (initial - 50) * 2,
+  };
+}, z.object({
   enabled: z.boolean().default(true),
-  initial: z.number().min(0).max(100).default(50),
-}).strict().default({ enabled: true, initial: 50 });
+  start: z.number().min(-100).max(100).default(15),
+  tiers: AffinityTiersSchema.default({
+    positive: [...DEFAULT_AFFINITY_TIERS.positive],
+    negative: [...DEFAULT_AFFINITY_TIERS.negative],
+  }),
+  curveDefaults: affinityCurveDefaultsSchema,
+}).strict().default({
+  enabled: true,
+  start: 15,
+  tiers: { positive: [15, 35, 60, 85], negative: [-85, -60, -35, -15] },
+  curveDefaults: defaultAffinityCurves,
+}));
 
 const sleepSchema = z.object({
   enabled: z.boolean().default(false),

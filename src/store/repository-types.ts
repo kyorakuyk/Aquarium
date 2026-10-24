@@ -27,6 +27,11 @@ import type { TagDropRepository } from './tag-drop-repo.ts';
 import type { KinGroupRepository } from './kin-group-repo.ts';
 import type { PersonaMemoryRepository } from './persona-memory-repo.ts';
 import type { EventRepository } from './event-repo.ts';
+import type {
+  PersonaAffinityEventRecord,
+  PersonaAffinityStateRecord,
+  StoredPersonaAffinityEvent,
+} from './persona-affinity-repo.ts';
 
 export interface MessageStorageRecord {
   sessionId: string;
@@ -208,6 +213,12 @@ export interface StoreRepository extends RecentExtractUsageRepository, PersonaVe
   recordAffinityEvent(event: AffinityEventRecord): void;
   recentAffinityEvents(account: number, userId: number, count: number): StoredAffinityEvent[];
   affinityEventsSince(account: number, userId: number, since: number): StoredAffinityEvent[];
+  getPersonaAffinityState(account: number, userId: number, personaId: string): PersonaAffinityStateRecord | undefined;
+  listPersonaAffinityStates(account: number, personaId: string): PersonaAffinityStateRecord[];
+  savePersonaAffinityState(state: PersonaAffinityStateRecord): void;
+  recordPersonaAffinityEvent(event: PersonaAffinityEventRecord): void;
+  recentPersonaAffinityEvents(account: number, userId: number, personaId: string, count: number): StoredPersonaAffinityEvent[];
+  personaAffinityEventsSince(account: number, userId: number, personaId: string, since: number): StoredPersonaAffinityEvent[];
   latestSenderNameForAccount(account: number, userId: number): string | undefined;
   insertTag(tag: TagRecord): number;
   tagById(id: number): StoredTag | undefined;

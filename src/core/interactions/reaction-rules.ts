@@ -123,7 +123,8 @@ export function createReactionRuleService(options: {
     async tryReact(input) {
       if (input.message.session.kind !== 'group') return undefined;
       if (input.trigger === 'positive_silence'
-        && (!(input.affinityLevel === 'warm' || input.affinityLevel === 'close')
+        && (!(input.affinityLevel === 'more_than_friends'
+          || input.affinityLevel === 'lover')
           || !isPositiveSocialMessage(input.message.plainText))) return undefined;
       if (input.trigger === 'closing_mention' && !isClosingMention(input.message)) return undefined;
 

@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 import { redactSensitiveText } from '../src/core/impressions/sensitive-text.ts';
 import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { parsePersonaMarkdown } from '../src/persona/load.ts';
 import { buildSections, parseSections, renderPersonaSectionBlocks } from '../src/persona/sections.ts';
 import { effectiveTalkLevel, renderTraitsBlock } from '../src/persona/traits.ts';
-import { authHeaders, withPanel } from './panel-test-helpers.ts';
+import { authHeaders, now, withPanel } from './panel-test-helpers.ts';
 
 test('persona API accepts traits, preserves Markdown body, and reads back the saved header', async () => {
   await withPanel(async ({ app }) => {
@@ -75,7 +77,84 @@ test('persona API accepts traits, preserves Markdown body, and reads back the sa
     const repairedDocument = await repairedReadBack.json() as { markdown: string; traits: unknown };
     assert.deepEqual(repairedDocument.traits, { order: 0, morality: 0, talk: 1, mind: 0, humor: 0, openness: 0, imitation: 0 });
     assert.ok(repairedDocument.markdown.endsWith('可修复正文。'));
+
+    const invalidAffinity = await app.request('/api/personas/invalid-affinity', {
+      method: 'PUT',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markdown: '---\naffinity:\n  mode: unexpected\n---\n# {{name}}\n' }),
+    });
+    assert.equal(invalidAffinity.status, 400);
   });
+});
+
+test('persona affinity preview reads real owner values for both storage modes', async () => {
+  await withPanel(async ({ app, getConfig, repository, root }) => {
+    const config = getConfig();
+    const account = config.accounts[0]!.uin;
+    const owner = config.owner;
+    const timestamps = {
+      levelSince: now - 86_400_000,
+      lastLevelChangeAt: now - 86_400_000,
+      lastInteractionAt: now - 1_000,
+      updatedAt: now - 1_000,
+    };
+    repository.saveAffinityState({
+      account,
+      userId: owner,
+      value: 44,
+      level: 'ordinary_friend',
+      ...timestamps,
+    });
+    repository.savePersonaAffinityState({
+      account,
+      userId: owner,
+      personaId: 'preview',
+      value: -36,
+      level: 'uncomfortable',
+      ...timestamps,
+    });
+    fs.writeFileSync(path.join(root, 'personas', 'preview.md'), [
+      '---',
+      'affinity:',
+      '  mode: independent',
+      '---',
+      '# {{name}}',
+      '预览人设。',
+    ].join('\n'), 'utf8');
+
+    const response = await app.request(`/api/personas/preview/affinity-preview?account=${account}`, {
+      headers: authHeaders(),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      account,
+      start: 15,
+      current: { inherit: 44, independent: -36 },
+      tiers: { positive: [15, 35, 60, 85], negative: [-85, -60, -35, -15] },
+      curveDefaults: {
+        posGain: { preset: 'default', points: [] },
+        posLoss: { preset: 'default', points: [] },
+        negGain: { preset: 'default', points: [] },
+        negLoss: { preset: 'default', points: [] },
+      },
+    });
+
+    const invalidAccount = await app.request('/api/personas/preview/affinity-preview?account=99999', {
+      headers: authHeaders(),
+    });
+    assert.equal(invalidAccount.status, 400);
+  }, 123456789);
+
+  await withPanel(async ({ app, getConfig }) => {
+    const account = getConfig().accounts[0]!.uin;
+    const response = await app.request(`/api/personas/default/affinity-preview?account=${account}`, {
+      headers: authHeaders(),
+    });
+    assert.equal(response.status, 200);
+    const preview = await response.json() as { start: number; current: { inherit: number; independent: number } };
+    assert.equal(preview.current.inherit, preview.start);
+    assert.equal(preview.current.independent, preview.start);
+  }, 0);
 });
 
 test('persona preview returns section blocks and the runtime trait renderer output', async () => {

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import yaml from 'yaml';
+import { parsePersonaAffinity, type PersonaAffinitySettings } from './affinity.ts';
 import { validPersonaId } from './persona-id.ts';
 
 export interface PersonaTraits {
@@ -70,6 +71,7 @@ export interface LoadedPersona {
   text: string;
   traits: PersonaTraits;
   energySource: PersonaEnergySource;
+  affinity: PersonaAffinitySettings;
   profile?: StructuredPersona;
 }
 
@@ -298,13 +300,24 @@ export function parsePersonaMarkdown(source: string): LoadedPersona {
   const text = match ? source.slice(match[0].length) : source;
   const traits = match ? parseTraits(header.traits) : { ...zeroTraits };
   const energySource = match ? parseEnergySource(header.energySource) : 'mixed';
+  const affinity = parsePersonaAffinity(match ? header.affinity : undefined);
   const profile = match ? parseStructuredPersona(header, text, traits, energySource) : undefined;
   return {
     text,
     traits,
     energySource,
+    affinity,
     ...(profile === undefined ? {} : { profile }),
   };
+}
+
+export function validatePersonaAffinityFrontmatter(source: string): void {
+  const match = frontmatterPattern.exec(source);
+  if (!match) return;
+  let header: Record<string, unknown>;
+  try { header = parseYamlHeader(match[1] ?? ''); }
+  catch { return; }
+  parsePersonaAffinity(header.affinity);
 }
 
 export function updatePersonaTraits(source: string, traits: PersonaTraits): string {
@@ -349,6 +362,7 @@ export function loadPersona(
     text: loaded.text.replaceAll('{{name}}', () => displayName),
     traits: loaded.traits,
     energySource: loaded.energySource,
+    affinity: loaded.affinity,
     ...(loaded.profile === undefined
       ? {}
       : { profile: replaceNameTokens(loaded.profile, displayName) as StructuredPersona }),

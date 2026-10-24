@@ -3,11 +3,16 @@ import { apiRequest, patch, type AffinityDetailView, type AffinityEventView, typ
 import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
 
 const LEVEL_LABELS: Record<AffinityLevel, string> = {
-  cold: '疏远',
-  cool: '偏冷',
-  neutral: '普通',
-  warm: '熟络',
-  close: '亲近',
+  enemy: '仇人',
+  loathe: '憎恶',
+  dislike: '讨厌',
+  uncomfortable: '不爽',
+  distant: '冷淡',
+  unfamiliar: '不熟',
+  acquaintance: '认识',
+  ordinary_friend: '普通朋友',
+  more_than_friends: '朋友以上',
+  lover: '恋人',
 };
 
 const SOURCE_LABELS: Record<AffinityEventView['source'], string> = {
@@ -60,7 +65,7 @@ export function MemberAffinity({ affinity, account }: { affinity: AffinityView; 
   return (
     <div className="member-affinity">
       <button className="member-affinity-toggle" type="button" aria-expanded={expanded} aria-label={`好感度 ${affinity.value}，${LEVEL_LABELS[affinity.level]}；${expanded ? '收起事件' : '查看最近 5 条事件'}`} title="查看最近 5 条好感事件" onClick={() => void toggle()}>
-        <progress max={100} value={affinity.value} aria-hidden="true" />
+        <progress max={200} value={affinity.value + 100} aria-hidden="true" />
         <strong>{LEVEL_LABELS[affinity.level]}</strong>
         <span className="affinity-chevron" aria-hidden="true">{expanded ? '⌃' : '⌄'}</span>
       </button>
@@ -101,8 +106,8 @@ export function AffinityPanel() {
     event.preventDefault();
     if (busyUser !== undefined) return;
     const value = Number(drafts[userId]);
-    if (!Number.isInteger(value) || value < 0 || value > 100) {
-      setError('好感度必须是 0–100 的整数');
+    if (!Number.isInteger(value) || value < -100 || value > 100) {
+      setError('好感度必须是 −100–100 的整数');
       return;
     }
     setBusyUser(userId);
@@ -121,7 +126,7 @@ export function AffinityPanel() {
   return (
     <section className="panel-card affinity-panel">
       <div className="section-heading">
-        <div><h2>所有人</h2><p className="muted">同一眷属的关系跨群共享；回落值在读取时计算。</p></div>
+        <div><h2>所有人</h2><p className="muted">继承人设下，同一眷属的关系跨群共享；独立人设分别保存。回落值在读取时计算。</p></div>
         <button className="text-button" type="button" onClick={() => setAscending((value) => !value)}>
           数值{ascending ? '从低到高' : '从高到低'}
         </button>
@@ -137,13 +142,13 @@ export function AffinityPanel() {
                 <strong>{name}</strong>
                 <span className="mono muted">QQ {person.userId}</span>
                 <span>{person.value} · {LEVEL_LABELS[person.level]}</span>
-                <progress max={100} value={person.value} aria-label={`${name} 好感度 ${person.value}`} />
+                <progress max={200} value={person.value + 100} aria-label={`${name} 好感度 ${person.value}`} />
                 <span className="muted">最近互动 · {formatTime(person.lastInteractionAt)}</span>
               </div>
               <form className="affinity-manual-form" onSubmit={(event) => void save(event, person.userId)}>
                 <label><span className="field-label">手动设置</span><input
                   type="number"
-                  min="0"
+                  min="-100"
                   max="100"
                   step="1"
                   value={drafts[person.userId] ?? String(person.value)}

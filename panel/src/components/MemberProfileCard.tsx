@@ -7,11 +7,16 @@ import { IdentityRelationsPanel } from './IdentityRelationsPanel.tsx';
 import type { QqMemberTargetView } from '../api.ts';
 
 const AFFINITY_LABELS: Record<ImpressionsView['members'][number]['affinity']['level'], string> = {
-  cold: '疏远',
-  cool: '偏冷',
-  neutral: '普通',
-  warm: '熟络',
-  close: '亲近',
+  enemy: '仇人',
+  loathe: '憎恶',
+  dislike: '讨厌',
+  uncomfortable: '不爽',
+  distant: '冷淡',
+  unfamiliar: '不熟',
+  acquaintance: '认识',
+  ordinary_friend: '普通朋友',
+  more_than_friends: '朋友以上',
+  lover: '恋人',
 };
 
 type Member = ImpressionsView['members'][number];

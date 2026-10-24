@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { StoreRepository } from './repository.ts';
 import { createTagQueries } from './tag-repo.ts';
 import { createTagVetoQueries } from './tag-veto-repo.ts';
+import { createPersonaAffinityQueries } from './persona-affinity-repo.ts';
 
 export type { StoredTag, TagEvidence, TagRecord, TagRunRecord, TagSource, TagStatus, TagUpdate } from './tag-repo.ts';
 export type { TagKind } from '../core/impressions/tag-model.ts';
@@ -9,7 +10,9 @@ export type { TagKind } from '../core/impressions/tag-model.ts';
 export type MoodBand = 'low' | 'annoyed' | 'calm' | 'happy' | 'excited';
 export type ReserveBand = 'full' | 'tired' | 'drained';
 export type MoodEventSource = 'appraise' | 'rule' | 'band';
-export type AffinityLevel = 'cold' | 'cool' | 'neutral' | 'warm' | 'close';
+export type AffinityLevel =
+  | 'enemy' | 'loathe' | 'dislike' | 'uncomfortable' | 'distant'
+  | 'unfamiliar' | 'acquaintance' | 'ordinary_friend' | 'more_than_friends' | 'lover';
 export type AffinityEventSource = 'appraise' | 'called' | 'manual' | 'band';
 
 export interface MoodStateRecord {
@@ -86,6 +89,7 @@ export interface StoredAffinityEvent extends AffinityEventRecord {
 export type AffectRepositoryQueries = Pick<StoreRepository,
   'getMoodState' | 'saveMoodState' | 'recordMoodEvent' | 'recentMoodEvents' | 'moodEventsSince' | 'latestMoodEventAtOrBefore'
   | 'getAffinityState' | 'listAffinityStates' | 'saveAffinityState' | 'recordAffinityEvent' | 'recentAffinityEvents' | 'affinityEventsSince' | 'latestSenderNameForAccount'
+  | 'getPersonaAffinityState' | 'listPersonaAffinityStates' | 'savePersonaAffinityState' | 'recordPersonaAffinityEvent' | 'recentPersonaAffinityEvents' | 'personaAffinityEventsSince'
   | 'insertTag' | 'tagById' | 'deleteTag' | 'listTagsForSubject' | 'listTagsForSession' | 'listGroupTagsForUser' | 'listViewTagsForAccount'
   | 'listFactTagsForAccounts' | 'listRelayTagsForAccount' | 'senderNameFor'
   | 'updateTag' | 'deleteActivityTag' | 'getTagRun' | 'saveTagRun'
@@ -196,6 +200,7 @@ function affinityEventRecord(row: Record<string, unknown>): StoredAffinityEvent 
 export function createAffectQueries(database: DatabaseSync): AffectRepositoryQueries {
   const tags = createTagQueries(database);
   const tagVetoes = createTagVetoQueries(database, tags);
+  const personaAffinity = createPersonaAffinityQueries(database);
   const selectMoodState = database.prepare(`
     SELECT account, valence, arousal, updated_at, band, band_since, last_band_change_at,
       reserve, reserve_band, reserve_band_since, reserve_last_change_at, last_reply_at
@@ -302,6 +307,7 @@ export function createAffectQueries(database: DatabaseSync): AffectRepositoryQue
   return {
     ...tags,
     ...tagVetoes,
+    ...personaAffinity,
     getMoodState(account) {
       const row = selectMoodState.get(account) as Record<string, unknown> | undefined;
       return row ? moodStateRecord(row) : undefined;

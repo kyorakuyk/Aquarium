@@ -485,6 +485,8 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
                 activeTab={pageTabs.page}
                 parameterTab={pageTabs.parameter}
                 onParameterTabChange={(parameter) => setPageTabs((current) => ({ ...current, parameter }))}
+                personaId={selected.id}
+                previewAccountId={previewAccount?.account ?? null}
               />
             </div>
             <PersonaPreview

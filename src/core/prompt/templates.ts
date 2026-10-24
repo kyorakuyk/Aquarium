@@ -7,6 +7,7 @@ import { parsePrivacyGateTemplate, type PrivacyGatePromptTemplate } from './temp
 import { parsePrivacyMentionTemplate, type PrivacyMentionPromptTemplate } from './templates/privacy-mention.ts';
 import { parseClassifyTagsTemplate, type ClassifyTagsPromptTemplate } from './templates/classify-tags.ts';
 import { parseMemberSummaryTemplate, type MemberSummaryPromptTemplate } from './templates/member-summary.ts';
+import { AFFINITY_LEVELS, type AffinityLevel } from '../affinity/core.ts';
 
 export type { ReplySystemTemplate } from './templates/reply-system.ts';
 export type { PrivacyGatePromptTemplate } from './templates/privacy-gate.ts';
@@ -66,12 +67,7 @@ export interface AffectPromptTemplate extends PromptTemplate {
     arousalHigh: string;
     wrap: string;
   };
-  affinity: {
-    cold: string;
-    cool: string;
-    warm: string;
-    close: string;
-  };
+  affinity: Record<AffinityLevel, string>;
   reserve: Record<'inner' | 'outer' | 'mixed', { tired: string; drained: string }>;
 }
 
@@ -218,7 +214,7 @@ function parseAffectTemplate(template: PromptTemplate): AffectPromptTemplate {
   }
   const affinityRecord = affinityField as Record<string, unknown>;
   const affinity = {} as AffectPromptTemplate['affinity'];
-  for (const key of ['cold', 'cool', 'warm', 'close'] as const) {
+  for (const key of AFFINITY_LEVELS) {
     const value = affinityRecord[key];
     if (typeof value !== 'string') throw new Error(`affect.md 缺少 affinity.${key} 文本`);
     affinity[key] = value;

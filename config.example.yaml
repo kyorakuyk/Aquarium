@@ -21,7 +21,15 @@ pricing:
   deepseek-flash: { input: 1.1, cachedInput: 0.02, output: 4.3 }
 budget: { dailyCny: 5, warnRatio: 0.8 }
 mood: { enabled: true, baseline: { valence: 0.1, arousal: 0.4 }, surfaceHalfLifeMin: 40, arousalHalfLifeMin: 40, reserve: { initial: 0.8 } }
-affinity: { enabled: true, initial: 50 }
+affinity:
+  enabled: true
+  start: 15
+  tiers: { positive: [15, 35, 60, 85], negative: [-85, -60, -35, -15] }
+  curveDefaults:
+    posGain: { preset: default, points: [] }
+    posLoss: { preset: default, points: [] }
+    negGain: { preset: default, points: [] }
+    negLoss: { preset: default, points: [] }
 sleep: { enabled: false, bedtime: '02:00', wake: '09:00', wakeWords: ['起床', '醒醒', '别睡了'], goodnight: true }
 profile:
   schedule: { minimumMessages: 50, nightOwlRatio: 0.4, weekendActiveRatio: 1.5, morningRatio: 0.03, morningMinimumMessages: 100 }

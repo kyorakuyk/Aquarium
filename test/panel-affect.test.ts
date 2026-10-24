@@ -487,7 +487,7 @@ test('好感 API 按全局用户读取回落值与事件，并手动设置档位
     const unseenResponse = await app.request('/api/affinity/99', { headers: authHeaders() });
     assert.equal(unseenResponse.status, 200);
     const unseen = await unseenResponse.json() as { value: number; lastInteractionAt: number | null };
-    assert.equal(unseen.value, 50);
+    assert.equal(unseen.value, 15);
     assert.equal(unseen.lastInteractionAt, null);
 
     const lastInteractionAt = now - 5 * 24 * 60 * 60 * 1000;
@@ -495,7 +495,7 @@ test('好感 API 按全局用户读取回落值与事件，并手动设置档位
       account,
       userId: 42,
       value: 72,
-      level: 'warm',
+      level: 'more_than_friends',
       levelSince: lastInteractionAt - 10 * 24 * 60 * 60 * 1000,
       lastLevelChangeAt: lastInteractionAt - 10 * 24 * 60 * 60 * 1000,
       lastInteractionAt,
@@ -536,8 +536,18 @@ test('好感 API 按全局用户读取回落值与事件，并手动设置档位
       value: number;
       level: string;
       lastInteractionAt: number | null;
+      personaId: string;
+      mode: string;
     }>;
-    assert.deepEqual(people, [{ userId: 42, name: 'MemberName123', value: 70, level: 'warm', lastInteractionAt }]);
+    assert.deepEqual(people, [{
+      userId: 42,
+      name: 'MemberName123',
+      value: 70,
+      level: 'more_than_friends',
+      lastInteractionAt,
+      personaId: 'default',
+      mode: 'inherit',
+    }]);
 
     const detailResponse = await app.request('/api/affinity/42', { headers: authHeaders() });
     assert.equal(detailResponse.status, 200);
@@ -553,7 +563,7 @@ test('好感 API 按全局用户读取回落值与事件，并手动设置档位
     assert.equal(updateResponse.status, 200);
     const updated = repository.getAffinityState(account, 42);
     assert.equal(updated?.value, 10);
-    assert.equal(updated?.level, 'cold');
+    assert.equal(updated?.level, 'unfamiliar');
     assert.equal(updated?.lastInteractionAt, lastInteractionAt);
     assert.equal(repository.recentAffinityEvents(account, 42, 1)[0]?.source, 'manual');
 

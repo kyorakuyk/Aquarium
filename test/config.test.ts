@@ -22,6 +22,22 @@ test('config.example.yaml 符合配置 schema 并默认关闭所有会话', () =
   assert.equal(result.data.debug.enabled, false);
   assert.equal(result.data.debug.retainDays, 7);
   assert.equal(result.data.accounts.length, 1);
+  assert.equal(result.data.affinity.start, 15);
+  assert.deepEqual(result.data.affinity.tiers, {
+    positive: [15, 35, 60, 85],
+    negative: [-85, -60, -35, -15],
+  });
+  assert.deepEqual(result.data.affinity.curveDefaults.posGain, { preset: 'default', points: [] });
+  const legacyBase = { ...exampleConfig, affinity: { enabled: true, initial: 50 } };
+  assert.equal(AquariumConfigSchema.parse(legacyBase).affinity.start, 15);
+  assert.equal(AquariumConfigSchema.parse({
+    ...exampleConfig,
+    affinity: { enabled: true, initial: 42 },
+  }).affinity.start, -16);
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...exampleConfig,
+    affinity: { enabled: true, initial: 101 },
+  }).success, false);
   assert.deepEqual(
     (result.data as unknown as { profile?: { schedule?: unknown } }).profile?.schedule,
     {

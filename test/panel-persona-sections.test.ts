@@ -64,6 +64,35 @@ test('panel persona sections stay compatible with server parsing and building', 
   assert.equal(buildSections({ ...panelForm, title: '' }), buildServerSections({ ...serverForm, title: '' }));
 });
 
+test('panel persona affinity metadata is validated and round-trips', () => {
+  const source = [
+    '---',
+    'affinity:',
+    '  mode: independent',
+    '  tiers:',
+    '    positive: [15, 35, 60, 85]',
+    '    negative: [-85, -60, -35, -15]',
+    '  curves:',
+    '    posGain:',
+    '      preset: slow',
+    '      points:',
+    '        - { x: 0.4, dy: 0.25 }',
+    '---',
+    '# {{name}}',
+  ].join('\n');
+  const form = parseSections(source);
+  assert.equal((form.metadata.affinity as { mode: string }).mode, 'independent');
+  assert.deepEqual(parseSections(buildSections(form)), form);
+
+  assert.throws(() => parseSections([
+    '---',
+    'affinity:',
+    '  mode: unexpected',
+    '---',
+    '# {{name}}',
+  ].join('\n')), /affinity/u);
+});
+
 test('editing a form field in source mode serializes the same form before save', () => {
   const form = parseSections('# {{name}}\n\n## 身份\n旧身份。');
   const changed: typeof form = { ...form, fields: { ...form.fields, 身份: '新身份。' } };

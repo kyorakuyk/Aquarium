@@ -124,11 +124,12 @@ test('旧式纯正文人设仍原样返回', () => {
 });
 
 test('好感等级映射到 stranger、acquaintance、close 三个 audience 层', () => {
-  assert.equal(personaAudienceTierFromAffinity('cold'), 'stranger');
-  assert.equal(personaAudienceTierFromAffinity('cool'), 'stranger');
-  assert.equal(personaAudienceTierFromAffinity('neutral'), 'acquaintance');
-  assert.equal(personaAudienceTierFromAffinity('warm'), 'acquaintance');
-  assert.equal(personaAudienceTierFromAffinity('close'), 'close');
+  assert.equal(personaAudienceTierFromAffinity('enemy'), 'stranger');
+  assert.equal(personaAudienceTierFromAffinity('unfamiliar'), 'stranger');
+  assert.equal(personaAudienceTierFromAffinity('acquaintance'), 'acquaintance');
+  assert.equal(personaAudienceTierFromAffinity('ordinary_friend'), 'acquaintance');
+  assert.equal(personaAudienceTierFromAffinity('more_than_friends'), 'close');
+  assert.equal(personaAudienceTierFromAffinity('lover'), 'close');
   assert.equal(personaAudienceTierFromAffinity(undefined), undefined);
 });
 

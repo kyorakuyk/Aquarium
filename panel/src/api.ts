@@ -448,7 +448,9 @@ export interface HistoryImportJobView {
   cancelRequested?: boolean;
 }
 
-export type AffinityLevel = 'cold' | 'cool' | 'neutral' | 'warm' | 'close';
+export type AffinityLevel =
+  | 'enemy' | 'loathe' | 'dislike' | 'uncomfortable' | 'distant'
+  | 'unfamiliar' | 'acquaintance' | 'ordinary_friend' | 'more_than_friends' | 'lover';
 
 export interface AffinityView {
   userId: number;
@@ -456,6 +458,8 @@ export interface AffinityView {
   value: number;
   level: AffinityLevel;
   lastInteractionAt: number | null;
+  personaId: string;
+  mode: 'inherit' | 'independent';
 }
 
 export interface AffinityEventView {

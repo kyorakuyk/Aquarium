@@ -1,7 +1,14 @@
 import { nextLevel, type HysteresisCause, type HysteresisState } from '../shared/hysteresis.ts';
 
-export type AffinityLevel = 'cold' | 'cool' | 'neutral' | 'warm' | 'close';
+export type AffinityLevel =
+  | 'enemy' | 'loathe' | 'dislike' | 'uncomfortable' | 'distant'
+  | 'unfamiliar' | 'acquaintance' | 'ordinary_friend' | 'more_than_friends' | 'lover';
 export type AffinityEventSource = 'appraise' | 'called' | 'manual' | 'band';
+
+export interface AffinityTiers {
+  positive: readonly [number, number, number, number];
+  negative: readonly [number, number, number, number];
+}
 
 export interface AffinityHistoryEntry {
   time: number;
@@ -9,12 +16,17 @@ export interface AffinityHistoryEntry {
   applied: number;
 }
 
-const BASELINE = 50;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const LEVELS: readonly AffinityLevel[] = ['cold', 'cool', 'neutral', 'warm', 'close'];
-const LEVEL_BOUNDS = [20, 40, 60, 80] as const;
+export const AFFINITY_LEVELS: readonly AffinityLevel[] = [
+  'enemy', 'loathe', 'dislike', 'uncomfortable', 'distant',
+  'unfamiliar', 'acquaintance', 'ordinary_friend', 'more_than_friends', 'lover',
+];
+const LEVELS = AFFINITY_LEVELS;
+export const DEFAULT_AFFINITY_TIERS: AffinityTiers = {
+  positive: [15, 35, 60, 85],
+  negative: [-85, -60, -35, -15],
+};
 const LEVEL_HYSTERESIS = {
-  bounds: LEVEL_BOUNDS,
   staticMargin: 3,
   slidingMargin: 1,
   slidingWindowMs: DAY_MS,
@@ -54,22 +66,30 @@ export function canCountCalledAffinity(history: readonly AffinityHistoryEntry[],
   return history.filter((event) => event.source === 'called' && isSameLocalDate(event.time, now)).length < 3;
 }
 
-export function decayAffinity(value: number, lastInteractionAt: number, now: number): number {
+export function decayAffinity(value: number, lastInteractionAt: number, now: number, start = 15): number {
   const elapsedDays = Math.floor((now - lastInteractionAt) / DAY_MS);
   if (elapsedDays <= 3) return value;
   const amount = elapsedDays - 3;
-  if (value > BASELINE) return Math.max(BASELINE, value - amount);
-  if (value < BASELINE) return Math.min(BASELINE, value + amount);
-  return BASELINE;
+  if (value > start) return Math.max(start, value - amount);
+  if (value < start) return Math.min(start, value + amount);
+  return start;
 }
 
-export function affinityLevelOf(value: number): AffinityLevel {
-  let level = 0;
-  for (const bound of LEVEL_BOUNDS) {
-    if (value < bound) break;
-    level += 1;
+function levelBounds(tiers: AffinityTiers): number[] {
+  return [...tiers.negative, 0, ...tiers.positive];
+}
+
+export function affinityLevelOf(value: number, tiers: AffinityTiers = DEFAULT_AFFINITY_TIERS): AffinityLevel {
+  if (value < 0) {
+    for (let index = 0; index < tiers.negative.length; index += 1) {
+      if (value < tiers.negative[index]!) return LEVELS[index]!;
+    }
+    return 'distant';
   }
-  return LEVELS[level] ?? 'close';
+  for (let index = 0; index < tiers.positive.length; index += 1) {
+    if (value < tiers.positive[index]!) return LEVELS[index + 5]!;
+  }
+  return 'lover';
 }
 
 export function nextAffinityLevel(
@@ -77,7 +97,8 @@ export function nextAffinityLevel(
   value: number,
   now: number,
   cause: HysteresisCause,
+  tiers: AffinityTiers = DEFAULT_AFFINITY_TIERS,
 ): AffinityLevel {
-  const current = nextLevel(state, value, now, cause, LEVEL_HYSTERESIS);
-  return LEVELS[current] ?? 'close';
+  const current = nextLevel(state, value, now, cause, { ...LEVEL_HYSTERESIS, bounds: levelBounds(tiers) });
+  return LEVELS[current] ?? 'lover';
 }

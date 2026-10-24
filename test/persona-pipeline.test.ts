@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
+import { getPersonaForMessage } from '../src/core/conversation/steps/persona.ts';
 import { sessionId } from '../src/core/shared/events.ts';
 import {
   createHarness,
@@ -11,6 +12,29 @@ import {
   makeIncoming,
   withRepository,
 } from './pipeline-test-helpers.ts';
+
+test('pipeline 人设缓存保留 frontmatter 中的好感模式', async () => {
+  await withRepository(async (_repository, personaRoot) => {
+    fs.writeFileSync(path.join(personaRoot, 'personas', 'default.md'), [
+      '---',
+      'affinity: { mode: independent }',
+      '---',
+      '人设正文',
+    ].join('\n'), 'utf8');
+    const config = makeConfig();
+    const context = {
+      message: { session: groupSession },
+      options: { getConfig: () => config, getNickname: () => '', personaRoot },
+      state: { config },
+    } as unknown as Parameters<typeof getPersonaForMessage>[0];
+
+    const loaded = getPersonaForMessage(context);
+    const cached = getPersonaForMessage(context);
+
+    assert.deepEqual(loaded.affinity, { mode: 'independent' });
+    assert.deepEqual(cached.affinity, loaded.affinity);
+  });
+});
 
 test('人设 mustReply 短语可在 mention_only 模式触发回复', async () => {
   await withRepository(async (repository, personaRoot) => {

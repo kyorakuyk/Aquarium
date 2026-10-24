@@ -7,6 +7,7 @@ export function getPersonaForMessage(ctx: StepContext): LoadedPersona {
       text: ctx.state.persona,
       traits: ctx.state.personaTraits,
       energySource: ctx.state.personaEnergySource ?? 'mixed',
+      affinity: ctx.state.personaAffinity ?? { mode: 'inherit' },
       ...(ctx.state.personaProfile === undefined ? {} : { profile: ctx.state.personaProfile }),
     };
   }
@@ -20,6 +21,7 @@ export function getPersonaForMessage(ctx: StepContext): LoadedPersona {
   ctx.state.persona = loaded.text;
   ctx.state.personaTraits = loaded.traits;
   ctx.state.personaEnergySource = loaded.energySource;
+  ctx.state.personaAffinity = loaded.affinity;
   if (loaded.profile === undefined) delete ctx.state.personaProfile;
   else ctx.state.personaProfile = loaded.profile;
   return loaded;

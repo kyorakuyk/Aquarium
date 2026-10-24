@@ -77,7 +77,10 @@ if (await isPanelPortOccupied(initialConfig.panel.host, initialConfig.panel.port
   instanceLock.release();
   process.exit(1);
 }
-const database = openDatabase();
+const database = openDatabase(undefined, {
+  affinityStart: initialConfig.affinity.start,
+  affinityTiers: initialConfig.affinity.tiers,
+});
 const repository = createRepository(database);
 const interactionLogRepository = createInteractionLogRepository(database);
 const memberSummaryRepository = createMemberSummaryRepository(database);
@@ -125,6 +128,7 @@ const sleepOrganizationTasks = new Set<Promise<void>>();
 const affinityService = createAffinityService({
   repository,
   getConfig: () => configWatcher.getConfig(),
+  getPersonaAffinity: (personaId) => loadPersona(personaId, '').affinity,
 });
 function energySourceForAccount(account: number) {
   const config = configWatcher.getConfig();

@@ -3,14 +3,34 @@ import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { migrations } from './migrations/index.ts';
+import type { MigrationContext } from './migrations/types.ts';
 
-export function openDatabase(databasePath = join(process.cwd(), 'data', 'aquarium.db')): DatabaseSync {
+export interface OpenDatabaseOptions {
+  affinityStart?: number;
+  affinityTiers?: MigrationContext['affinityTiers'];
+}
+
+export function openDatabase(
+  databasePath = join(process.cwd(), 'data', 'aquarium.db'),
+  options: OpenDatabaseOptions = {},
+): DatabaseSync {
   if (databasePath !== ':memory:') mkdirSync(dirname(databasePath), { recursive: true });
+  const affinityStart = options.affinityStart ?? 15;
+  if (!Number.isFinite(affinityStart) || affinityStart < -100 || affinityStart > 100) {
+    throw new RangeError('好感起点必须在 −100 到 100 之间');
+  }
+  const context: MigrationContext = {
+    affinityStart,
+    affinityTiers: options.affinityTiers ?? {
+      positive: [15, 35, 60, 85],
+      negative: [-85, -60, -35, -15],
+    },
+  };
   const database = new DatabaseSync(databasePath);
   try {
     database.exec('PRAGMA journal_mode = WAL;');
     database.exec('PRAGMA foreign_keys = ON;');
-    applyMigrations(database);
+    applyMigrations(database, context);
     return database;
   } catch (error) {
     database.close();
@@ -18,7 +38,7 @@ export function openDatabase(databasePath = join(process.cwd(), 'data', 'aquariu
   }
 }
 
-function applyMigrations(database: DatabaseSync): void {
+function applyMigrations(database: DatabaseSync, context: MigrationContext): void {
   database.exec(`
     CREATE TABLE IF NOT EXISTS schema_version (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -40,7 +60,7 @@ function applyMigrations(database: DatabaseSync): void {
     if (migration.version <= currentVersion) continue;
     database.exec('BEGIN IMMEDIATE;');
     try {
-      migration.up(database);
+      migration.up(database, context);
       database.prepare('UPDATE schema_version SET version = ? WHERE id = 1').run(migration.version);
       database.exec('COMMIT;');
     } catch (error) {

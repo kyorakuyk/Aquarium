@@ -196,6 +196,45 @@ html:has(.personas-page)::-webkit-scrollbar-track { background: transparent; }
 .persona-version-diff-row.is-changed pre { border-color: var(--accent); }
 .persona-version-diff-raw p { font-size: 12px; }
 
+.persona-affinity-editor { display: grid; min-width: 0; gap: 10px; }
+.persona-affinity-mode-card, .persona-affinity-chart-card { min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.persona-affinity-mode-heading, .persona-affinity-chart-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.persona-affinity-mode-heading h3, .persona-affinity-chart-heading h4 { margin: 0; color: var(--ink); font-size: 14px; }
+.persona-affinity-mode-heading p, .persona-affinity-chart-heading p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.persona-affinity-current-readout { flex: none; color: var(--accent); font-family: var(--mono); font-size: 12px; text-align: right; }
+.persona-affinity-mode-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
+.persona-affinity-mode-actions .button, .persona-affinity-presets .button { min-height: 44px; }
+.persona-affinity-mode-note, .persona-affinity-editor-note { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.persona-affinity-error { margin: 8px 0 0; color: var(--warn-ink); font-size: 12px; line-height: 1.5; }
+.persona-affinity-charts { display: grid; min-width: 0; gap: 10px; }
+.persona-affinity-chart-heading { align-items: center; margin-bottom: 4px; }
+.persona-affinity-direction { display: flex; flex: none; gap: 3px; padding: 3px; border-radius: 9px; background: var(--surface-2); }
+.persona-affinity-direction button { min-height: 44px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; }
+.persona-affinity-direction button.is-active { background: var(--surface); color: var(--accent); font-weight: 700; }
+.persona-affinity-chart { display: block; width: 100%; min-width: 420px; height: auto; overflow: visible; touch-action: none; }
+.persona-affinity-chart line { stroke: var(--line); stroke-width: 1; }
+.persona-affinity-chart line.is-baseline { stroke: var(--muted); stroke-dasharray: 4 4; opacity: .55; }
+.persona-affinity-axis-label, .persona-affinity-axis-title, .persona-affinity-threshold-label, .persona-affinity-tier-name { fill: var(--muted); font-family: var(--sans); font-size: 11px; }
+.persona-affinity-axis-label { font-family: var(--mono); font-size: 10px; }
+.persona-affinity-axis-title { font-size: 10px; }
+.persona-affinity-ghost-curve { fill: none; stroke: var(--muted); stroke-dasharray: 3 5; stroke-width: 2; opacity: .35; pointer-events: none; }
+.persona-affinity-tier-line { stroke: var(--accent); stroke-dasharray: 3 4; opacity: .6; pointer-events: none; }
+.persona-affinity-tier-hit { stroke: transparent !important; stroke-width: 10 !important; cursor: ew-resize; pointer-events: stroke; }
+.persona-affinity-tier-hit:focus-visible, .persona-affinity-point:focus-visible { outline: none; stroke: var(--accent); stroke-width: 3; }
+.persona-affinity-threshold-label { fill: var(--accent); font-family: var(--mono); font-size: 10px; }
+.persona-affinity-start-line { stroke: var(--warn-ink) !important; stroke-width: 2 !important; pointer-events: none; }
+.persona-affinity-start-label { fill: var(--warn-ink); font-family: var(--sans); font-size: 10px; }
+.persona-affinity-current-line { stroke: var(--accent) !important; stroke-dasharray: 4 4; stroke-width: 2 !important; pointer-events: none; }
+.persona-affinity-active-curve { fill: none; stroke: var(--accent); stroke-linecap: round; stroke-linejoin: round; stroke-width: 3; pointer-events: none; }
+.persona-affinity-curve-hit { fill: none; stroke: transparent; stroke-width: 18; cursor: crosshair; pointer-events: stroke; }
+.persona-affinity-point { fill: var(--surface); stroke: var(--accent); stroke-width: 2; cursor: grab; }
+.persona-affinity-x-tick { stroke: var(--muted) !important; opacity: .7; }
+.persona-affinity-tier-name { fill: var(--ink-2); font-size: 10px; }
+.persona-affinity-readout { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 12px; margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.persona-affinity-readout strong { color: var(--ink); font-family: var(--mono); font-weight: 600; }
+.persona-affinity-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.persona-affinity-mode-actions button:focus-visible, .persona-affinity-direction button:focus-visible, .persona-affinity-presets button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 @media (max-width: 1199px) {
   .persona-workspace-v2 { flex-direction: column; flex-wrap: nowrap; }
   .persona-main-tab-panel, .persona-preview-rail { width: 100%; flex: 1 1 auto; }
@@ -220,4 +259,9 @@ html:has(.personas-page)::-webkit-scrollbar-track { background: transparent; }
   .persona-version-actions .text-button { flex: 1; }
   .persona-version-diff-column-headings, .persona-version-diff-row > div, .persona-version-diff-raw > div { grid-template-columns: minmax(0, 1fr); }
   .persona-version-trait-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .persona-affinity-mode-heading, .persona-affinity-chart-heading { align-items: stretch; flex-direction: column; }
+  .persona-affinity-direction { width: 100%; }
+  .persona-affinity-direction button { flex: 1; }
+  .persona-affinity-current-readout { text-align: left; }
+  .persona-affinity-readout { flex-direction: column; }
 }

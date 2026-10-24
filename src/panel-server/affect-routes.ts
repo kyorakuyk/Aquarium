@@ -13,6 +13,7 @@ import { decide } from '../core/privacy/policy.ts';
 import { promptTemplateStore } from '../core/prompt/templates.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
 import { createAffinityService } from '../core/affinity/service.ts';
+import { loadPersona } from '../persona/load.ts';
 import type { StoredTag } from '../store/affect-repo.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import type { PanelAccountRuntime } from './types.ts';
@@ -29,6 +30,7 @@ export interface AffectRouteOptions {
   getConfig: () => AquariumConfig;
   repository: StoreRepository;
   accounts: () => PanelAccountRuntime[];
+  personaRoot: string;
   historyImports?: HistoryImportService;
   now?: () => number;
 }
@@ -48,7 +50,7 @@ const tagPatchSchema = z.object({
   locked: z.boolean().optional(),
 }).strict();
 
-const affinityPatchSchema = z.object({ value: z.number().int().min(0).max(100) }).strict();
+const affinityPatchSchema = z.object({ value: z.number().int().min(-100).max(100) }).strict();
 const historyImportSchema = z.object({
   target: z.union([z.literal(200), z.literal(500), z.literal(1_000), z.literal(2_000)]),
   mode: z.enum(['incremental', 'full']).default('incremental'),
@@ -91,7 +93,11 @@ function tagView(tag: StoredTag, at: number) {
 
 export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): void {
   const now = options.now ?? Date.now;
-  const affinityService = createAffinityService({ repository: options.repository, getConfig: options.getConfig });
+  const affinityService = createAffinityService({
+    repository: options.repository,
+    getConfig: options.getConfig,
+    getPersonaAffinity: (personaId) => loadPersona(personaId, '', { root: options.personaRoot }).affinity,
+  });
   const qqProfiles = createQqProfileService({ repository: options.repository, now });
   const historyImports = options.historyImports;
 
@@ -133,7 +139,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     if (account === undefined) return context.json({ error: 'Invalid account' }, 400);
     return context.json({
       ...affinityView(account, userId, now()),
-      events: options.repository.recentAffinityEvents(account, userId, 20).map((event) => ({
+      events: affinityService.recentEvents(account, userId, 20).map((event) => ({
         ...event,
         reason: redactSensitiveText(event.reason),
       })),
@@ -153,7 +159,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     const current = affinityService.setManual({ account, userId, value: body.value, now: now() });
     return context.json({
       ...current,
-      name: options.repository.latestSenderNameForAccount(account, userId) ?? String(userId),
+      name: options.repository.latestSenderNameForAccount(account, current.userId) ?? String(current.userId),
     });
   });
 

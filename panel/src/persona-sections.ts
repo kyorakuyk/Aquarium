@@ -1,4 +1,5 @@
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { PersonaAffinitySchema } from '../../src/persona/affinity.ts';
 import { parsePersonaTraits } from './persona-traits.ts';
 import type { PersonaTraits } from './api.ts';
 
@@ -138,7 +139,12 @@ function parseMetadata(source: string): Record<string, unknown> {
   if (typeof header !== 'object' || Array.isArray(header)) {
     throw new Error('人设 YAML 文件头必须是对象');
   }
-  return Object.fromEntries(Object.entries(header).filter(([key]) => key !== 'traits'));
+  const metadata = Object.fromEntries(Object.entries(header).filter(([key]) => key !== 'traits'));
+  if (metadata.affinity !== undefined && metadata.affinity !== null) {
+    const affinity = PersonaAffinitySchema.safeParse(metadata.affinity);
+    if (!affinity.success) throw new Error('人设好感字段 affinity 无效');
+  }
+  return metadata;
 }
 
 function parsedSectionText(body: string, start: number, end: number): string {

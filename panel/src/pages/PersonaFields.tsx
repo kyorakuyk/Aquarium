@@ -211,6 +211,8 @@ export function PersonaFields({
   activeTab,
   parameterTab,
   onParameterTabChange,
+  personaId,
+  previewAccountId,
 }: {
   form: PersonaSectionsForm;
   onChange: (form: PersonaSectionsForm) => void;
@@ -219,6 +221,8 @@ export function PersonaFields({
   activeTab: PersonaEditorTab;
   parameterTab: PersonaParameterTab;
   onParameterTabChange: (tab: PersonaParameterTab) => void;
+  personaId: string;
+  previewAccountId: number | null;
 }) {
   function setText(heading: TextHeading, value: string) {
     onChange({ ...form, fields: { ...form.fields, [heading]: value } as PersonaSectionFields });
@@ -380,7 +384,7 @@ export function PersonaFields({
         {relationshipFields}
       </section>
       <section className="persona-fields-panel" role="tabpanel" aria-labelledby="persona-editor-tab-parameters" hidden={activeTab !== 'parameters'}>
-        <PersonaParametersPanel parameterTab={parameterTab} onParameterTabChange={onParameterTabChange} />
+        <PersonaParametersPanel parameterTab={parameterTab} onParameterTabChange={onParameterTabChange} form={form} onChange={onChange} personaId={personaId} previewAccountId={previewAccountId} disabled={disabled} active={activeTab === 'parameters'} />
       </section>
       <section className="persona-fields-panel" role="tabpanel" aria-labelledby="persona-editor-tab-other" hidden={activeTab !== 'other'}>
         {otherFields}

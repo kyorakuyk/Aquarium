@@ -245,7 +245,7 @@ test('context step injects only the affinity-matched audience and triggered pers
     '背景',
   ].join('\n'), 'utf8');
   ctx.options.affinityService = {
-    getCurrent: () => ({ level: 'warm' }),
+    getCurrent: () => ({ level: 'ordinary_friend' }),
     promptBlock: () => undefined,
   } as unknown as NonNullable<typeof ctx.options.affinityService>;
 

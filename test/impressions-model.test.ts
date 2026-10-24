@@ -116,10 +116,10 @@ test('member list shows a message count instead of empty tag copy and repeated n
 
   assert.equal(typeof memberRowPresentation, 'function');
   if (typeof memberRowPresentation !== 'function') return;
-  assert.deepEqual(memberRowPresentation([], 7, 'neutral'), { subtitle: '7 条发言', showAffinity: false });
-  assert.deepEqual(memberRowPresentation([], 0, 'neutral'), { subtitle: '0 条发言', showAffinity: false });
-  assert.deepEqual(memberRowPresentation([], 7, 'warm'), { subtitle: '7 条发言', showAffinity: true });
-  assert.deepEqual(memberRowPresentation(['游戏 › FPS', '短句连发'], 7, 'neutral'), {
+  assert.deepEqual(memberRowPresentation([], 7, 'acquaintance'), { subtitle: '7 条发言', showAffinity: false });
+  assert.deepEqual(memberRowPresentation([], 0, 'acquaintance'), { subtitle: '0 条发言', showAffinity: false });
+  assert.deepEqual(memberRowPresentation([], 7, 'more_than_friends'), { subtitle: '7 条发言', showAffinity: true });
+  assert.deepEqual(memberRowPresentation(['游戏 › FPS', '短句连发'], 7, 'acquaintance'), {
     subtitle: '游戏 › FPS · 短句连发',
     showAffinity: true,
   });

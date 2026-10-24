@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 import { createAffinityService } from '../src/core/affinity/service.ts';
 import { createMoodService } from '../src/core/mood/service.ts';
 import { createMessagePipeline } from '../src/core/conversation/pipeline.ts';
 import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { sessionId } from '../src/core/shared/events.ts';
+import { loadPersona } from '../src/persona/load.ts';
 import {
   FakeAdapter,
   groupSession,
@@ -23,7 +26,11 @@ function createMoodHarness(
   const replyPrompts: string[] = [];
   const appraiseRequests: string[] = [];
   const clock = { value: new Date(2026, 9, 12, 9, 0).getTime() };
-  const affinityService = createAffinityService({ repository, getConfig: () => config });
+  const affinityService = createAffinityService({
+    repository,
+    getConfig: () => config,
+    getPersonaAffinity: (personaId) => loadPersona(personaId, '', { root: personaRoot }).affinity,
+  });
   const moodService = createMoodService({
     repository,
     getConfig: () => config,
@@ -132,7 +139,7 @@ test('回复后异步评估并换档，下一次提示词带情绪块', async ()
       account,
       userId: 42,
       value: 70,
-      level: 'warm',
+      level: 'more_than_friends',
       levelSince: harness.clock.value - 3_600_000,
       lastLevelChangeAt: harness.clock.value - 3_600_000,
       lastInteractionAt: harness.clock.value,
@@ -230,13 +237,27 @@ test('mood.enabled 关闭时评估不调用且提示词没有情绪块', async (
     assert.equal(repository.getMoodState(groupSession.account), undefined);
     assert.deepEqual(repository.recentMoodEvents(groupSession.account, 10), []);
     const detail = repository.recentDecisions(1)[0]?.detail as { promptBlocks?: Array<{ id: string }> };
-    assert.deepEqual(detail.promptBlocks?.map((block) => block.id), ['persona', 'rules', 'groupNote']);
+    assert.deepEqual(detail.promptBlocks?.map((block) => block.id), ['persona', 'rules', 'groupNote', 'affinity']);
   });
 });
 
 test('情绪评估更新发送者好感，下一次提示词按顺序注入 affinity 块', async () => {
   await withRepository(async (repository, personaRoot) => {
-    const config = makeConfig({ affinity: { enabled: true, initial: 50 } });
+    fs.writeFileSync(path.join(personaRoot, 'personas', 'default.md'), [
+      '---',
+      'affinity:',
+      '  mode: independent',
+      '  curves:',
+      '    posGain:',
+      '      preset: flat',
+      '      points:',
+      '        - x: 0.15',
+      '          dy: 0.5',
+      '---',
+      '# {{name}}',
+      '测试人设。',
+    ].join('\n'), 'utf8');
+    const config = makeConfig({ affinity: { enabled: true, start: 15 } });
     const harness = createMoodHarness(repository, config, personaRoot, {
       appraiseText: '{"valence":0.15,"reserve":0,"arousal":0,"reason":"友好回应"}',
     });
@@ -245,7 +266,7 @@ test('情绪评估更新发送者好感，下一次提示词按顺序注入 affi
       account,
       userId: 42,
       value: 62,
-      level: 'neutral',
+      level: 'more_than_friends',
       levelSince: harness.clock.value - 10 * 24 * 60 * 60 * 1000,
       lastLevelChangeAt: harness.clock.value - 10 * 24 * 60 * 60 * 1000,
       lastInteractionAt: harness.clock.value - 1_000,
@@ -255,23 +276,36 @@ test('情绪评估更新发送者好感，下一次提示词按顺序注入 affi
     await harness.pipeline(makeIncoming({ messageId: 'affinity-1', mentionsSelf: true }));
     await harness.moodService.idle();
 
-    const updated = repository.getAffinityState(account, 42);
-    assert.equal(updated?.value, 65.5);
-    assert.equal(updated?.level, 'warm');
-    assert.ok(repository.recentAffinityEvents(account, 42, 10).some((event) => event.source === 'appraise' && event.applied === 3));
+    const updated = repository.getPersonaAffinityState(account, 42, 'default');
+    assert.equal(updated?.value, 20);
+    assert.equal(updated?.level, 'acquaintance');
+    assert.equal(repository.getAffinityState(account, 42)?.value, 62);
+    assert.equal(repository.getPersonaAffinityState(account + 1, 42, 'default'), undefined);
+    const affinityEvents = repository.recentPersonaAffinityEvents(account, 42, 'default', 10);
+    assert.ok(affinityEvents.some((event) => event.source === 'called' && event.applied === 0.75));
+    assert.ok(affinityEvents.some((event) => event.source === 'appraise'
+      && Math.abs(event.delta - 4.495) < 1e-9 && event.applied === 4.25));
 
     harness.clock.value += 100_000;
     await harness.pipeline(makeIncoming({ messageId: 'affinity-2', mentionsSelf: true }));
     const secondPrompt = harness.replyPrompts[1] ?? '';
-    assert.ok(secondPrompt.includes('你和"小明"挺熟'));
+    assert.ok(secondPrompt.includes('你和"小明"已经熟悉'));
     const nextDetail = repository.recentDecisions(1)[0]?.detail as { promptBlocks?: Array<{ id: string }> };
     assert.deepEqual(nextDetail.promptBlocks?.map((block) => block.id), ['persona', 'rules', 'groupNote', 'mood', 'affinity']);
+
+    await harness.moodService.idle();
+    const independentValue = repository.getPersonaAffinityState(account, 42, 'default')?.value;
+    fs.writeFileSync(path.join(personaRoot, 'personas', 'default.md'), [
+      '---', 'affinity:', '  mode: inherit', '---', '# {{name}}', '测试人设。',
+    ].join('\n'), 'utf8');
+    assert.equal(harness.affinityService.getCurrent(account, 42, harness.clock.value).value, 62);
+    assert.equal(repository.getPersonaAffinityState(account, 42, 'default')?.value, independentValue);
   });
 });
 
 test('affinity.enabled=false 时完全不记录好感且不注入提示词', async () => {
   await withRepository(async (repository, personaRoot) => {
-    const config = makeConfig({ affinity: { enabled: false, initial: 50 } });
+    const config = makeConfig({ affinity: { enabled: false, start: 15 } });
     const harness = createMoodHarness(repository, config, personaRoot, {
       appraiseText: '{"valence":0.15,"reserve":0,"arousal":0,"reason":"友好回应"}',
     });

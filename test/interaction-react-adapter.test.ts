@@ -121,7 +121,7 @@ test('OneBot reaction action and emoji-like notices produce only eligible affini
         subType: 'add',
         likes: [{ emojiId: 'emoji-a', count: 1 }],
       });
-      assert.equal(repository.getAffinityState(account, 42)?.value, 51);
+      assert.ok(Math.abs((repository.getAffinityState(account, 42)?.value ?? 0) - 15.914) < 1e-9);
       assert.equal(repository.recentAffinityEvents(account, 42, 1)[0]?.reason, 'emoji_like_received');
       assert.equal(logged, 1);
     } finally {

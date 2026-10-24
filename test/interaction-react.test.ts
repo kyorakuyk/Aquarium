@@ -81,7 +81,7 @@ async function verifyRuleServiceAndLogging(): Promise<void> {
     message,
     trigger,
     moodBand: 'happy' as const,
-    affinityLevel: 'warm' as const,
+    affinityLevel: 'more_than_friends' as const,
     random: () => 0,
     rateLimiter: createRateLimiter(() => baseTime),
     limits,
@@ -103,8 +103,13 @@ async function verifyRuleServiceAndLogging(): Promise<void> {
     session: groupSession, messageId: 'positive-silence', plainText: '谢谢你！',
   });
   assert.equal(await service.tryReact({
-    ...attempt(positiveMessage, 'positive_silence'), affinityLevel: 'neutral',
+    ...attempt(positiveMessage, 'positive_silence'), affinityLevel: 'acquaintance',
   }), undefined);
+  const callsBeforeOrdinaryFriend = gateCalls.length;
+  assert.equal(await service.tryReact({
+    ...attempt(positiveMessage, 'positive_silence'), affinityLevel: 'ordinary_friend',
+  }), undefined);
+  assert.equal(gateCalls.length, callsBeforeOrdinaryFriend);
   const positiveBoundary = await service.tryReact({
     ...attempt(positiveMessage, 'positive_silence'), random: () => 0.25,
   });
@@ -326,7 +331,7 @@ async function verifyPipelineTriggers(): Promise<void> {
     }));
     assert.equal(positiveResult.reason, 'judge_skip');
     assert.deepEqual(positiveCalls, [{
-      trigger: 'positive_silence', affinityLevel: 'warm', probabilityScale: 0.5,
+      trigger: 'positive_silence', affinityLevel: 'more_than_friends', probabilityScale: 0.5,
     }]);
   });
 }
