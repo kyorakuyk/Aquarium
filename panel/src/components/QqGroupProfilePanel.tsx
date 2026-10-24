@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { apiRequest, type QqGroupProfileView } from '../api.ts';
+import { decodeGroupAnnouncement } from '../group-announcement.ts';
 
 const HONOR_LABELS: Record<NonNullable<QqGroupProfileView['honors']>[number]['kind'], string> = {
   dragon_king: '龙王',
@@ -95,7 +96,7 @@ export function QqGroupProfilePanel({ sessionId, profile, onReload }: {
       </div>
       <div className="qq-profile-detail-row">
         <span className="small-heading">最新公告</span>
-        <p>{profile?.latestNotice || '—'}</p>
+        <p className="qq-profile-announcement">{profile?.latestNotice ? decodeGroupAnnouncement(profile.latestNotice) : '—'}</p>
       </div>
       <div className="qq-profile-detail-row">
         <span className="small-heading">当前荣誉持有人</span>

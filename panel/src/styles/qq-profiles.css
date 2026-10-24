@@ -14,6 +14,7 @@
 .qq-profile-summary-grid strong { font-size: 14px; }
 .qq-profile-detail-row { display: grid; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .qq-profile-detail-row > p { margin: 0; color: var(--ink-2); font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+.qq-profile-announcement { white-space: pre-wrap; }
 .qq-honor-list { display: flex; flex-wrap: wrap; gap: 7px; margin: 0; padding: 0; list-style: none; }
 .qq-honor-list li { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; }
 .qq-honor-list li > span { color: var(--muted); }
