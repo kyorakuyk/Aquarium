@@ -77,6 +77,8 @@ test('loadPersona 非法性格值报出具体字段', () => {
     fs.writeFileSync(path.join(root, 'personas', 'default.md'), '---\ntraits:\n  morality: 3\n---\n正文', 'utf8');
 
     assert.throws(() => loadPersona('default', '小鱼', { root }), /morality/u);
+    assert.throws(() => parsePersonaMarkdown('---\ntraits:\n  morality: 2.1\n---\n正文'), /morality/u);
+    assert.throws(() => parsePersonaMarkdown('---\ntraits:\n  morality: 1.25\n---\n正文'), /morality/u);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -97,6 +99,8 @@ test('parsePersonaMarkdown 解析结构化字段并将四维档位映射为数�
     '  morality: m2',
     '  talk: p1',
     '  mind: p2',
+    '  openness: -1.2',
+    '  imitation: 1.4',
     '  flavor: { warm: 8, dark: 1.5 }',
     'speech:',
     '  firstPerson: 我',
@@ -136,8 +140,8 @@ test('parsePersonaMarkdown 解析结构化字段并将四维档位映射为数�
     talk: 1,
     mind: 2,
     humor: 0,
-    openness: 0,
-    imitation: 0,
+    openness: -1.2,
+    imitation: 1.4,
   });
   assert.equal(loaded.text, '正文背景。');
   assert.equal(loaded.profile?.name, '小鲸鱼妈妈精简版');

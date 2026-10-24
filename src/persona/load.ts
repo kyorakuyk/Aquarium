@@ -108,8 +108,10 @@ function parseTraits(values: unknown): PersonaTraits {
   for (const field of traitFields) {
     const value = Object.hasOwn(input, field) ? input[field] : 0;
     const numericValue = typeof value === 'string' ? traitLevelValues[value] : value;
-    if (typeof numericValue !== 'number' || !Number.isInteger(numericValue) || numericValue < -2 || numericValue > 2) {
-      throw new Error(`人设性格字段 ${field} 必须是 -2 到 2 的整数或 m2/m1/p1/p2`);
+    if (typeof numericValue !== 'number' || !Number.isFinite(numericValue)
+      || numericValue < -2 || numericValue > 2
+      || Math.abs(numericValue * 10 - Math.round(numericValue * 10)) > 1e-8) {
+      throw new Error(`人设性格字段 ${field} 必须是 −2 到 2 之间的数（最多一位小数）或 m2/m1/p1/p2`);
     }
     traits[field] = numericValue;
   }

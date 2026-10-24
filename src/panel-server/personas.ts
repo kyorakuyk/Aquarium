@@ -29,23 +29,27 @@ import type { StoreRepository } from '../store/repository.ts';
 import { personaPath, validPersonaId } from './persona-paths.ts';
 import { recordPersonaVersionOnSave, registerPersonaVersionRoutes } from './persona-version-routes.ts';
 
+const personaTraitValueSchema = z.number().min(-2).max(2).refine(
+  (value) => Number.isFinite(value) && Math.abs(value * 10 - Math.round(value * 10)) <= 1e-8,
+  '最多一位小数',
+);
 const personaTraitsSchema: z.ZodType<PersonaTraits> = z.object({
-  order: z.number().int().min(-2).max(2).default(0),
-  morality: z.number().int().min(-2).max(2).default(0),
-  talk: z.number().int().min(-2).max(2).default(0),
-  mind: z.number().int().min(-2).max(2).default(0),
-  humor: z.number().int().min(-2).max(2).default(0),
-  openness: z.number().int().min(-2).max(2).default(0),
-  imitation: z.number().int().min(-2).max(2).default(0),
+  order: personaTraitValueSchema.default(0),
+  morality: personaTraitValueSchema.default(0),
+  talk: personaTraitValueSchema.default(0),
+  mind: personaTraitValueSchema.default(0),
+  humor: personaTraitValueSchema.default(0),
+  openness: personaTraitValueSchema.default(0),
+  imitation: personaTraitValueSchema.default(0),
 }).strict();
 const personaImportTraitsSchema = z.object({
-  order: z.number().int().min(-2).max(2),
-  morality: z.number().int().min(-2).max(2),
-  talk: z.number().int().min(-2).max(2),
-  mind: z.number().int().min(-2).max(2),
-  humor: z.number().int().min(-2).max(2),
-  openness: z.number().int().min(-2).max(2),
-  imitation: z.number().int().min(-2).max(2),
+  order: personaTraitValueSchema,
+  morality: personaTraitValueSchema,
+  talk: personaTraitValueSchema,
+  mind: personaTraitValueSchema,
+  humor: personaTraitValueSchema,
+  openness: personaTraitValueSchema,
+  imitation: personaTraitValueSchema,
 }).strict();
 const personaBodySchema = z.object({
   markdown: z.string().max(100_000),

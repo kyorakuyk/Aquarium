@@ -34,7 +34,9 @@ function traitsFromJson(value: string): PersonaTraits {
     const traits = neutralTraits();
     for (const key of traitKeys) {
       const trait = Object.hasOwn(values, key) ? values[key] : 0;
-      if (typeof trait !== 'number' || !Number.isInteger(trait) || trait < -2 || trait > 2) return neutralTraits();
+      if (typeof trait !== 'number' || !Number.isFinite(trait)
+        || trait < -2 || trait > 2
+        || Math.abs(trait * 10 - Math.round(trait * 10)) > 1e-8) return neutralTraits();
       traits[key] = trait;
     }
     return traits;
@@ -46,7 +48,7 @@ function traitsFromJson(value: string): PersonaTraits {
 function traitDelta(previous: PersonaTraits | undefined, current: PersonaTraits): PersonaTraits {
   const before = previous ?? neutralTraits();
   const delta = neutralTraits();
-  for (const key of traitKeys) delta[key] = current[key] - before[key];
+  for (const key of traitKeys) delta[key] = Math.round((current[key] - before[key]) * 10) / 10;
   return delta;
 }
 

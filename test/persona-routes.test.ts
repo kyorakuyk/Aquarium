@@ -15,7 +15,7 @@ test('persona API accepts traits, preserves Markdown body, and reads back the sa
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         markdown: bodyText,
-        traits: { order: -2, morality: 1, talk: 0, mind: 2 },
+        traits: { order: -2, morality: 1.3, talk: 0, mind: 2, openness: -1.2 },
       }),
     });
     assert.equal(put.status, 200);
@@ -26,8 +26,8 @@ test('persona API accepts traits, preserves Markdown body, and reads back the sa
       markdown: string;
       traits: { order: number; morality: number; talk: number; mind: number; humor: number; openness: number; imitation: number };
     };
-    assert.equal(saved.markdown, `---\ntraits:\n  order: -2\n  morality: 1\n  talk: 0\n  mind: 2\n  humor: 0\n  openness: 0\n  imitation: 0\n---\n${bodyText}`);
-    assert.deepEqual(saved.traits, { order: -2, morality: 1, talk: 0, mind: 2, humor: 0, openness: 0, imitation: 0 });
+    assert.equal(saved.markdown, `---\ntraits:\n  order: -2\n  morality: 1.3\n  talk: 0\n  mind: 2\n  humor: 0\n  openness: -1.2\n  imitation: 0\n---\n${bodyText}`);
+    assert.deepEqual(saved.traits, { order: -2, morality: 1.3, talk: 0, mind: 2, humor: 0, openness: -1.2, imitation: 0 });
 
     const malformed = await app.request('/api/personas/custom-traits', {
       method: 'PUT',
@@ -47,6 +47,12 @@ test('persona API accepts traits, preserves Markdown body, and reads back the sa
       body: JSON.stringify({ markdown: saved.markdown, traits: { order: 3 } }),
     });
     assert.equal(invalid.status, 400);
+    const tooPrecise = await app.request('/api/personas/custom-traits', {
+      method: 'PUT',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markdown: saved.markdown, traits: { order: 1.25 } }),
+    });
+    assert.equal(tooPrecise.status, 400);
     const unchanged = await app.request('/api/personas/custom-traits', { headers: authHeaders() });
     assert.equal((await unchanged.json() as { markdown: string }).markdown, saved.markdown);
 
@@ -76,7 +82,7 @@ test('persona preview returns section blocks and the runtime trait renderer outp
   const content = [
     '---',
     'traits:',
-    '  order: 1',
+    '  order: 1.3',
     '  morality: 0',
     '  talk: -1',
     '  mind: 0',
@@ -128,6 +134,7 @@ test('persona preview returns section blocks and the runtime trait renderer outp
     assert.deepEqual(preview.blocks, expectedBlocks);
     assert.ok(preview.blocks.some((block) => block.label === '我 · 身份'));
     assert.ok(preview.blocks.some((block) => block.id === 'traits'));
+    assert.ok(preview.blocks.find((block) => block.id === 'traits')?.text.includes('你略随性'));
     assert.equal(preview.chars, safePreviewText.length);
     assert.equal(preview.estTokens, Math.ceil(preview.chars / 1.3));
     assert.equal(
@@ -171,7 +178,7 @@ test('persona import uses the extract slot and returns a redacted unsaved draft'
       对主人: '',
       底线: [],
     },
-    traits: { order: 1, morality: 0, talk: -1, mind: 0, humor: 1, openness: 0, imitation: 2 },
+    traits: { order: 1.3, morality: 0, talk: -1.2, mind: 0, humor: 1, openness: 0.5, imitation: 2 },
     other: [{ heading: '经历', text: '后来搬到海边。' }, { heading: '', text: '' }],
   };
 
@@ -183,7 +190,7 @@ test('persona import uses the extract slot and returns a redacted unsaved draft'
     });
     assert.equal(response.status, 200);
     const result = await response.json() as { draft: string; mappedCount: number; otherCount: number };
-    assert.equal(result.mappedCount, 7);
+    assert.equal(result.mappedCount, 8);
     assert.equal(result.otherCount, 1);
     assert.ok(!result.draft.includes(syntheticSecret), 'draft must not expose imported credential text');
     assert.ok(result.draft.includes('[敏感内容已隐藏]'));
@@ -226,6 +233,7 @@ test('persona import returns 422 with a reason for invalid JSON and schema value
     'not JSON',
     JSON.stringify({ ...valid, fields: { ...valid.fields, 身份: 7 } }),
     JSON.stringify({ ...valid, traits: { ...valid.traits, order: 3 } }),
+    JSON.stringify({ ...valid, traits: { ...valid.traits, order: 1.25 } }),
     JSON.stringify({ ...valid, traits: { order: 0, morality: 0, talk: 0 } }),
   ];
   let responseIndex = 0;
@@ -284,7 +292,7 @@ test('persona versions seed on first read and retain only the newest 50 saves', 
 
 test('persona version list summarizes changes and restore loads without saving', async () => {
   await withPanel(async ({ app }) => {
-    const original = '# 记录\n\n## 说话方式\n慢慢说。';
+    const original = '---\ntraits:\n  order: -0.1\n---\n# 记录\n\n## 说话方式\n慢慢说。';
     const originalSave = await app.request('/api/personas/default', {
       method: 'PUT',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
@@ -299,7 +307,7 @@ test('persona version list summarizes changes and restore loads without saving',
     const changed = [
       '---',
       'traits:',
-      '  order: -1',
+      '  order: 0.2',
       '---',
       '# 记录',
       '',
@@ -319,9 +327,12 @@ test('persona version list summarizes changes and restore loads without saving',
       summary: string;
     }>;
     assert.equal(versions.length, 2);
-    assert.equal(versions[0]?.traitsDelta.order, -1);
-    assert.match(versions[0]?.summary ?? '', /规矩 0→−1/u);
+    assert.equal(versions[0]?.traitsDelta.order, 0.3);
+    assert.match(versions[0]?.summary ?? '', /规矩 −0\.1→\+0\.2/u);
     assert.match(versions[0]?.summary ?? '', /说话方式/u);
+
+    const latestDetails = await app.request(`/api/personas/default/versions/${versions[0]?.id}`, { headers: authHeaders() });
+    assert.equal((await latestDetails.json() as { traits: { order: number } }).traits.order, 0.2);
 
     const details = await app.request(`/api/personas/default/versions/${originalVersionId}`, { headers: authHeaders() });
     assert.equal((await details.json() as { markdown: string }).markdown, original);

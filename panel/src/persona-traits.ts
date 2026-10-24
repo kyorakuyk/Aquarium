@@ -4,6 +4,15 @@ import type { PersonaTraits } from './api.ts';
 const frontmatterPattern = /^---[ \t]*\r?\n([\s\S]*?)^---[ \t]*(?:\r?\n|$)/m;
 const zeroTraits: PersonaTraits = { order: 0, morality: 0, talk: 0, mind: 0, humor: 0, openness: 0, imitation: 0 };
 const traitFields: Array<keyof PersonaTraits> = ['order', 'morality', 'talk', 'mind', 'humor', 'openness', 'imitation'];
+const traitLevelValues = { m2: -2, m1: -1, p1: 1, p2: 2 } as const;
+
+function isTraitValue(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isFinite(value)
+    && value >= -2
+    && value <= 2
+    && Math.abs(value * 10 - Math.round(value * 10)) <= 1e-8;
+}
 
 export function parsePersonaTraits(markdown: string): PersonaTraits | null {
   const match = frontmatterPattern.exec(markdown);
@@ -19,8 +28,11 @@ export function parsePersonaTraits(markdown: string): PersonaTraits | null {
     const values = raw as Record<string, unknown>;
     const traits = { ...zeroTraits };
     for (const field of traitFields) {
-      const value = Object.hasOwn(values, field) ? values[field] : 0;
-      if (typeof value !== 'number' || !Number.isInteger(value) || value < -2 || value > 2) return null;
+      const rawValue = Object.hasOwn(values, field) ? values[field] : 0;
+      const value = typeof rawValue === 'string' && Object.hasOwn(traitLevelValues, rawValue)
+        ? traitLevelValues[rawValue as keyof typeof traitLevelValues]
+        : rawValue;
+      if (!isTraitValue(value)) return null;
       traits[field] = value;
     }
     return traits;

@@ -280,27 +280,30 @@ export function PersonaFields({
           <p className="persona-field-hint">向内独处时回能，向外有人陪时回能；下一次读取状态时生效。</p>
         </div>
         <div className="persona-trait-grid">
-          {PERSONA_TRAIT_LABELS.map((field) => (
-            <div className="persona-trait-field" key={field.key}>
-              <div className="persona-trait-label">
-                <strong>{field.title}{'locked' in field && field.locked ? ' · 锁定' : ''}</strong>
-                <output>{form.traits[field.key] > 0 ? `+${form.traits[field.key]}` : form.traits[field.key]}</output>
+          {PERSONA_TRAIT_LABELS.map((field) => {
+            const traitValue = form.traits[field.key];
+            return (
+              <div className="persona-trait-field" key={field.key}>
+                <div className="persona-trait-label">
+                  <strong>{field.title}{'locked' in field && field.locked ? ' · 锁定' : ''}</strong>
+                  <output>{traitValue > 0 ? `+${traitValue.toFixed(1)}` : traitValue.toFixed(1)}</output>
+                </div>
+                <input
+                  className="persona-trait-range"
+                  type="range"
+                  min={-2}
+                  max={2}
+                  step={0.1}
+                  value={traitValue}
+                  aria-label={`${field.title}${'locked' in field && field.locked ? '，锁定' : ''}，${field.low}到${field.high}`}
+                  disabled={disabled}
+                  onFocus={() => onFocus('traits')}
+                  onChange={(event) => setTrait(field.key, Number(event.currentTarget.value))}
+                />
+                <div className="persona-trait-endpoints"><span>{field.low}</span><span>{field.high}</span></div>
               </div>
-              <input
-                className="persona-trait-range"
-                type="range"
-                min={-2}
-                max={2}
-                step={1}
-                value={form.traits[field.key]}
-                aria-label={`${field.title}${'locked' in field && field.locked ? '，锁定' : ''}，${field.low}到${field.high}`}
-                disabled={disabled}
-                onFocus={() => onFocus('traits')}
-                onChange={(event) => setTrait(field.key, Number(event.currentTarget.value))}
-              />
-              <div className="persona-trait-endpoints"><span>{field.low}</span><span>{field.high}</span></div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
     </div>

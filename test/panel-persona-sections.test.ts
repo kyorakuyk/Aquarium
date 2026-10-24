@@ -24,8 +24,8 @@ test('panel persona sections stay compatible with server parsing and building', 
     'owner: aquarium',
     'energySource: outer',
     'traits:',
-    '  order: 1',
-    '  morality: -1',
+    '  order: 1.3',
+    '  morality: -1.2',
     '  talk: 0',
     '  mind: 2',
     '---',
@@ -53,6 +53,7 @@ test('panel persona sections stay compatible with server parsing and building', 
   const panelForm = parseSections(source);
   const serverForm = parseServerSections(source);
   assert.deepEqual(panelForm, serverForm);
+  assert.deepEqual(panelForm.traits, { order: 1.3, morality: -1.2, talk: 0, mind: 2, humor: 0, openness: 0, imitation: 0 });
   assert.equal(panelForm.metadata.energySource, 'outer');
   assert.deepEqual(
     renderPersonaSectionBlocks(panelForm).map(({ id, label }) => ({ id, label })),
