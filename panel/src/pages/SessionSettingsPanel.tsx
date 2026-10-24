@@ -3,6 +3,7 @@ import type { DefaultsView, SessionSettings, SessionView } from '../api.ts';
 import { PersistedDetails } from '../components/PersistedDetails.tsx';
 import { SESSION_MODE_OPTIONS } from '../session-mode.ts';
 import { formatSavedAt } from '../panel-feedback.ts';
+import { sessionSettingsPanelCopy } from '../session-settings-copy.ts';
 import { SessionFieldHeading } from './SessionFieldHeading.tsx';
 import { SessionScheduleEditor } from './SessionScheduleEditor.tsx';
 
@@ -177,7 +178,7 @@ export function SessionSettingsPanel({
   }
 
   const selectedMode = SESSION_MODE_OPTIONS.find((option) => option.mode === target.settings.mode);
-  const noteTitle = target.kind === 'private' ? '对这个人的补充说明' : '在这个群里的补充说明';
+  const copy = sessionSettingsPanelCopy(target.kind, target.id);
 
   return (
     <>
@@ -185,9 +186,9 @@ export function SessionSettingsPanel({
         <div className="detail-title-main">
           <span className="detail-avatar">{Array.from(target.name)[0] ?? '全'}</span>
           <div className="detail-title-copy">
-            <div className="eyebrow">{target.kind === 'global' ? '所有会话' : target.kind === 'group' ? '群聊' : '好友'}</div>
+            {copy.eyebrow && <div className="eyebrow">{copy.eyebrow}</div>}
             <h2>{target.name}</h2>
-            <span className="mono muted">{target.kind === 'global' ? '所有会话' : target.id}</span>
+            {copy.identifier && <span className="mono muted">{copy.identifier}</span>}
           </div>
         </div>
         <div className="detail-title-actions">
@@ -234,7 +235,7 @@ export function SessionSettingsPanel({
           </SettingGroup>
 
           <SettingGroup>
-            {heading('叫它的名字', ['nicknames'])}
+            {heading(copy.nicknameTitle, ['nicknames'])}
             <div className="nickname-tags">
               {nicknames.map((nickname, index) => <span className="nickname-chip" key={`${index}:${nickname}`}>
                 <span>{nickname}</span>
@@ -256,9 +257,9 @@ export function SessionSettingsPanel({
 
       <SettingGroup>
         <div className="session-details-row">
-          {heading(noteTitle, ['groupNote'])}
+          {heading(copy.noteTitle, ['groupNote'])}
           <PersistedDetails className="session-persisted-details" sessionId={target.id} section="note" summary={<span className="details-summary-copy">{noteSummary()}</span>}>
-            <textarea rows={3} value={groupNote} onChange={(event) => setGroupNote(event.currentTarget.value)} onBlur={() => void update({ groupNote })} aria-label={noteTitle} />
+            <textarea rows={3} value={groupNote} onChange={(event) => setGroupNote(event.currentTarget.value)} onBlur={() => void update({ groupNote })} aria-label={copy.noteTitle} />
           </PersistedDetails>
         </div>
       </SettingGroup>
