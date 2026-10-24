@@ -68,6 +68,9 @@ export function GroupProfileCard({ sessionId, groupName, enabled, profile, tags,
     </section>}
     <details className="member-injected-tags" open>
       <summary>它眼里的这个群（实际注入的一行）</summary>
+      <small className="member-injected-tags-help">
+        这行来自回复提示词的「群知识」段，可能包含本群符合注入条件的事实、同眷属其他账号可共享的群聊事实，以及经隐私策略授权转述的私聊事实。上方分类仅列本群知识标签；个人印象属于另一段提示词，不在此处。
+      </small>
       <p>{injectedText ?? '没有符合条件的已确认标签。'}</p>
     </details>
     <ul className="impressions-tag-legend" aria-label="标签图例">

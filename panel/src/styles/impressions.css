@@ -147,6 +147,7 @@
 .tag-lock-toggle:hover, .tag-lock-toggle.is-locked { border-color: var(--accent-soft); background: var(--accent-soft); color: var(--accent); }
 .member-injected-tags { padding-top: 10px; border-top: 1px solid var(--line); }
 .member-injected-tags summary { min-height: 44px; padding: 8px 0; color: var(--accent); cursor: pointer; font-size: 12px; }
+.member-injected-tags-help { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .member-injected-tags p { margin: 5px 0 0; padding: 9px 11px; border-radius: 8px; background: var(--bg); color: var(--ink-2); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .group-profile-tags { display: grid; min-width: 0; gap: 4px; }
 .group-profile-tags h3 { margin: 0; padding-bottom: 5px; font-size: 13px; }
