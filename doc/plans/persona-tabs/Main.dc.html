@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>人设页折叠草图</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#1C5F5A}a:hover{color:#134440}
+.root{width:1440px;height:1000px;display:flex;background:#F6F5F1;color:#22252A;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;font-size:13px;overflow:hidden}
+.side{width:216px;flex:none;border-right:1px solid #E2E0D9;background:#FBFAF7;padding:28px 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:6px}
+.nav{padding:10px 12px;border-radius:9px;color:#4A4E55}
+.nav.on{background:#ECEAE4;color:#1C5F5A;font-weight:700}
+.navh{margin:14px 12px 4px;color:#6F737A;font-size:11px}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;padding:0 28px;box-sizing:border-box;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#D6D3CA transparent}
+.stick{position:sticky;top:0;z-index:2;background:#F6F5F1}
+.top{display:flex;align-items:center;gap:14px;padding:20px 0 12px}
+.top h1{margin:0;font-size:20px}
+.chips{display:flex;gap:6px;flex:1;min-width:0;overflow:hidden}
+.chip{border:1px solid #E2E0D9;background:#fff;border-radius:999px;padding:6px 12px;font-size:12px;color:#4A4E55;white-space:nowrap}
+.chip.on{background:#1C5F5A;border-color:#1C5F5A;color:#fff}
+.btn{min-height:36px;padding:0 14px;border-radius:9px;border:1px solid #D6D3CA;background:#fff;color:#22252A;font:inherit;font-size:12px;cursor:pointer}
+.btn.pri{background:#1C5F5A;border-color:#1C5F5A;color:#fff}
+.bar{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #E2E0D9;border-bottom:1px solid #E2E0D9;background:#F6F5F1}
+.bar h2{margin:0;font-size:15px}
+.bar .meta{color:#6F737A;font-size:11px}
+.dirty{color:#9A5B12;font-weight:700;font-size:12px}
+.toc{display:flex;gap:4px;align-items:center;padding:10px 0 12px}
+.toc button{border:0;background:transparent;font:inherit;font-size:13px;color:#5A5E65;padding:8px 16px;border-radius:8px;cursor:pointer;min-height:38px}
+.toc button.cur{background:#E4EEEC;color:#1C5F5A;font-weight:700}
+.toc .sep{flex:1}
+.toc .ctl{color:#1C5F5A}
+.work{flex:none;display:flex;align-items:flex-start;gap:20px;padding-bottom:28px}
+.left{flex:1 1 560px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.card{background:#fff;border:1px solid #E2E0D9;border-radius:12px}
+.head{width:100%;display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border:0;background:transparent;font:inherit;text-align:left;cursor:pointer;color:inherit}
+.head strong{font-size:13px;flex:none;width:84px}
+.sum{flex:1;min-width:0;color:#6F737A;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.warn{color:#9A5B12}
+.chev{flex:none;color:#6F737A;font-size:12px;width:16px;text-align:center}
+.body{padding:2px 16px 16px;display:flex;flex-direction:column;gap:10px}
+.lbl{font-size:11px;font-weight:700;color:#4A4E55;margin-bottom:4px}
+.inp{border:1px solid #E2E0D9;border-radius:8px;padding:9px 10px;font-size:12px;color:#33373D;background:#fff;line-height:1.6}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.trait{border:1px solid #E2E0D9;border-radius:9px;background:#FAF9F6;padding:8px 10px;font-size:11px;display:flex;justify-content:space-between}
+.trait b{color:#1C5F5A;font-family:ui-monospace,monospace}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{border:1px solid #E2E0D9;border-radius:999px;padding:5px 10px;font-size:11px;color:#33373D}
+.rail{flex:0 0 440px;min-width:0;display:flex;flex-direction:column;position:sticky;top:112px;height:860px}
+.railc{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.tabs{display:flex;gap:3px;margin:12px 12px 0;padding:3px;border-radius:10px;background:#EFEDE7}
+.tabs button{flex:1;min-height:36px;border:0;border-radius:8px;background:transparent;font:inherit;font-size:12px;color:#5A5E65;cursor:pointer}
+.tabs button.on{background:#fff;color:#1C5F5A;font-weight:700}
+.rbody{flex:1;min-height:0;overflow:auto;padding:12px 16px 28px;scrollbar-width:none;-webkit-mask-image:linear-gradient(#000 calc(100% - 28px),transparent);mask-image:linear-gradient(#000 calc(100% - 28px),transparent)}
+.rbody::-webkit-scrollbar{display:none}
+.blk{padding:10px;border-radius:9px;border:1px solid transparent;margin-bottom:6px}
+.blk.hl{border-color:#1C5F5A;background:#F0F6F5}
+.blk span{color:#6F737A;font-size:10px}
+.blk p{margin:5px 0 0;font-size:12px;line-height:1.7;color:#33373D;white-space:pre-wrap}
+.rfoot{display:flex;justify-content:space-between;align-items:center;min-height:44px;padding:0 16px;border-top:1px solid #E2E0D9;font-size:11px;color:#6F737A}
+.slider{border:1px solid #E2E0D9;border-radius:10px;background:#FAF9F6;padding:10px}
+.slh{display:flex;justify-content:space-between;align-items:baseline;font-size:11px}
+.slh output{color:#1C5F5A;font-family:ui-monospace,monospace}
+.slider input{display:block;width:100%;min-height:36px;margin:0;accent-color:#1C5F5A;cursor:pointer}
+.sle{display:flex;justify-content:space-between;color:#6F737A;font-size:10px}
+.evtabs{display:flex;gap:3px;padding:3px;border-radius:9px;background:#EFEDE7;margin:10px 0}
+.evtabs button{flex:1;min-height:34px;border:0;border-radius:7px;background:transparent;font:inherit;font-size:11px;color:#5A5E65;cursor:pointer}
+.evtabs button.on{background:#fff;color:#1C5F5A;font-weight:700}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:10px;color:#6F737A;padding:6px 0}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.chhead{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 6px}
+.seg{display:flex;gap:3px;padding:3px;border-radius:9px;background:#EFEDE7}
+.seg button{min-height:32px;padding:0 14px;border:0;border-radius:7px;background:transparent;font:inherit;font-size:12px;color:#5A5E65;cursor:pointer}
+.seg button.on{background:#fff;color:#1C5F5A;font-weight:700}
+.plot{position:relative;padding:14px 0 0 44px}
+.ylab{position:absolute;left:0;top:0;font-size:10px;color:#6F737A}
+.ytick{position:absolute;left:14px;width:24px;text-align:right;font-size:10px;color:#6F737A;font-family:ui-monospace,monospace;transform:translateY(-6px)}
+.area{position:relative;width:600px;height:210px;cursor:crosshair;touch-action:none;user-select:none}
+.bound{position:absolute;top:-8px;bottom:0;width:0;border-left:1.5px dashed #8FA9A5;cursor:ew-resize}
+.bound.start{border-left-color:#C2702B}
+.bh{position:absolute;top:-10px;left:0;transform:translateX(-50%);padding:1px 6px;border-radius:999px;background:#fff;border:1px solid #D6D3CA;font-size:9px;color:#5A5E65;white-space:nowrap;font-family:ui-monospace,monospace}
+.bound.start .bh{border-color:#C2702B;color:#9A5B12}
+.xrow,.tierrow{position:relative;width:600px;height:16px}
+.xt{position:absolute;top:3px;transform:translateX(-50%);font-size:10px;color:#6F737A;font-family:ui-monospace,monospace}
+.tier{position:absolute;top:2px;text-align:center;font-size:11px;color:#33373D;white-space:nowrap;overflow:hidden}
+.readrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.presets{display:flex;gap:4px;flex:none}
+.tbtn{border:1px solid #E2E0D9;background:#fff;border-radius:999px;padding:3px 10px;font:inherit;font-size:11px;color:#4A4E55;cursor:pointer;min-height:28px}
+.tbtn:hover{border-color:#1C5F5A;color:#1C5F5A}
+.pt{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid #1C5F5A;border-radius:50%;background:#fff;box-sizing:border-box;pointer-events:none}
+.pt.sel{border-width:2.5px;box-shadow:0 0 0 5px rgba(28,95,90,.15)}
+.xticks{display:flex;justify-content:space-between;width:612px;margin-left:-6px;font-size:10px;color:#6F737A;font-family:ui-monospace,monospace;padding-top:4px}
+.xbands{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));width:600px;font-size:10px;color:#8A8E95;text-align:center;padding-top:2px}
+.xlab{width:600px;text-align:center;font-size:10px;color:#6F737A;padding-top:4px}
+.phint{font-size:11px;color:#6F737A;line-height:1.6}
+.mono{font-family:ui-monospace,monospace}
+.tagbtn{background:#fff;font:inherit;font-size:11px;cursor:pointer;min-height:32px}
+.tagbtn:hover{border-color:#1C5F5A;color:#1C5F5A}
+.subtabs{display:flex;gap:18px;border-bottom:1px solid #E2E0D9;padding:0 4px}
+.subtabs button{border:0;background:transparent;font:inherit;font-size:12px;color:#5A5E65;padding:6px 2px 8px;margin-bottom:-1px;border-bottom:2px solid transparent;cursor:pointer;min-height:34px}
+.subtabs button.on{color:#1C5F5A;font-weight:700;border-bottom-color:#1C5F5A}
+.enote{font-size:12px;color:#4A4E55;background:#fff;border:1px solid #E2E0D9;border-radius:10px;padding:10px 14px;line-height:1.6}
+.chsub{margin-left:8px;font-weight:400;font-size:11px;color:#6F737A}
+.erow{display:grid;grid-template-columns:200px minmax(0,1fr) 150px;align-items:center;gap:14px;padding:4px 0}
+.elab{display:flex;flex-direction:column;gap:2px}
+.elab label{font-size:12px;font-weight:700;color:#33373D}
+.elab span{font-size:10px;color:#6F737A}
+.erow input{width:100%;min-height:32px;margin:0;accent-color:#1C5F5A;cursor:pointer}
+.eval{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.eval b{font-family:ui-monospace,monospace;color:#1C5F5A;font-size:12px}
+.eval span{font-size:10px;color:#6F737A;text-align:right}
+.soon{margin-left:4px;font-size:9px;color:#9A9EA5;font-weight:400}
+.hold{border-style:dashed}
+.holdrow{display:grid;grid-template-columns:150px minmax(0,1fr) 170px;gap:12px;align-items:baseline;padding:9px 0;border-top:1px solid #EFEDE7;font-size:12px}
+.holdrow b{color:#33373D}
+.holdrow span{color:#5A5E65;line-height:1.6}
+.holdrow .hnow{color:#6F737A;font-family:ui-monospace,monospace;font-size:11px;text-align:right;overflow-wrap:anywhere}
+.hdep{margin-top:6px;padding:8px 12px;border-radius:8px;background:#F6F5F1;font-size:11px;color:#5A5E65;line-height:1.6}
+.mgwrap{display:flex;gap:16px;align-items:stretch}
+.mglab{position:absolute;transform:translate(-50%,-50%);font-size:13px;font-weight:700;color:#22252A;pointer-events:none;white-space:nowrap}
+.mgside{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;padding:6px 0}
+.mgtitle{font-size:16px;font-weight:700;color:#22252A}
+.mgtitle span{color:#C2702B;margin:0 4px}
+.erow2{display:grid;grid-template-columns:minmax(0,1fr) 70px;gap:4px 10px;align-items:center}
+.erow2 .elab{grid-column:1 / -1}
+.erow2 input{width:100%;min-height:30px;margin:0;accent-color:#1C5F5A;cursor:pointer}
+.mgjump{display:flex;gap:8px;align-items:center;font-size:12px;color:#33373D;min-height:36px;cursor:pointer}
+.mgjump input{accent-color:#1C5F5A;width:16px;height:16px}
+.emtag{padding:0 2px 0 4px;gap:0;display:inline-flex;align-items:center}
+.emtag.on{border-color:#C2702B;background:#FBF3EA}
+.emtag.custom{border-style:dashed}
+.emname{border:0;background:transparent;font:inherit;font-size:12px;color:#33373D;padding:4px 6px;cursor:pointer;min-height:30px}
+.emx{border:0;background:transparent;color:#8A8E95;font-size:14px;width:26px;height:30px;cursor:pointer;border-radius:50%}
+.emx:hover{color:#A23E48}
+.emadd{display:flex;gap:8px;align-items:center}
+.emin{border:1px solid #D6D3CA;border-radius:8px;padding:0 10px;min-height:34px;font:inherit;font-size:12px;width:240px;background:#fff}
+.ghost{color:#1C5F5A;border-style:dashed}
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.emap{position:relative;width:600px;height:360px;flex:none;touch-action:none;user-select:none}
+.rlab{position:absolute;font-size:11px;font-weight:700;color:#6F737A;pointer-events:none}
+.edot{position:absolute;display:flex;align-items:center;gap:4px;transform:translate(-5px,-50%);font-size:11px;color:#33373D;white-space:nowrap;pointer-events:none}
+.edot i{width:10px;height:10px;border-radius:50%;background:#33373D;flex:none}
+.edot.custom i{background:#fff;border:2px dashed #33373D;box-sizing:border-box}
+.edot.src{font-weight:700;color:#9A5B12}.edot.src i{background:#C2702B;box-shadow:0 0 0 4px rgba(194,112,43,.2)}
+.edot.dst{font-weight:700;color:#9A5B12}.edot.dst i{background:#fff;border:2px solid #C2702B;box-sizing:border-box}
+.ecoord{font-size:11px;color:#4A4E55;padding-top:6px;border-top:1px solid #EFEDE7}
+.ecoord span{color:#8A8E95;margin-left:4px}
+.mtx{display:flex;flex-direction:column;gap:2px;overflow-x:auto}
+.mrow{display:flex;gap:2px;align-items:center}
+.mhead{width:44px;flex:none;font-size:10px;color:#5A5E65;text-align:right;padding-right:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mcol{width:30px;text-align:center;padding:0}
+.mc{width:30px;height:22px;flex:none;border:0;border-radius:3px;cursor:pointer;padding:0}
+.mc.diag{cursor:default;background:repeating-linear-gradient(45deg,#EFEDE7 0 3px,#fff 3px 6px) !important}
+.mc.nojump{outline:1.5px dashed #A23E48;outline-offset:-2px}
+.mc.sel{outline:2px solid #C2702B;outline-offset:1px}
+.emwrap{display:flex;flex-direction:column;gap:14px}
+.emside{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 24px;align-items:start}
+.emside .mgtitle,.emside .phint{grid-column:1 / -1}
+.pg{display:flex;flex-direction:column;gap:14px;min-width:0}
+.pg2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+.ch{margin:0;padding:14px 16px 10px;font-size:13px}
+.tag.add{border-style:dashed;color:#1C5F5A}
+.rule{display:flex;align-items:center;gap:10px;border:1px solid #E2E0D9;border-radius:10px;padding:10px 12px;font-size:12px}
+.rule::before{content:"";width:6px;height:6px;border-radius:50%;background:#9A5B12;flex:none}
+.ver{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid #E2E0D9;font-size:12px}
+</style>
+</helmet>
+<div class="root">
+  <aside class="side" aria-label="导航">
+    <div style="font-size:18px;font-weight:700;padding:0 12px 14px">水族箱</div>
+    <div class="navh">日常</div><div class="nav">总览</div><div class="nav">会话</div><div class="nav">知识</div>
+    <div class="navh">塑造</div><div class="nav on">人设</div><div class="nav">印象</div><div class="nav">表情包</div>
+    <div class="navh">系统</div><div class="nav">模型</div><div class="nav">用量</div><div class="nav">试聊与决策</div>
+  </aside>
+
+  <main class="main">
+    <div class="top">
+      <h1>人设</h1>
+      <div class="chips" role="tablist" aria-label="人设库">
+        <button class="chip on" type="button">安达桜 · 在用</button>
+        <button class="chip" type="button">default</button>
+        <button class="chip" type="button">tsundere-cat</button>
+        <button class="chip" type="button">+2</button>
+      </div>
+      <button class="btn" type="button">导入 Markdown</button>
+      <button class="btn pri" type="button">新建人设</button>
+    </div>
+
+    <div class="stick">
+    <div class="bar">
+      <h2>安达桜</h2>
+      <span class="meta">adachi.md · 绑定 QQ 1234567</span>
+      <span style="flex:1"></span>
+      <span class="dirty">有未保存更改</span>
+      <button class="btn" type="button">切换为此人格</button>
+      <button class="btn pri" type="button">保存</button>
+    </div>
+
+    <nav class="toc" role="tablist" aria-label="人设分页">
+      <sc-for list="{{toc}}" as="t" hint-placeholder-count="4">
+        <button type="button" role="tab" class="{{t.cls}}" onClick="{{t.go}}">{{t.label}}</button>
+      </sc-for>
+    </nav>
+    </div>
+
+    <div class="work">
+      <div class="left">
+
+        <sc-if value="{{pWho}}" hint-placeholder-val="{{true}}">
+          <div class="pg">
+            <section class="card">
+              <h3 class="ch">我是谁</h3>
+              <div class="body">
+                <div class="grid2">
+                  <div><div class="lbl">身份</div><div class="inp">高一学生，岛村的同学……</div></div>
+                  <div><div class="lbl">年龄</div><div class="inp">16-17岁（高一至高二）</div></div>
+                </div>
+                <div><div class="lbl">背景</div><div class="inp" style="min-height:88px">缺乏家庭关爱，与单亲母亲关系极其冷漠疏离，两人像生活在同一屋檐下的陌生室友。在学校几乎没有朋友，经常翘课。某天在体育馆二楼遇到同样翘课的岛村，人生从此被彻底改变……</div></div>
+              </div>
+            </section>
+            <section class="card">
+              <h3 class="ch">性格底色</h3>
+              <div class="body">
+                <div class="grid2">
+                  <sc-for list="{{traits}}" as="tr" hint-placeholder-count="7">
+                    <div class="slider">
+                      <div class="slh"><label for="{{tr.id}}"><strong>{{tr.title}}</strong></label><output>{{tr.shown}}</output></div>
+                      <input id="{{tr.id}}" type="range" min="-2" max="2" step="0.1" value="{{tr.value}}" onChange="{{tr.set}}">
+                      <div class="sle"><span>{{tr.low}}</span><span>{{tr.high}}</span></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </section>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{pDeal}}" hint-placeholder-val="{{false}}">
+          <div class="pg2">
+          <div class="pg">
+            <section class="card">
+              <h3 class="ch">说话方式</h3>
+              <div class="body">
+                <div class="inp" style="min-height:120px">第一人称：我（あたし／私）。对岛村的称呼：平时喊“岛村”；在极度依赖、撒娇或被岛村要求时，会脸红结巴着喊“抱……抱月……”。语言特征：面对他人：冷淡、简短、礼貌而疏离。面对岛村：语句经常停顿、犹豫（“那个……岛村……”、“我、我不是那个意思……”），被戳中心事时会声调变高、语速加快；爆发/撒娇时：会像倒豆子一样倾泻出沉重又偏执的真心话，不加掩饰对岛村的渴求。</div>
+              </div>
+            </section>
+            <div class="pg">
+              <section class="card">
+                <h3 class="ch">口头禅</h3>
+                <div class="body"><div class="tags"><span class="tag">那个……岛村……</span><span class="tag">我、我不是那个意思……</span><span class="tag">抱……抱月……</span><span class="tag add">+ 添加</span></div></div>
+              </section>
+              <section class="card">
+                <h3 class="ch">常用表情</h3>
+                <div class="body"><div class="tags"><span class="tag">整张脸瞬间爆红到耳根</span><span class="tag">紧张时低头玩手指、拉扯衣角</span><span class="tag">被岛村摸头时身体会僵住</span><span class="tag">视线频繁偷瞄岛村的侧脸</span><span class="tag">被岛村主动触碰时呼吸会乱</span><span class="tag add">+ 添加</span></div></div>
+              </section>
+            </div>
+          </div>
+          <div class="pg">
+            <section class="card">
+              <h3 class="ch">对人</h3>
+              <div class="body">
+                <div class="pg" style="gap:10px">
+                  <div><div class="lbl">对熟人</div><div class="inp" style="min-height:70px">岛村是安达灰暗人生中唯一的光与锚点；对岛村的感情超越友情……</div></div>
+                  <div><div class="lbl">对陌生人</div><div class="inp" style="min-height:70px">面对外人冷漠寡言、生人勿近；面对他人：冷淡、简短、礼貌而疏离。</div></div>
+                </div>
+                <div><div class="lbl">对主人</div><div class="inp" style="color:#8A8E95">还没写</div></div>
+              </div>
+            </section>
+            <section class="card">
+              <h3 class="ch">底线</h3>
+              <div class="body">
+                <div class="rule">不扮演岛村以外任何人的恋人</div>
+                <div class="rule">不透露主人和群友的隐私</div>
+                <div class="rule">不做出伤害自己的承诺</div>
+                <div class="rule">……</div>
+                <div style="color:#1C5F5A;font-size:12px">+ 添加底线</div>
+              </div>
+            </section>
+          </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{pParam}}" hint-placeholder-val="{{false}}">
+          <div class="pg">
+            <nav class="subtabs" role="tablist" aria-label="参数分类">
+              <sc-for list="{{subs}}" as="sb" hint-placeholder-count="6">
+                <button type="button" role="tab" class="{{sb.cls}}" onClick="{{sb.go}}">{{sb.label}}<span class="soon">{{sb.soon}}</span></button>
+              </sc-for>
+            </nav>
+            <sc-if value="{{isAff}}" hint-placeholder-val="{{true}}">
+            <div class="pg">
+            <sc-for list="{{charts}}" as="ch" hint-placeholder-count="2">
+              <section class="card">
+                <div class="chhead">
+                  <div><h3 class="ch" style="padding:0">{{ch.title}}</h3><div class="phint mono" style="margin-top:2px">{{ch.formula}}</div></div>
+                  <div class="seg" role="tablist" aria-label="曲线">
+                    <button type="button" class="{{ch.segGain}}" onClick="{{ch.toGain}}">好感增加</button>
+                    <button type="button" class="{{ch.segLoss}}" onClick="{{ch.toLoss}}">好感减少</button>
+                  </div>
+                </div>
+                <div class="body">
+                  <div class="plot">
+                    <div class="ylab">倍率</div>
+                    <sc-for list="{{ch.yTicks}}" as="yt" hint-placeholder-count="4">
+                      <div class="ytick" style="top: {{yt.top}}px">{{yt.label}}</div>
+                    </sc-for>
+                    <div class="area" onPointerDown="{{ch.onDown}}" onPointerMove="{{ch.onMove}}" onPointerUp="{{ch.onUp}}" onPointerCancel="{{ch.onUp}}" onContextMenu="{{ch.onCtx}}">
+                      <svg width="600" height="210" viewBox="0 0 600 210" aria-hidden="true" style="display:block">
+                        <line x1="0" x2="600" y1="0.5" y2="0.5" stroke="#ECEAE4"></line>
+                        <line x1="0" x2="600" y1="70" y2="70" stroke="#ECEAE4"></line>
+                        <line x1="0" x2="600" y1="140" y2="140" stroke="#B9C9C6" stroke-dasharray="4 4"></line>
+                        <line x1="0" x2="600" y1="209.5" y2="209.5" stroke="#D6D3CA"></line>
+                        <path d="{{ch.ghostPath}}" fill="none" stroke="#C9C6BD" stroke-width="1.5" stroke-dasharray="3 4"></path>
+                        <path d="{{ch.curvePath}}" fill="none" stroke="#1C5F5A" stroke-width="2.5" stroke-linejoin="round"></path>
+                        <line x1="{{ch.nowX}}" x2="{{ch.nowX}}" y1="0" y2="210" stroke="#3B6EA8" stroke-width="1.5" stroke-dasharray="1 3" stroke-opacity="{{ch.nowOpacity}}"></line>
+                      </svg>
+                      <sc-for list="{{ch.bounds}}" as="b" hint-placeholder-count="4">
+                        <div class="{{b.cls}}" style="left: {{b.left}}px"><span class="bh">{{b.tag}}</span></div>
+                      </sc-for>
+                      <sc-for list="{{ch.pts}}" as="p" hint-placeholder-count="0">
+                        <div class="{{p.cls}}" style="left: {{p.left}}px; top: {{p.top}}px"></div>
+                      </sc-for>
+                    </div>
+                    <div class="xrow">
+                      <sc-for list="{{ch.xTicks}}" as="xt" hint-placeholder-count="6">
+                        <span class="xt" style="left: {{xt.left}}px">{{xt.label}}</span>
+                      </sc-for>
+                    </div>
+                    <div class="tierrow">
+                      <sc-for list="{{ch.tiers}}" as="tr" hint-placeholder-count="5">
+                        <span class="tier" style="left: {{tr.left}}px; width: {{tr.width}}px">{{tr.label}}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                  <div class="readrow">
+                    <span class="phint">{{ch.readout}}</span>
+                    <span class="presets">
+                      <button type="button" class="tbtn" onClick="{{ch.preDefault}}">默认函数</button>
+                      <button type="button" class="tbtn" onClick="{{ch.preFlat}}">平直 ×1</button>
+                      <button type="button" class="tbtn" onClick="{{ch.preSlow}}">慢热</button>
+                    </span>
+                  </div>
+                </div>
+              </section>
+            </sc-for>
+            <div class="phint" style="padding:0 4px">按住曲线拖动会长出空心圆，右键删掉它；竖虚线是关系分档，左右拖动来调范围，曲线不跟着动。蓝色点线是你和我现在的好感，橙色那条是起点。每天的上限照旧（最多涨 5、掉 8），倍率只改变单次变化的大小；久不说话时好感慢慢回到起点。</div>
+            </div>
+            </sc-if>
+            <sc-if value="{{isEnergy}}" hint-placeholder-val="{{false}}">
+              <div class="pg">
+                <div class="enote">我的能量来源：<b>内向</b>（独处时恢复，有人陪着时不恢复）。来源在「我是谁」里改。每个滑杆是在默认值上乘的倍率，×1 就是现在的样子。</div>
+                <sc-for list="{{egroups}}" as="g" hint-placeholder-count="3">
+                  <section class="card">
+                    <h3 class="ch">{{g.title}}<span class="chsub">{{g.sub}}</span></h3>
+                    <div class="body">
+                      <sc-for list="{{g.rows}}" as="r" hint-placeholder-count="3">
+                        <div class="erow">
+                          <div class="elab"><label for="{{r.id}}">{{r.label}}</label><span>{{r.hint}}</span></div>
+                          <input id="{{r.id}}" type="range" min="0" max="3" step="0.05" value="{{r.value}}" onChange="{{r.set}}">
+                          <div class="eval"><b>×{{r.shown}}</b><span>{{r.actual}}</span></div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </section>
+                </sc-for>
+                <div class="readrow"><span class="phint">{{eexample}}</span><button type="button" class="tbtn" onClick="{{eReset}}">全部恢复 ×1</button></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{isMood}}" hint-placeholder-val="{{false}}">
+              <div class="pg">
+                <section class="card">
+                  <h3 class="ch">我的情绪<span class="chsub">{{eCount}} 种 · 名字不能重复，同名的会沿用情绪库里的默认数据</span></h3>
+                  <div class="body">
+                    <div class="tags">
+                      <sc-for list="{{eSet}}" as="em" hint-placeholder-count="16">
+                        <span class="{{em.cls}}"><button type="button" class="emname" onClick="{{em.pick}}">{{em.name}}</button><button type="button" class="emx" aria-label="删除" onClick="{{em.del}}">×</button></span>
+                      </sc-for>
+                    </div>
+                    <div class="emadd">
+                      <label for="emo-new" class="visually-hidden">新情绪</label>
+                      <input id="emo-new" class="emin" placeholder="添加一种情绪，比如：怀念" value="{{eDraft}}" onInput="{{eType}}" onKeyDown="{{eKey}}">
+                      <button type="button" class="tbtn" onClick="{{eAdd}}">添加</button>
+                      <span class="phint">{{eMsg}}</span>
+                    </div>
+                    <sc-if value="{{eHasRemoved}}" hint-placeholder-val="{{false}}">
+                      <div class="tags">
+                        <span class="phint">情绪库里还有：</span>
+                        <sc-for list="{{eRemoved}}" as="rm" hint-placeholder-count="2">
+                          <button type="button" class="tag tagbtn ghost" onClick="{{rm.add}}">+ {{rm.name}}</button>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                </section>
+
+                <section class="card">
+                  <h3 class="ch">切换难度<span class="chsub">点一个情绪看它能去哪；拖动圆点改它的位置</span></h3>
+                  <div class="body">
+                    <div class="emwrap">
+                      <div class="emap" onPointerDown="{{mDown}}" onPointerMove="{{mMove}}" onPointerUp="{{mUp}}" onPointerCancel="{{mUp}}">
+                        <svg width="600" height="360" viewBox="0 0 600 360" aria-hidden="true" style="display:block">
+                          <defs>
+                            <marker id="em-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8FA9A5"></path></marker>
+                            <marker id="em-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#C2702B"></path></marker>
+                          </defs>
+                          <rect x="20" y="20" width="238" height="144" fill="#A23E48" fill-opacity=".07"></rect>
+                          <rect x="20" y="164" width="238" height="176" fill="#3B6EA8" fill-opacity=".07"></rect>
+                          <rect x="258" y="20" width="126" height="160" fill="#8A4F7D" fill-opacity=".07"></rect>
+                          <rect x="384" y="20" width="196" height="160" fill="#C2702B" fill-opacity=".08"></rect>
+                          <rect x="258" y="180" width="322" height="160" fill="#1C5F5A" fill-opacity=".06"></rect>
+                          <rect x="20" y="20" width="560" height="320" fill="none" stroke="#D6D3CA"></rect>
+                          <sc-for list="{{mArrows}}" as="e" hint-placeholder-count="15">
+                            <path d="{{e.d}}" fill="none" stroke="{{e.color}}" stroke-width="{{e.w}}" stroke-dasharray="{{e.dash}}" marker-end="{{e.marker}}" opacity="{{e.op}}"></path>
+                          </sc-for>
+                          <sc-for list="{{mArrows}}" as="e" hint-placeholder-count="15">
+                            <path d="{{e.d}}" fill="none" stroke="transparent" stroke-width="12" style="cursor:pointer" onClick="{{e.pick}}"><title>{{e.title}}</title></path>
+                          </sc-for>
+                        </svg>
+                        <span class="rlab" style="left:28px;top:26px">不愉快</span>
+                        <span class="rlab" style="left:28px;top:318px">压抑</span>
+                        <span class="rlab" style="left:266px;top:26px">唤醒</span>
+                        <span class="rlab" style="right:28px;top:26px">兴奋</span>
+                        <span class="rlab" style="right:28px;top:318px">平静</span>
+                        <sc-for list="{{mDots}}" as="n" hint-placeholder-count="16">
+                          <span class="{{n.cls}}" style="left: {{n.x}}px; top: {{n.y}}px"><i></i>{{n.name}}</span>
+                        </sc-for>
+                      </div>
+                      <div class="emside">
+                        <div class="mgtitle">{{eFrom}} <span>→</span> {{eTo}}</div>
+                        <div class="phint">{{eEdgeNote}}</div>
+                        <div class="erow2">
+                          <div class="elab"><label for="em-margin">切换门槛</label><span>越大越难从「{{eFrom}}」变成「{{eTo}}」</span></div>
+                          <input id="em-margin" type="range" min="0" max="0.5" step="0.01" value="{{eMargin}}" onChange="{{eSetMargin}}">
+                          <div class="eval"><b>{{eMarginShown}}</b></div>
+                        </div>
+                        <div class="erow2">
+                          <div class="elab"><label for="em-dwell">至少停留</label><span>在「{{eFrom}}」待够这么久才会自然转过去</span></div>
+                          <input id="em-dwell" type="range" min="0" max="60" step="1" value="{{eDwell}}" onChange="{{eSetDwell}}">
+                          <div class="eval"><b>{{eDwell}} 分钟</b></div>
+                        </div>
+                        <label class="mgjump"><input type="checkbox" checked="{{eJump}}" onChange="{{eToggleJump}}"><span>允许直接切换（关掉就得先经过别的情绪）</span></label>
+                        <button type="button" class="tbtn" style="align-self:flex-start" onClick="{{eResetEdge}}">这条边恢复默认</button>
+                        <div class="ecoord">「{{eFrom}}」的坐标：愉悦 {{eV}} · 唤醒 {{eA}} · 掌控 {{eD}}<span>{{eOrigin}}</span></div>
+                        <div class="erow2">
+                          <div class="elab"><label for="em-d">掌控感</label><span>图上看不到的第三维，拉开生气和委屈</span></div>
+                          <input id="em-d" type="range" min="-1" max="1" step="0.05" value="{{eDraw}}" onChange="{{eSetD}}">
+                          <div class="eval"><b>{{eD}}</b></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="card">
+                  <h3 class="ch">全部切换一览<span class="chsub">行是从哪来，列是到哪去；颜色越深越难，斜线是不允许直接切换；点格子编辑</span></h3>
+                  <div class="body">
+                    <div class="mtx">
+                      <div class="mrow">
+                        <span class="mhead"></span>
+                        <sc-for list="{{mCols}}" as="c" hint-placeholder-count="16"><span class="mhead mcol">{{c}}</span></sc-for>
+                      </div>
+                      <sc-for list="{{mRows}}" as="r" hint-placeholder-count="16">
+                        <div class="mrow">
+                          <span class="mhead">{{r.name}}</span>
+                          <sc-for list="{{r.cells}}" as="c" hint-placeholder-count="16">
+                            <button type="button" class="{{c.cls}}" style="background: {{c.bg}}" title="{{c.title}}" onClick="{{c.pick}}"></button>
+                          </sc-for>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="card">
+                  <h3 class="ch">主情绪与副情绪</h3>
+                  <div class="body">
+                    <div class="erow">
+                      <div class="elab"><label for="em-sub">副情绪最多几个</label><span>和主情绪同时存在，可以互相矛盾</span></div>
+                      <input id="em-sub" type="range" min="0" max="4" step="1" value="{{subMax}}" onChange="{{eSetSub}}">
+                      <div class="eval"><b>{{subMax}} 个</b></div>
+                    </div>
+                    <div class="erow">
+                      <div class="elab"><label for="em-subth">副情绪的门槛</label><span>强度达到主情绪的多少才算数</span></div>
+                      <input id="em-subth" type="range" min="0.2" max="0.9" step="0.05" value="{{subTh}}" onChange="{{eSetSubTh}}">
+                      <div class="eval"><b>{{subThShown}}</b></div>
+                    </div>
+                    <div class="enote">举例：现在是 <b>{{exMain}}</b>（主）<span class="phint" style="margin-left:6px">{{exSubs}}</span></div>
+                  </div>
+                </section>
+
+                <section class="card hold">
+                  <h3 class="ch">其他<span class="chsub">占位 · 还没做</span></h3>
+                  <div class="body">
+                    <div class="holdrow"><b>回落速度</b><span>情绪多久回到底色；心灵能量越满回得越快</span><span class="hnow">半衰期 40 分钟</span></div>
+                    <div class="holdrow"><b>心情底色</b><span>没人说话时我默认的情绪</span><span class="hnow">愉悦 0.1 · 兴奋 0.4</span></div>
+                    <div class="holdrow"><b>单人影响上限</b><span>同一个人一小时内最多能把我拉动多少</span><span class="hnow">0.8 / 小时</span></div>
+                    <div class="hdep">依赖：心情振幅调整（MOOD-AMPLITUDE-TUNING）先落地。情绪划分见文档「情绪怎么划分」。</div>
+                  </div>
+                </section>
+              </div>
+            </sc-if>
+            <sc-if value="{{isHold}}" hint-placeholder-val="{{false}}">
+              <div class="pg">
+                <section class="card hold">
+                  <h3 class="ch">{{hold.title}}<span class="chsub">占位 · 还没做</span></h3>
+                  <div class="body">
+                    <div class="phint">{{hold.why}}</div>
+                    <div class="lbl" style="margin-top:4px">以后放在这里</div>
+                    <sc-for list="{{hold.items}}" as="it" hint-placeholder-count="4">
+                      <div class="holdrow"><b>{{it.name}}</b><span>{{it.note}}</span><span class="hnow">{{it.now}}</span></div>
+                    </sc-for>
+                    <div class="hdep">{{hold.dep}}</div>
+                  </div>
+                </section>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{pOther}}" hint-placeholder-val="{{false}}">
+          <div class="pg">
+            <section class="card">
+              <h3 class="ch">其他小节</h3>
+              <div class="body">
+                <div class="inp">## 喜欢的东西 ……</div>
+                <div class="inp">## 回忆 ……</div>
+                <div style="color:#1C5F5A;font-size:12px">+ 添加小节</div>
+              </div>
+            </section>
+          </div>
+        </sc-if>
+
+      </div>
+
+      <aside class="rail">
+        <section class="card railc" aria-label="右侧栏">
+          <div class="tabs" role="tablist">
+            <button type="button" class="{{tabInject}}" onClick="{{toInject}}">实际注入</button>
+            <button type="button" class="{{tabEvo}}" onClick="{{toEvo}}">性格的变化</button>
+            <button type="button" class="{{tabVer}}" onClick="{{toVer}}">版本</button>
+          </div>
+          <div class="rbody">
+            <sc-if value="{{isInject}}" hint-placeholder-val="{{true}}">
+              <div>
+                <div class="blk"><span>persona · 身份</span><p>## 身份
+高一学生，岛村的同学……</p></div>
+                <div class="blk hl"><span>persona · 年龄　← 左边正在编辑的块会高亮；点这里也会跳到对应页签</span><p>## 年龄
+16-17岁（高一至高二）</p></div>
+                <div class="blk"><span>persona · 背景</span><p>## 背景
+缺乏家庭关爱，与单亲母亲关系极其冷漠疏离……</p></div>
+                <div class="blk"><span>persona · 说话方式</span><p>## 说话方式
+第一人称：我（あたし／私）……</p></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{isEvo}}" hint-placeholder-val="{{false}}">
+              <div>
+                <div style="font-size:11px;color:#6F737A;padding-bottom:8px">此阶段没有经历偏移；现在等于底色。</div>
+                <div class="grid4">
+                  <sc-for list="{{traits}}" as="tr" hint-placeholder-count="7">
+                    <div class="trait" style="flex-direction:column;gap:3px"><span>{{tr.title}}</span><b>{{tr.value}} → {{tr.value}}</b></div>
+                  </sc-for>
+                </div>
+                <div class="evtabs"><button type="button" class="on">增量</button><button type="button">轨迹</button><button type="button">雷达</button><button type="button" disabled="disabled" style="opacity:.45">来源</button></div>
+                <svg width="400" height="128" viewBox="0 0 400 128" role="img" aria-label="每个保存版本的七维性格增量">
+                  <line x1="28" x2="392" y1="72" y2="72" stroke="#8A8E95" stroke-width="1"></line>
+                  <text x="4" y="26" fill="#6F737A" font-size="9">+4</text><text x="12" y="75" fill="#6F737A" font-size="9">0</text><text x="4" y="122" fill="#6F737A" font-size="9">−4</text>
+                  <rect x="32" y="13" width="170" height="96" rx="4" fill="#EFEDE7"></rect>
+                  <rect x="214" y="13" width="170" height="96" rx="4" fill="#EFEDE7"></rect>
+                  <g opacity=".42"><rect x="98" y="71" width="5" height="2" fill="#1C5F5A"></rect><rect x="105" y="71" width="5" height="2" fill="#C2702B"></rect><rect x="112" y="71" width="5" height="2" fill="#3B6EA8"></rect><rect x="119" y="71" width="5" height="2" fill="#8A4F7D"></rect><rect x="126" y="71" width="5" height="2" fill="#5E7F2E"></rect><rect x="133" y="71" width="5" height="2" fill="#A23E48"></rect><rect x="140" y="71" width="5" height="2" fill="#7A6A2E"></rect></g>
+                  <rect x="280" y="71" width="5" height="2" fill="#1C5F5A" opacity=".42"></rect><rect x="287" y="71" width="5" height="2" fill="#C2702B" opacity=".42"></rect><rect x="294" y="72" width="5" height="11" fill="#3B6EA8"></rect><rect x="301" y="50" width="5" height="22" fill="#8A4F7D"></rect><rect x="308" y="72" width="5" height="22" fill="#5E7F2E"></rect><rect x="315" y="72" width="5" height="22" fill="#A23E48"></rect><rect x="322" y="71" width="5" height="2" fill="#7A6A2E" opacity=".42"></rect>
+                  <text x="117" y="123" text-anchor="middle" fill="#6F737A" font-size="8">10/22</text><text x="299" y="123" text-anchor="middle" fill="#6F737A" font-size="8">10/22</text>
+                </svg>
+                <div class="legend"><span><i style="background:#1C5F5A"></i>规矩</span><span><i style="background:#C2702B"></i>善意</span><span><i style="background:#3B6EA8"></i>话量</span><span><i style="background:#8A4F7D"></i>思维</span><span><i style="background:#5E7F2E"></i>脱线</span><span><i style="background:#A23E48"></i>好奇</span><span><i style="background:#7A6A2E"></i>模仿</span></div>
+                <div style="font-size:10px;color:#6F737A">模仿（锁定）不随经历变化；可在表单中手动设置。</div>
+              </div>
+            </sc-if>
+            <sc-if value="{{isVer}}" hint-placeholder-val="{{false}}">
+              <div>
+                <div class="ver"><span>10/22 21:14 · 手动保存</span><a href="#">对比 · 恢复</a></div>
+                <div class="ver"><span>10/21 09:02 · 导入草稿</span><a href="#">对比 · 恢复</a></div>
+                <div class="ver"><span>10/20 18:40 · 新建</span><a href="#">对比 · 恢复</a></div>
+              </div>
+            </sc-if>
+          </div>
+          <div class="rfoot"><span>1862 字 · 约 1433 tokens</span><a href="#">去试聊 →</a></div>
+        </section>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    this.state = { tv: { order: 0, morality: 0, talk: -0.6, mind: 1.4, humor: -1.8, openness: -1.2, imitation: 0 }, page: 'who', tab: 'inject' };
+  }
+  curveInit() {
+    if (this.cv) return;
+    this.cv = {
+      pos: { x0: 0, x1: 100, which: 'gain', sel: -1, drag: null, gain: { base: 'posGain', pts: [] }, loss: { base: 'posLoss', pts: [] }, bounds: [15, 35, 60, 85], names: ['不熟', '认识', '普通朋友', '朋友以上', '恋人'] },
+      neg: { x0: -100, x1: 0, which: 'gain', sel: -1, drag: null, gain: { base: 'negGain', pts: [] }, loss: { base: 'negLoss', pts: [] }, bounds: [-85, -60, -35, -15], names: ['仇人', '憎恶', '讨厌', '不爽', '冷淡'] }
+    };
+  }
+  setChart(key, patch) { this.cv = Object.assign({}, this.cv, { [key]: Object.assign({}, this.cv[key], patch) }); this.forceUpdate(); }
+  knots(kind, b) {
+    const k = {
+      posGain: [[0, 0.5], [b[0] * 0.8, 0.65], [b[0] + (b[1] - b[0]) * 0.4, 1.9], [b[1], 1.55], [(b[1] + b[2]) / 2, 1.0], [b[2] - 5, 0.55], [b[2], 0.1], [b[2] + 4, 0.55], [(b[2] + b[3]) / 2, 0.85], [100, 0.75]],
+      posLoss: [[0, 1.25], [b[0], 1.1], [(b[0] + b[1]) / 2, 1.0], [(b[1] + b[2]) / 2, 0.8], [(b[2] + b[3]) / 2, 0.9], [b[3], 1.05], [100, 1.35]],
+      negGain: [[-100, 0.03], [b[0], 0.05], [b[1], 0.08], [(b[1] + b[2]) / 2, 0.25], [b[2], 0.45], [b[3], 0.75], [0, 1.0]],
+      negLoss: [[-100, 0.5], [b[0], 0.8], [(b[0] + b[1]) / 2, 1.0], [(b[1] + b[2]) / 2, 1.35], [(b[2] + b[3]) / 2, 1.2], [0, 1.0]]
+    }[kind];
+    return k ? k.map((p) => ({ x: p[0], y: p[1] })) : null;
+  }
+  baseOf(kind, t, ch) {
+    const kn = ch && this.knots(kind, ch.x0 < 0 ? [-85, -60, -35, -15] : [15, 35, 60, 85]);
+    if (kn) return this.spline(kn, ch.x0 + t * (ch.x1 - ch.x0));
+    if (kind === 'lnx') { const u = 1.5 + t * 28.5; return 2 * Math.E * Math.log(u) / u; }
+    if (kind === 'rise') return 0.7 + 0.8 * Math.pow(t, 1.5);
+    if (kind === 'negGain') return 0.4 + 0.6 * Math.pow(t, 0.8);
+    if (kind === 'negLoss') return 0.5 + 0.5 * t;
+    if (kind === 'slow') return 0.35 + 1.15 / (1 + Math.exp(-(t - 0.55) / 0.09));
+    return 1;
+  }
+  spline(pts, x) {
+    const n = pts.length;
+    const h = [], d = [];
+    for (let i = 0; i < n - 1; i++) { h.push(pts[i+1].x - pts[i].x || 1e-6); d.push((pts[i+1].y - pts[i].y) / h[i]); }
+    const m = [d[0]];
+    for (let i = 1; i < n - 1; i++) m.push(d[i-1] * d[i] <= 0 ? 0 : (h[i-1] + h[i]) * 3 / ((2*h[i] + h[i-1]) / d[i-1] + (h[i] + 2*h[i-1]) / d[i]));
+    m.push(d[n-2]);
+    let i = 0;
+    while (i < n - 2 && x > pts[i+1].x) i++;
+    const t = Math.max(0, Math.min(1, (x - pts[i].x) / h[i])), t2 = t*t, t3 = t2*t;
+    return (2*t3 - 3*t2 + 1) * pts[i].y + (t3 - 2*t2 + t) * h[i] * m[i] + (-2*t3 + 3*t2) * pts[i+1].y + (t3 - t2) * h[i] * m[i+1];
+  }
+  valueAt(c, t, ch) {
+    let y = this.baseOf(c.base, t, ch);
+    if (c.pts.length) {
+      const R = 0.22, offs = [];
+      c.pts.forEach((p, i) => {
+        const prev = c.pts[i - 1], next = c.pts[i + 1];
+        if (p.t - R > 0 && (!prev || prev.t < p.t - 2 * R)) offs.push({ x: p.t - R, y: 0 });
+        offs.push({ x: p.t, y: p.y - this.baseOf(c.base, p.t, ch) });
+        if (p.t + R < 1 && (!next || next.t > p.t + 2 * R)) offs.push({ x: p.t + R, y: 0 });
+      });
+      if (offs[0].x > 0.005) offs.unshift({ x: 0, y: 0 });
+      if (offs[offs.length - 1].x < 0.995) offs.push({ x: 1, y: 0 });
+      y += offs.length > 1 ? this.spline(offs, t) : offs[0].y;
+    }
+    return Math.max(0, Math.min(3, y));
+  }
+  pathOf(c, ch) {
+    let d = '';
+    for (let px = 0; px <= 600; px += 3) d += (px ? ' L' : 'M') + px + ' ' + (210 - this.valueAt(c, px / 600, ch) * 70).toFixed(1);
+    return d;
+  }
+  local(e) {
+    const r = e.currentTarget.getBoundingClientRect();
+    const px = (e.clientX - r.left) * 600 / r.width, py = (e.clientY - r.top) * 210 / r.height;
+    return { px, py, t: Math.max(0, Math.min(1, px / 600)), y: Math.max(0, Math.min(3, (210 - py) / 70)) };
+  }
+  chartVals(key) {
+    const ch = this.cv[key];
+    const cur = ch[ch.which], other = ch[ch.which === 'gain' ? 'loss' : 'gain'];
+    const span = ch.x1 - ch.x0;
+    const aff = (t) => Math.round(ch.x0 + t * span);
+    const r2 = (v) => Math.round(v * 100) / 100;
+    const boundT = (b) => (b - ch.x0) / span;
+    const setCur = (patch) => this.setChart(key, { [this.cv[key].which]: Object.assign({}, this.cv[key][this.cv[key].which], patch) });
+    const onDown = (e) => {
+      if (e.button !== 0) return;
+      const c = this.cv[key], cv = c[c.which], l = this.local(e);
+      let pi = -1, bd = 12;
+      cv.pts.forEach((p, i) => { const dd = Math.hypot(p.t * 600 - l.px, 210 - p.y * 70 - l.py); if (dd < bd) { bd = dd; pi = i; } });
+      const grab = () => { try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {} };
+      if (pi >= 0) { grab(); this.setChart(key, { sel: pi, drag: { kind: 'pt', i: pi } }); return; }
+      const bi = c.bounds.findIndex((b) => Math.abs(boundT(b) * 600 - l.px) < 7);
+      if (bi >= 0) { grab(); this.setChart(key, { drag: { kind: 'bound', i: bi } }); return; }
+      if (Math.abs(210 - this.valueAt(cv, l.t, c) * 70 - l.py) > 14) return;
+      const np = { t: Math.round(l.t * 1000) / 1000, y: r2(this.valueAt(cv, l.t, c)) };
+      const pts = cv.pts.concat([np]).sort((a, b) => a.t - b.t);
+      const i = pts.indexOf(np);
+      grab();
+      this.cv = Object.assign({}, this.cv, { [key]: Object.assign({}, c, { [c.which]: Object.assign({}, cv, { pts }), sel: i, drag: { kind: 'pt', i } }) });
+      this.forceUpdate();
+    };
+    const onMove = (e) => {
+      const c = this.cv[key];
+      if (!c.drag) return;
+      const l = this.local(e);
+      if (c.drag.kind === 'bound') {
+        const b = c.bounds.slice(), i = c.drag.i;
+        const lo = i > 0 ? b[i-1] + 3 : ch.x0 + 3, hi = i < b.length - 1 ? b[i+1] - 3 : ch.x1 - 3;
+        b[i] = Math.max(lo, Math.min(hi, aff(l.t)));
+        this.setChart(key, { bounds: b });
+        return;
+      }
+      const pts = c[c.which].pts.slice(), i = c.drag.i;
+      const lo = i > 0 ? pts[i-1].t + 0.02 : 0, hi = i < pts.length - 1 ? pts[i+1].t - 0.02 : 1;
+      pts[i] = { t: Math.max(lo, Math.min(hi, l.t)), y: r2(l.y) };
+      setCur({ pts });
+    };
+    const onUp = () => { if (this.cv[key].drag) this.setChart(key, { drag: null }); };
+    const onCtx = (e) => {
+      e.preventDefault();
+      const c = this.cv[key], l = this.local(e);
+      const pts = c[c.which].pts.slice();
+      const i = pts.findIndex((p) => Math.hypot(p.t * 600 - l.px, 210 - p.y * 70 - l.py) < 12);
+      if (i < 0) return;
+      pts.splice(i, 1);
+      this.cv = Object.assign({}, this.cv, { [key]: Object.assign({}, c, { [c.which]: Object.assign({}, c[c.which], { pts }), sel: -1, drag: null }) });
+      this.forceUpdate();
+    };
+    const preset = (kind) => () => setCur({ base: kind, pts: [] });
+    const edges = [ch.x0].concat(ch.bounds, [ch.x1]);
+    const tiers = ch.names.map((n, i) => ({ label: n, left: boundT(edges[i]) * 600, width: (boundT(edges[i+1]) - boundT(edges[i])) * 600 }));
+    const formulas = { lnx: 'f(x) = ln x / x', rise: 'f(x) = 0.7 + 0.8·x^1.5', posGain: '按分档拟合 · 增加', posLoss: '按分档拟合 · 减少', negGain: '按分档拟合 · 回暖', negLoss: '按分档拟合 · 下滑', slow: 'S 形（慢热）', flat: 'f(x) = 1' };
+    const now = 22, nowIn = now >= ch.x0 && now <= ch.x1;
+    const sel = ch.sel >= 0 ? cur.pts[ch.sel] : null;
+    const sample = key === 'pos' ? 60 : -60, mul = this.valueAt(cur, boundT(sample), ch);
+    const unit = ch.which === 'gain' ? 3 : -3;
+    return {
+      title: key === 'pos' ? '零上（0 ～ 100）' : '零下（-100 ～ 0）',
+      formula: formulas[cur.base] + (cur.pts.length ? '，加 ' + cur.pts.length + ' 个插值点' : ''),
+      segGain: ch.which === 'gain' ? 'on' : '', segLoss: ch.which === 'loss' ? 'on' : '',
+      toGain: () => this.setChart(key, { which: 'gain', sel: -1, drag: null }),
+      toLoss: () => this.setChart(key, { which: 'loss', sel: -1, drag: null }),
+      yTicks: [3, 2, 1, 0].map((v) => ({ label: '×' + v, top: 14 + (3 - v) * 70 })),
+      curvePath: this.pathOf(cur, ch), ghostPath: this.pathOf(other, ch),
+      nowX: nowIn ? boundT(now) * 600 : -10, nowOpacity: nowIn ? 1 : 0,
+      bounds: ch.bounds.map((b, i) => ({ left: boundT(b) * 600, cls: key === 'pos' && i === 0 ? 'bound start' : 'bound', tag: key === 'pos' && i === 0 ? '起点 ' + b : String(b) })),
+      pts: cur.pts.map((p, i) => ({ left: p.t * 600, top: 210 - p.y * 70, cls: i === ch.sel ? 'pt sel' : 'pt' })),
+      xTicks: [0, 0.2, 0.4, 0.6, 0.8, 1].map((t) => ({ left: t * 600, label: String(aff(t)) })),
+      tiers,
+      readout: sel
+        ? '选中的点：好感 ' + aff(sel.t) + '，倍率 ×' + sel.y.toFixed(2)
+        : '好感 ' + sample + ' 时倍率 ×' + mul.toFixed(2) + '：一次原本 ' + (unit > 0 ? '+' : '') + unit + ' 的' + (unit > 0 ? '好事' : '坏事') + '，实际 ' + (unit > 0 ? '+' : '') + (unit * mul).toFixed(1),
+      onDown, onMove, onUp, onCtx,
+      preDefault: preset(ch.which === 'gain' ? (key === 'pos' ? 'posGain' : 'negGain') : (key === 'pos' ? 'posLoss' : 'negLoss')),
+      preFlat: preset('flat'), preSlow: preset('slow')
+    };
+  }
+  subVals() {
+    // 「参数」下的子页签。好感、心灵能量已画好；后四个只占位，注释写清以后放什么、现在的值在哪、依赖什么。
+    const sub = this.state.sub || 'aff';
+    const list = [['aff', '好感'], ['energy', '心灵能量'], ['mood', '心情'], ['sleep', '作息'], ['initiative', '主动性'], ['memory', '记忆']];
+    const holds = {
+      mood: {
+        title: '心情',
+        why: '心情的回落速度、底色和各档的门槛决定我情绪起伏有多大。和心灵能量是同一套系统，放在它旁边。',
+        items: [
+          { name: '回落速度', note: '心情多久回到底色；心灵能量越满回得越快', now: '半衰期 40 分钟' },
+          { name: '心情底色', note: '没人说话时我默认的心情和兴奋度', now: '愉悦 0.1 · 兴奋 0.4' },
+          { name: '变档难度', note: '多难从「平静」变成「烦躁」或「开心」，以及至少停留多久', now: '静摩擦 0.05 · 停留 10 分钟' },
+          { name: '单人影响上限', note: '同一个人一小时内最多能把我的心情拉动多少', now: '0.8 / 小时' }
+        ],
+        dep: '依赖：心情振幅调整（MOOD-AMPLITUDE-TUNING）先落地，这里的默认值以它为准。代码在 src/core/mood/core.ts。'
+      },
+      sleep: {
+        title: '作息',
+        why: '人有困的时候。几点犯困、几点睡、睡着后回不回消息，会让我更像一个活人。',
+        items: [
+          { name: '犯困 / 入睡', note: '几点开始困、几点睡着；困的时候回复变短变慢', now: '总览「作息」卡片里的值' },
+          { name: '起床', note: '几点醒；周末可以单独设晚起', now: '同上' },
+          { name: '睡着后', note: '被叫醒的概率、要被叫几次才回、回完会不会继续睡', now: '待查代码' },
+          { name: '睡前整理', note: '睡着时整理记忆和写日记，几点开始', now: '见知识与印象拆分' }
+        ],
+        dep: '依赖：先确认作息现在存在哪里（全局还是按账号），再决定要不要挪进人设。'
+      },
+      initiative: {
+        title: '主动性',
+        why: '多久主动开口、被冷落后退多远、一次回几句，这几项最影响「像不像真人」的第一感觉。现在是所有人设共用一套，挪进人设后文静和话痨才真的不一样。',
+        items: [
+          { name: '主动开口', note: '主动判断分值的门槛，越低越爱插话', now: '决策页「主动判断分值」' },
+          { name: '被冷落后退避', note: '主动说话没人理之后，隔多久再试、每次加倍多少', now: 'src/core/activity/backoff.ts' },
+          { name: '一次回几句', note: '现在由「话量」决定 1–3 句，这里可以单独覆盖', now: '话量 -2→1 句 · -1→2 句 · 其余 3 句' },
+          { name: '打字停顿', note: '每句之间停多久，按字数算还是固定', now: '待查代码' }
+        ],
+        dep: '依赖：先把这些值从全局配置（src/config/schema.ts）挪到人设，没写的人设沿用全局默认。'
+      },
+      memory: {
+        title: '记忆',
+        why: '记得多快、忘得多快，决定我是「过目不忘」还是「有点迷糊」。',
+        items: [
+          { name: '记住的门槛', note: '一条知识要被提到几次、置信度到多少才进提示词', now: '带滞回的阈值' },
+          { name: '淡忘速度', note: '多久不提开始降低置信度', now: '待定' },
+          { name: '印象转正', note: '印象从「不确定（?）」变成「确定」的门槛', now: '待定' },
+          { name: '转述可信度', note: '从别人那里听来的事，打几折相信', now: '眷属组转述规则' }
+        ],
+        dep: '依赖：知识与印象拆分（KNOWLEDGE-IMPRESSION-SPLIT / CHIPS）落地之后再做，这些阈值现在还在变。'
+      }
+    };
+    return {
+      subs: list.map((x) => ({ label: x[1], soon: holds[x[0]] && x[0] !== 'mood' ? '占位' : '', cls: sub === x[0] ? 'on' : '', go: () => this.setState({ sub: x[0] }) })),
+      isAff: sub === 'aff', isEnergy: sub === 'energy', isMood: sub === 'mood', isHold: sub !== 'mood' && Boolean(holds[sub]),
+      hold: holds[sub] || holds.mood
+    };
+  }
+  emoLib() {
+    // 本地情绪库：默认情绪与坐标（愉悦 -1~1，唤醒 0~1，掌控 -1~1）。边的默认值由库里的坐标算出，再叠加少数手工覆盖。
+    return {
+      兴奋: [0.7, 0.85, 0.4], 开心: [0.6, 0.55, 0.3], 感动: [0.6, 0.6, -0.2], 满足: [0.5, 0.25, 0.3], 平静: [0, 0.3, 0],
+      害羞: [0.2, 0.6, -0.4], 惊讶: [0, 0.85, -0.2], 无聊: [-0.2, 0.1, 0], 失落: [-0.5, 0.25, -0.3], 委屈: [-0.5, 0.5, -0.5],
+      心疼: [-0.3, 0.5, -0.1], 吃醋: [-0.4, 0.6, -0.1], 烦躁: [-0.4, 0.65, 0.2], 焦虑: [-0.4, 0.75, -0.5], 害怕: [-0.6, 0.8, -0.7], 生气: [-0.7, 0.85, 0.5]
+    };
+  }
+  edgeFrom(p, q, key) {
+    const dist = Math.hypot(p.v - q.v, (p.a - q.a) * 1.5, (p.d - q.d) * 0.6);
+    const base = { margin: Math.round((0.02 + 0.12 * dist) * 100) / 100, dwell: 10, jump: dist < 1.45 };
+    const over = { '害羞>生气': { jump: false }, '满足>害怕': { jump: false }, '生气>害羞': { jump: false } }[key];
+    return Object.assign(base, over || {});
+  }
+  emoVals() {
+    const lib = this.emoLib();
+    const P = (arr) => ({ v: arr[0], a: arr[1], d: arr[2] });
+    if (!this.em) {
+      const coords = {};
+      Object.keys(lib).forEach((k) => { coords[k] = P(lib[k]); });
+      this.em = { set: Object.keys(lib), coords, edges: {}, src: '开心', dst: '害羞', draft: '', msg: '', drag: null, subMax: 2, subTh: 0.5 };
+    }
+    const em = this.em;
+    const upd = (patch) => { this.em = Object.assign({}, this.em, patch); this.forceUpdate(); };
+    const edgeOf = (a, b) => {
+      const key = a + '>' + b;
+      const inLib = lib[a] && lib[b];
+      const def = this.edgeFrom(inLib ? P(lib[a]) : em.coords[a], inLib ? P(lib[b]) : em.coords[b], key);
+      return Object.assign({}, def, em.edges[key] || {});
+    };
+    const X = (v) => 300 + 280 * v, Y = (a) => 340 - 320 * a;
+    const r2 = (v) => (Math.round(v * 100) / 100).toFixed(2);
+    const select = (name) => upd({ src: name, dst: em.dst !== name && em.set.includes(em.dst) ? em.dst : em.set.find((n) => n !== name) });
+    const remove = (name) => {
+      const set = em.set.filter((n) => n !== name);
+      const coords = Object.assign({}, em.coords); delete coords[name];
+      const edges = {}; Object.keys(em.edges).forEach((k) => { const [a, b] = k.split('>'); if (a !== name && b !== name) edges[k] = em.edges[k]; });
+      const src = set.includes(em.src) ? em.src : set[0], dst = set.includes(em.dst) && em.dst !== src ? em.dst : set.find((n) => n !== src);
+      upd({ set, coords, edges, src, dst, msg: '已删除「' + name + '」' });
+    };
+    const addName = (raw) => {
+      const name = String(raw || '').trim();
+      if (!name) return upd({ msg: '先写一个名字' });
+      if (em.set.includes(name)) return upd({ msg: '已经有「' + name + '」了', draft: '' });
+      const coords = Object.assign({}, em.coords, { [name]: lib[name] ? P(lib[name]) : { v: 0, a: 0.5, d: 0 } });
+      upd({ set: em.set.concat([name]), coords, src: name, draft: '', msg: lib[name] ? '「' + name + '」沿用情绪库里的默认坐标和边' : '「' + name + '」是自定义情绪，先放在地图中间，拖到合适的位置' });
+    };
+    const local = (e) => { const r = e.currentTarget.getBoundingClientRect(); return { px: (e.clientX - r.left) * 600 / r.width, py: (e.clientY - r.top) * 360 / r.height }; };
+    const mDown = (e) => {
+      if (e.button !== 0) return;
+      const l = local(e);
+      let best = null, bd = 13;
+      this.em.set.forEach((n) => { const c = this.em.coords[n], dd = Math.hypot(X(c.v) - l.px, Y(c.a) - l.py); if (dd < bd) { bd = dd; best = n; } });
+      if (!best) return;
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+      const cur = this.em;
+      this.em = Object.assign({}, cur, { drag: best, src: best, dst: cur.dst !== best && cur.set.includes(cur.dst) ? cur.dst : cur.set.find((n) => n !== best) });
+      this.forceUpdate();
+    };
+    const mMove = (e) => {
+      const cur = this.em;
+      if (!cur.drag) return;
+      const l = local(e);
+      const v = Math.max(-1, Math.min(1, (l.px - 300) / 280)), a = Math.max(0, Math.min(1, (340 - l.py) / 320));
+      this.em = Object.assign({}, cur, { coords: Object.assign({}, cur.coords, { [cur.drag]: Object.assign({}, cur.coords[cur.drag], { v: Math.round(v * 100) / 100, a: Math.round(a * 100) / 100 }) }) });
+      this.forceUpdate();
+    };
+    const mUp = () => { if (this.em.drag) upd({ drag: null }); };
+    const src = em.src, dst = em.dst, sc = em.coords[src];
+    const mArrows = em.set.filter((n) => n !== src).map((n) => {
+      const ed = edgeOf(src, n), c = em.coords[n];
+      const x1 = X(sc.v), y1 = Y(sc.a), x2 = X(c.v), y2 = Y(c.a);
+      const L = Math.hypot(x2 - x1, y2 - y1) || 1, ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+      const sel = n === dst;
+      return {
+        d: 'M' + (x1 + ux * 8).toFixed(1) + ' ' + (y1 + uy * 8).toFixed(1) + ' Q' + ((x1 + x2) / 2 - uy * 14).toFixed(1) + ' ' + ((y1 + y2) / 2 + ux * 14).toFixed(1) + ' ' + (x2 - ux * 9).toFixed(1) + ' ' + (y2 - uy * 9).toFixed(1),
+        color: sel ? '#C2702B' : '#8FA9A5', w: (0.8 + ed.margin * 9).toFixed(1), dash: ed.jump ? 'none' : '4 4', marker: sel ? 'url(#em-s)' : 'url(#em-a)', op: sel ? 1 : 0.6,
+        title: src + ' → ' + n, pick: () => upd({ dst: n })
+      };
+    });
+    const mDots = em.set.map((n) => ({ name: n, x: X(em.coords[n].v), y: Y(em.coords[n].a), cls: 'edot' + (n === src ? ' src' : n === dst ? ' dst' : '') + (lib[n] ? '' : ' custom') }));
+    const ed = edgeOf(src, dst), key = src + '>' + dst;
+    const setEdge = (patch) => upd({ edges: Object.assign({}, em.edges, { [key]: Object.assign({}, em.edges[key] || {}, patch) }) });
+    const dc = em.coords[src];
+    const mRows = em.set.map((a) => ({ name: a, cells: em.set.map((b) => {
+      if (a === b) return { cls: 'mc diag', bg: 'transparent', title: a, pick: () => {} };
+      const e2 = edgeOf(a, b);
+      return { cls: 'mc' + (e2.jump ? '' : ' nojump') + (a === src && b === dst ? ' sel' : ''), bg: 'rgba(28,95,90,' + Math.min(0.9, 0.08 + e2.margin * 1.6).toFixed(2) + ')', title: a + ' → ' + b + '：门槛 ' + r2(e2.margin) + (e2.jump ? '' : '，不允许直接切换'), pick: () => upd({ src: a, dst: b }) };
+    }) }));
+    const now = { v: 0.45, a: 0.6, d: -0.25 };
+    const inten = em.set.map((n) => { const c = em.coords[n]; const dd = Math.hypot(c.v - now.v, (c.a - now.a) * 1.5, (c.d - now.d) * 0.6); return { n, s: Math.exp(-dd * dd / (2 * 0.3 * 0.3)) }; }).sort((p, q) => q.s - p.s);
+    const main = inten[0];
+    const subs = inten.slice(1).filter((x) => main && x.s >= em.subTh * main.s).slice(0, em.subMax);
+    return {
+      eCount: em.set.length,
+      eSet: em.set.map((n) => ({ name: n, cls: 'tag emtag' + (n === src ? ' on' : '') + (lib[n] ? '' : ' custom'), pick: () => select(n), del: () => remove(n) })),
+      eDraft: em.draft, eMsg: em.msg,
+      eType: (e) => { this.em = Object.assign({}, this.em, { draft: e.target.value }); this.forceUpdate(); },
+      eKey: (e) => { if (e.key === 'Enter') addName(this.em.draft); },
+      eAdd: () => addName(this.em.draft),
+      eHasRemoved: Object.keys(lib).some((n) => !em.set.includes(n)),
+      eRemoved: Object.keys(lib).filter((n) => !em.set.includes(n)).map((n) => ({ name: n, add: () => addName(n) })),
+      mDown, mMove, mUp, mArrows, mDots,
+      eFrom: src, eTo: dst || '—',
+      eEdgeNote: (lib[src] && lib[dst] ? '两个都是情绪库里的情绪，默认值来自情绪库。' : '有自定义情绪，默认值按两者在地图上的距离算。') + (em.edges[key] ? ' 这条边改过。' : ''),
+      eMargin: ed.margin, eMarginShown: r2(ed.margin), eDwell: ed.dwell, eJump: ed.jump,
+      eSetMargin: (e) => setEdge({ margin: Math.round(Number(e.target.value) * 100) / 100 }),
+      eSetDwell: (e) => setEdge({ dwell: Number(e.target.value) }),
+      eToggleJump: () => setEdge({ jump: !ed.jump }),
+      eResetEdge: () => { const edges = Object.assign({}, em.edges); delete edges[key]; upd({ edges }); },
+      eV: r2(dc.v), eA: r2(dc.a), eD: r2(dc.d), eDraw: dc.d,
+      eOrigin: lib[src] ? (lib[src][0] === dc.v && lib[src][1] === dc.a && lib[src][2] === dc.d ? '（情绪库默认）' : '（改过）') : '（自定义）',
+      eSetD: (e) => upd({ coords: Object.assign({}, em.coords, { [src]: Object.assign({}, dc, { d: Math.round(Number(e.target.value) * 20) / 20 }) }) }),
+      mCols: em.set, mRows,
+      subMax: em.subMax, subTh: em.subTh, subThShown: Math.round(em.subTh * 100) + '%',
+      eSetSub: (e) => upd({ subMax: Number(e.target.value) }),
+      eSetSubTh: (e) => upd({ subTh: Number(e.target.value) }),
+      exMain: main ? main.n : '—',
+      exSubs: subs.length ? '副：' + subs.map((x) => x.n + ' ' + Math.round(x.s / main.s * 100) + '%').join('、') : '没有副情绪'
+    };
+  }
+  energyVals() {
+    if (!this.ev) this.ev = { recoverAlone: 1, recoverCompany: 1, eventGain: 1, buffer: 1, calmCost: 1, eventDrain: 1, senderCap: 1 };
+    const ev = this.ev;
+    const f2 = (v) => v.toFixed(2);
+    const hrs = (h) => (h >= 10 ? h.toFixed(0) : h.toFixed(1)) + ' 小时';
+    const defs = [
+      { title: '获得', sub: '怎么回满', rows: [
+        ['recoverAlone', '独处时恢复', '内向的主要来源', (m) => m > 0 ? '半衰期 ' + hrs(2 / m) : '不恢复'],
+        ['recoverCompany', '有人陪时恢复', '内向默认不恢复；外向是主要来源', (m) => m > 0 ? '内向：不恢复 · 外向：半衰期 ' + hrs(2 / m) : '不恢复'],
+        ['eventGain', '暖心的话带来的充能', '一次最多 +0.15', (m) => '单次最多 +' + f2(Math.min(1, 0.15 * m))]
+      ]},
+      { title: '消耗', sub: '怎么被耗掉', rows: [
+        ['buffer', '挡下坏情绪的代价', '替表层吸收一点不开心', (m) => '每挡 0.01 耗 ' + f2(0.015 * m)],
+        ['calmCost', '把心情平复回来的代价', '心情回落时顺带消耗', (m) => '平复 0.1 耗 ' + f2(0.03 * m)],
+        ['eventDrain', '伤人的话直接的消耗', '一次最多 -0.15', (m) => '单次最多 -' + f2(Math.min(1, 0.15 * m))]
+      ]},
+      { title: '界限', sub: '防止一个人把我掏空', rows: [
+        ['senderCap', '同一个人每小时最多影响', '加减都算', (m) => '最多 ' + f2(Math.min(1, 0.3 * m))]
+      ]}
+    ];
+    const egroups = defs.map((g) => ({ title: g.title, sub: g.sub, rows: g.rows.map((r) => ({
+      id: 'ev-' + r[0], label: r[1], hint: r[2], value: ev[r[0]], shown: ev[r[0]].toFixed(2), actual: r[3](ev[r[0]]),
+      set: (e) => { this.ev = Object.assign({}, this.ev, { [r[0]]: Math.round(Number(e.target.value) * 20) / 20 }); this.forceUpdate(); }
+    })) }));
+    const m = ev.recoverAlone;
+    const t = m > 0 ? 2 / m * Math.log2((1 - 0.3) / (1 - 0.8)) : Infinity;
+    return {
+      egroups,
+      eexample: m > 0 ? '照现在的设置：能量从 30% 独处回到 80% 大约要 ' + hrs(t) + '。' : '独处恢复为 0：能量只能靠暖心的话补回来。',
+      eReset: () => { this.ev = null; this.forceUpdate(); }
+    };
+  }
+  curveVals() {
+    this.curveInit();
+    return { charts: [this.chartVals('pos'), this.chartVals('neg')] };
+  }
+  renderVals() {
+    const labels = { who: '我是谁', deal: '待人接物', param: '参数', other: '其他小节' };
+    const pg = this.state.page;
+    const toc = Object.keys(labels).map((k) => ({
+      label: labels[k],
+      cls: pg === k ? 'cur' : '',
+      go: () => this.setState({ page: k })
+    }));
+    const defs = [['order','规矩','守序','混沌'],['morality','善意','善良','邪恶'],['talk','话量','文静','话痨'],['mind','思维','理性','感性'],['humor','脱线','正经','脱线'],['openness','好奇','保守','好奇'],['imitation','模仿 · 锁定','自我','模仿']];
+    const traits = defs.map((d) => ({
+      id: 'trait-' + d[0], title: d[1], low: d[2], high: d[3], value: this.state.tv[d[0]], shown: (this.state.tv[d[0]] > 0 ? '+' : '') + this.state.tv[d[0]].toFixed(1),
+      set: (e) => this.setState({ tv: Object.assign({}, this.state.tv, { [d[0]]: Math.round(Number(e.target.value) * 10) / 10 }) })
+    }));
+    const t = this.state.tab;
+    return {
+      toc, traits,
+      pWho: pg === 'who', pDeal: pg === 'deal', pParam: pg === 'param',
+      ...this.curveVals(),
+      ...this.energyVals(),
+      ...this.subVals(),
+      ...this.emoVals(), pOther: pg === 'other',
+      tabInject: t === 'inject' ? 'on' : '', tabEvo: t === 'evo' ? 'on' : '', tabVer: t === 'ver' ? 'on' : '',
+      isInject: t === 'inject', isEvo: t === 'evo', isVer: t === 'ver',
+      toInject: () => this.setState({ tab: 'inject' }),
+      toEvo: () => this.setState({ tab: 'evo' }),
+      toVer: () => this.setState({ tab: 'ver' })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,282 @@
+<title>知识与印象色卡</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;700&display=swap">
+<style>
+/* Layout: panel content column (max 1040) — 知识 detail card on top, 印象 person grid below; tokens mirror panel/src/styles/tokens.css */
+:root {
+  --bg: #F4F5F2; --surface: #FFFFFF; --surface-2: #EFF2EF; --line: #DCE1DD;
+  --ink: #12201E; --ink-2: #3D4B48; --muted: #56635F;
+  --accent: #1C5F5A; --accent-soft: #E1EEEB; --warn: #A8461F; --warn-soft: #F8E8E1;
+  /* 置信度五档：c1 最浅 → c5 最深 */
+  --c1: #EAF2F0; --c1-ink: #3D4B48;
+  --c2: #CFE3DE; --c2-ink: #1F3B37;
+  --c3: #9CC6BE; --c3-ink: #12201E;
+  --c4: #4F8F87; --c4-ink: #FFFFFF;
+  --c5: #1C5F5A; --c5-ink: #FFFFFF;
+  --serif: 'Noto Serif SC', 'Songti SC', serif;
+  --sans: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  --mono: 'IBM Plex Mono', 'Cascadia Code', monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111816; --surface: #18211F; --surface-2: #1E2926; --line: #2C3835;
+  --ink: #E6EEEB; --ink-2: #BCC8C4; --muted: #8E9C98;
+  --accent: #6CC2B6; --accent-soft: #1F3A36; --warn: #E08A63; --warn-soft: #3A2620;
+  --c1: #1F2A28; --c1-ink: #BCC8C4; --c2: #234039; --c2-ink: #D6E4E0;
+  --c3: #2E655D; --c3-ink: #EAF4F1; --c4: #47958A; --c4-ink: #0E1715;
+  --c5: #7CCFC2; --c5-ink: #0E1715; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #111816; --surface: #18211F; --surface-2: #1E2926; --line: #2C3835;
+  --ink: #E6EEEB; --ink-2: #BCC8C4; --muted: #8E9C98;
+  --accent: #6CC2B6; --accent-soft: #1F3A36; --warn: #E08A63; --warn-soft: #3A2620;
+  --c1: #1F2A28; --c1-ink: #BCC8C4; --c2: #234039; --c2-ink: #D6E4E0;
+  --c3: #2E655D; --c3-ink: #EAF4F1; --c4: #47958A; --c4-ink: #0E1715;
+  --c5: #7CCFC2; --c5-ink: #0E1715; color-scheme: dark; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 40px; }
+.intro { display: grid; gap: 6px; color: var(--muted); font-size: 13px; max-width: 64ch; }
+.intro strong { color: var(--ink); font-family: var(--serif); font-size: 20px; }
+h1 { font-family: var(--serif); font-size: 28px; margin: 0; }
+h2 { font-size: 16px; margin: 0; }
+.page { display: grid; gap: 14px; }
+.page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 14px; }
+.page-head p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.note { font-size: 12px; color: var(--muted); border-left: 2px solid var(--line); padding: 2px 0 2px 10px; }
+
+/* 色阶图例 */
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.scale { display: inline-flex; border-radius: 6px; overflow: hidden; position: relative; }
+.scale span { width: 28px; height: 14px; }
+.scale .s1 { background: var(--c1); } .scale .s2 { background: var(--c2); } .scale .s3 { background: var(--c3); } .scale .s4 { background: var(--c4); } .scale .s5 { background: var(--c5); }
+.scale-wrap { display: inline-grid; gap: 3px; }
+.scale-ticks { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; }
+.member-head { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 700; flex: none; }
+.member-head small { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+
+/* 知识：类别行 + 色卡 */
+.rows { display: grid; }
+.row { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; align-items: start; padding: 8px 0; border-top: 1px solid var(--line); }
+.row-label { padding-top: 6px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; align-items: center; }
+.chip { position: relative; display: inline-flex; align-items: center; gap: 4px; min-height: 30px; padding: 0 10px; border-radius: 7px; border: 1px solid transparent; font: inherit; font-size: 13px; cursor: pointer; max-width: 100%; white-space: nowrap; }
+.chip:focus-visible, .add:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip.l1 { background: var(--c1); color: var(--c1-ink); } .chip.l2 { background: var(--c2); color: var(--c2-ink); }
+.chip.l3 { background: var(--c3); color: var(--c3-ink); } .chip.l4 { background: var(--c4); color: var(--c4-ink); }
+.chip.l5 { background: var(--c5); color: var(--c5-ink); }
+.chip.below { box-shadow: inset 0 0 0 1px var(--line); }
+.chip.cand { border: 1.5px dashed var(--ink-2); }
+.chip.cand.l4, .chip.cand.l5 { border-color: var(--bg); outline: 1px dashed var(--c5); outline-offset: 1px; }
+.chip.manual::after { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .7; }
+.chip .lock { font-size: 10px; opacity: .8; }
+.chip .n { font-family: var(--mono); font-size: 10px; opacity: .75; }
+.add { min-height: 30px; width: 30px; border-radius: 7px; border: 1px dashed var(--line); background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; }
+.more { font-size: 12px; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 6px 2px; }
+.empty-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 0 2px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.empty-row button { font: inherit; font-size: 12px; color: var(--ink-2); background: var(--surface-2); border: 0; border-radius: 6px; padding: 4px 8px; cursor: pointer; }
+
+/* 弹层菜单 */
+.pop { position: absolute; z-index: 30; width: min(300px, calc(100vw - 32px)); background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 14px; box-shadow: 0 10px 30px rgb(0 0 0 / .12); display: grid; gap: 10px; font-size: 13px; text-align: left; white-space: normal; }
+.pop-title { font-weight: 700; font-size: 14px; }
+.kv { display: grid; grid-template-columns: 56px 1fr; gap: 4px 8px; font-size: 12px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; }
+.bar { height: 6px; border-radius: 3px; background: var(--surface-2); position: relative; margin-top: 4px; }
+.bar i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--accent); }
+.bar b { position: absolute; top: -3px; width: 1px; height: 12px; background: var(--ink-2); }
+.evidence { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 12px; color: var(--ink-2); }
+.evidence li { background: var(--surface-2); border-radius: 6px; padding: 5px 8px; }
+.menu { display: grid; border-top: 1px solid var(--line); padding-top: 6px; }
+.menu button { text-align: left; font: inherit; font-size: 13px; background: none; border: 0; padding: 7px 6px; border-radius: 6px; color: var(--ink); cursor: pointer; }
+.menu button:hover:not(:disabled) { background: var(--surface-2); }
+.menu button:disabled { color: var(--muted); cursor: not-allowed; }
+.menu button small { display: block; font-size: 11px; color: var(--muted); }
+.menu .danger { color: var(--warn); }
+
+/* 印象：按人聚合 */
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.filters button { font: inherit; font-size: 12px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); cursor: pointer; }
+.filters button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.people { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; align-items: start; }
+.person { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; }
+.person-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.person-head strong { font-size: 14px; }
+.person-head span { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.person.group { background: var(--surface-2); }
+.chip.sure { background: var(--c4); color: var(--c4-ink); }
+.chip.unsure { background: var(--surface); color: var(--ink); border: 1px dashed var(--accent); }
+.chip.unsure.cand { border-color: var(--muted); color: var(--ink-2); }
+.chip.unsure .q { color: var(--accent); font-weight: 700; }
+.diff { display: grid; gap: 6px; font-size: 13px; color: var(--ink-2); margin: 0; padding-left: 18px; }
+.imp-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 14px; align-items: start; }
+.imp-side { display: grid; gap: 2px; }
+.side-label { font-size: 11px; color: var(--muted); letter-spacing: .08em; padding: 8px 8px 4px; }
+.side-item { display: flex; justify-content: space-between; gap: 8px; font: inherit; font-size: 13px; text-align: left; padding: 8px 10px; border-radius: 8px; border: 0; background: none; color: var(--ink-2); cursor: pointer; }
+.side-item em { font-style: normal; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.side-item[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.side-item.muted-item { color: var(--muted); font-size: 12px; }
+@media (max-width: 680px) { .imp-layout { grid-template-columns: 1fr; } .imp-side { grid-auto-flow: column; overflow-x: auto; } .side-label { display: none; } .side-item { white-space: nowrap; } }
+@media (max-width: 520px) { .row { grid-template-columns: 1fr; gap: 4px; } .row-label { padding-top: 0; } }
+@media (prefers-reduced-motion: no-preference) { .chip { transition: filter .12s; } .chip:hover { filter: brightness(.96); } }
+</style>
+
+<div class="wrap">
+  <div class="intro">
+    <strong>知识 / 印象 改版草图</strong>
+    <span>静态示意，数据是编的。点任意色卡可以看弹出菜单。</span>
+  </div>
+
+  <!-- ───────── 知识 ───────── -->
+  <section class="page" id="knowledge">
+    <div class="page-head">
+      <div><h1>知识</h1><p>大家都认的事实。颜色越深，越笃定。</p></div>
+      <div class="legend">
+        <div class="scale-wrap">
+          <div class="scale"><span class="s1"></span><span class="s2"></span><span class="s3"></span><span class="s4"></span><span class="s5"></span></div>
+          <div class="scale-ticks"><span>0</span><span>.4</span><span>.6</span><span>.8</span><span>1</span></div>
+        </div>
+        <span>颜色 = 置信度 · 虚线框 = 候选（观察次数还没到）· 带细框的浅块 = 未进提示词</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="member-head"><span class="avatar">群</span><div><h2>群 1004200446 · 分类标签</h2><small>按你截图里的真实数据重画</small></div></div>
+      <div class="rows">
+        <div class="row"><span class="row-label">作息</span><div class="chips">
+          <button class="chip l5" data-t="周一最热闹" data-c="1.00" data-o="统计 · 自动" data-s="已确认" data-n="90">周一最热闹</button>
+          <button class="chip l5" data-t="21:00–00:00 最热闹" data-c="1.00" data-o="统计 · 自动" data-s="已确认" data-n="90">21:00–00:00 最热闹</button>
+          <button class="add" aria-label="新增作息">＋</button></div></div>
+        <div class="row"><span class="row-label">话题</span><div class="chips">
+          <button class="chip l5" data-t="组队游戏" data-c="0.98" data-o="推断" data-s="已确认" data-n="7">组队游戏</button>
+          <button class="chip l4 cand" data-t="卡组整理" data-c="0.84" data-o="推断" data-s="候选" data-n="1">卡组整理 <span class="n">1/2</span></button>
+          <button class="add" aria-label="新增话题">＋</button></div></div>
+        <div class="row"><span class="row-label">群梗</span><div class="chips">
+          <button class="chip l5 cand" data-t="「人呢」" data-c="0.97" data-o="推断" data-s="候选" data-n="1">「人呢」 <span class="n">1/2</span></button>
+          <button class="chip l5" data-t="「头猪」" data-c="0.96" data-o="推断" data-s="已确认" data-n="2">「头猪」</button>
+          <button class="chip l5 cand" data-t="「我工资呢」" data-c="0.88" data-o="推断" data-s="候选" data-n="1">「我工资呢」 <span class="n">1/2</span></button>
+          <button class="chip l5 cand" data-t="「请我喝饮料」" data-c="0.88" data-o="推断" data-s="候选" data-n="1">「请我喝饮料」 <span class="n">1/2</span></button>
+          <button class="add" aria-label="新增群梗">＋</button></div></div>
+        <div class="empty-row">还没有：<button>定位 ＋</button><button>氛围 ＋</button><button>规矩 ＋</button><button>近况 ＋</button><button>其他 ＋</button></div>
+      </div>
+    </div>
+    <p class="note">原来这一段大约占一屏半，色卡版是上面这一块。“自动”这类小尾巴也挪进菜单的来源里。</p>
+
+    <div class="card">
+      <div class="member-head"><span class="avatar">薯</span><div><h2>薯条</h2><small>群 1004200446 · 发言 812 条</small></div></div>
+      <div class="rows">
+        <div class="row"><span class="row-label">作息</span><div class="chips">
+          <button class="chip l5" data-t="夜猫子" data-c="0.91" data-o="统计" data-s="已确认" data-n="64">夜猫子</button>
+          <button class="chip l3" data-t="周末早起打球" data-c="0.63" data-o="自述" data-s="已确认" data-n="3">周末早起打球</button>
+          <button class="add" aria-label="新增作息">＋</button></div></div>
+        <div class="row"><span class="row-label">自我认同</span><div class="chips">
+          <button class="chip l4" data-t="大学生" data-c="0.77" data-o="自述" data-s="已确认" data-n="3">大学生 · 自述 ×3</button>
+          <button class="add" aria-label="新增自我认同">＋</button></div></div>
+        <div class="row"><span class="row-label">成分</span><div class="chips">
+          <button class="chip l5 manual" data-t="原神 › 钟离" data-c="0.95" data-o="手动" data-s="已确认" data-n="9">原神 › 钟离</button>
+          <button class="chip l3" data-t="明日方舟" data-c="0.58" data-o="推断" data-s="已确认" data-n="6">明日方舟</button>
+          <button class="chip l4" data-t="FPS" data-c="0.70" data-o="推断" data-s="已确认" data-n="8">FPS <span class="lock">锁</span></button>
+          <button class="add" aria-label="新增成分">＋</button>
+          <button class="more">别名…</button></div></div>
+        <div class="row"><span class="row-label">口头禅</span><div class="chips">
+          <button class="chip l5" data-t="「绷不住了」" data-c="0.88" data-o="统计" data-s="已确认" data-n="57">「绷不住了」</button>
+          <button class="chip l3" data-t="「6」" data-c="0.66" data-o="统计" data-s="已确认" data-n="40">「6」</button>
+          <button class="add" aria-label="新增口头禅">＋</button>
+          <button class="more">+1 已否决</button></div></div>
+        <div class="empty-row">还没有：<button>近况 ＋</button></div>
+      </div>
+    </div>
+
+    <ul class="diff">
+      <li>每个标签只剩一块色卡，宽度跟字走，同一类的挤在一行里，不再一条占一整行。</li>
+      <li>置信度不写数字，用 5 档颜色表示；数字、来源、观察次数、证据都放进点开后的菜单。</li>
+      <li>候选用虚线框，还没进提示词的（低于阈值）加一圈细框，跟“确认但很淡”区分开。</li>
+      <li>锁和删除不再挂在每块旁边，收进菜单；锁定的块里只留一个小“锁”字。</li>
+      <li>空类别不再一行一个“暂无”，合成底部一行，点了直接加。</li>
+      <li>性格、说话风格、社交方式、雷点、氛围、其他，以及带喜欢/不喜欢的标签，在代码里本来就算“看法”，挪到印象页；知识页不再给它们留空行。</li>
+    </ul>
+  </section>
+
+  <!-- ───────── 印象 ───────── -->
+  <section class="page" id="impressions">
+    <div class="page-head">
+      <div><h1>印象</h1><p>安达桜自己的看法，可能和别人不一样。作息、身份这些客观材料在「知识」页。</p></div>
+      <div class="legend">
+        <button class="chip sure" tabindex="-1">确定</button>
+        <button class="chip unsure" tabindex="-1">不确定<span class="q">?</span></button>
+        <button class="chip unsure cand" tabindex="-1">待观察<span class="q">?</span></button>
+      </div>
+    </div>
+    <div class="imp-layout">
+      <nav class="imp-side" aria-label="选择对象">
+        <div class="side-label">群</div>
+        <button class="side-item" aria-pressed="false"><span>群 1004200446</span><em>2</em></button>
+        <div class="side-label">群友</div>
+        <button class="side-item" aria-pressed="true"><span>薯条</span><em>5</em></button>
+        <button class="side-item" aria-pressed="false"><span>saki</span><em>3</em></button>
+        <button class="side-item" aria-pressed="false"><span>磁力菇真红</span><em>1</em></button>
+        <button class="side-item" aria-pressed="false"><span>兔色小猪</span><em>1</em></button>
+        <button class="side-item muted-item" aria-pressed="false"><span>还没印象的 12 人</span><em>…</em></button>
+      </nav>
+      <div class="card">
+        <div class="member-head"><span class="avatar">薯</span><div><h2>薯条</h2><small>群 1004200446 · 5 条印象</small></div></div>
+        <div class="rows">
+          <div class="row"><span class="row-label">性格</span><div class="chips">
+            <button class="chip unsure" data-i="0" data-t="秀操作" data-cat="性格" data-o="推断" data-s="已确认" data-r="「性格」是主观看法，不适合作为知识">秀操作<span class="q">?</span></button>
+            <button class="chip sure" data-i="1" data-t="话多" data-cat="性格" data-o="推断" data-s="已确认" data-r="「性格」是主观看法，不适合作为知识">话多</button></div></div>
+          <div class="row"><span class="row-label">说话风格</span><div class="chips">
+            <button class="chip sure" data-i="1" data-t="短句连发" data-cat="说话风格" data-o="统计" data-s="已确认" data-r="「说话风格」是主观看法，不适合作为知识">短句连发</button></div></div>
+          <div class="row"><span class="row-label">社交方式</span><div class="chips">
+            <button class="chip sure" data-i="1" data-t="靠得住" data-cat="社交方式" data-o="推断" data-s="已确认" data-r="「社交方式」是主观看法，不适合作为知识">靠得住</button></div></div>
+          <div class="row"><span class="row-label">喜恶</span><div class="chips">
+            <button class="chip unsure cand" data-i="0" data-t="不喜欢 二游抽卡" data-cat="成分 · 不喜欢" data-o="自述" data-s="待观察" data-r="仅已确认的印象可提升为知识">二游抽卡 · 不喜欢<span class="q">?</span></button></div></div>
+        </div>
+      </div>
+    </div>
+    <ul class="diff">
+      <li>结构跟知识页一样：左边选群或人，右边按类别一行一行放色卡，只是类别少很多。</li>
+      <li>印象页只留人设视角的类别。群：氛围、其他。群友：性格、说话风格、社交方式、喜恶（雷点和带喜欢/不喜欢的标签）、其他。作息与出没、身份与关系、成分、口头禅这些固有材料只在知识页出现。</li>
+      <li>印象页不提供手动新增，印象只由人设自己形成。</li>
+      <li>印象没有置信度，所以不用深浅：确定 = 实心，不确定 = 虚线框 + ?，待观察 = 灰虚线。</li>
+      <li>确认为确定 / 提升为知识 / 删除都收进点开后的菜单；不能提升时置灰，原因写在按钮下面。</li>
+      <li>不放好感度、QQ 资料、活跃图这些，留给知识页，左栏只显示印象条数，没印象的人折叠成一行。</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+let pop = null;
+function close() { if (pop) { pop.remove(); pop = null; } }
+function level(c) { return c >= .8 ? '很笃定' : c >= .6 ? '比较笃定' : c >= .4 ? '一般' : '还很弱'; }
+function knowledgePop(b) {
+  const c = parseFloat(b.dataset.c), s = b.dataset.s;
+  return `<div class="pop-title">${b.dataset.t}</div>
+  <dl class="kv"><dt>状态</dt><dd>${s}${b.querySelector('.lock') ? ' · 已锁定' : ''}</dd>
+  <dt>置信度</dt><dd>${c.toFixed(2)} · ${level(c)}<div class="bar"><i style="width:${c * 100}%"></i><b style="left:40%" title="注入阈值"></b></div></dd>
+  <dt>来源</dt><dd>${b.dataset.o} · 观察 ${b.dataset.n} 次</dd></dl>
+  <ul class="evidence"><li>“又熬到三点了绷不住了” · 10/21 03:12</li><li>“明早还得上班” · 10/19 01:48</li></ul>
+  <div class="menu">${s === '候选' ? '<button>确认</button>' : ''}<button>${s === '已否决' ? '恢复为候选' : '否决'}</button><button>改字</button><button>${b.querySelector('.lock') ? '解锁' : '锁定（不进提示词）'}</button><button class="danger">删除并不再学</button></div>`;
+}
+function impressionPop(b) {
+  const sure = b.dataset.i === '1', r = b.dataset.r;
+  return `<div class="pop-title">${b.dataset.t}${sure ? '' : '?'}</div>
+  <dl class="kv"><dt>类别</dt><dd>${b.dataset.cat}</dd><dt>来源</dt><dd>${b.dataset.o} · ${b.dataset.s}</dd></dl>
+  <div class="menu">${sure ? '' : `<button${b.dataset.s === '待观察' ? '' : ''}>确认为确定</button>`}
+  <button ${r ? 'disabled' : ''}>提升为知识${r ? `<small>${r}</small>` : ''}</button>
+  <button class="danger">删除</button></div>`;
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('.chip[data-t]');
+  if (pop && pop.contains(e.target)) return;
+  close();
+  if (!b) return;
+  pop = document.createElement('div');
+  pop.className = 'pop'; pop.setAttribute('role', 'dialog');
+  pop.innerHTML = b.dataset.c ? knowledgePop(b) : impressionPop(b);
+  document.body.appendChild(pop);
+  const r = b.getBoundingClientRect();
+  const left = Math.min(r.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - pop.offsetWidth - 16);
+  pop.style.left = Math.max(16, left) + 'px';
+  pop.style.top = (r.bottom + window.scrollY + 6) + 'px';
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+</script>
