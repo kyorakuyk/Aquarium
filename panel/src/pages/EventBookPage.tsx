@@ -211,6 +211,9 @@ export function EventBookPage() {
   }
 
   const visibleEvents = events !== undefined && events.account === selectedAccount ? events.events : [];
+  const visibleSettingsChanges = events !== undefined && events.account === selectedAccount
+    ? events.settingsChanges ?? []
+    : [];
   return (
     <div className="page event-book-page">
       <header className="page-header event-book-header">
@@ -241,8 +244,26 @@ export function EventBookPage() {
       {!loadingAccounts && !status?.accounts.length && <div className="empty-state">尚无可查看的眷属。</div>}
       {!loadingAccounts && selectedAccount !== undefined && loadingEvents
         && <div className="empty-state" role="status">正在读取事件簿…</div>}
-      {!loadingEvents && selectedAccount !== undefined && visibleEvents.length === 0 && !error
+      {!loadingEvents && selectedAccount !== undefined && visibleEvents.length === 0
+        && visibleSettingsChanges.length === 0 && !error
         && <div className="empty-state">还没有整理出的群聊事件。</div>}
+      {visibleSettingsChanges.length > 0 && <section className="panel-card event-book-settings">
+        <header className="event-book-event-heading">
+          <div>
+            <h2>对话设置修改</h2>
+            <p>主人通过 /aq set 确认的修改记录。</p>
+          </div>
+        </header>
+        <ol className="event-book-settings-list">
+          {visibleSettingsChanges.map((change) => {
+            const stamp = eventTime(change.time);
+            return <li key={change.id}>
+              <time className="mono muted" dateTime={stamp.iso}>{stamp.label}</time>
+              <span>{change.summary}</span>
+            </li>;
+          })}
+        </ol>
+      </section>}
       <div className="event-book-list">
         {visibleEvents.map((event) => <section className="panel-card event-book-event" key={event.id}>
           <header className="event-book-event-heading">

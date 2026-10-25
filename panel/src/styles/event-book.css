@@ -19,13 +19,18 @@
 .event-book-note-editor select { min-width: 0; }
 .event-book-note-editor .button { min-width: 92px; }
 .event-book-note-current { margin: 0; font-size: 12px; }
+.event-book-settings { padding: 20px 24px; }
+.event-book-settings-list { display: grid; gap: 10px; margin: 16px 0 0; padding: 0; list-style: none; }
+.event-book-settings-list li { display: grid; grid-template-columns: minmax(150px, auto) minmax(0, 1fr); gap: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
 
 @media (max-width: 760px) {
   .event-book-header { align-items: stretch; flex-direction: column; gap: 14px; }
   .event-book-account { width: 100%; }
   .event-book-event { padding: 18px; }
+  .event-book-settings { padding: 18px; }
   .event-book-event-heading { flex-direction: column; gap: 10px; }
   .event-book-event-meta { justify-items: start; }
+  .event-book-settings-list li { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .event-book-note-editor { grid-template-columns: minmax(0, 1fr); }
   .event-book-note-editor .button { width: 100%; }
 }

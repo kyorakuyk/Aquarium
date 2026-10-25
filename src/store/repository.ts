@@ -16,6 +16,7 @@ import { createTagDropRepository } from './tag-drop-repo.ts';
 import { createKinGroupRepository } from './kin-group-repo.ts';
 import { createPersonaMemoryRepository } from './persona-memory-repo.ts';
 import { createEventRepository } from './event-repo.ts';
+import { createSelfEditEventRepository } from './self-edit-event-repo.ts';
 import type { ImageCaptionKind, StoreRepository } from './repository-types.ts';
 
 export type {
@@ -265,6 +266,7 @@ export function createRepository(
     ...kinGroups,
     ...personaMemory,
     ...createEventRepository(database),
+    ...createSelfEditEventRepository(database),
     ...tagDrops,
     ...createAffectQueries(database),
     ...createPersonaVersionRepository(database, clock),

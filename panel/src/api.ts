@@ -434,6 +434,7 @@ export interface EventBookEvent {
 export interface EventBookResponse {
   account: number;
   events: EventBookEvent[];
+  settingsChanges?: Array<{ id: number; time: number; summary: string }>;
 }
 
 export type HistoryImportMode = 'incremental' | 'full';

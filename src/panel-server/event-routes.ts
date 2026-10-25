@@ -73,6 +73,11 @@ export function registerEventRoutes(app: Hono, options: EventRouteOptions): void
     )).sort((first, second) => second.occurredAt - first.occurredAt || second.id - first.id).slice(0, 200);
     return context.json({
       account,
+      settingsChanges: options.repository.recentSelfEditEvents(account, 200).map((change) => ({
+        id: change.id,
+        time: change.time,
+        summary: redactSensitiveText(change.summary),
+      })),
       events: events.map((event) => ({
         id: event.id,
         sourceGroupId: event.sourceGroupId,

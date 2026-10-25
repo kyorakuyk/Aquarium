@@ -240,6 +240,23 @@ test('only a recognized command from the configured owner bypasses activity batc
   assert.equal(isManagementCommand(ownerCommand, 0), false);
 });
 
+test('/aq set 是仅限主人的显式管理入口，普通聊天不触发', () => {
+  const ownerCommand = makeMessage({ messageId: 'owner-set', plainText: '/aq set 把口头禅加上哼' });
+  const nonOwnerCommand = makeMessage({
+    messageId: 'non-owner-set', plainText: '/aq set 把口头禅加上哼', senderId: ownerId + 1,
+  });
+  const quotedCommand = makeMessage({
+    messageId: 'quoted-set',
+    plainText: '/aq set 把口头禅加上哼',
+    segments: [{ type: 'reply', messageId: 'quoted' }, { type: 'text', text: '/aq set 把口头禅加上哼' }],
+  });
+
+  assert.equal(isManagementCommand(ownerCommand, ownerId), true);
+  assert.equal(isManagementCommand(nonOwnerCommand, ownerId), false);
+  assert.equal(isManagementCommand(quotedCommand, ownerId), false);
+  assert.equal(isManagementCommand(makeMessage({ messageId: 'plain-chat', plainText: '把口头禅加上哼' }), ownerId), false);
+});
+
 test('闭嘴期间被 @ 的消息记录 muted；到期后自动恢复回复', async () => {
   await withRepository(async (repository, personaRoot) => {
     currentTime = new Date(2026, 9, 13, 12, 0).getTime();

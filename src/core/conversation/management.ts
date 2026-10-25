@@ -5,6 +5,9 @@ import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '
 import { listEnabledSessions } from './sessions.ts';
 import type { ProtocolAdapter } from '../../adapters/types.ts';
 import type { StoreRepository } from '../../store/repository.ts';
+import { parseSelfEditCommand } from '../self-edit/command.ts';
+import type { SelfEditCommandHandler } from '../self-edit/types.ts';
+import type { SelfEditMuteState } from '../self-edit/tools.ts';
 
 const DEFAULT_MUTE_MINUTES = 60;
 const MINUTE_MS = 60_000;
@@ -54,7 +57,9 @@ function repliedMessageHasImage(message: IncomingMessage, repository: StoreRepos
 }
 
 export function isManagementCommand(message: IncomingMessage, ownerId: number): boolean {
-  return isStickerCollectionRequest(message) || parseOwnerCommand(message, ownerId) !== undefined;
+  return isStickerCollectionRequest(message)
+    || parseOwnerCommand(message, ownerId) !== undefined
+    || (ownerId > 0 && message.senderId === ownerId && parseSelfEditCommand(message) !== undefined);
 }
 
 function budgetLabel(state: ReturnType<typeof budgetState>): string {
@@ -67,6 +72,7 @@ function budgetLabel(state: ReturnType<typeof budgetState>): string {
 
 export interface ManagementCommands {
   handle(message: IncomingMessage): Promise<boolean>;
+  isManagementCommand(message: IncomingMessage): boolean;
   isMuted(session: SessionKey): boolean;
   isAllMuted(): boolean;
   muteAll(): void;
@@ -82,22 +88,33 @@ export function createManagementCommands(options: {
   now?: () => number;
   onError?: (error: unknown, message: IncomingMessage) => void;
   collectSticker?: (message: IncomingMessage) => Promise<{ ok: boolean; reason?: string }>;
+  createSelfEdit?: (muteState: SelfEditMuteState) => SelfEditCommandHandler;
 }): ManagementCommands {
   const now = options.now ?? Date.now;
   const mutedUntil = new Map<string, number>();
   let allMuted = false;
 
-  const isMuted = (session: SessionKey): boolean => {
-    if (allMuted) return true;
+  const muteUntil = (session: SessionKey): number | undefined => {
     const key = sessionId(session);
     const until = mutedUntil.get(key);
-    if (until === undefined) return false;
+    if (until === undefined) return undefined;
     if (now() >= until) {
       mutedUntil.delete(key);
-      return false;
+      return undefined;
     }
-    return true;
+    return until;
   };
+  const isMuted = (session: SessionKey): boolean => allMuted || muteUntil(session) !== undefined;
+  const setMuteUntil = (session: SessionKey, until: number | undefined): void => {
+    const key = sessionId(session);
+    if (until === undefined || until <= now()) mutedUntil.delete(key);
+    else mutedUntil.set(key, until);
+  };
+  const selfEdit = options.createSelfEdit?.({ getUntil: muteUntil, setUntil: setMuteUntil });
+  const handlesManagementCommand = (message: IncomingMessage): boolean => (
+    isManagementCommand(message, options.getConfig().owner)
+    || selfEdit?.shouldHandle(message, options.getConfig().owner) === true
+  );
 
   function recordDecision(
     message: IncomingMessage,
@@ -138,6 +155,26 @@ export function createManagementCommands(options: {
 
   async function handle(message: IncomingMessage): Promise<boolean> {
     const config = options.getConfig();
+    if (selfEdit?.shouldHandle(message, config.owner)) {
+      const inserted = options.repository.saveMessage({
+        sessionId: sessionId(message.session),
+        messageId: message.messageId,
+        senderId: message.senderId,
+        senderName: message.senderName,
+        isSelf: false,
+        plainText: message.plainText,
+        segments: message.segments,
+        time: message.time,
+      });
+      if (!inserted) {
+        recordDecision(message, 'duplicate', { command: 'self_edit' });
+        return true;
+      }
+      const result = await selfEdit.handle(message);
+      const sent = result.text.length > 0 ? await sendDirect(message, result.text) : false;
+      recordDecision(message, result.reason, result.detail ?? { command: 'self_edit' }, sent);
+      return true;
+    }
     if (isStickerCollectionRequest(message)) {
       if (config.owner === 0 || message.senderId !== config.owner) return true;
       if (!options.collectSticker || !repliedMessageHasImage(message, options.repository)) return false;
@@ -264,6 +301,7 @@ export function createManagementCommands(options: {
 
   return {
     handle,
+    isManagementCommand: handlesManagementCommand,
     isMuted,
     isAllMuted: () => allMuted,
     muteAll() {

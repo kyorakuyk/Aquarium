@@ -69,6 +69,7 @@ test('openDatabase 开启 WAL 并创建当前 schema 数据表', () => {
       'qq_member_profiles',
       'relations',
       'schema_version',
+      'self_edit_events',
       'stickers',
       'tag_drop_events',
       'tag_runs',

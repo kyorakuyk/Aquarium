@@ -11,6 +11,7 @@ import { bindPromptTemplateReload, promptTemplateStore } from '../core/prompt/te
 import { createHistoryCatchUp } from '../core/conversation/history-catchup.ts';
 import { createManagementCommands } from '../core/conversation/management.ts';
 import type { ManagementCommands } from '../core/conversation/management.ts';
+import { createSelfEditHandler } from '../core/self-edit/loop.ts';
 import { sessionId } from '../core/shared/events.ts';
 import { createSessionQueue } from '../core/conversation/session-queue.ts';
 import { createAffinityService } from '../core/affinity/service.ts';
@@ -53,6 +54,7 @@ import { describeError } from './error-description.ts';
 import { isPanelPortOccupied } from './panel-instance-guard.ts';
 import { createOnlineStartupTasks } from './online-startup-tasks.ts';
 import { acquireInstanceLock } from './instance-lock.ts';
+import { callSlot } from '../llm/slots.ts';
 
 const logger = createLogger('app');
 const instanceLock = acquireInstanceLock({
@@ -426,6 +428,25 @@ const accountStartup = runStartupTasks(initialConfig.accounts, () => !shuttingDo
       logger.error(`管理指令消息 ${message.messageId} 执行失败：${describeError(error)}`);
     },
     collectSticker: (message) => stickerService.collect(message),
+    createSelfEdit: (muteState) => createSelfEditHandler({
+      getConfig: () => configWatcher.getConfig(),
+      saveConfig: (config) => {
+        writeConfig(config, configPath);
+        configWatcher.replaceConfig(config);
+      },
+      repository,
+      root: process.cwd(),
+      muteState,
+      callModel: async (messages) => {
+        const result = await callSlot('reply', messages, {
+          config: configWatcher.getConfig(),
+          account: adapter.account,
+          costToday: () => repository.costToday(),
+          recordUsage: (usage) => repository.recordUsage({ ...usage, account: adapter.account }),
+        });
+        return result.text;
+      },
+    }),
   });
   managementControllers.push(management);
   const interactionRuntime = createAccountInteractionRuntime({

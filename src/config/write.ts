@@ -4,6 +4,14 @@ import { dirname } from 'node:path';
 import yaml from 'yaml';
 import { AquariumConfigSchema, type AquariumConfig } from './schema.ts';
 
+let configWriteTail: Promise<void> = Promise.resolve();
+
+export function serializeConfigWrite<T>(task: () => Promise<T>): Promise<T> {
+  const result = configWriteTail.then(task, task);
+  configWriteTail = result.then(() => undefined, () => undefined);
+  return result;
+}
+
 export function writeConfig(config: AquariumConfig, configPath = 'data/config.yaml'): void {
   const result = AquariumConfigSchema.safeParse(config);
   if (!result.success) {

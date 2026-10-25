@@ -14,7 +14,8 @@ export interface AccountActivityRouterOptions<Timer> {
   clearTimer: (timer: Timer) => void;
   queue: SessionQueue;
   getConfig: () => AquariumConfig;
-  management: Pick<ManagementCommands, 'handle' | 'isMuted'>;
+  management: Pick<ManagementCommands, 'handle' | 'isMuted'>
+    & Partial<Pick<ManagementCommands, 'isManagementCommand'>>;
   isBotAccount?: (account: number, userId: number) => boolean;
   costToday: () => number;
   processMessage: (message: IncomingMessage, options: RoutedActivityOptions) => Promise<unknown>;
@@ -37,7 +38,8 @@ export function createAccountActivityRouter<Timer>(
       if (!canCallWithDailyBudget(config, 'reply', options.costToday())) return false;
       if (resolveMode(settings, options.now()) === 'mention_only') return false;
       if (messageTrigger(message, settings.nicknames) !== 'none') return false;
-      return !isManagementCommand(message, config.owner);
+      return !(options.management.isManagementCommand?.(message)
+        ?? isManagementCommand(message, config.owner));
     },
     async processMessage(message, routedOptions) {
       const isBot = options.isBotAccount?.(message.session.account, message.senderId) ?? false;

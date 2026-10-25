@@ -7,6 +7,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import type { ContactFriend, ContactGroup, ProtocolAdapter } from '../adapters/types.ts';
 import type { AquariumConfig } from '../config/schema.ts';
+import { serializeConfigWrite } from '../config/write.ts';
 import type { EnergySource } from '../core/mood/core.ts';
 import type { PersonaEnergyMultipliers } from '../persona/energy.ts';
 import type { PersonaMoodSettings } from '../persona/mood.ts';
@@ -126,12 +127,7 @@ export function createPanelApp(options: PanelServerOptions): Hono {
   const panelDist = options.panelDist ?? path.join(root, 'panel', 'dist');
   const now = options.now ?? Date.now;
   const app = new Hono();
-  let configWriteTail: Promise<void> = Promise.resolve();
-  const serializeConfigWrite = <T>(task: () => Promise<T>): Promise<T> => {
-    const result = configWriteTail.then(task, task);
-    configWriteTail = result.then(() => undefined, () => undefined);
-    return result;
-  };
+
   const adapterTimeoutMs = options.adapterTimeoutMs ?? DEFAULT_ADAPTER_TIMEOUT_MS;
   if (!Number.isSafeInteger(adapterTimeoutMs) || adapterTimeoutMs <= 0) {
     throw new TypeError('Panel adapter timeout must be a positive integer');

@@ -13,6 +13,14 @@ const rateSchema = z.object({
 }).strict();
 
 const modeSchema = z.enum(['mention_only', 'active', 'natural', 'busy']);
+export const SelfEditScopeSchema = z.enum([
+  'persona_behavior',
+  'persona_traits',
+  'persona_boundaries',
+  'behavior',
+  'session',
+]);
+export type SelfEditScope = z.infer<typeof SelfEditScopeSchema>;
 export const ScheduleTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
 const scheduleTimeSchema = ScheduleTimeSchema;
 const modeScheduleEntrySchema = z.object({
@@ -310,6 +318,16 @@ const profileSchema = z.object({
   },
 });
 
+const selfEditSchema = z.object({
+  enabled: z.boolean().default(true),
+  scopes: z.array(SelfEditScopeSchema).default([
+    'persona_behavior', 'persona_traits', 'persona_boundaries', 'behavior', 'session',
+  ]),
+}).strict().default({
+  enabled: true,
+  scopes: ['persona_behavior', 'persona_traits', 'persona_boundaries', 'behavior', 'session'],
+});
+
 export const AquariumConfigSchema = z.object({
   owner: z.number().int().nonnegative(),
   accounts: z.array(z.object({
@@ -328,6 +346,7 @@ export const AquariumConfigSchema = z.object({
   mood: moodSchema,
   affinity: affinitySchema,
   sleep: sleepSchema,
+  selfEdit: selfEditSchema,
   profile: profileSchema,
   defaults: sessionSettingsSchema,
   sessions: z.record(z.string(), sessionOverrideSchema),
