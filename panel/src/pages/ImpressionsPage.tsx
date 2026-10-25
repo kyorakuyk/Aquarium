@@ -66,6 +66,7 @@ export function ImpressionsPage() {
   const [tagClassificationRetrying, setTagClassificationRetrying] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [historyMode, setHistoryMode] = useState<HistoryImportMode>('incremental');
+  const [fineAnalysis, setFineAnalysis] = useState(false);
   const [historyTarget, setHistoryTarget] = useState<HistoryImportTarget>(200);
   const [historyJobId, setHistoryJobId] = useState('');
   const [historyJob, setHistoryJob] = useState<HistoryImportJobView>();
@@ -300,6 +301,7 @@ export function ImpressionsPage() {
       setHistoryJob(undefined);
     }
     setHistoryMode('incremental');
+    setFineAnalysis(false);
     setHistoryTarget(200);
     setHistoryError('');
     setHistoryDialogOpen(true);
@@ -314,6 +316,7 @@ export function ImpressionsPage() {
       const result = await post(`/api/impressions/${selectedId}/import`, {
         target: historyTarget,
         mode: historyMode,
+        fineAnalysis,
       }) as { id?: unknown };
       if (typeof result.id !== 'string') throw new Error('服务器没有返回导入任务编号');
       setHistoryJobId(result.id);
@@ -478,6 +481,10 @@ export function ImpressionsPage() {
               <span><strong>重新整理全部</strong><small>忽略水位线，整理本次拉取范围内的消息</small></span>
             </label>
           </fieldset>
+          <label className="history-import-fine-toggle">
+            <input type="checkbox" checked={fineAnalysis} onChange={(event) => setFineAnalysis(event.currentTarget.checked)} />
+            <span><strong>精细分析（oneoff）</strong><small>使用一次性模型槽，每 200 条消息一段；确认页显示近期费用估算，受单任务预算限制。</small></span>
+          </label>
           <label>
             <span>拉取条数</span>
             <select value={historyTarget} onChange={(event) => setHistoryTarget(Number(event.currentTarget.value) as HistoryImportTarget)}>
@@ -493,6 +500,7 @@ export function ImpressionsPage() {
           {historyJob.cancelRequested ? '；取消将在当前页完成后生效。' : '。'}
         </p>}
         {historyJob?.phase === 'awaiting_confirmation' && <p className="history-import-status" role="status">
+          {historyJob.fineAnalysis && '精细分析（oneoff，200 条/段）。'}
           {historyJob.mode === 'full' ? '待整理' : '新消息'} {historyJob.newMessages.toLocaleString('zh-CN')} 条，预计花费 <strong>{historyJob.estimatedCostCny === undefined ? '—' : `¥${historyJob.estimatedCostCny.toFixed(2)}`}</strong>。
           {historyJob.previewChanged ? '整理水位已变化，预估已更新，请再次确认。' : '确认后才会开始提取。'}
         </p>}

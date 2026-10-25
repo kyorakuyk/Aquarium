@@ -60,8 +60,11 @@ export type ExtractResult =
   | { ok: false; reason: 'budget' }
   | { ok: false; reason: 'extract_error'; error: unknown };
 
+export type ExtractModelSlot = 'extract' | 'oneoff';
+export type ExtractContextSize = 80 | 200;
+
 export type ExtractSlotCall = (
-  slot: 'extract',
+  slot: ExtractModelSlot,
   messages: OpenAI.ChatCompletionMessageParam[],
 ) => Promise<{ text: string }>;
 
@@ -109,8 +112,9 @@ export function buildExtractMessages(
   records: readonly MessageStorageRecord[],
   existing: ExistingTagsInput,
   template: ExtractTagsPromptTemplate,
+  maxContextMessages: ExtractContextSize = 80,
 ): OpenAI.ChatCompletionMessageParam[] {
-  const contextText = records.slice(-80).map((record) => {
+  const contextText = records.slice(-maxContextMessages).map((record) => {
     const speaker = record.isSelf
       ? `你(QQ ${record.senderId})`
       : `${JSON.stringify(record.senderName)}(QQ ${record.senderId})`;
@@ -258,11 +262,13 @@ export async function runExtract(
   existing: ExistingTagsInput,
   template: ExtractTagsPromptTemplate,
   callModel: ExtractSlotCall,
+  options: { slot?: ExtractModelSlot; maxContextMessages?: ExtractContextSize } = {},
 ): Promise<ExtractResult> {
-  const messages = buildExtractMessages(records, existing, template);
+  const messages = buildExtractMessages(records, existing, template, options.maxContextMessages);
+  const slot = options.slot ?? 'extract';
   let response: { text: string };
   try {
-    response = await callModel('extract', messages);
+    response = await callModel(slot, messages);
   } catch (error) {
     if (isBudgetExceededError(error)) return { ok: false, reason: 'budget' };
     return { ok: false, reason: 'extract_error', error };

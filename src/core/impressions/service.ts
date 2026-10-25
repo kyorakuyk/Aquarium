@@ -14,6 +14,8 @@ import {
   asObserveItem,
   isExternalLinkShareText,
   runExtract,
+  type ExtractContextSize,
+  type ExtractModelSlot,
   type ExtractContradictItem,
   type ExtractNewItem,
   type ExtractSubjectItems,
@@ -88,6 +90,9 @@ export interface ImpressionsService {
     records: MessageStorageRecord[];
     now: number;
     template: ExtractTagsPromptTemplate;
+    slot?: ExtractModelSlot;
+    maxContextMessages?: ExtractContextSize;
+    oneoffTaskCostCny?: () => number;
   }): Promise<ExtractSummary>;
   promptBlocks(input: {
     session: SessionKey;
@@ -420,10 +425,19 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     template: ExtractTagsPromptTemplate,
     records: MessageStorageRecord[] = options.repository.recentMessages(sessionKey, EXTRACT_WINDOW_MESSAGES),
     updateTagRun = true,
+    extractionOptions: {
+      slot?: ExtractModelSlot;
+      maxContextMessages?: ExtractContextSize;
+      oneoffTaskCostCny?: () => number;
+    } = {},
   ): Promise<ExtractSummary> {
     const account = session.account;
-    let attemptedProvider = config.slots.extract?.[0]?.provider ?? 'unknown';
-    let attemptedModel = config.slots.extract?.[0]?.model ?? 'unknown';
+    const modelSlot = extractionOptions.slot ?? 'extract';
+    if (modelSlot === 'oneoff' && !extractionOptions.oneoffTaskCostCny) {
+      throw new TypeError('oneoff 提取必须提供当前任务累计费用');
+    }
+    let attemptedProvider = config.slots[modelSlot]?.[0]?.provider ?? 'unknown';
+    let attemptedModel = config.slots[modelSlot]?.[0]?.model ?? 'unknown';
     const counters = {
       inserted: 0,
       observed: 0,
@@ -444,7 +458,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       return summary;
     };
 
-    if (!canCallWithDailyBudget(config, 'extract', options.repository.costToday())) {
+    if (modelSlot === 'extract' && !canCallWithDailyBudget(config, 'extract', options.repository.costToday())) {
       return finish('budget');
     }
 
@@ -488,11 +502,15 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
           : [],
       },
       template,
-      async (slot, messages) => {
-        const response = await callModel(slot, messages, {
+      async (calledSlot, messages) => {
+        const response = await callModel(calledSlot, messages, {
           config,
           account,
           costToday: () => options.repository.costToday(),
+          ...(calledSlot === 'oneoff' ? {
+            budgetScope: 'oneoff',
+            oneoffTaskCostCny: extractionOptions.oneoffTaskCostCny!,
+          } : {}),
           recordUsage: (usage) => {
             attemptedProvider = usage.provider;
             attemptedModel = usage.model === 'cli-model'
@@ -505,6 +523,12 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         });
         costCny += response.usage.costCny;
         return response;
+      },
+      {
+        slot: modelSlot,
+        ...(extractionOptions.maxContextMessages === undefined
+          ? {}
+          : { maxContextMessages: extractionOptions.maxContextMessages }),
       },
     );
 
@@ -526,7 +550,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
         const classified = classifyExtractFailure(result.error);
         failureReason = classified.type;
         const elapsedMs = Math.max(0, now() - startedAt);
-        const message = `印象提取失败：slot=extract provider=${attemptedProvider} model=${attemptedModel} durationMs=${elapsedMs} reason=${extractFailureLabel(classified)}`;
+        const message = `印象提取失败：slot=${modelSlot} provider=${attemptedProvider} model=${attemptedModel} durationMs=${elapsedMs} reason=${extractFailureLabel(classified)}`;
         try { options.onWarn?.(message); } catch { /* 日志回调失败不影响提取结果。 */ }
         if (classified.httpStatus !== undefined) failureHttpStatus = classified.httpStatus;
       } else {
@@ -574,7 +598,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       if (input.session.kind !== 'group') throw new RangeError('印象提取只支持群聊');
       const key = sessionId(input.session);
       if (!runState.isRunning(key)) throw new Error('extractWindowUnderSessionLock requires the group lock');
-      return runExtraction(options.getConfig(), input.session, key, input.now, input.template, input.records, false);
+      return runExtraction(options.getConfig(), input.session, key, input.now, input.template, input.records, false, input);
     },
 
     maybeExtract(input) {

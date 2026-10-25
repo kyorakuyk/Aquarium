@@ -443,6 +443,7 @@ export interface HistoryImportJobView {
   id: string;
   sessionId: string;
   mode: HistoryImportMode;
+  fineAnalysis: boolean;
   phase: HistoryImportPhase;
   fetched: number;
   inserted: number;

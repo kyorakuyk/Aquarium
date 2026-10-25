@@ -329,7 +329,11 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .history-import-modes input[type="radio"] { width: 18px; height: 18px; min-height: 18px; flex: none; margin: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; accent-color: var(--accent); }
 .history-import-modes label span { display: grid; gap: 2px; }
 .history-import-modes small { color: var(--ink-2); font-size: 12px; }
-.history-import-form > label { display: grid; gap: 6px; color: var(--ink-2); font-size: 12px; }
+.history-import-fine-toggle { display: flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 10px; cursor: pointer; }
+.history-import-fine-toggle input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; flex: none; margin: 0; padding: 0; border: 0; accent-color: var(--accent); }
+.history-import-fine-toggle span { display: grid; gap: 2px; }
+.history-import-fine-toggle small { color: var(--ink-2); font-size: 12px; line-height: 1.4; }
+.history-import-form > label:not(.history-import-fine-toggle) { display: grid; gap: 6px; color: var(--ink-2); font-size: 12px; }
 .history-import-form select { min-height: 44px; padding: 8px 10px; }
 .history-import-status, .history-import-error { margin: 16px 0; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .history-import-status.is-error, .history-import-error { border-color: var(--warn); background: var(--warn-soft); color: var(--warn-ink); }

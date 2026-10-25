@@ -55,6 +55,7 @@ const affinityPatchSchema = z.object({ value: z.number().int().min(-100).max(100
 const historyImportSchema = z.object({
   target: z.union([z.literal(200), z.literal(500), z.literal(1_000), z.literal(2_000)]),
   mode: z.enum(['incremental', 'full']).default('incremental'),
+  fineAnalysis: z.boolean().default(false),
 }).strict();
 
 function parseJsonBody<T>(body: unknown, schema: z.ZodType<T>): T | undefined {
@@ -346,7 +347,13 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
     if (runtime.getStatus() !== 'online') return context.json({ error: '小号不在线' }, 503);
     if (historyImports.isRunning(id)) return context.json({ error: '该群已有导入任务' }, 409);
 
-    const job = historyImports.start({ session: key, target: body.target, mode: body.mode, adapter: runtime.adapter });
+    const job = historyImports.start({
+      session: key,
+      target: body.target,
+      mode: body.mode,
+      fineAnalysis: body.fineAnalysis,
+      adapter: runtime.adapter,
+    });
     if (!job) return context.json({ error: '该群已有印象提取任务' }, 409);
     return context.json({ id: job.id }, 202);
   });

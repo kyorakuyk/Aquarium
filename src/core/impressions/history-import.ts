@@ -9,6 +9,7 @@ import { extractFailureLabel, type ExtractFailureType } from './extract-error.ts
 
 const PAGE_SIZE = 50;
 const WINDOW_SIZE = 80;
+const FINE_ANALYSIS_WINDOW_SIZE = 200;
 const PAGE_DELAY_MS = 500;
 const WINDOW_DELAY_MS = 1_000;
 const MAX_CONSECUTIVE_ERRORS = 3;
@@ -22,6 +23,7 @@ export interface HistoryImportJob {
   id: string;
   sessionId: string;
   mode: HistoryImportMode;
+  fineAnalysis: boolean;
   phase: HistoryImportPhase;
   fetched: number;
   inserted: number;
@@ -52,7 +54,7 @@ export interface HistoryImportServiceOptions {
 }
 
 export interface HistoryImportService {
-  start(input: { session: SessionKey; target: number; adapter: ProtocolAdapter; mode?: HistoryImportMode }): HistoryImportJob | undefined;
+  start(input: { session: SessionKey; target: number; adapter: ProtocolAdapter; mode?: HistoryImportMode; fineAnalysis?: boolean }): HistoryImportJob | undefined;
   confirm(jobId: string): HistoryImportJob | undefined;
   get(jobId: string): HistoryImportJob | undefined;
   cancel(jobId: string): HistoryImportJob | undefined;
@@ -125,8 +127,11 @@ export function createHistoryImportService(options: HistoryImportServiceOptions)
       : allRecords.filter((record) => waterline === null || record.time > waterline);
     job.waterlineTime = waterline;
     job.newMessages = runtime.records.length;
-    job.windowsTotal = Math.ceil(runtime.records.length / WINDOW_SIZE);
-    const averageCost = options.repository.recentExtractAverageCost();
+    const windowSize = job.fineAnalysis ? FINE_ANALYSIS_WINDOW_SIZE : WINDOW_SIZE;
+    job.windowsTotal = Math.ceil(runtime.records.length / windowSize);
+    const averageCost = job.fineAnalysis
+      ? options.repository.recentOneoffAverageCost()
+      : options.repository.recentExtractAverageCost();
     if (averageCost === undefined) delete job.estimatedCostCny;
     else job.estimatedCostCny = job.windowsTotal * averageCost;
     job.previewChanged = false;
@@ -217,9 +222,10 @@ export function createHistoryImportService(options: HistoryImportServiceOptions)
         return;
       }
 
+      const windowSize = job.fineAnalysis ? FINE_ANALYSIS_WINDOW_SIZE : WINDOW_SIZE;
       const windows: MessageStorageRecord[][] = [];
-      for (let start = 0; start < runtime.records.length; start += WINDOW_SIZE) {
-        windows.push(runtime.records.slice(start, start + WINDOW_SIZE));
+      for (let start = 0; start < runtime.records.length; start += windowSize) {
+        windows.push(runtime.records.slice(start, start + windowSize));
       }
       for (const [index, window] of windows.entries()) {
         if (job.cancelRequested) break;
@@ -232,6 +238,9 @@ export function createHistoryImportService(options: HistoryImportServiceOptions)
             records: window,
             now: now(),
             template: options.getTemplate(),
+            slot: job.fineAnalysis ? 'oneoff' : 'extract',
+            maxContextMessages: windowSize,
+            ...(job.fineAnalysis ? { oneoffTaskCostCny: () => job.costCny } : {}),
           });
           job.tagsInserted += summary.inserted;
           job.tagsObserved += summary.observed;
@@ -300,6 +309,7 @@ export function createHistoryImportService(options: HistoryImportServiceOptions)
         id: randomUUID(),
         sessionId: key,
         mode,
+        fineAnalysis: input.fineAnalysis === true,
         phase: 'fetching',
         fetched: 0,
         inserted: 0,

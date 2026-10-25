@@ -22,13 +22,13 @@ function message(messageId: string, time: number): IncomingMessage {
   };
 }
 
-test('history import API rejects offline accounts and duplicate jobs, then cancels after the in-flight page', async () => {
+test('history import API accepts fine-analysis selection and cancels after the in-flight page', async () => {
   await withPanel(async ({ app, repository, adapter, historyImports }) => {
     const endpoint = `/api/impressions/${sessionId(groupSession)}/import`;
     const request = () => app.request(endpoint, {
       method: 'POST',
       headers: jsonHeaders(),
-      body: JSON.stringify({ target: 200 }),
+      body: JSON.stringify({ target: 200, fineAnalysis: true }),
     });
 
     adapter.status = 'offline';
@@ -42,6 +42,9 @@ test('history import API rejects offline accounts and duplicate jobs, then cance
     const started = await request();
     assert.equal(started.status, 202);
     const { id } = await started.json() as { id: string };
+
+    const progress = await app.request(`/api/impressions/import/${id}`, { headers: authHeaders() });
+    assert.equal((await progress.json() as { fineAnalysis: boolean }).fineAnalysis, true);
 
     const duplicate = await request();
     assert.equal(duplicate.status, 409);
@@ -92,10 +95,11 @@ test('未启用群可以拉取并整理历史，但仍保持未启用', async ()
     await historyImports.idle();
 
     const previewResponse = await app.request(`/api/impressions/import/${jobId}`, { headers: authHeaders() });
-    const preview = await previewResponse.json() as { phase: string; mode: string; newMessages: number; estimatedCostCny?: number };
+    const preview = await previewResponse.json() as { phase: string; mode: string; fineAnalysis: boolean; newMessages: number; estimatedCostCny?: number };
     assert.equal(previewResponse.status, 200);
     assert.equal(preview.phase, 'awaiting_confirmation');
     assert.equal(preview.mode, 'incremental');
+    assert.equal(preview.fineAnalysis, false);
     assert.equal(preview.newMessages, 2);
     assert.equal(preview.estimatedCostCny, undefined);
     assert.equal(repository.getTagRun(account, id), undefined);

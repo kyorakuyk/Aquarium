@@ -397,3 +397,116 @@ test('an unconfirmed preview expires and releases the session after its bounded 
     assert.equal(imports.confirm(started.id), undefined);
   });
 });
+
+test('精细分析用 oneoff 槽展示预估，并只保存窗口内真实消息出处', async () => {
+  await withRepository(async (repository) => {
+    const baseConfig = makeConfig({ nicknames: [] });
+    const config = { ...baseConfig, budget: { ...baseConfig.budget, dailyCny: 0 } };
+    const messages = Array.from({ length: 400 }, (_, index) => message(index));
+    repository.recordUsage({
+      time: 1,
+      account: groupSession.account,
+      slot: 'oneoff',
+      provider: 'fixture',
+      model: 'fixture-model',
+      inputTokens: 20,
+      cachedTokens: 0,
+      outputTokens: 10,
+      costCny: 0.07,
+      latencyMs: 1,
+      ok: true,
+    });
+    const adapter = new PagedAdapter();
+    adapter.historyPages = [
+      messages.slice(350), messages.slice(300, 350), messages.slice(250, 300), messages.slice(200, 250),
+      messages.slice(150, 200), messages.slice(100, 150), messages.slice(50, 100), messages.slice(0, 50),
+    ];
+    const calls: Array<{ slot: string; prompt: string; budgetScope?: string; taskCost?: number }> = [];
+    const impressions = createImpressionsService({
+      repository,
+      getConfig: () => config,
+      callModel: async (slot, prompt, callOptions) => {
+        calls.push({
+          slot,
+          prompt: prompt.map(({ content }) => String(content)).join('\n'),
+          budgetScope: callOptions.budgetScope,
+          taskCost: callOptions.oneoffTaskCostCny?.(),
+        });
+        callOptions.recordUsage({
+          time: 2,
+          account: callOptions.account,
+          slot: 'oneoff',
+          provider: 'fixture',
+          model: 'fixture-model',
+          inputTokens: 20,
+          cachedTokens: 0,
+          outputTokens: 10,
+          costCny: 0.05,
+          latencyMs: 1,
+          ok: true,
+        });
+        return {
+          text: JSON.stringify({
+            group: {
+              observe: [],
+              new: [
+                {
+                  text: calls.length === 1 ? '真实兴趣一' : '真实兴趣二',
+                  messageId: calls.length === 1 ? 'm3-199' : 'm3-399',
+                  category: 'topic', subject: null, polarity: null, origin: 'inferred', sensitive: false,
+                },
+                { text: '虚构出处', messageId: 'fabricated-id', category: 'topic', subject: null, polarity: null, origin: 'inferred', sensitive: false },
+              ],
+              contradict: [],
+            },
+            members: [],
+          }),
+          provider: 'fixture',
+          model: 'fixture-model',
+          usage: { inputTokens: 20, cachedTokens: 0, outputTokens: 10, costCny: 0.05 },
+        };
+      },
+    });
+    const imports = createHistoryImportService({
+      repository,
+      getConfig: () => config,
+      impressionsService: impressions,
+      getTemplate: () => template,
+      wait: async () => {},
+    });
+
+    const started = imports.start({ session: groupSession, target: 500, adapter, fineAnalysis: true });
+    assert.ok(started);
+    await imports.idle();
+    const preview = imports.get(started.id);
+    assert.equal(preview?.phase, 'awaiting_confirmation');
+    assert.equal(preview?.fineAnalysis, true);
+    assert.equal(preview?.fetched, 400);
+    assert.equal(preview?.windowsTotal, 2);
+    assert.equal(preview?.estimatedCostCny, 0.14);
+
+    assert.equal(imports.confirm(started.id)?.phase, 'extracting');
+    await imports.idle();
+    const completed = imports.get(started.id);
+    assert.equal(completed?.phase, 'done');
+    assert.equal(completed?.windowsDone, 2);
+    assert.equal(completed?.windowsFailed, 0);
+    assert.equal(completed?.costCny, 0.1);
+    assert.deepEqual(calls.map(({ slot, budgetScope, taskCost }) => ({ slot, budgetScope, taskCost })), [
+      { slot: 'oneoff', budgetScope: 'oneoff', taskCost: 0 },
+      { slot: 'oneoff', budgetScope: 'oneoff', taskCost: 0.05 },
+    ]);
+    assert.ok(calls[0]?.prompt.includes('#m3-000'));
+    assert.ok(calls[0]?.prompt.includes('#m3-199'));
+    assert.equal(calls[0]?.prompt.includes('#m3-200'), false);
+    assert.ok(calls[1]?.prompt.includes('#m3-200'));
+    assert.ok(calls[1]?.prompt.includes('#m3-399'));
+    const tags = repository.listTagsForSubject(groupSession.account, sessionId(groupSession), null);
+    const tagEvidence = tags.map((tag) => ({ text: tag.text, messageId: tag.evidence[0]?.messageId }));
+    tagEvidence.sort((first, second) => (first.messageId ?? '').localeCompare(second.messageId ?? ''));
+    assert.deepEqual(tagEvidence, [
+      { text: '真实兴趣一', messageId: 'm3-199' },
+      { text: '真实兴趣二', messageId: 'm3-399' },
+    ]);
+  });
+});
