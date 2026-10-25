@@ -7,9 +7,12 @@ function rampColor(percent: number): string {
   return `color-mix(in srgb, #1C5F5A ${percent}%, #FFFFFF)`;
 }
 
-function marginRampPercent(margin: number): number {
-  const bounded = Number.isFinite(margin) ? Math.max(0, Math.min(0.4, margin)) : 0;
-  return Number((7 + (bounded / 0.4) * 80).toFixed(1));
+// 按当前矩阵里最小到最大的门槛拉开色阶，深浅直接对应系数大小
+function marginRampPercent(margin: number, low: number, high: number): number {
+  if (!Number.isFinite(margin)) return 7;
+  const span = high - low;
+  const t = span > 1e-6 ? (Math.max(low, Math.min(high, margin)) - low) / span : 0.5;
+  return Number((7 + t * 80).toFixed(1));
 }
 
 export function PersonaMoodEdgeMatrix({
@@ -26,6 +29,12 @@ export function PersonaMoodEdgeMatrix({
   const [pointerHovered, setPointerHovered] = useState<{ from: string; to: string } | null>(null);
   const [focused, setFocused] = useState<{ from: string; to: string } | null>(null);
   const hovered = pointerHovered ?? focused;
+  const margins = settings.emotions.flatMap((from) => settings.emotions
+    .filter((to) => to !== from)
+    .map((to) => resolveMoodEdge(settings, from, to).margin)
+    .filter(Number.isFinite));
+  const low = margins.length ? Math.min(...margins) : 0;
+  const high = margins.length ? Math.max(...margins) : 0.4;
   const edgeTitle = (from: string, to: string) => {
     const edge = resolveMoodEdge(settings, from, to);
     return `${from} → ${to} · 门槛 ${edge.margin.toFixed(2)} · 停留 ${edge.dwell} 分钟 · ${edge.jump ? '允许直接切换' : '不可直接切换'} · ${edge.modified ? '已修改' : '默认值'}`;
@@ -71,7 +80,7 @@ export function PersonaMoodEdgeMatrix({
                     <button
                       className={className}
                       type="button"
-                      style={{ backgroundColor: rampColor(marginRampPercent(edge.margin)) }}
+                      style={{ backgroundColor: rampColor(marginRampPercent(edge.margin, low, high)) }}
                       title={title}
                       aria-label={title}
                       aria-pressed={selected}
@@ -91,11 +100,11 @@ export function PersonaMoodEdgeMatrix({
         </tbody>
       </table>
       <div className="persona-mood-matrix-legend" role="img" aria-label="门槛从易到难">
-        <span>易</span>
-        {[7, 25, 45, 65, 87].map((percent, index) => (
+        <span>易 {low.toFixed(2)}</span>
+        {[7, 27, 47, 67, 87].map((percent, index) => (
           <i key={percent} className={`is-step-${index + 1}`} style={{ backgroundColor: rampColor(percent) }} aria-hidden="true" />
         ))}
-        <span>难</span>
+        <span>{high.toFixed(2)} 难</span>
       </div>
       <p className="persona-mood-matrix-hint">斜线表示不可直接切换，右上角小点表示已修改。</p>
     </div>

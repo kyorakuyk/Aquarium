@@ -154,12 +154,12 @@ test('persona mood editor renders its five planned cards', async () => {
       .map((match) => match[1] ?? '');
     assert.equal(matrixCellBodies.length, DEFAULT_PERSONA_MOOD.emotions.length * (DEFAULT_PERSONA_MOOD.emotions.length - 1));
     assert.ok(matrixCellBodies.every((body) => !/\d/u.test(body.replace(/<i[^>]*><\/i>/gu, ''))), '矩阵格子不直接显示数字');
-    assert.match(moodStyles, /\.persona-mood-matrix-cell\s*\{[^}]*width:\s*20px/su);
+    assert.match(moodStyles, /\.persona-mood-matrix-cell\s*\{[^}]*width:\s*26px/su);
     assert.match(moodStyles, /\.persona-mood-matrix\s*\{[^}]*width:\s*max-content/su);
     assert.match(moodStyles, /\.persona-mood-matrix-scroll\s*\{[^}]*overflow-x:\s*auto[^}]*overflow-y:\s*hidden/su);
     assert.match(moodStyles, /\.persona-mood-matrix thead th:not\(:first-child\)[^{]*\{[^}]*writing-mode:\s*vertical-rl/su);
     assert.match(moodStyles, /\.persona-mood-matrix th\.is-hovered/u);
-    assert.match(moodStyles, /\.persona-mood-matrix td\s*\{[^}]*height:\s*20px/su);
+    assert.match(moodStyles, /\.persona-mood-matrix td\s*\{[^}]*height:\s*26px/su);
     assert.match(moodStyles, /persona-mood-edge-hit\s*\{[^}]*stroke-width:\s*12/su);
     assert.match(html, /易/u);
     assert.match(html, /难/u);

@@ -93,25 +93,25 @@
 .persona-mood-coordinate-readout > span { font-family: var(--mono); }
 .persona-mood-empty-edge, .persona-mood-preview-source, .persona-mood-global-note { margin: 0; color: var(--muted); font-size: 11px; }
 
-/* matrix: 20px cells, rows are cell + 2px spacing */
+/* matrix: 26px square cells, centered; rows are cell + 2px spacing */
 .persona-mood-matrix-scroll { max-width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; }
-.persona-mood-matrix { width: max-content; border-collapse: separate; border-spacing: 2px; font-size: 10px; }
-.persona-mood-matrix th { padding: 0 4px 0 0; background: transparent; color: #5A5E65; font-weight: 400; line-height: 20px; }
-.persona-mood-matrix td { width: 20px; height: 20px; padding: 0; line-height: 0; }
-.persona-mood-matrix tbody th { position: sticky; left: 0; z-index: 1; height: 20px; text-align: right; white-space: nowrap; background: var(--surface); }
+.persona-mood-matrix { width: max-content; margin: 0 auto; border-collapse: separate; border-spacing: 2px; font-size: 11px; }
+.persona-mood-matrix th { padding: 0 4px 0 0; background: transparent; color: #5A5E65; font-weight: 400; line-height: 26px; }
+.persona-mood-matrix td { width: 26px; height: 26px; padding: 0; line-height: 0; }
+.persona-mood-matrix tbody th { position: sticky; left: 0; z-index: 1; height: 26px; text-align: right; white-space: nowrap; background: var(--surface); }
 .persona-mood-matrix thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
 .persona-mood-matrix thead th:first-child { left: 0; z-index: 2; white-space: nowrap; text-align: right; font-size: 9px; }
-.persona-mood-matrix thead th:not(:first-child) { padding: 0 0 3px; width: 20px; line-height: 20px; writing-mode: vertical-rl; text-orientation: mixed; text-align: end; white-space: nowrap; }
+.persona-mood-matrix thead th:not(:first-child) { padding: 0 0 3px; width: 26px; line-height: 26px; writing-mode: vertical-rl; text-orientation: mixed; text-align: end; white-space: nowrap; }
 .persona-mood-matrix th.is-hovered { color: var(--mood-teal); font-weight: 700; }
-.persona-mood-matrix-cell { position: relative; display: block; box-sizing: border-box; width: 20px; min-width: 20px; height: 20px; min-height: 20px; padding: 0; border: 0; border-radius: 3px; background-color: var(--surface); cursor: pointer; }
+.persona-mood-matrix-cell { position: relative; display: block; box-sizing: border-box; width: 26px; min-width: 26px; height: 26px; min-height: 26px; padding: 0; border: 0; border-radius: 3px; background-color: var(--surface); cursor: pointer; }
 .persona-mood-matrix-cell:hover { outline: 1px solid var(--ink-2); outline-offset: 1px; }
 .persona-mood-matrix-cell.is-blocked { background-image: repeating-linear-gradient(135deg, transparent 0 3px, rgba(162, 62, 72, .55) 3px 4.5px); }
 .persona-mood-matrix-cell.is-selected, .persona-mood-matrix-cell:focus-visible { outline: 2px solid var(--mood-orange); outline-offset: 1px; }
 .persona-mood-matrix-cell i { position: absolute; top: 2px; right: 2px; width: 4px; height: 4px; border-radius: 50%; background: var(--mood-orange); }
-.persona-mood-matrix-diagonal { box-sizing: border-box; width: 20px; height: 20px; border-radius: 3px; background: #E4E5E2; }
-.persona-mood-matrix-legend { display: flex; align-items: center; gap: 5px; margin-top: 6px; color: var(--muted); font-size: 11px; }
+.persona-mood-matrix-diagonal { box-sizing: border-box; width: 26px; height: 26px; border-radius: 3px; background: #E4E5E2; }
+.persona-mood-matrix-legend { display: flex; justify-content: center; align-items: center; gap: 5px; margin-top: 6px; color: var(--muted); font-size: 11px; }
 .persona-mood-matrix-legend i { display: block; width: 18px; height: 8px; border-radius: 2px; }
-.persona-mood-matrix-hint { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+.persona-mood-matrix-hint { margin: 4px 0 0; text-align: center; color: var(--muted); font-size: 11px; }
 .persona-mood-preview-example { margin: 2px 0 0; padding: 7px 12px; border: 1px solid var(--line); border-radius: 10px; color: #4A4E55; font-size: 12px; }
 .persona-mood-preview-example strong { color: var(--mood-teal); }
 
