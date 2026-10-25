@@ -97,8 +97,8 @@ export function MemberProfileCard({ sessionId, member, refreshVersion, busy, rel
       targets={relationTargets}
       onUpdated={onIdentityUpdated}
     />
-    {member.counterpartClaims.length > 0 && <div className="member-counterpart-claims" aria-label="原作对象待认领">
-      {member.counterpartClaims.map((claim) => (
+    {(member.counterpartClaims ?? []).length > 0 && <div className="member-counterpart-claims" aria-label="原作对象待认领">
+      {(member.counterpartClaims ?? []).map((claim) => (
         <div className="member-counterpart-claim" key={`${claim.account}:${claim.personaId}:${claim.counterpartName}:${claim.userId}`}>
           <div className="member-counterpart-claim-copy">
             <span className="mono">QQ {claim.userId}</span>
