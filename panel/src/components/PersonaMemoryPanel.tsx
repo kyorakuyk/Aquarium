@@ -8,14 +8,6 @@ interface PersonaMemoryAccount {
   name: string;
 }
 
-interface PersonaMemoView {
-  id: number;
-  senderName: string;
-  text: string;
-  createdAt: number;
-  processedCycleKey: string | null;
-}
-
 interface PersonaDiaryView {
   id: number;
   account: number;
@@ -28,7 +20,8 @@ interface PersonaDiaryView {
 
 interface PersonaMemoryView {
   account: number;
-  memos: PersonaMemoView[];
+  pendingMessageCount: number;
+  openSegmentCount: number;
   diaries: PersonaDiaryView[];
 }
 
@@ -122,23 +115,13 @@ export function PersonaMemoryPanel() {
       {!loading && selectedAccount && visibleMemory && <>
         <section className="persona-memory-section" aria-labelledby="persona-memos-title">
           <div className="persona-memory-section-heading">
-            <h3 id="persona-memos-title">Memo</h3>
-            <span className="muted">最近 {visibleMemory.memos.length} 条</span>
+            <h3 id="persona-memos-title">暂存区</h3>
           </div>
-          {visibleMemory.memos.length === 0 ? <p className="muted">还没有暂存的 memo。</p> : (
-            <ul className="persona-memory-list">
-              {visibleMemory.memos.map((memo) => (
-                <li className="persona-memory-entry" key={memo.id}>
-                  <div className="persona-memory-meta">
-                    <strong>{memo.senderName}</strong>
-                    <time dateTime={new Date(memo.createdAt).toISOString()}>{formatTime(memo.createdAt)}</time>
-                    <span>{memo.processedCycleKey ? `已整理 · ${memo.processedCycleKey}` : '待夜间整理'}</span>
-                  </div>
-                  <p>{memo.text}</p>
-                </li>
-              ))}
-            </ul>
-          )}
+          <p className="persona-memory-staging-summary">
+            暂存 <strong>{visibleMemory.pendingMessageCount}</strong> 条，
+            <strong>{visibleMemory.openSegmentCount}</strong> 段进行中
+          </p>
+          {visibleMemory.pendingMessageCount === 0 && <p className="muted">暂存区当前为空。</p>}
         </section>
         <section className="persona-memory-section" aria-labelledby="persona-diaries-title">
           <div className="persona-memory-section-heading">

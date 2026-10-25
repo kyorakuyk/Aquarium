@@ -9,9 +9,12 @@ import { openDatabase } from '../src/store/db.ts';
 import { migrations } from '../src/store/migrations/index.ts';
 import { createRepository } from '../src/store/repository.ts';
 
-test('migration versions start at one and are continuous and unique', () => {
+test('migration versions start at one, increase uniquely, and preserve the reserved v36 gap', () => {
   const versions = migrations.map(({ version }) => version);
-  assert.deepEqual(versions, Array.from({ length: versions.length }, (_, index) => index + 1));
+  assert.deepEqual(versions.filter((version) => version < 36), Array.from({ length: 35 }, (_, index) => index + 1));
+  const postReservedGap = versions.filter((version) => version >= 36);
+  assert.deepEqual(postReservedGap, Array.from({ length: postReservedGap.length }, (_, index) => index + 37));
+  assert.ok(versions.every((version, index) => index === 0 || version > (versions[index - 1] ?? 0)));
   assert.equal(new Set(versions).size, versions.length);
   assert.ok(migrations.every(({ up }) => typeof up === 'function'));
 });

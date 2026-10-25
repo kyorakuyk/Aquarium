@@ -31,16 +31,16 @@ interface MemoryRepoTestApi {
   setPersonaDiaryVisibility(account: number, id: number, visibleToAni: boolean): boolean;
 }
 
-test('persona memory migration creates account-scoped memo and diary tables', () => {
+test('persona memory migrations create account-scoped cursor, memo, run, and diary tables', () => {
   const database = openDatabase(':memory:');
   try {
     const tables = database.prepare(`
       SELECT name FROM sqlite_master
-      WHERE type = 'table' AND name IN ('persona_memos', 'persona_diaries', 'persona_memory_runs')
+      WHERE type = 'table' AND name IN ('memory_cursors', 'persona_memos', 'persona_diaries', 'persona_memory_runs')
       ORDER BY name
     `).all() as Array<{ name: string }>;
     assert.deepEqual(tables.map(({ name }) => name), [
-      'persona_diaries', 'persona_memory_runs', 'persona_memos',
+      'memory_cursors', 'persona_diaries', 'persona_memory_runs', 'persona_memos',
     ]);
   } finally {
     database.close();

@@ -1,7 +1,9 @@
 import type { Hono } from 'hono';
 import { z } from 'zod';
 import type { AquariumConfig } from '../config/schema.ts';
+import { parseSessionId } from '../core/conversation/sessions.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
+import { memorySilenceMs } from '../core/persona-memory-segments.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import type { PanelAccountRuntime } from './types.ts';
 
@@ -9,6 +11,7 @@ export interface PersonaMemoryRouteOptions {
   repository: StoreRepository;
   getConfig: () => AquariumConfig;
   accounts: () => PanelAccountRuntime[];
+  now?: () => number;
 }
 
 const visibilitySchema = z.object({ visibleToAni: z.boolean() }).strict();
@@ -43,6 +46,17 @@ export function registerPersonaMemoryRoutes(app: Hono, options: PersonaMemoryRou
   app.get('/api/persona-memory', (context) => {
     const account = activeAccount(options, context.req.query('account'));
     if (account === undefined) return context.json({ error: 'Unknown account' }, 400);
+    const cursors = options.repository.listPersonaMemoryCursorSummaries(account);
+    const pendingMessageCount = cursors.reduce((total, cursor) => total + cursor.pendingMessageCount, 0);
+    const now = options.now?.() ?? Date.now();
+    const openSegmentCount = cursors.filter((cursor) => {
+      if (cursor.openSegmentStart === null || cursor.pendingMessageCount === 0 || cursor.latestPendingMessageTime === null) {
+        return false;
+      }
+      const session = parseSessionId(cursor.sessionId);
+      return session?.account === account
+        && now - cursor.latestPendingMessageTime < memorySilenceMs(session.kind);
+    }).length;
     const memos = options.repository.listPersonaMemos(account, MEMORY_VIEW_LIMIT).map((memo) => ({
       id: memo.id,
       senderName: safeMemoText(memo.senderName),
@@ -59,7 +73,7 @@ export function registerPersonaMemoryRoutes(app: Hono, options: PersonaMemoryRou
       sourceCount: diary.sourceCount,
       createdAt: diary.createdAt,
     }));
-    return context.json({ account, memos, diaries });
+    return context.json({ account, pendingMessageCount, openSegmentCount, memos, diaries });
   });
 
   app.patch('/api/persona-memory/diaries/:id', async (context) => {

@@ -51,6 +51,7 @@ test('openDatabase 开启 WAL 并创建当前 schema 数据表', () => {
       'kin_groups',
       'kin_tag_states',
       'member_summaries',
+      'memory_cursors',
       'messages',
       'mood_events',
       'mood_state',

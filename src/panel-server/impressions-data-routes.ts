@@ -189,6 +189,7 @@ export function registerImpressionsDataRoutes(app: Hono, options: ImpressionsDat
     repository: options.repository,
     getConfig: options.getConfig,
     accounts: options.accounts,
+    now: options.now,
   });
   registerViewImpressionsRoutes(app, {
     repository: options.repository,

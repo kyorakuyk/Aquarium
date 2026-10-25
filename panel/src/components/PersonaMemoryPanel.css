@@ -10,6 +10,8 @@
 .persona-memory-entry > p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .persona-memory-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 9px 14px; color: var(--muted); font-size: 12px; }
 .persona-memory-meta strong { color: var(--ink); }
+.persona-memory-staging-summary { margin: 0; font-size: 15px; }
+.persona-memory-staging-summary strong { color: var(--ink); font-family: var(--mono); }
 .persona-memory-meta time { font-family: var(--mono); }
 .persona-memory-visibility { grid-auto-flow: column; align-items: center; gap: 8px; margin-left: auto; }
 .persona-memory-diary-text { line-height: 1.65; }

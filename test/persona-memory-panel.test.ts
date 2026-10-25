@@ -24,6 +24,23 @@ test('persona memory read is authenticated, account-scoped, and redacts stored t
       text: `今天的记录 ${canary}`,
       createdAt: now,
     });
+    const pendingSessionId = `${account}:private:42`;
+    repository.saveMessage({
+      sessionId: pendingSessionId,
+      messageId: 'panel-pending-message',
+      senderId: 42,
+      senderName: '朋友',
+      isSelf: false,
+      plainText: '暂存区计数 fixture',
+      segments: [],
+      time: now,
+    });
+    repository.savePersonaMemoryCursor({
+      account,
+      sessionId: pendingSessionId,
+      organizedUntilMessageTime: null,
+      openSegmentStart: now,
+    });
     repository.insertPersonaDiary({
       account,
       cycleKey: '2026-10-22',
@@ -47,10 +64,14 @@ test('persona memory read is authenticated, account-scoped, and redacts stored t
     assert.equal(response.status, 200);
     const body = await response.json() as {
       account: number;
+      pendingMessageCount: number;
+      openSegmentCount: number;
       memos: Array<{ senderName: string; text: string }>;
       diaries: Array<{ text: string; visibleToAni: boolean }>;
     };
     assert.equal(body.account, account);
+    assert.equal(body.pendingMessageCount, 1);
+    assert.equal(body.openSegmentCount, 1);
     assert.equal(body.memos.length, 1);
     assert.equal(body.memos[0]?.senderName, '[敏感内容已隐藏]');
     assert.ok(body.memos[0]?.text.includes('[敏感内容已隐藏]'));

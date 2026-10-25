@@ -52,8 +52,9 @@ function applyMigrations(database: DatabaseSync, context: MigrationContext): voi
   if (typeof currentVersion !== 'number' || !Number.isSafeInteger(currentVersion) || currentVersion < 0) {
     throw new Error('数据库 schema_version 无效');
   }
-  if (currentVersion > migrations.length) {
-    throw new Error(`数据库版本 ${currentVersion} 高于当前支持版本 ${migrations.length}`);
+  const latestVersion = migrations.at(-1)?.version ?? 0;
+  if (currentVersion > latestVersion) {
+    throw new Error(`数据库版本 ${currentVersion} 高于当前支持版本 ${latestVersion}`);
   }
 
   for (const migration of migrations) {

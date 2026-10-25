@@ -6,6 +6,9 @@ import { sessionId, type IncomingMessage, type SessionKey } from './shared/event
 import { parseSessionId } from './conversation/sessions.ts';
 import { redactSensitiveText } from './impressions/sensitive-text.ts';
 import { createRecentDiaryBlock, DIARY_ENTRY_LIMIT } from './persona-memory-prompt.ts';
+import { segmentMemoryMessages } from './persona-memory-segments.ts';
+
+export { segmentMemoryMessages } from './persona-memory-segments.ts';
 
 export type PersonaMemoryProcessStatus = 'done' | 'budget' | 'failed';
 
@@ -98,8 +101,9 @@ export function createPersonaMemoryService(options: PersonaMemoryServiceOptions)
       const text = truncateText(redactSensitiveText(message.plainText.trim()), 2_000);
       const senderName = truncateText(redactSensitiveText(message.senderName.trim() || String(message.senderId)), 120);
       if (text.length === 0 || !Number.isSafeInteger(message.time) || message.time < 0) return false;
+      let inserted = false;
       try {
-        return options.repository.insertPersonaMemo({
+        inserted = options.repository.insertPersonaMemo({
           account: message.session.account,
           sessionId: sessionId(message.session),
           messageId: message.messageId,
@@ -113,6 +117,27 @@ export function createPersonaMemoryService(options: PersonaMemoryServiceOptions)
         reportError(error, message.session.account);
         return false;
       }
+      try {
+        const targetSessionId = sessionId(message.session);
+        const cursor = options.repository.personaMemoryCursor(message.session.account, targetSessionId);
+        const pendingMessages = options.repository.listPersonaMemoryPendingMessages(message.session.account, targetSessionId);
+        const segments = segmentMemoryMessages({
+          sessionKind: message.session.kind,
+          messages: pendingMessages,
+          now: message.time,
+        });
+        const openSegment = segments.findLast((segment) => !segment.closed);
+        options.repository.savePersonaMemoryCursor({
+          account: message.session.account,
+          sessionId: targetSessionId,
+          organizedUntilMessageTime: cursor?.organizedUntilMessageTime ?? null,
+          openSegmentStart: openSegment?.startAt ?? null,
+        });
+      } catch (error) {
+        reportError(error, message.session.account);
+        return false;
+      }
+      return inserted;
     },
 
     async organizeAtSleep(input) {

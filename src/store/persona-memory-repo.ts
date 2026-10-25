@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { createMemoryCursorRepository, type PersonaMemoryCursorRepository } from './memory-cursor-repo.ts';
 
 export interface PersonaMemoInput {
   account: number;
@@ -67,7 +68,7 @@ export interface PersonaDiaryRecord extends Required<PersonaDiaryInput> {
   id: number;
 }
 
-export interface PersonaMemoryRepository {
+export interface PersonaMemoryRepository extends PersonaMemoryCursorRepository {
   insertPersonaMemo(memo: PersonaMemoInput): boolean;
   listPersonaMemos(account: number, limit: number): PersonaMemoRecord[];
   listPendingPersonaMemos(account: number, limit: number): PersonaMemoRecord[];
@@ -208,6 +209,7 @@ function memoryRunRecord(row: Record<string, unknown>): PersonaMemoryRunRecord {
 }
 
 export function createPersonaMemoryRepository(database: DatabaseSync): PersonaMemoryRepository {
+  const memoryCursors = createMemoryCursorRepository(database);
   const insertMemo = database.prepare(`
     INSERT OR IGNORE INTO persona_memos
       (account, session_id, message_id, sender_id, sender_name, is_self, text, created_at)
@@ -280,6 +282,7 @@ export function createPersonaMemoryRepository(database: DatabaseSync): PersonaMe
   );
 
   return {
+    ...memoryCursors,
     insertPersonaMemo(memo) {
       if (!validId(memo.account) || !validId(memo.senderId)
         || typeof memo.sessionId !== 'string' || memo.sessionId.length < 1 || memo.sessionId.length > 512
