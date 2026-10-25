@@ -28,6 +28,8 @@ export interface PanelStatus {
 }
 
 export type SessionMode = 'mention_only' | 'active' | 'natural' | 'busy';
+export type InnerVoiceMode = 'full' | 'light' | 'hidden';
+export type InnerVoiceSetting = InnerVoiceMode | 'inherit';
 
 export interface ModeScheduleEntry {
   from: string;
@@ -36,6 +38,7 @@ export interface ModeScheduleEntry {
 }
 
 export interface SessionSettings {
+  innerVoice?: InnerVoiceMode | null;
   mode: SessionMode;
   modeSchedule: ModeScheduleEntry[];
   proactiveCooldownSec: number;
@@ -119,6 +122,8 @@ export interface DecisionView {
   sessionName: string;
   messageId: string;
   messageText: string | null;
+  replyText: string | null;
+  innerVoice: string[];
   costCny: number | null;
   replied: boolean;
   reason: string;

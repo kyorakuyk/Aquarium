@@ -30,8 +30,15 @@ test('情绪评估解析恰好六字段并使用独立范围', () => {
 test('评估提示的范围数字与解析常量一致', () => {
   const messages = buildAppraiseMessages([], template);
   const system = String(messages[0]?.content);
+  const user = String(messages[1]?.content);
   assert.match(system, /valence ±0\.3/u);
   assert.match(system, /reserve ±0\.15/u);
   assert.match(system, /arousal ±0\.3/u);
   assert.match(system, /dominance ±0\.3/u);
+  assert.doesNotMatch(user, /未说出口的心声/u);
+
+  const withInnerVoice = buildAppraiseMessages([], template, '她其实很在意。');
+  const userWithInnerVoice = String(withInnerVoice[1]?.content);
+  assert.match(userWithInnerVoice, /未说出口的心声/u);
+  assert.match(userWithInnerVoice, /"她其实很在意。"/u);
 });

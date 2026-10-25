@@ -382,12 +382,20 @@ test('full 模式只单独发送一个心声，且不占 spoken 的三条上限'
   const firstAside = '（她紧张得说不出话，只能一直盯着屏幕）';
   const extraAside = '（第二段心声保留但不再单独发送）';
   const sentTexts: string[] = [];
+  const savedMessages: Array<{ messageId: string; plainText: string }> = [];
+  const savedInnerVoice: Array<{ messageId: string; values: readonly string[]; time: number }> = [];
   ctx.options.adapter.send = async (_key, segments) => {
     const text = segments.find((segment) => segment.type === 'text');
     if (text?.type === 'text') sentTexts.push(text.text);
     return { messageId: `step-sent-${sentTexts.length}` };
   };
-  ctx.options.repository.saveMessage = () => true;
+  ctx.options.repository.saveMessage = (message) => {
+    savedMessages.push({ messageId: message.messageId, plainText: message.plainText });
+    return true;
+  };
+  ctx.options.repository.saveInnerVoiceForMessage = (_sessionId, messageId, values, time) => {
+    savedInnerVoice.push({ messageId, values, time });
+  };
   ctx.wait = async () => {};
   ctx.state.nickname = 'Bot';
   ctx.state.innerVoiceMode = 'full';
@@ -408,6 +416,12 @@ test('full 模式只单独发送一个心声，且不占 spoken 的三条上限'
   assert.deepEqual(sentTexts, ['第一段。', '第二段。', '第三段。', firstAside]);
   assert.deepEqual(ctx.state.parts, sentTexts);
   assert.deepEqual(ctx.state.innerVoice, [firstAside, extraAside]);
+  assert.equal(savedMessages[0]?.plainText, '第一段。');
+  assert.deepEqual(savedInnerVoice, [{
+    messageId: 'step-sent-1',
+    values: [firstAside, extraAside],
+    time: 1_800_000_000_000,
+  }]);
 });
 
 test('full 模式 replay 把心声作为单独一条计入预览但不发送', async (t) => {

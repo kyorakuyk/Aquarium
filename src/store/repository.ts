@@ -17,6 +17,7 @@ import { createKinGroupRepository } from './kin-group-repo.ts';
 import { createPersonaMemoryRepository } from './persona-memory-repo.ts';
 import { createEventRepository } from './event-repo.ts';
 import { createSelfEditEventRepository } from './self-edit-event-repo.ts';
+import { createInnerVoiceRepository } from './inner-voice-repo.ts';
 import type { ImageCaptionKind, StoreRepository } from './repository-types.ts';
 
 export type {
@@ -243,6 +244,7 @@ export function createRepository(
       throw error;
     }
   };
+  const innerVoice = createInnerVoiceRepository(database, transaction);
   const resetImpressionsSession = (account: number, sessionId: string) => {
     if (!Number.isSafeInteger(account) || account <= 0
       || typeof sessionId !== 'string' || !sessionId.startsWith(`${account}:group:`)) {
@@ -267,6 +269,7 @@ export function createRepository(
     ...personaMemory,
     ...createEventRepository(database),
     ...createSelfEditEventRepository(database),
+    ...innerVoice,
     ...tagDrops,
     ...createAffectQueries(database),
     ...createPersonaVersionRepository(database, clock),

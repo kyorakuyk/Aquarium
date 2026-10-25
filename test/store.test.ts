@@ -45,6 +45,7 @@ test('openDatabase 开启 WAL 并创建当前 schema 数据表', () => {
       'events',
       'group_summaries',
       'image_captions',
+      'inner_voice',
       'interaction_log',
       'kin_group_members',
       'kin_groups',

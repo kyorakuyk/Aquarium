@@ -255,6 +255,7 @@ export function createMessagePipeline(options: MessagePipelineOptions) {
           sessionId: currentSessionId,
           senderId: message.senderId,
           messageId: message.messageId,
+          ...(ctx.state.innerVoice?.length ? { innerVoice: ctx.state.innerVoice.join('\n') } : {}),
           moodSettings: ctx.state.personaMood,
           now: now(),
           template: promptTemplates.appraise,

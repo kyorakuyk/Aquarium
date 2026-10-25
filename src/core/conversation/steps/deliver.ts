@@ -50,6 +50,16 @@ function stickerFallbackSegments(base64: string): Segment[] {
   return [{ type: 'image', url: `base64://${base64}`, file: `base64://${base64}` }];
 }
 
+function saveInnerVoice(ctx: StepContext, messageId: string, time: number): void {
+  const innerVoice = ctx.state.innerVoice;
+  if (!innerVoice?.length) return;
+  try {
+    ctx.options.repository.saveInnerVoiceForMessage(ctx.currentSessionId, messageId, innerVoice, time);
+  } catch (error) {
+    ctx.options.onError?.(error, ctx.message);
+  }
+}
+
 function recordStickerSend(ctx: StepContext, messageId: string, stickerId: number, time: number): void {
   ctx.state.sentMessageIds.push(messageId);
   ctx.state.stickerSent = { id: stickerId, stickerOnly: ctx.state.stickerOnly === true };
@@ -76,6 +86,7 @@ async function sendSticker(ctx: StepContext, sticker: StickerOffer['candidates']
       segments: [{ type: 'sticker', emojiId: sticker.emojiId }],
       time: sentAt,
     });
+    if (ctx.state.sentMessageIds.length === 0) saveInnerVoice(ctx, sent.messageId, sentAt);
     recordStickerSend(ctx, sent.messageId, sticker.id, sentAt);
     return;
   } catch (primaryError) {
@@ -97,6 +108,7 @@ async function sendSticker(ctx: StepContext, sticker: StickerOffer['candidates']
         segments,
         time: sentAt,
       });
+      if (ctx.state.sentMessageIds.length === 0) saveInnerVoice(ctx, sent.messageId, sentAt);
       recordStickerSend(ctx, sent.messageId, sticker.id, sentAt);
     } catch (fallbackError) {
       ctx.options.onError?.(fallbackError, ctx.message);
@@ -182,6 +194,7 @@ export const deliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'deliver'
     }
 
     ctx.state.sentMessageIds.push(sent.messageId);
+    const sentAt = ctx.now();
     ctx.options.repository.saveMessage({
       sessionId: ctx.currentSessionId,
       messageId: sent.messageId,
@@ -190,8 +203,9 @@ export const deliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'deliver'
       isSelf: true,
       plainText: text,
       segments,
-      time: ctx.now(),
+      time: sentAt,
     });
+    if (index === 0) saveInnerVoice(ctx, sent.messageId, sentAt);
     if (index < spokenParts.length && ctx.state.eventAdvocacyPromptEventId !== undefined) {
       try {
         markEventAdvocacyConfirmationPrompt({

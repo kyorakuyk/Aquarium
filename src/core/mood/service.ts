@@ -61,6 +61,7 @@ export interface MoodService {
     sessionId: string;
     senderId: number | null;
     messageId: string;
+    innerVoice?: string;
     moodSettings?: PersonaMoodSettings;
     now: number;
     template: AppraisePromptTemplate;
@@ -352,7 +353,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
           costToday: () => options.repository.costToday(),
           recordUsage: (usage) => options.repository.recordUsage({ ...usage, account: input.account }),
           now,
-        }));
+        }), input.innerVoice);
         const completedAt = now();
 
         if (!result.ok) {

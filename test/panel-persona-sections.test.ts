@@ -129,6 +129,35 @@ test('editing a form field in source mode serializes the same form before save',
   assert.equal(syncPersonaFormEdit(changed, false).sourceText, undefined);
 });
 
+test('人设说话方式的括号心声档位可以编辑并往返序列化', () => {
+  const source = [
+    '---',
+    'name: 心声档位测试',
+    'aliases: []',
+    'identity: { kind: 测试角色, selfAwareness: 知道身份, nameRule: fixed }',
+    'traits: { order: 0, morality: 0, talk: 0, mind: 0 }',
+    'speech:',
+    '  firstPerson: 我',
+    '  length: { min: 1, max: 100 }',
+    '  segmenting: multi',
+    '  innerVoice: light',
+    '  catchphrases: []',
+    'boundaries: { hard: [不编造] }',
+    '---',
+    '# {{name}}',
+  ].join('\n');
+  const form = parseSections(source);
+  const speech = form.metadata.speech as Record<string, unknown>;
+  const updated = {
+    ...form,
+    metadata: { ...form.metadata, speech: { ...speech, innerVoice: 'full' } },
+  };
+
+  assert.equal(speech.innerVoice, 'light');
+  assert.deepEqual(parseSections(buildSections(updated)), updated);
+  assert.deepEqual(parseServerSections(buildServerSections(updated)), updated);
+});
+
 test('blank and fixed persona names serialize correctly without exposing the template token', () => {
   const form = parseSections('# {{name}}');
   const blank = { ...form, title: personaTitleFromName('') };

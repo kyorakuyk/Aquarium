@@ -88,6 +88,7 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .mode-segmented button { min-width: 0; min-height: 44px; padding: 0 6px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--ink-2); cursor: pointer; font-size: 12px; white-space: nowrap; }
 .mode-segmented button.is-current { border-color: var(--line); background: var(--surface); color: var(--accent); font-weight: 500; }
 .mode-description { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+.session-inner-voice-select { width: min(100%, 340px); min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink-2); font-size: 13px; }
 .talk-offset-slider { display: block; width: 100%; min-height: 32px; margin: 6px 0 0; padding: 0; border: 0; border-radius: 0; background: transparent; accent-color: var(--accent); }
 .talk-offset-labels { display: grid; grid-template-columns: 1fr 1fr 1fr; color: var(--muted); font-size: 12px; }
 .talk-offset-labels span:nth-child(2) { text-align: center; }
@@ -212,6 +213,7 @@ td { padding: 13px 12px; border-top: 1px solid var(--surface-2); color: var(--in
 .replay-column h4 { margin: 0 0 9px; font-size: 13px; }
 .replay-meta { margin: 8px 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .replay-generated-text { margin: 11px 0; padding: 10px; border-radius: 8px; background: var(--surface); color: var(--ink-2); font-size: 12px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.inner-voice-note { margin: 4px 0; color: var(--muted); font-size: 12px; font-style: italic; line-height: 1.55; overflow-wrap: anywhere; }
 
 .mood-card { padding: 20px; }
 .overview-state-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }

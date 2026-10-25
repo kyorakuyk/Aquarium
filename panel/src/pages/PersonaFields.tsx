@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { PersonaTraits } from '../api.ts';
+import type { InnerVoiceMode, PersonaTraits } from '../api.ts';
 import type { PersonaEditorTab, PersonaParameterTab } from '../persona-page-tabs.ts';
 import { PersonaParametersPanel } from './PersonaParametersPanel.tsx';
 import { PersonaCounterpartEditor } from './PersonaCounterpartEditor.tsx';
+import { InnerVoiceModeSelect } from '../components/InnerVoiceModeSelect.tsx';
 import type { PersonaCounterpart } from '../persona-counterpart-api.ts';
 import {
   PERSONA_TRAIT_LABELS,
@@ -244,6 +245,17 @@ export function PersonaFields({
   function setCounterparts(counterparts: PersonaCounterpart[]) {
     onChange({ ...form, metadata: { ...form.metadata, counterparts } });
   }
+  const speechValue = form.metadata.speech;
+  const speech = typeof speechValue === 'object' && speechValue !== null && !Array.isArray(speechValue)
+    ? speechValue as Record<string, unknown>
+    : {};
+  const selectedInnerVoice: InnerVoiceMode = speech.innerVoice === 'full'
+    || speech.innerVoice === 'hidden' || speech.innerVoice === 'light'
+    ? speech.innerVoice
+    : 'light';
+  function setInnerVoice(innerVoice: InnerVoiceMode) {
+    onChange({ ...form, metadata: { ...form.metadata, speech: { ...speech, innerVoice } } });
+  }
   function setOther(index: number, change: Partial<PersonaSectionsForm['other'][number]>) {
     onChange({ ...form, other: form.other.map((section, itemIndex) => itemIndex === index ? { ...section, ...change } : section) });
   }
@@ -327,6 +339,18 @@ export function PersonaFields({
         <section className="persona-form-card">
           <h3>说话方式</h3>
           <TextField id="persona-说话方式" title="说话方式" reference="## 说话方式" value={form.fields.说话方式} rows={3} hideLabel active={activeTab === 'deal'} disabled={disabled} onFocus={() => onFocus('persona-section-说话方式')} onChange={(value) => setText('说话方式', value)} />
+          <div className="persona-field">
+            <FieldLabel id="persona-inner-voice" title="括号心声" reference="speech.innerVoice" />
+            <InnerVoiceModeSelect
+              id="persona-inner-voice"
+              value={selectedInnerVoice}
+              disabled={disabled}
+              className="persona-energy-source"
+              ariaLabel="括号心声"
+              onChange={(value) => { if (value !== 'inherit') setInnerVoice(value); }}
+            />
+            <p className="persona-field-hint">设定此人设默认使用完整、轻量或隐藏模式；会话可以单独覆盖。</p>
+          </div>
         </section>
         <section className="persona-form-card">
           <h3>口头禅</h3>

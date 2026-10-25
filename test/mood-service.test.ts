@@ -20,7 +20,7 @@ function createMoodHarness(
   repository: Parameters<Parameters<typeof withRepository>[0]>[0],
   config: ReturnType<typeof makeConfig>,
   personaRoot: string,
-  options: { appraiseText?: string; appraiseAdvanceMs?: number } = {},
+  options: { appraiseText?: string; appraiseAdvanceMs?: number; replyText?: string } = {},
 ) {
   const adapter = new FakeAdapter();
   const replyPrompts: string[] = [];
@@ -58,7 +58,7 @@ function createMoodHarness(
     callModel: async (_slot, messages) => {
       replyPrompts.push(messages.map((message) => String(message.content)).join('\n'));
       return {
-        text: '普通回复。',
+        text: options.replyText ?? '普通回复。',
         provider: 'fake',
         model: 'fake-model',
         usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 1, costCny: 0 },
@@ -70,6 +70,30 @@ function createMoodHarness(
   });
   return { adapter, affinityService, appraiseRequests, clock, moodService, pipeline, replyPrompts };
 }
+
+test('回复中拆出的心声进入情绪评估，但不拼进已保存的正文', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    const currentSession = sessionId(groupSession);
+    const config = makeConfig({ sessions: { [currentSession]: { innerVoice: 'hidden' } } });
+    const innerVoice = '（她一直记得这件事，心里其实很在意）';
+    const harness = createMoodHarness(repository, config, personaRoot, {
+      replyText: `普通回复。\n${innerVoice}`,
+    });
+
+    const result = await harness.pipeline(makeIncoming({
+      messageId: 'inner-voice-appraisal',
+      plainText: '刚才的事我还记得。',
+      mentionsSelf: true,
+    }));
+    await harness.moodService.idle();
+
+    assert.equal(result.reason, 'replied');
+    assert.match(harness.appraiseRequests[0] ?? '', /未说出口的心声/u);
+    assert.match(harness.appraiseRequests[0] ?? '', /"（她一直记得这件事，心里其实很在意）"/u);
+    const botMessage = repository.recentMessages(currentSession, 10).find((message) => message.isSelf);
+    assert.equal(botMessage?.plainText, '普通回复。');
+  });
+});
 
 test('回复后异步评估并更新 PAD 状态，下一次提示词带情绪块', async () => {
   await withRepository(async (repository, personaRoot) => {

@@ -32,6 +32,7 @@ const sessionPatchSchema = z.object({
   modeSchedule: ModeScheduleSchema.nullable().optional(),
   proactiveCooldownSec: z.number().int().min(0).max(3600).nullable().optional(),
   talkOffset: z.number().int().min(-2).max(2).nullable().optional(),
+  innerVoice: z.enum(['full', 'light', 'hidden']).nullable().optional(),
   nicknames: z.array(z.string()).nullable().optional(),
   contextMessages: z.number().int().positive().nullable().optional(),
   rate: ratePatchSchema.nullable().optional(),
@@ -162,6 +163,7 @@ export function registerSessionRoutes(app: Hono, options: SessionRouteOptions): 
           contextMessages: effective.contextMessages,
           rate: effective.rate,
           groupNote: effective.groupNote,
+          innerVoice: config.sessions[id]?.innerVoice ?? null,
         },
       };
     });

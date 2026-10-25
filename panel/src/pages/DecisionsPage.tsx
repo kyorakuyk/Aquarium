@@ -278,6 +278,11 @@ export function DecisionsPage() {
         <aside className="panel-card trace-card">
           <h2>决策记录</h2>
           {!selectedDecision && <p className="muted">选择一条决策查看详情。</p>}
+          {selectedDecision && (selectedDecision.replyText !== null || selectedDecision.innerVoice.length > 0) && <section className="recorded-bot-reply" aria-labelledby="recorded-bot-reply-title">
+            <h3 id="recorded-bot-reply-title">机器人回复</h3>
+            <div className="replay-generated-text">{selectedDecision.replyText || '（仅非文字消息）'}</div>
+            {selectedDecision.innerVoice.map((text, index) => <p className="inner-voice-note" key={`${index}:${text}`}><em>心声：{text}</em></p>)}
+          </section>}
           {selectedDecision && selectedActivityMetrics.length > 0 && <section className="activity-metrics" aria-labelledby="activity-metrics-title">
             <h3 id="activity-metrics-title">主动判断分值</h3>
             <dl>

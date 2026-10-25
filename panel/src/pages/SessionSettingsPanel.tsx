@@ -6,10 +6,11 @@ import { formatSavedAt } from '../panel-feedback.ts';
 import { sessionNoteSummary, sessionSettingsPanelCopy } from '../session-settings-copy.ts';
 import { SessionFieldHeading } from './SessionFieldHeading.tsx';
 import { SessionScheduleEditor } from './SessionScheduleEditor.tsx';
+import { InnerVoiceModeSelect } from '../components/InnerVoiceModeSelect.tsx';
 
 export const GLOBAL_DEFAULT_ID = '__global-defaults__';
 
-type SessionField = 'enabled' | 'mode' | 'modeSchedule' | 'nicknames' | 'contextMessages' | 'proactiveCooldownSec' | 'talkOffset' | 'rate' | 'groupNote';
+type SessionField = 'enabled' | 'mode' | 'modeSchedule' | 'nicknames' | 'contextMessages' | 'proactiveCooldownSec' | 'talkOffset' | 'rate' | 'groupNote' | 'innerVoice';
 type RateField = keyof SessionSettings['rate'];
 
 export interface SessionSettingsTarget {
@@ -74,7 +75,7 @@ export function SessionSettingsPanel({
   const [proactiveCooldownDraft, setProactiveCooldownDraft] = useState(String(target.settings.proactiveCooldownSec));
   const [savedAt, setSavedAt] = useState('');
   const [scheduleIsDirty, setScheduleIsDirty] = useState(false);
-  const restoreFields: SessionField[] = ['enabled', 'mode', 'modeSchedule', 'nicknames', 'contextMessages', 'proactiveCooldownSec', 'talkOffset', 'rate', 'groupNote'];
+  const restoreFields: SessionField[] = ['enabled', 'mode', 'modeSchedule', 'nicknames', 'contextMessages', 'proactiveCooldownSec', 'talkOffset', 'rate', 'groupNote', 'innerVoice'];
 
   useEffect(() => {
     setNicknames(target.settings.nicknames);
@@ -255,6 +256,20 @@ export function SessionSettingsPanel({
             </div>
           </SettingGroup>
         </>}
+
+      {target.kind !== 'global' && <SettingGroup>
+        {heading('括号心声', ['innerVoice'], '默认跟随当前人设，也可以在本会话单独覆盖。')}
+        <InnerVoiceModeSelect
+          id="session-inner-voice"
+          value={target.settings.innerVoice ?? 'inherit'}
+          allowInherit
+          disabled={busy}
+          className="session-inner-voice-select"
+          ariaLabel="括号心声"
+          onChange={(value) => void update({ innerVoice: value === 'inherit' ? null : value })}
+        />
+        <p className="mode-description">完整会把一段旁白单独发出；轻量只留一个短动作；隐藏不发送括号内容。</p>
+      </SettingGroup>}
 
       <SettingGroup>
         <div className="session-details-row">

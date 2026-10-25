@@ -20,6 +20,24 @@ function decisionCostCny(detail: unknown): number | null {
   return typeof costCny === 'number' && Number.isFinite(costCny) ? costCny : null;
 }
 
+function decisionReply(repository: StoreRepository, sessionId: string, detail: unknown) {
+  if (typeof detail !== 'object' || detail === null || Array.isArray(detail)) {
+    return { replyText: null, innerVoice: [] as string[] };
+  }
+  const sentMessageIds = (detail as Record<string, unknown>).sentMessageIds;
+  if (!Array.isArray(sentMessageIds)) return { replyText: null, innerVoice: [] as string[] };
+  for (const messageId of sentMessageIds) {
+    if (typeof messageId !== 'string' || !messageId) continue;
+    const message = repository.messageBySessionAndId(sessionId, messageId);
+    if (!message?.isSelf) continue;
+    return {
+      replyText: message.plainText,
+      innerVoice: repository.innerVoiceForMessage(sessionId, messageId),
+    };
+  }
+  return { replyText: null, innerVoice: [] as string[] };
+}
+
 export function registerDecisionRoutes(app: Hono, options: DecisionRouteOptions): void {
   app.get('/api/decisions', async (context) => {
     const rawLimit = context.req.query('limit');
@@ -43,6 +61,7 @@ export function registerDecisionRoutes(app: Hono, options: DecisionRouteOptions)
       }
     }
     return context.json(decisions.map((decision) => ({
+      ...decisionReply(options.repository, decision.sessionId, decision.detail),
       ...decision,
       sessionName: sessionNames.get(decision.sessionId) ?? decision.sessionId,
       messageText: options.repository.decisionMessageText(decision.sessionId, decision.messageId) ?? null,

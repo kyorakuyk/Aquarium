@@ -38,11 +38,16 @@ function formatTime(timestamp: number): string {
 export function buildAppraiseMessages(
   context: readonly AppraiseContextMessage[],
   template: AppraisePromptTemplate,
+  innerVoice?: string,
 ): OpenAI.ChatCompletionMessageParam[] {
-  const contextText = context.slice(-8).map((message) => {
+  const conversationText = context.slice(-8).map((message) => {
     const speaker = message.isSelf ? '你' : JSON.stringify(message.senderName);
     return `[${formatTime(message.time)}] ${speaker}: ${message.plainText}`;
   }).join('\n');
+  const innerVoiceText = innerVoice?.trim()
+    ? `${conversationText ? '\n\n' : ''}未说出口的心声（仅作为机器人情绪证据，不是对方说的话）：${JSON.stringify(innerVoice.trim())}`
+    : '';
+  const contextText = conversationText + innerVoiceText;
   const system = template.system
     .replaceAll('{{MAX_VALENCE_DELTA}}', String(MAX_VALENCE_DELTA))
     .replaceAll('{{MAX_RESERVE_DELTA}}', String(MAX_RESERVE_DELTA))
@@ -101,8 +106,9 @@ export async function runAppraise(
   context: readonly AppraiseContextMessage[],
   template: AppraisePromptTemplate,
   callModel: AppraiseSlotCall,
+  innerVoice?: string,
 ): Promise<AppraiseResult> {
-  const messages = buildAppraiseMessages(context, template);
+  const messages = buildAppraiseMessages(context, template, innerVoice);
   let response: { text: string };
   try {
     response = await callModel('extract', messages);
