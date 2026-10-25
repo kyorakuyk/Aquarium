@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest, type MoodView } from '../api.ts';
 import {
+  DEFAULT_EMOTION_LIBRARY,
   buildEmotionLibrary,
   defaultEmotionEdge,
   resolveConfiguredMoodEmotions,
@@ -66,6 +67,13 @@ function moodPreviewIsValid(value: MoodView, account: number): boolean {
     && moodSettingsAreValid(value.settings);
 }
 
+function edgeLibraryNote(from: string, to: string): string {
+  const known = new Set(DEFAULT_EMOTION_LIBRARY.map((emotion) => emotion.name));
+  return known.has(from) && known.has(to)
+    ? '两个都是情绪库里的情绪，默认值来自情绪库。'
+    : '其中有自定义情绪，默认值按两者的坐标估算。';
+}
+
 function coordinateLabel(emotion: PadEmotion | undefined): string {
   if (!emotion) return '—';
   return `V ${emotion.valence.toFixed(2)} · A ${emotion.arousal.toFixed(2)} · D ${emotion.dominance.toFixed(2)}`;
@@ -94,9 +102,15 @@ export function PersonaMoodEditor({
   const [selection, setSelection] = useState<MoodGraphSelection>({ from: null, to: null });
 
   useEffect(() => {
+    setSelection((current) => (
+      current.from === null && settings.emotions.length > 0 ? { from: settings.emotions[0] ?? null, to: null } : current
+    ));
+  }, []);
+
+  useEffect(() => {
     setSelection((current) => {
       if (current.from === null) return current;
-      if (!settings.emotions.includes(current.from)) return { from: null, to: null };
+      if (!settings.emotions.includes(current.from)) return { from: settings.emotions[0] ?? null, to: null };
       if (current.to === null || settings.emotions.includes(current.to) && current.to !== current.from) return current;
       return { from: current.from, to: null };
     });
@@ -232,12 +246,15 @@ export function PersonaMoodEditor({
       {!parsed.success && <p className="persona-mood-error" role="alert">人设 mood 配置无效，请在源文件中修复后再编辑。</p>}
       {message && <p className="persona-mood-message" role="status">{message}</p>}
 
-      <PersonaMoodLibraryCard settings={settings} disabled={disabled || !parsed.success} onChange={commit} />
+      <PersonaMoodLibraryCard
+        settings={settings}
+        selectedName={selection.from}
+        onSelectEmotion={(name) => setSelection((current) => ({ from: name, to: current.to !== null && current.to !== name && settings.emotions.includes(current.to) ? current.to : null }))}
+        disabled={disabled || !parsed.success} onChange={commit} />
 
       <section className="persona-form-card persona-mood-card" aria-labelledby="persona-mood-graph-title">
         <header className="persona-mood-card-heading">
-          <div><h3 id="persona-mood-graph-title">切换难度</h3><p>点来源，再点目标；再点来源可取消。拖动超过 4px 才会调整坐标。</p></div>
-          <span className="muted">愉悦 V × 唤醒 A</span>
+          <div><h3 id="persona-mood-graph-title">切换难度</h3><span className="muted">点来源，再点目标；再点来源可取消；拖动超过 4px 才会调整坐标</span></div>
         </header>
         <PersonaMoodGraph
           settings={settings}
@@ -251,48 +268,58 @@ export function PersonaMoodEditor({
         {selectedEdge && selectedSource && selectedTarget ? (
           <div className="persona-mood-edge-editor" ref={edgeEditorRef}>
             <div className="persona-mood-edge-heading">
-              <strong>{selection.from ?? ''} → {selection.to ?? ''}</strong>
-              <span className={selectedEdge.modified ? 'is-custom' : ''}>{selectedEdge.modified ? '已修改' : '默认值'}</span>
+              <h4 className="persona-mood-edge-title">{selection.from ?? ''}<span className="persona-mood-edge-arrow">→</span>{selection.to ?? ''}</h4>
+              <p className="persona-mood-edge-note">
+                {edgeLibraryNote(selection.from ?? '', selection.to ?? '')}
+                {selectedEdge.modified && <span className="is-custom"> · 已修改</span>}
+              </p>
             </div>
             <div className="persona-mood-edge-controls">
-              <SettingsRange
-                id="persona-mood-margin"
-                label="切换门槛"
-                value={selectedEdge.margin}
-                min={0}
-                max={0.5}
-                step={0.01}
-                display={selectedEdge.margin.toFixed(2)}
-                disabled={disabled || !parsed.success}
-                onChange={(value) => changeEdge('margin', value)}
-              />
-              <SettingsRange
-                id="persona-mood-dwell"
-                label="至少停留"
-                value={selectedEdge.dwell}
-                min={0}
-                max={60}
-                step={1}
-                display={`${selectedEdge.dwell} 分钟`}
-                disabled={disabled || !parsed.success}
-                onChange={(value) => changeEdge('dwell', value)}
-              />
-              <label className="persona-mood-jump-toggle">
-                <input
-                  type="checkbox"
-                  checked={selectedEdge.jump}
+              <div className="persona-mood-edge-column">
+                <SettingsRange
+                  id="persona-mood-margin"
+                  label="切换门槛"
+                  hint={`越大越难从「${selection.from}」变成「${selection.to}」`}
+                  value={selectedEdge.margin}
+                  min={0}
+                  max={0.5}
+                  step={0.01}
+                  display={selectedEdge.margin.toFixed(2)}
                   disabled={disabled || !parsed.success}
-                  onChange={(event) => changeEdge('jump', event.currentTarget.checked)}
+                  onChange={(value) => changeEdge('margin', value)}
                 />
-                <span>允许直接切换（关掉就得先经过其他情绪）</span>
-              </label>
-              <button className="button button-secondary" type="button" disabled={disabled || !selectedEdge.modified} onClick={resetEdge}>这条边恢复默认</button>
+                <label className="persona-mood-jump-toggle">
+                  <input
+                    type="checkbox"
+                    checked={selectedEdge.jump}
+                    disabled={disabled || !parsed.success}
+                    onChange={(event) => changeEdge('jump', event.currentTarget.checked)}
+                  />
+                  <span>允许直接切换（关掉就得先经过其他情绪）</span>
+                </label>
+              </div>
+              <div className="persona-mood-edge-column">
+                <SettingsRange
+                  id="persona-mood-dwell"
+                  label="至少停留"
+                  hint={`在「${selection.from}」待够这么久才会自然转过去`}
+                  value={selectedEdge.dwell}
+                  min={0}
+                  max={60}
+                  step={1}
+                  display={`${selectedEdge.dwell} 分钟`}
+                  disabled={disabled || !parsed.success}
+                  onChange={(value) => changeEdge('dwell', value)}
+                />
+                <button className="persona-mood-small-button persona-mood-edge-reset" type="button" disabled={disabled || !selectedEdge.modified} onClick={resetEdge}>这条边恢复默认</button>
+              </div>
             </div>
             <div className="persona-mood-coordinate-readout">
               <span>「{selection.from}」的坐标：{coordinateLabel(selectedSource)}</span>
               <SettingsRange
                 id="persona-mood-dominance"
                 label="掌控感 D"
+                hint="图上看不到的第三维，拉开生气和委屈"
                 value={selectedSource.dominance}
                 min={-1}
                 max={1}
@@ -310,7 +337,7 @@ export function PersonaMoodEditor({
 
       <section className="persona-form-card persona-mood-card" aria-labelledby="persona-mood-matrix-title">
         <header className="persona-mood-card-heading">
-          <div><h3 id="persona-mood-matrix-title">全部切换一览</h3><p>行是来源，列是目标；斜线表示不允许直接切换，点格子可编辑。</p></div>
+          <div><h3 id="persona-mood-matrix-title">全部切换一览</h3><span className="muted">行是来源，列是目标；颜色越深越难，斜线表示不允许直接切换，点格子编辑</span></div>
         </header>
         <PersonaMoodEdgeMatrix
           settings={settings}

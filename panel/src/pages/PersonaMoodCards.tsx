@@ -16,11 +16,13 @@ export function SettingsRange({
   max,
   step,
   display,
+  hint,
   disabled,
   onChange,
 }: {
   id: string;
   label: string;
+  hint?: string;
   value: number;
   min: number;
   max: number;
@@ -30,28 +32,38 @@ export function SettingsRange({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="persona-mood-slider" htmlFor={id}>
-      <span className="persona-mood-slider-heading"><span>{label}</span><output htmlFor={id}>{display}</output></span>
-      <input
-        id={id}
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(Number(event.currentTarget.value))}
-      />
-    </label>
+    <div className="persona-mood-slider">
+      <label className="persona-mood-slider-heading" htmlFor={id}>
+        <span>{label}</span>
+        {hint && <span className="persona-mood-slider-hint">{hint}</span>}
+      </label>
+      <div className="persona-mood-slider-row">
+        <input
+          id={id}
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          disabled={disabled}
+          onChange={(event) => onChange(Number(event.currentTarget.value))}
+        />
+        <output htmlFor={id}>{display}</output>
+      </div>
+    </div>
   );
 }
 
 export function PersonaMoodLibraryCard({
   settings,
+  selectedName,
+  onSelectEmotion,
   disabled,
   onChange,
 }: {
   settings: PersonaMoodSettings;
+  selectedName?: string | null;
+  onSelectEmotion?: (name: string) => void;
   disabled: boolean;
   onChange: (settings: PersonaMoodSettings) => void;
 }) {
@@ -73,24 +85,28 @@ export function PersonaMoodLibraryCard({
   return (
     <section className="persona-form-card persona-mood-card" aria-labelledby="persona-mood-library-title">
       <header className="persona-mood-card-heading">
-        <div><h3 id="persona-mood-library-title">我的情绪</h3><p>名称不能重复；库内同名情绪会沿用默认坐标。</p></div>
-        <span className="muted">{settings.emotions.length} 种</span>
+        <div><h3 id="persona-mood-library-title">我的情绪</h3><span className="muted">{settings.emotions.length} 种 · 名字不能重复，同名的会沿用情绪库里的默认数据</span></div>
       </header>
       <div className="persona-mood-emotion-tags">
         {settings.emotions.map((name) => (
-          <button
-            className="persona-mood-emotion-tag"
-            type="button"
-            key={name}
-            disabled={disabled || settings.emotions.length <= 1}
-            aria-label={`删除情绪 ${name}`}
-            onClick={() => {
-              try { onChange(removeMoodEmotion(settings, name)); setMessage(''); }
-              catch (error) { setMessage(error instanceof Error ? error.message : '删除情绪失败'); }
-            }}
-          >
-            {name}<span aria-hidden="true">×</span>
-          </button>
+          <span className={`persona-mood-emotion-tag${selectedName === name ? ' is-selected' : ''}`} key={name}>
+            <button
+              className="persona-mood-emotion-name"
+              type="button"
+              aria-pressed={selectedName === name}
+              onClick={() => onSelectEmotion?.(name)}
+            >{name}</button>
+            <button
+              className="persona-mood-emotion-remove"
+              type="button"
+              disabled={disabled || settings.emotions.length <= 1}
+              aria-label={`删除情绪 ${name}`}
+              onClick={() => {
+                try { onChange(removeMoodEmotion(settings, name)); setMessage(''); }
+                catch (error) { setMessage(error instanceof Error ? error.message : '删除情绪失败'); }
+              }}
+            >×</button>
+          </span>
         ))}
       </div>
       <form className="persona-mood-add-form" onSubmit={(event) => { event.preventDefault(); add(newName); }}>
@@ -99,11 +115,11 @@ export function PersonaMoodLibraryCard({
           id="persona-mood-new-name"
           value={newName}
           maxLength={32}
-          placeholder="输入一个情绪名称"
+          placeholder="添加一种情绪，比如：怀念"
           disabled={disabled || settings.emotions.length >= 64}
           onChange={(event) => setNewName(event.currentTarget.value)}
         />
-        <button className="button button-secondary" type="submit" disabled={disabled || !newName.trim() || settings.emotions.length >= 64}>添加</button>
+        <button className="persona-mood-small-button" type="submit" disabled={disabled || !newName.trim() || settings.emotions.length >= 64}>添加</button>
       </form>
       {message && <p className="persona-mood-message" role="status">{message}</p>}
       {missing.length > 0 && (
@@ -142,12 +158,13 @@ export function PersonaMoodSubSettingsCard({
   return (
     <section className="persona-form-card persona-mood-card" aria-labelledby="persona-mood-subs-title">
       <header className="persona-mood-card-heading">
-        <div><h3 id="persona-mood-subs-title">主情绪与副情绪</h3><p>副情绪与主情绪同时存在，也可以互相矛盾。</p></div>
+        <div><h3 id="persona-mood-subs-title">主情绪与副情绪</h3></div>
       </header>
       <div className="persona-mood-sub-controls">
         <SettingsRange
           id="persona-mood-sub-max"
           label="副情绪最多几个"
+          hint="和主情绪同时存在，可以互相矛盾"
           value={settings.subMax}
           min={0}
           max={4}
@@ -159,6 +176,7 @@ export function PersonaMoodSubSettingsCard({
         <SettingsRange
           id="persona-mood-sub-th"
           label="副情绪的门槛"
+          hint="强度达到主情绪的多少才算数"
           value={settings.subTh}
           min={0.2}
           max={0.9}
@@ -186,7 +204,7 @@ export function PersonaMoodOtherCard({
   return (
     <section className="persona-form-card persona-mood-card" aria-labelledby="persona-mood-other-title">
       <header className="persona-mood-card-heading">
-        <div><h3 id="persona-mood-other-title">其他</h3><p>占位 · 还没做</p></div>
+        <div><h3 id="persona-mood-other-title">其他</h3><span className="muted">占位 · 还没做</span></div>
       </header>
       <div className="persona-mood-other-grid">
         <div><strong>回落速度</strong><span>心情多久回到底色；心灵能量越满回得越快。</span><b>愉悦 {settings.surfaceHalfLifeMin} 分钟 · 唤醒 {settings.arousalHalfLifeMin} 分钟</b></div>

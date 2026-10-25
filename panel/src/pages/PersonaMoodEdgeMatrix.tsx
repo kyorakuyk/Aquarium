@@ -1,6 +1,16 @@
 import { useState } from 'react';
 import type { PersonaMoodSettings } from '../../../src/persona/mood.ts';
-import { isMoodMatrixHeaderHovered, moodMarginColorPercent, resolveMoodEdge } from './persona-mood-utils.ts';
+import { isMoodMatrixHeaderHovered, resolveMoodEdge } from './persona-mood-utils.ts';
+
+/** Easy (margin 0) is very light teal; hard (0.4 and up) is deep teal. */
+function rampColor(percent: number): string {
+  return `color-mix(in srgb, #1C5F5A ${percent}%, #FFFFFF)`;
+}
+
+function marginRampPercent(margin: number): number {
+  const bounded = Number.isFinite(margin) ? Math.max(0, Math.min(0.4, margin)) : 0;
+  return Number((7 + (bounded / 0.4) * 80).toFixed(1));
+}
 
 export function PersonaMoodEdgeMatrix({
   settings,
@@ -61,7 +71,7 @@ export function PersonaMoodEdgeMatrix({
                     <button
                       className={className}
                       type="button"
-                      style={{ backgroundColor: `color-mix(in srgb, var(--accent-soft) ${moodMarginColorPercent(edge.margin)}%, var(--surface))` }}
+                      style={{ backgroundColor: rampColor(marginRampPercent(edge.margin)) }}
                       title={title}
                       aria-label={title}
                       aria-pressed={selected}
@@ -82,8 +92,8 @@ export function PersonaMoodEdgeMatrix({
       </table>
       <div className="persona-mood-matrix-legend" role="img" aria-label="门槛从易到难">
         <span>易</span>
-        {[10, 32, 54, 75].map((percent, index) => (
-          <i key={percent} className={`is-step-${index + 1}`} style={{ backgroundColor: `color-mix(in srgb, var(--accent-soft) ${percent}%, var(--surface))` }} aria-hidden="true" />
+        {[7, 25, 45, 65, 87].map((percent, index) => (
+          <i key={percent} className={`is-step-${index + 1}`} style={{ backgroundColor: rampColor(percent) }} aria-hidden="true" />
         ))}
         <span>难</span>
       </div>

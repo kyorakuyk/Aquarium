@@ -147,25 +147,22 @@ export function PersonaMoodGraph({
     } else if (!dragged) onSelectPoint(press.name);
   }
 
-  function trimmedLine(source: PadEmotion, target: PadEmotion) {
+  function curvedPath(source: PadEmotion, target: PadEmotion): { d: string } | null {
     const x1 = chartX(source.valence);
     const y1 = chartY(source.arousal);
     const x2 = chartX(target.valence);
     const y2 = chartY(target.arousal);
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const length = Math.hypot(dx, dy);
+    const length = Math.hypot(x2 - x1, y2 - y1);
     if (length < 1) return null;
-    const ux = dx / length;
-    const uy = dy / length;
-    const startOffset = Math.min((selectedFrom === source.name ? 7 : 5) + 3, length * 0.4);
-    const endOffset = Math.min((selectedTo === target.name ? 7 : 5) + 3, length * 0.4);
-    return {
-      x1: x1 + ux * startOffset,
-      y1: y1 + uy * startOffset,
-      x2: x2 - ux * endOffset,
-      y2: y2 - uy * endOffset,
-    };
+    const ux = (x2 - x1) / length;
+    const uy = (y2 - y1) / length;
+    const startOffset = Math.min(8, length * 0.4);
+    const endOffset = Math.min(9, length * 0.4);
+    const bend = Math.min(14, length * 0.25);
+    const cx = (x1 + x2) / 2 - uy * bend;
+    const cy = (y1 + y2) / 2 + ux * bend;
+    const f = (value: number) => value.toFixed(1);
+    return { d: `M${f(x1 + ux * startOffset)} ${f(y1 + uy * startOffset)} Q${f(cx)} ${f(cy)} ${f(x2 - ux * endOffset)} ${f(y2 - uy * endOffset)}` };
   }
 
   return (
@@ -194,17 +191,16 @@ export function PersonaMoodGraph({
         <rect x={xNegative} y={chart.top} width={xPositive - xNegative} height={yPositive - chart.top} className="persona-mood-region persona-mood-region-aroused" />
         <rect x={xPositive} y={chart.top} width={chart.right - xPositive} height={yPositive - chart.top} className="persona-mood-region persona-mood-region-excited" />
         <rect x={xNegative} y={yPositive} width={chart.right - xNegative} height={chart.bottom - yPositive} className="persona-mood-region persona-mood-region-calm" />
-        <text x={chart.left + 6} y={chart.top + 12} className="persona-mood-region-label">不愉快</text>
-        <text x={chart.left + 6} y={yNegative + 12} className="persona-mood-region-label">压抑</text>
-        <text x={xNegative + 6} y={chart.top + 12} className="persona-mood-region-label">唤醒</text>
-        <text x={xPositive + 6} y={chart.top + 12} className="persona-mood-region-label">兴奋</text>
-        <text x={xNegative + 6} y={yPositive + 12} className="persona-mood-region-label">平静</text>
-        <line x1={chart.left} y1={chart.bottom} x2={chart.right} y2={chart.bottom} className="persona-mood-axis" />
-        <line x1={chart.left} y1={chart.top} x2={chart.left} y2={chart.bottom} className="persona-mood-axis" />
-        <text x={chart.right} y={chart.height - 6} textAnchor="end" className="persona-mood-axis-label">愉快 →</text>
-        <text x={chart.left - 2} y={chart.top - 8} className="persona-mood-axis-label">唤醒 ↑</text>
-        {outgoing.map(({ name, source, target, edge }) => {
-          const line = trimmedLine(source, target);
+        <rect x={chart.left} y={chart.top} width={chart.right - chart.left} height={chart.bottom - chart.top} className="persona-mood-plot" />
+        <text x={chart.left + 8} y={chart.top + 15} className="persona-mood-region-label">不愉快</text>
+        <text x={chart.left + 8} y={chart.bottom - 8} className="persona-mood-region-label">压抑</text>
+        <text x={xNegative + 8} y={chart.top + 15} className="persona-mood-region-label">唤醒</text>
+        <text x={chart.right - 8} y={chart.top + 15} textAnchor="end" className="persona-mood-region-label">兴奋</text>
+        <text x={chart.right - 8} y={chart.bottom - 8} textAnchor="end" className="persona-mood-region-label">平静</text>
+        <text x={chart.right} y={chart.height - 8} textAnchor="end" className="persona-mood-axis-label">愉快 →</text>
+        <text x={chart.left} y={chart.top - 8} className="persona-mood-axis-label">唤醒 ↑</text>
+        {[...outgoing].sort((left, right) => Number(left.name === selectedTo) - Number(right.name === selectedTo)).map(({ name, source, target, edge }) => {
+          const line = curvedPath(source, target);
           if (!line) return null;
           const selected = selectedTo === name;
           const isHovered = hoveredTarget === name;
@@ -221,8 +217,8 @@ export function PersonaMoodGraph({
               onClick={() => onSelectTo(name)}
               onKeyDown={(event) => selectOnKey(event, () => onSelectTo(name))}
             >
-              <line {...line} markerEnd={marker} />
-              <line className="persona-mood-edge-hit" {...line} />
+              <path className="persona-mood-edge-line" d={line.d} strokeWidth={Math.min(3.2, 0.9 + edge.margin * 6).toFixed(1)} markerEnd={marker} />
+              <path className="persona-mood-edge-hit" d={line.d} />
             </g>
           );
         })}
@@ -248,7 +244,7 @@ export function PersonaMoodGraph({
               onPointerDown={beginPointPress}
             >
               <circle className="persona-mood-point-hit" cx={chartX(point.valence)} cy={chartY(point.arousal)} r={15} />
-              <circle cx={chartX(point.valence)} cy={chartY(point.arousal)} r={selected ? 7 : 5} />
+              <circle className="persona-mood-point-dot" cx={chartX(point.valence)} cy={chartY(point.arousal)} r={selected ? 5.5 : 4.5} />
               <text
                 x={label.x}
                 y={label.y}

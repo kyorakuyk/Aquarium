@@ -146,7 +146,7 @@ test('persona mood editor renders its five planned cards', async () => {
       disabled: false,
       active: true,
     }));
-    const moodStyles = readFileSync(fileURLToPath(new URL('../panel/src/styles/personas.css', import.meta.url)), 'utf8');
+    const moodStyles = readFileSync(fileURLToPath(new URL('../panel/src/styles/persona-mood.css', import.meta.url)), 'utf8');
     for (const title of ['我的情绪', '切换难度', '全部切换一览', '主情绪与副情绪', '其他']) {
       assert.ok(html.includes(title), `缺少卡片标题：${title}`);
     }
@@ -159,6 +159,7 @@ test('persona mood editor renders its five planned cards', async () => {
     assert.match(moodStyles, /\.persona-mood-matrix-scroll\s*\{[^}]*overflow-x:\s*auto[^}]*overflow-y:\s*hidden/su);
     assert.match(moodStyles, /\.persona-mood-matrix thead th:not\(:first-child\)[^{]*\{[^}]*writing-mode:\s*vertical-rl/su);
     assert.match(moodStyles, /\.persona-mood-matrix th\.is-hovered/u);
+    assert.match(moodStyles, /\.persona-mood-matrix td\s*\{[^}]*height:\s*20px/su);
     assert.match(moodStyles, /persona-mood-edge-hit\s*\{[^}]*stroke-width:\s*12/su);
     assert.match(html, /易/u);
     assert.match(html, /难/u);

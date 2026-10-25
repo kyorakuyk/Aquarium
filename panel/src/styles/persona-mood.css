@@ -1,0 +1,130 @@
+/* Persona 参数 › 心情: tokens local to this tab. */
+.persona-mood-editor {
+  --mood-orange: #C2702B;
+  --mood-orange-soft: #FBF3EA;
+  --mood-teal: #1C5F5A;
+  --mood-edge: #8FA9A5;
+  display: grid; gap: 12px; min-width: 0;
+}
+.persona-mood-card { display: grid; gap: 10px; min-width: 0; padding: 14px 16px; }
+.persona-mood-card-heading { display: flex; align-items: baseline; justify-content: flex-start; gap: 10px; flex-wrap: wrap; }
+.persona-mood-card-heading > div { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.persona-mood-card-heading h3 { margin: 0; font-size: 13px; font-weight: 700; }
+.persona-mood-card-heading p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.persona-mood-card-heading .muted { font-size: 11px; color: var(--muted); }
+
+/* emotion chips */
+.persona-mood-emotion-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.persona-mood-emotion-tag { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: #33373D; font-size: 12px; }
+.persona-mood-emotion-tag.is-selected { border-color: var(--mood-orange); background: var(--mood-orange-soft); }
+.persona-mood-emotion-tag button { border: 0; background: transparent; font: inherit; cursor: pointer; color: inherit; }
+.persona-mood-emotion-name { min-height: 28px; padding: 0 4px 0 11px; }
+.persona-mood-emotion-remove { width: 26px; height: 28px; border-radius: 50%; color: #8A8E95; font-size: 14px; }
+.persona-mood-emotion-remove:hover:not(:disabled) { color: #A23E48; }
+.persona-mood-emotion-tag button:disabled { cursor: default; opacity: .6; }
+.persona-mood-add-form { display: flex; align-items: center; gap: 8px; }
+.persona-mood-add-form input { min-width: 0; width: 240px; max-width: 100%; min-height: 32px; padding: 0 10px; border: 1px solid #D6D3CA; border-radius: 8px; font: inherit; font-size: 12px; background: var(--surface); }
+.persona-mood-small-button { min-height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: #4A4E55; font: inherit; font-size: 11px; cursor: pointer; }
+.persona-mood-small-button:hover:not(:disabled) { border-color: var(--mood-teal); color: var(--mood-teal); }
+.persona-mood-small-button:disabled { opacity: .5; cursor: default; }
+.persona-mood-missing-defaults { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; color: var(--muted); font-size: 11px; }
+.persona-mood-missing-defaults button { min-height: 26px; padding: 0 9px; border: 1px dashed var(--line); border-radius: 999px; background: transparent; color: var(--mood-teal); font: inherit; font-size: 11px; cursor: pointer; }
+.persona-mood-restore-all { font-weight: 600; }
+.persona-mood-error, .persona-mood-message { margin: 0; padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; }
+.persona-mood-error { border-color: var(--warn); background: var(--warn-soft); color: var(--warn-ink); }
+
+/* graph */
+.persona-mood-graph { display: grid; gap: 8px; min-width: 0; }
+.persona-mood-graph-hint { margin: 0; color: var(--ink-2); font-size: 11px; }
+.persona-mood-chart { display: block; width: 100%; max-width: 640px; height: auto; margin: 0 auto; touch-action: none; user-select: none; }
+.persona-mood-plot { fill: none; stroke: #D6D3CA; stroke-width: 1; }
+.persona-mood-region { stroke: none; }
+.persona-mood-region-unpleasant { fill: #A23E48; fill-opacity: .07; }
+.persona-mood-region-oppressed { fill: #3B6EA8; fill-opacity: .07; }
+.persona-mood-region-aroused { fill: #8A4F7D; fill-opacity: .07; }
+.persona-mood-region-excited { fill: #C2702B; fill-opacity: .08; }
+.persona-mood-region-calm { fill: #1C5F5A; fill-opacity: .06; }
+.persona-mood-region-label { fill: #6F737A; font-size: 11px; font-weight: 700; pointer-events: none; }
+.persona-mood-axis-label { fill: #8A8E95; font-size: 10px; pointer-events: none; }
+.persona-mood-edge { cursor: pointer; outline: none; }
+.persona-mood-edge-line { fill: none; stroke: var(--mood-edge); opacity: .6; pointer-events: none; }
+.persona-mood-edge.is-blocked .persona-mood-edge-line { stroke-dasharray: 4 4; }
+.persona-mood-edge.is-hovered .persona-mood-edge-line { stroke: #5F7F7A; opacity: .95; }
+.persona-mood-edge.is-selected .persona-mood-edge-line, .persona-mood-edge:focus-visible .persona-mood-edge-line { stroke: var(--mood-orange); opacity: 1; }
+.persona-mood-edge .persona-mood-edge-hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; }
+.persona-mood-arrow-muted { fill: var(--mood-edge); }
+.persona-mood-arrow-selected-fill { fill: var(--mood-orange); }
+.persona-mood-point { cursor: grab; touch-action: none; outline: none; }
+.persona-mood-point-hit { fill: transparent; stroke: transparent; pointer-events: all; }
+.persona-mood-point-dot { fill: #2B2E33; stroke: none; }
+.persona-mood-point.is-source .persona-mood-point-dot { fill: var(--mood-orange); }
+.persona-mood-point.is-target .persona-mood-point-dot { fill: var(--surface); stroke: var(--mood-orange); stroke-width: 2; }
+.persona-mood-point:focus-visible .persona-mood-point-dot { stroke: var(--mood-orange); stroke-width: 2.5; }
+.persona-mood-point.is-dragging { cursor: grabbing; }
+.persona-mood-point text { fill: #33373D; font-size: 11px; paint-order: stroke; stroke: var(--surface); stroke-opacity: .7; stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
+.persona-mood-point text.is-selected { fill: var(--mood-orange); font-weight: 700; }
+.persona-mood-edge-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.persona-mood-edge-chip { display: inline-flex; min-height: 28px; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-2); cursor: pointer; font-size: 11px; }
+.persona-mood-edge-chip span:last-child { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+.persona-mood-edge-chip.is-blocked { border-style: dashed; }
+.persona-mood-edge-chip.is-selected { border-color: var(--mood-orange); background: var(--mood-orange-soft); color: var(--mood-orange); }
+.persona-mood-edge-chip.is-selected span:last-child { color: var(--mood-orange); }
+
+/* edge editor */
+.persona-mood-edge-editor { display: grid; gap: 8px; padding-top: 4px; }
+.persona-mood-edge-heading { display: grid; gap: 4px; }
+.persona-mood-edge-title { margin: 0; color: var(--mood-orange); font-size: 18px; font-weight: 700; line-height: 1.3; }
+.persona-mood-edge-arrow { margin: 0 8px; }
+.persona-mood-edge-note { margin: 0; color: var(--muted); font-size: 11px; }
+.persona-mood-edge-note .is-custom { color: var(--mood-teal); font-weight: 600; }
+.persona-mood-edge-controls, .persona-mood-sub-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 24px; align-items: start; }
+.persona-mood-edge-column { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.persona-mood-slider { display: grid; gap: 2px; min-width: 0; color: var(--ink); }
+.persona-mood-slider-heading { display: grid; gap: 1px; }
+.persona-mood-slider-heading > span:first-child { font-size: 12px; font-weight: 700; color: #33373D; }
+.persona-mood-slider-hint { font-size: 10px; color: var(--muted); }
+.persona-mood-slider-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.persona-mood-slider-row input[type="range"] { width: 100%; min-height: 26px; margin: 0; accent-color: var(--mood-teal); cursor: pointer; }
+.persona-mood-slider output { min-width: 52px; text-align: right; color: var(--mood-teal); font-family: var(--mono); font-size: 12px; font-weight: 600; }
+.persona-mood-jump-toggle { display: flex; min-height: 30px; align-items: center; gap: 8px; color: #33373D; font-size: 12px; cursor: pointer; }
+.persona-mood-jump-toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--mood-teal); }
+.persona-mood-edge-reset { justify-self: start; }
+.persona-mood-coordinate-readout { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid #EFEDE7; color: #4A4E55; font-size: 11px; }
+.persona-mood-coordinate-readout > span { font-family: var(--mono); }
+.persona-mood-empty-edge, .persona-mood-preview-source, .persona-mood-global-note { margin: 0; color: var(--muted); font-size: 11px; }
+
+/* matrix: 20px cells, rows are cell + 2px spacing */
+.persona-mood-matrix-scroll { max-width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; }
+.persona-mood-matrix { width: max-content; border-collapse: separate; border-spacing: 2px; font-size: 10px; }
+.persona-mood-matrix th { padding: 0 4px 0 0; background: transparent; color: #5A5E65; font-weight: 400; line-height: 20px; }
+.persona-mood-matrix td { width: 20px; height: 20px; padding: 0; line-height: 0; }
+.persona-mood-matrix tbody th { position: sticky; left: 0; z-index: 1; height: 20px; text-align: right; white-space: nowrap; background: var(--surface); }
+.persona-mood-matrix thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+.persona-mood-matrix thead th:first-child { left: 0; z-index: 2; white-space: nowrap; text-align: right; font-size: 9px; }
+.persona-mood-matrix thead th:not(:first-child) { padding: 0 0 3px; width: 20px; line-height: 20px; writing-mode: vertical-rl; text-orientation: mixed; text-align: end; white-space: nowrap; }
+.persona-mood-matrix th.is-hovered { color: var(--mood-teal); font-weight: 700; }
+.persona-mood-matrix-cell { position: relative; display: block; box-sizing: border-box; width: 20px; min-width: 20px; height: 20px; min-height: 20px; padding: 0; border: 0; border-radius: 3px; background-color: var(--surface); cursor: pointer; }
+.persona-mood-matrix-cell:hover { outline: 1px solid var(--ink-2); outline-offset: 1px; }
+.persona-mood-matrix-cell.is-blocked { background-image: repeating-linear-gradient(135deg, transparent 0 3px, rgba(162, 62, 72, .55) 3px 4.5px); }
+.persona-mood-matrix-cell.is-selected, .persona-mood-matrix-cell:focus-visible { outline: 2px solid var(--mood-orange); outline-offset: 1px; }
+.persona-mood-matrix-cell i { position: absolute; top: 2px; right: 2px; width: 4px; height: 4px; border-radius: 50%; background: var(--mood-orange); }
+.persona-mood-matrix-diagonal { box-sizing: border-box; width: 20px; height: 20px; border-radius: 3px; background: #E4E5E2; }
+.persona-mood-matrix-legend { display: flex; align-items: center; gap: 5px; margin-top: 6px; color: var(--muted); font-size: 11px; }
+.persona-mood-matrix-legend i { display: block; width: 18px; height: 8px; border-radius: 2px; }
+.persona-mood-matrix-hint { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+.persona-mood-preview-example { margin: 2px 0 0; padding: 7px 12px; border: 1px solid var(--line); border-radius: 10px; color: #4A4E55; font-size: 12px; }
+.persona-mood-preview-example strong { color: var(--mood-teal); }
+
+/* 其他 placeholder */
+.persona-mood-other-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.persona-mood-other-grid > div { display: grid; align-content: start; gap: 3px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 8px; }
+.persona-mood-other-grid strong { font-size: 12px; }
+.persona-mood-other-grid span { color: var(--muted); font-size: 10px; line-height: 1.4; }
+.persona-mood-other-grid b { color: var(--mood-teal); font-family: var(--mono); font-size: 10px; font-weight: 500; }
+
+@media (max-width: 760px) {
+  .persona-mood-edge-controls, .persona-mood-sub-controls, .persona-mood-other-grid { grid-template-columns: minmax(0, 1fr); }
+  .persona-mood-add-form input { width: auto; flex: 1; }
+}
+
+.persona-mood-add-form .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
