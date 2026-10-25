@@ -174,7 +174,7 @@ test('回复后异步评估并更新 PAD 状态，下一次提示词带情绪块
       injectedAffectBlocks?: { mood?: string; float?: string; affinity?: string };
     };
     assert.deepEqual(detail.promptBlocks?.map((block) => block.id), [
-      'persona', 'rules', 'groupNote', 'mood', 'affinity', 'float',
+      'persona', 'innerVoice', 'rules', 'groupNote', 'mood', 'affinity', 'float',
     ]);
     assert.match(detail.injectedAffectBlocks?.mood ?? '', /你的主情绪是「[^」]+」/u);
     assert.ok(detail.injectedAffectBlocks?.mood?.includes('同时存在的副情绪：'));
@@ -249,7 +249,7 @@ test('mood.enabled 关闭时评估不调用且提示词没有情绪块', async (
     assert.equal(repository.getMoodState(groupSession.account), undefined);
     assert.deepEqual(repository.recentMoodEvents(groupSession.account, 10), []);
     const detail = repository.recentDecisions(1)[0]?.detail as { promptBlocks?: Array<{ id: string }> };
-    assert.deepEqual(detail.promptBlocks?.map((block) => block.id), ['persona', 'rules', 'groupNote', 'affinity']);
+    assert.deepEqual(detail.promptBlocks?.map((block) => block.id), ['persona', 'innerVoice', 'rules', 'groupNote', 'affinity']);
   });
 });
 
@@ -303,7 +303,7 @@ test('情绪评估更新发送者好感，下一次提示词按顺序注入 affi
     const secondPrompt = harness.replyPrompts[1] ?? '';
     assert.ok(secondPrompt.includes('你和"小明"已经熟悉'));
     const nextDetail = repository.recentDecisions(1)[0]?.detail as { promptBlocks?: Array<{ id: string }> };
-    assert.deepEqual(nextDetail.promptBlocks?.map((block) => block.id), ['persona', 'rules', 'groupNote', 'mood', 'affinity']);
+    assert.deepEqual(nextDetail.promptBlocks?.map((block) => block.id), ['persona', 'innerVoice', 'rules', 'groupNote', 'mood', 'affinity']);
 
     await harness.moodService.idle();
     const independentValue = repository.getPersonaAffinityState(account, 42, 'default')?.value;

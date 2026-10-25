@@ -40,6 +40,38 @@ test('pipeline 人设缓存保留 frontmatter 中的好感模式', async () => {
   });
 });
 
+test('回复 system prompt 按会话档位覆盖人设括号心声策略', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    fs.writeFileSync(path.join(personaRoot, 'personas', 'default.md'), [
+      '---',
+      'name: 心声档位测试',
+      'aliases: []',
+      'identity: { kind: 测试角色, selfAwareness: 知道身份, nameRule: fixed }',
+      'traits: { order: 0, morality: 0, talk: 0, mind: 0 }',
+      'speech:',
+      '  firstPerson: 我',
+      '  length: { min: 1, max: 100 }',
+      '  segmenting: multi',
+      '  innerVoice: full',
+      '  catchphrases: []',
+      'boundaries: { hard: [不编造] }',
+      '---',
+      '背景',
+    ].join('\n'), 'utf8');
+    const config = makeConfig({
+      sessions: { [sessionId(groupSession)]: { innerVoice: 'hidden' } },
+    });
+    const harness = createHarness(repository, config, personaRoot);
+
+    const result = await harness.pipeline(makeIncoming({ messageId: 'inner-voice-prompt' }));
+    const system = harness.modelRequests[0]?.messages.find(({ role }) => role === 'system')?.content ?? '';
+
+    assert.equal(result.reason, 'replied');
+    assert.ok(system.includes('不要写任何括号旁白、动作或心理描写'));
+    assert.ok(!system.includes('可以用全角括号写动作和心理'));
+  });
+});
+
 test('人设 mustReply 短语可在 mention_only 模式触发回复', async () => {
   await withRepository(async (repository, personaRoot) => {
     const key = sessionId(groupSession);

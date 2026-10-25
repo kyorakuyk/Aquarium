@@ -54,6 +54,7 @@ function createUnusedTemplates(): PromptTemplateSet {
     replySystem: {
       source: '', version: '', system: '', groupNote: '', request: '',
       groupTags: '', memberTags: '', impressions: '', privateFacts: '', altRecent: '', groupEvents: '', knownFacts: '', stickers: '',
+      innerVoiceFull: '', innerVoiceLight: '', innerVoiceHidden: '',
     },
     judge: { source: '', version: '', system: '', user: '' },
     vision: { source: '', version: '', system: '', user: '' },

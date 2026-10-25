@@ -31,6 +31,7 @@ export interface BuildPromptOptions {
     privacyRule?: string;
     float?: string;
     stickers?: string;
+    innerVoice?: string;
   };
 }
 
@@ -62,6 +63,7 @@ function resolvePromptBlocks(options: BuildPromptOptions): RenderedPromptBlock[]
     : '';
   return [
     { id: 'persona', text: options.persona },
+    { id: 'innerVoice', text: options.blocks?.innerVoice ?? '' },
     { id: 'traits', text: options.blocks?.traits ?? '' },
     {
       id: 'rules',
@@ -92,7 +94,7 @@ export function buildPromptMessages(
 ): OpenAI.ChatCompletionMessageParam[] {
   const blocks = resolvePromptBlocks(options);
   const template = options.replySystemTemplate ?? promptTemplateStore.get().replySystem;
-  const systemBlockIds = new Set(['persona', 'traits', 'rules', 'groupNote', 'groupTags']);
+  const systemBlockIds = new Set(['persona', 'innerVoice', 'traits', 'rules', 'groupNote', 'groupTags']);
   const systemContent = [
     ...blocks.filter(({ id, text }) => systemBlockIds.has(id) && text.length > 0).map(({ text }) => text),
     RECENT_DIARY_SAFETY_RULE,

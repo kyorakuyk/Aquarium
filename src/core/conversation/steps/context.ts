@@ -1,4 +1,5 @@
 import { buildPromptMessages, describePromptBlocks, hashPromptMessages } from '../../prompt/index.ts';
+import { resolveInnerVoice } from './inner-voice-mode.ts';
 import { captionIncomingImages, messageTextWithImageCaptions } from '../../images/index.ts';
 import { renderPersonaPrompt, personaAudienceTierFromAffinity } from '../../../persona/injection.ts';
 import { effectiveTalkLevel, renderTraitsBlock } from '../../../persona/traits.ts';
@@ -100,6 +101,12 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     messageText: ctx.message.plainText,
     historyText: context.slice(-8).map((record) => record.plainText).join('\n'),
   });
+  const innerVoiceMode = resolveInnerVoice(config.sessions[ctx.currentSessionId], loadedPersona);
+  const innerVoiceRule = {
+    full: ctx.state.promptTemplates.replySystem.innerVoiceFull,
+    light: ctx.state.promptTemplates.replySystem.innerVoiceLight,
+    hidden: ctx.state.promptTemplates.replySystem.innerVoiceHidden,
+  }[innerVoiceMode];
   const tagBlocks = ctx.options.impressionsService?.promptBlocks({
     session: ctx.message.session,
     sessionId: ctx.currentSessionId,
@@ -212,6 +219,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     counterpartRule: counterpartContext.rule,
     speakerAnnotations: counterpartContext.speakerAnnotations,
     blocks: {
+      innerVoice: innerVoiceRule,
       traits: traitsBlock,
       ...moodBlocks,
       ...(tagBlocks.groupTags === undefined ? {} : { groupTags: tagBlocks.groupTags }),

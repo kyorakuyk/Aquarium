@@ -714,7 +714,7 @@ test('群聊提示分开注入 fact 知识与符合范围的 view 印象', async
       droppedTags?: number;
     };
     assert.deepEqual(groupDetail.promptBlocks?.map((block) => block.id), [
-      'persona', 'rules', 'groupNote', 'memberTags', 'impressions',
+      'persona', 'innerVoice', 'rules', 'groupNote', 'memberTags', 'impressions',
     ]);
     assert.equal(groupDetail.droppedTags, 4);
 
@@ -735,7 +735,7 @@ test('群聊提示分开注入 fact 知识与符合范围的 view 印象', async
       promptBlocks?: Array<{ id: string }>;
       droppedTags?: number;
     };
-    assert.deepEqual(privateDetail.promptBlocks?.map((block) => block.id), ['persona', 'rules', 'groupNote']);
+    assert.deepEqual(privateDetail.promptBlocks?.map((block) => block.id), ['persona', 'innerVoice', 'rules', 'groupNote']);
     assert.equal(privateDetail.droppedTags, undefined);
   });
 });

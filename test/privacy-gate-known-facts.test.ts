@@ -119,7 +119,7 @@ test('touched L1 fact enters knownFacts after memberTags and is excluded from de
     assert.equal(JSON.stringify(decision?.detail).includes(privateText), false);
     assert.deepEqual(
       (decision?.detail as { promptBlocks?: Array<{ id: string }> }).promptBlocks?.map(({ id }) => id),
-      ['persona', 'rules', 'groupNote', 'memberTags', 'knownFacts'],
+      ['persona', 'innerVoice', 'rules', 'groupNote', 'memberTags', 'knownFacts'],
     );
     assert.deepEqual(adapter.sent.length, 1);
   });

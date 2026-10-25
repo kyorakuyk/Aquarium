@@ -12,6 +12,9 @@ export interface ReplySystemTemplate extends PromptTemplate {
   groupEvents: string;
   knownFacts: string;
   stickers: string;
+  innerVoiceFull: string;
+  innerVoiceLight: string;
+  innerVoiceHidden: string;
 }
 
 export type PlaceholderValidator = (
@@ -36,8 +39,11 @@ export function parseReplySystemTemplate(
     || typeof fields.altRecent !== 'string' || fields.altRecent.length === 0
     || typeof fields.groupEvents !== 'string' || fields.groupEvents.length === 0
     || typeof fields.knownFacts !== 'string' || fields.knownFacts.length === 0
-    || typeof fields.stickers !== 'string' || fields.stickers.length === 0) {
-    throw new Error('reply-system.md 必须包含非空 system、groupNote、request、groupTags、memberTags、impressions、privateFacts、altRecent、groupEvents、knownFacts 和 stickers 文本');
+    || typeof fields.stickers !== 'string' || fields.stickers.length === 0
+    || typeof fields.innerVoiceFull !== 'string' || fields.innerVoiceFull.length === 0
+    || typeof fields.innerVoiceLight !== 'string' || fields.innerVoiceLight.length === 0
+    || typeof fields.innerVoiceHidden !== 'string' || fields.innerVoiceHidden.length === 0) {
+    throw new Error('reply-system.md 必须包含非空 system、groupNote、request、groupTags、memberTags、impressions、privateFacts、altRecent、groupEvents、knownFacts、stickers 和 innerVoiceFull/Light/Hidden 文本');
   }
   const replySystem = {
     ...template,
@@ -52,6 +58,9 @@ export function parseReplySystemTemplate(
     groupEvents: fields.groupEvents,
     knownFacts: fields.knownFacts,
     stickers: fields.stickers,
+    innerVoiceFull: fields.innerVoiceFull,
+    innerVoiceLight: fields.innerVoiceLight,
+    innerVoiceHidden: fields.innerVoiceHidden,
   };
   validatePlaceholders('reply-system.md', replySystem.system, ['ownerRule', 'counterpartRule'], ['ownerRule', 'counterpartRule']);
   validatePlaceholders('reply-system.md', replySystem.groupNote, ['groupNote'], ['groupNote']);
@@ -64,5 +73,8 @@ export function parseReplySystemTemplate(
   validatePlaceholders('reply-system.md', replySystem.groupEvents, ['events'], ['events']);
   validatePlaceholders('reply-system.md', replySystem.knownFacts, ['facts'], ['facts']);
   validatePlaceholders('reply-system.md', replySystem.stickers, ['list'], ['list']);
+  validatePlaceholders('reply-system.md', replySystem.innerVoiceFull, [], []);
+  validatePlaceholders('reply-system.md', replySystem.innerVoiceLight, [], []);
+  validatePlaceholders('reply-system.md', replySystem.innerVoiceHidden, [], []);
   return replySystem;
 }
