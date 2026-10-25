@@ -4,6 +4,7 @@ import type { PageId } from '../components/Sidebar.tsx';
 import { personaEditorViewClass } from '../persona-editor-view.ts';
 import { readPersonaPageTabs, writePersonaPageTabs } from '../persona-page-tabs.ts';
 import { redactSensitiveText } from '../../../src/core/impressions/sensitive-text.ts';
+import type { PersonaImportResponse } from '../../../src/persona/persona-import.ts';
 import { hasPersonaIdCollision, normalizePersonaId, validPersonaId } from '../../../src/persona/persona-id.ts';
 import {
   buildSections,
@@ -17,6 +18,7 @@ import {
 import { PersonaComparisonDialog } from './PersonaComparisonDialog.tsx';
 import { PersonaEditorToolbar } from './PersonaEditorToolbar.tsx';
 import { PersonaFields } from './PersonaFields.tsx';
+import { PersonaImportBanner } from './PersonaImportBanner.tsx';
 import { PersonaLibraryToolbar, type PersonaCard } from './PersonaLibraryToolbar.tsx';
 import { PersonaPreview, type PersonaPreviewResult } from './PersonaPreview.tsx';
 
@@ -32,6 +34,9 @@ interface PersonaImportDraft {
   form: PersonaSectionsForm;
   mappedCount: number;
   otherCount: number;
+  repairCount: number;
+  fixedCount: number;
+  warnings: PersonaImportResponse['warnings'];
 }
 
 export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => void }) {
@@ -62,6 +67,7 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const [fileDragActive, setFileDragActive] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const fileDragDepth = useRef(0);
+  const personaLibraryBusy = busy || Boolean(importDraft && selectedId);
 
   const loadLibrary = useCallback(async (preferred?: string) => {
     const [items, status] = await Promise.all([
@@ -292,6 +298,11 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   }
 
   async function importFile(file: File) {
+    if (importDraft) {
+      setError('请先接受或放弃当前导入草稿，再导入其他文件。');
+      if (fileInput.current) fileInput.current.value = '';
+      return;
+    }
     if (!file.name.toLowerCase().endsWith('.md')) {
       setError('请导入 Markdown（.md）文件。');
       return;
@@ -300,10 +311,20 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
     setError('');
     try {
       const text = await file.text();
-      const imported = await apiRequest<{ draft: string; mappedCount: number; otherCount: number }>('/api/personas/import', {
+      const imported = await apiRequest<PersonaImportResponse>('/api/personas/import', {
         method: 'POST', body: JSON.stringify({ filename: file.name, text }),
       });
-      setImportDraft({ filename: file.name, source: text, draft: imported.draft, form: parseSections(imported.draft), mappedCount: imported.mappedCount, otherCount: imported.otherCount });
+      setImportDraft({
+        filename: file.name,
+        source: text,
+        draft: imported.draft,
+        form: parseSections(imported.draft),
+        mappedCount: imported.mappedCount,
+        otherCount: imported.otherCount,
+        repairCount: imported.repairCount,
+        fixedCount: imported.fixedCount,
+        warnings: imported.warnings,
+      });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '导入失败');
     } finally {
@@ -331,11 +352,19 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
 
   function selectPersona(id: string) {
     if (id === selectedId) return;
+    if (importDraft && selectedId) {
+      setError('请先接受或放弃当前导入草稿，再切换人设。');
+      return;
+    }
     if (dirty && !window.confirm('切换人设会放弃当前未保存更改，仍要继续吗？')) return;
     setSelectedId(id);
   }
 
   async function createPersona() {
+    if (importDraft && selectedId) {
+      setError('请先接受或放弃当前导入草稿，再创建其他人设。');
+      return;
+    }
     const id = normalizePersonaId(newId);
     if (!validPersonaId(id)) {
       setError('人设 ID 只能包含字母、数字、下划线和连字符，且长度为 1–40 个字符。');
@@ -436,24 +465,29 @@ export function PersonasPage({ onNavigate }: { onNavigate: (page: PageId) => voi
         accounts={accounts}
         selectedId={selectedId}
         loading={loading}
-        busy={busy}
+        busy={personaLibraryBusy}
         onSelect={selectPersona}
         onImport={() => fileInput.current?.click()}
         onNew={() => setNewId((current) => current || 'new-persona')}
       />
       <input id="persona-file" ref={fileInput} className="visually-hidden" type="file" accept=".md,text/markdown" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) void importFile(file); }} />
       {error && <div className="notice notice-warn persona-page-notice" role="alert">{error}</div>}
-      {newId && <div className="new-persona-row"><label htmlFor="new-persona-id">新建 ID</label><input id="new-persona-id" value={newId} onChange={(event) => setNewId(event.currentTarget.value)} /><button className="button button-primary" type="button" disabled={busy} onClick={() => void createPersona()}>创建</button><button className="text-button" type="button" disabled={busy} onClick={() => setNewId('')}>取消</button></div>}
+      {newId && <div className="new-persona-row"><label htmlFor="new-persona-id">新建 ID</label><input id="new-persona-id" value={newId} onChange={(event) => setNewId(event.currentTarget.value)} /><button className="button button-primary" type="button" disabled={personaLibraryBusy} onClick={() => void createPersona()}>创建</button><button className="text-button" type="button" disabled={busy} onClick={() => setNewId('')}>取消</button></div>}
 
       {importDraft && (
-        <section className="persona-import-banner" aria-label="人设导入草稿">
-          <div><strong>“{redactSensitiveText(importDraft.filename)}”已整理好</strong><p>拆进了 {importDraft.mappedCount} 个表单项，{importDraft.otherCount} 段放进了“其他小节”。确认前不会保存。</p></div>
-          <div className="persona-import-actions">
-            <button className="button button-secondary" type="button" disabled={busy} onClick={() => setCompareOpen(true)}>逐项对照</button>
-            <button className="text-button" type="button" disabled={busy} onClick={() => { setImportDraft(null); setCompareOpen(false); }}>放弃</button>
-            <button className="button button-primary" type="button" disabled={busy || !selectedId} onClick={acceptImport}>接受</button>
-          </div>
-        </section>
+        <PersonaImportBanner
+          filename={redactSensitiveText(importDraft.filename)}
+          mappedCount={importDraft.mappedCount}
+          otherCount={importDraft.otherCount}
+          repairCount={importDraft.repairCount}
+          fixedCount={importDraft.fixedCount}
+          warnings={importDraft.warnings}
+          busy={busy}
+          canAccept={Boolean(selectedId)}
+          onCompare={() => setCompareOpen(true)}
+          onDiscard={() => { setImportDraft(null); setCompareOpen(false); }}
+          onAccept={acceptImport}
+        />
       )}
 
       {selected ? (

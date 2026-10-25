@@ -9,7 +9,12 @@
 .persona-library-chip small { font-size: 11px; opacity: .86; }
 .persona-library-actions { display: flex; flex: none; gap: 8px; }
 .persona-import-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 15px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-accent); }
+.persona-import-summary { min-width: 0; flex: 1; }
 .persona-import-banner p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+.persona-import-warning { margin-top: 10px; }
+.persona-import-warning ul { margin: 7px 0 0; padding-left: 19px; }
+.persona-import-warning li + li { margin-top: 5px; }
+.persona-import-warning-mark { display: inline-block; margin-left: 6px; padding: 1px 4px; border-radius: 4px; background: var(--warn-soft); color: var(--warn-ink); }
 .persona-import-actions { display: flex; flex: none; align-items: center; gap: 8px; }
 .persona-editor-sticky { position: sticky; top: 0; z-index: 8; margin: 0 0 16px; padding: 7px 0 0; border-bottom: 1px solid var(--line); background: var(--bg); }
 .persona-editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 5px 1px 9px; }

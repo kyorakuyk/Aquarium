@@ -16,8 +16,6 @@ import type { PipelineModelCall } from '../core/conversation/pipeline.ts';
 import { createAffinityService } from '../core/affinity/service.ts';
 import { promptTemplateStore } from '../core/prompt/templates.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
-import { isBudgetExceededError } from '../llm/budget.ts';
-import { callSlot } from '../llm/slots.ts';
 import { effectiveTalkLevel, renderTraitsBlock } from '../persona/traits.ts';
 import { loadPersona, parsePersonaMarkdown, updatePersonaTraits, validatePersonaSettingsFrontmatter, type PersonaTraits } from '../persona/load.ts';
 import {
@@ -29,6 +27,7 @@ import {
 } from '../persona/sections.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import { personaPath, validPersonaId } from './persona-paths.ts';
+import { registerPersonaImportRoute } from './persona-import-route.ts';
 import { registerPersonaCounterpartRoutes } from './persona-counterpart-routes.ts';
 import { recordPersonaVersionOnSave, registerPersonaVersionRoutes } from './persona-version-routes.ts';
 
@@ -45,49 +44,15 @@ const personaTraitsSchema: z.ZodType<PersonaTraits> = z.object({
   openness: personaTraitValueSchema.default(0),
   imitation: personaTraitValueSchema.default(0),
 }).strict();
-const personaImportTraitsSchema = z.object({
-  order: personaTraitValueSchema,
-  morality: personaTraitValueSchema,
-  talk: personaTraitValueSchema,
-  mind: personaTraitValueSchema,
-  humor: personaTraitValueSchema,
-  openness: personaTraitValueSchema,
-  imitation: personaTraitValueSchema,
-}).strict();
 const personaBodySchema = z.object({
   markdown: z.string().max(100_000),
   traits: personaTraitsSchema.optional(),
 }).strict();
 const accountPersonaSchema = z.object({ persona: z.string() }).strict();
-const personaImportSchema = z.object({
-  filename: z.string().min(1).max(255),
-  text: z.string().min(1).max(100_000),
-}).strict();
 const personaPreviewSchema = z.object({
   content: z.string().max(100_000),
   name: z.string().max(100).optional(),
 }).strict();
-const personaImportFieldsSchema = z.object({
-  身份: z.string().max(10_000),
-  年龄: z.string().max(10_000),
-  背景: z.string().max(10_000),
-  说话方式: z.string().max(10_000),
-  口头禅: z.array(z.string().max(10_000)).max(100),
-  常用表情: z.array(z.string().max(10_000)).max(100),
-  对熟人: z.string().max(10_000),
-  对陌生人: z.string().max(10_000),
-  对主人: z.string().max(10_000),
-  底线: z.array(z.string().max(10_000)).max(100),
-}).strict();
-const personaImportResultSchema = z.object({
-  fields: personaImportFieldsSchema,
-  traits: personaImportTraitsSchema,
-  other: z.array(z.object({
-    heading: z.string().max(255).refine((value) => !/[\r\n]/u.test(value)),
-    text: z.string().max(100_000),
-  }).strict()).max(100),
-}).strict();
-
 interface PersonaRouteOptions {
   getConfig: () => AquariumConfig;
   saveConfig: (config: AquariumConfig) => void | Promise<void>;
@@ -127,6 +92,11 @@ function parseBody<T>(body: unknown, schema: z.ZodType<T>): T | undefined {
 }
 
 export function registerPersonaRoutes(app: Hono, root: string, options: PersonaRouteOptions): void {
+  registerPersonaImportRoute(app, {
+    getConfig: options.getConfig,
+    repository: options.repository,
+    ...(options.callModel ? { callModel: options.callModel } : {}),
+  });
   registerPersonaCounterpartRoutes(app, root, {
     getConfig: options.getConfig,
     repository: options.repository,
@@ -298,77 +268,4 @@ export function registerPersonaRoutes(app: Hono, root: string, options: PersonaR
     return context.json({ id, saved: true });
   });
 
-  app.post('/api/personas/import', async (context) => {
-    let rawBody: unknown;
-    try { rawBody = await context.req.json(); } catch { return context.json({ error: 'Invalid JSON' }, 400); }
-    const body = parseBody(rawBody, personaImportSchema);
-    if (!body || /[\\/\u0000-\u001f\u007f]/u.test(body.filename) || body.filename === '.' || body.filename === '..'
-      || body.text.trim().length === 0) {
-      return context.json({ error: 'Invalid persona import' }, 400);
-    }
-    const template = promptTemplateStore.get().personaImport;
-    const messages: Parameters<PipelineModelCall>[1] = [
-      { role: 'system', content: template.system },
-      { role: 'user', content: template.user.replaceAll('{{text}}', () => body.text) },
-    ];
-    let modelResult;
-    try {
-      modelResult = await (options.callModel ?? callSlot)('extract', messages, {
-        config: options.getConfig(),
-        account: null,
-        costToday: options.repository.costToday,
-        recordUsage: options.repository.recordUsage,
-      });
-    } catch (error) {
-      if (isBudgetExceededError(error)) {
-        return context.json({
-          error: 'Persona import failed',
-          reason: '预算已用尽',
-          code: 'budget_exceeded',
-        }, 429);
-      }
-      return context.json({ error: 'Persona import failed', reason: '模型调用失败' }, 502);
-    }
-    let modelJson: unknown;
-    try {
-      modelJson = JSON.parse(modelResult.text);
-    } catch {
-      return context.json({ error: 'Invalid persona import response', reason: '模型返回内容不是有效 JSON' }, 422);
-    }
-    const parsed = personaImportResultSchema.safeParse(modelJson);
-    if (!parsed.success) {
-      return context.json({ error: 'Invalid persona import response', reason: '模型返回字段或 traits 数值不符合要求' }, 422);
-    }
-    const extracted = parsed.data;
-    const other = extracted.other.filter((section) => section.text.trim().length > 0);
-    const fields: PersonaSectionFields = Object.fromEntries(
-      Object.entries(extracted.fields).map(([heading, value]) => [
-        heading,
-        Array.isArray(value) ? value.map(redactSensitiveText) : redactSensitiveText(value),
-      ]),
-    ) as PersonaSectionFields;
-    const form: PersonaSectionsForm = {
-      title: '# {{name}}',
-      introduction: '',
-      traits: extracted.traits,
-      fields,
-      other: other.map((section) => ({
-        heading: redactSensitiveText(section.heading),
-        text: redactSensitiveText(section.text),
-      })),
-      metadata: {},
-      lineEnding: '\n',
-    };
-    let draft: string;
-    try {
-      draft = buildSections(form);
-    } catch {
-      return context.json({ error: 'Invalid persona import response', reason: '模型返回内容无法生成草稿' }, 422);
-    }
-    const mappedFields = Object.values(extracted.fields).filter((value) => Array.isArray(value)
-      ? value.some((item) => item.trim().length > 0)
-      : value.trim().length > 0).length;
-    const mappedTraits = Object.values(extracted.traits).filter((value) => value !== 0).length;
-    return context.json({ draft, mappedCount: mappedFields + mappedTraits, otherCount: other.length });
-  });
 }

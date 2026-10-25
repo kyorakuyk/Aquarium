@@ -2,8 +2,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
+import { createElement } from 'react';
+import type { ReactElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { fileURLToPath } from 'node:url';
+import { createServer } from 'vite';
 import { redactSensitiveText } from '../src/core/impressions/sensitive-text.ts';
 import { promptTemplateStore } from '../src/core/prompt/templates.ts';
+import type { SlotCallOptions } from '../src/llm/slots.ts';
 import { parsePersonaMarkdown } from '../src/persona/load.ts';
 import { buildSections, parseSections, renderPersonaSectionBlocks } from '../src/persona/sections.ts';
 import { effectiveTalkLevel, renderTraitsBlock } from '../src/persona/traits.ts';
@@ -246,25 +252,21 @@ test('persona preview redacts credential-shaped text from its API response', asy
   });
 });
 
-test('persona import uses the extract slot and returns a redacted unsaved draft', async () => {
+test('persona import uses oneoff, strips citations, redacts secrets, and returns an unsaved draft', async () => {
   const syntheticSecret = ['sk', 'test', 'secret', '123456'].join('-');
-  const sourceText = '一段待整理的人设资料。';
-  const calls: Array<{ slot: string; messages: unknown[] }> = [];
+  const sourceText = syntheticSecret;
+  const calls: Array<{ slot: string; messages: unknown[]; options: SlotCallOptions }> = [];
   const extracted = {
     fields: {
-      身份: syntheticSecret,
-      年龄: '成年',
-      背景: '',
-      说话方式: '',
-      口头禅: ['你好'],
-      常用表情: [],
-      对熟人: '',
-      对陌生人: '',
-      对主人: '',
-      底线: [],
+      身份: [{ text: syntheticSecret, src: syntheticSecret }],
+      年龄: [], 背景: [], 说话方式: [], 口头禅: [], 常用表情: [],
+      对熟人: [], 对陌生人: [], 对主人: [], 底线: [],
     },
-    traits: { order: 1.3, morality: 0, talk: -1.2, mind: 0, humor: 1, openness: 0.5, imitation: 2 },
-    other: [{ heading: '经历', text: '后来搬到海边。' }, { heading: '', text: '' }],
+    traits: {
+      order: { value: 0, src: '' }, morality: { value: 0, src: '' }, talk: { value: 0, src: '' },
+      mind: { value: 0, src: '' }, humor: { value: 0, src: '' }, openness: { value: 0, src: '' }, imitation: { value: 0, src: '' },
+    },
+    other: [],
   };
 
   await withPanel(async ({ app }) => {
@@ -274,27 +276,30 @@ test('persona import uses the extract slot and returns a redacted unsaved draft'
       body: JSON.stringify({ filename: 'new-card.md', text: sourceText }),
     });
     assert.equal(response.status, 200);
-    const result = await response.json() as { draft: string; mappedCount: number; otherCount: number };
-    assert.equal(result.mappedCount, 8);
-    assert.equal(result.otherCount, 1);
+    const result = await response.json() as { draft: string; mappedCount: number; otherCount: number; warnings: unknown[] };
+    assert.equal(result.mappedCount, 1);
+    assert.equal(result.otherCount, 0);
+    assert.deepEqual(result.warnings, []);
     assert.ok(!result.draft.includes(syntheticSecret), 'draft must not expose imported credential text');
     assert.ok(result.draft.includes('[敏感内容已隐藏]'));
+    assert.ok(!result.draft.includes('src:'), 'citations are validation evidence only');
     const form = parseSections(result.draft);
     assert.equal(form.fields.身份, '[敏感内容已隐藏]');
-    assert.deepEqual(form.fields.口头禅, ['你好']);
-    assert.deepEqual(form.traits, extracted.traits);
-    assert.deepEqual(form.other, [extracted.other[0]]);
+    assert.deepEqual(form.fields.口头禅, []);
+    assert.deepEqual(form.traits, { order: 0, morality: 0, talk: 0, mind: 0, humor: 0, openness: 0, imitation: 0 });
+    assert.deepEqual(form.other, []);
 
     assert.equal(calls.length, 1);
-    assert.equal(calls[0]?.slot, 'extract');
+    assert.equal(calls[0]?.slot, 'oneoff');
+    assert.equal(calls[0]?.options.budgetScope, 'oneoff');
     assert.ok(JSON.stringify(calls[0]?.messages).includes(sourceText));
 
     const personas = await app.request('/api/personas', { headers: authHeaders() });
     assert.deepEqual((await personas.json() as Array<{ id: string }>).map(({ id }) => id), ['default']);
     assert.equal((await app.request('/api/personas/new-card', { headers: authHeaders() })).status, 404);
   }, undefined, {
-    callModel: async (slot, messages) => {
-      calls.push({ slot, messages });
+    callModel: async (slot, messages, options) => {
+      calls.push({ slot, messages, options });
       return {
         text: JSON.stringify(extracted),
         provider: 'fake',
@@ -355,7 +360,7 @@ test('persona import reports budget exhaustion without treating it as a provider
     assert.equal(response.status, 429);
     assert.deepEqual(await response.json(), {
       error: 'Persona import failed',
-      reason: '预算已用尽',
+      reason: '单任务预算已用尽',
       code: 'budget_exceeded',
     });
   }, undefined, {
