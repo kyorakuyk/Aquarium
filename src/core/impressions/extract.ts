@@ -36,6 +36,7 @@ export interface ExtractEventItem {
   summary: string;
   participantIds: number[];
   messageIds: string[];
+  worthRemembering: boolean;
 }
 
 export interface ExtractSubjectItems {
@@ -234,6 +235,8 @@ export function asEventItem(raw: unknown): ExtractEventItem | undefined {
   const summary = record.summary;
   const participantIds = record.participantIds;
   const messageIds = record.messageIds;
+  const worthRemembering = record.worthRemembering;
+  if (typeof worthRemembering !== 'boolean') return undefined;
   if (typeof title !== 'string' || Array.from(title.trim()).length < 1 || Array.from(title.trim()).length > 16) {
     return undefined;
   }
@@ -254,6 +257,7 @@ export function asEventItem(raw: unknown): ExtractEventItem | undefined {
     summary: summary.trim(),
     participantIds: [...new Set(participantIds as number[])].sort((first, second) => first - second),
     messageIds: [...new Set((messageIds as string[]).map((messageId) => messageId.trim()))],
+    worthRemembering,
   };
 }
 

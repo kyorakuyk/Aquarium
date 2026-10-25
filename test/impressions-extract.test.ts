@@ -4,11 +4,14 @@ import {
   buildExtractMessages,
   asContradictItem,
   asNewItem,
+  asEventItem,
   parseExtractResponse,
   runExtract,
 } from '../src/core/impressions/extract.ts';
+import { persistExtractedGroupEvents } from '../src/core/impressions/persist-events.ts';
 import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { isTagCategoryForScope, prepareTagText } from '../src/core/impressions/tag-model.ts';
+import { baseTime, groupSession, withRepository } from './pipeline-test-helpers.ts';
 
 const profile = {
   category: 'identity',
@@ -62,6 +65,7 @@ test('extract response preserves group events and accepts older responses withou
     summary: '群友约好周末一同参加漫展',
     participantIds: [42, 43],
     messageIds: ['m1', 'm2'],
+    worthRemembering: true,
   }];
   const parsed = parseExtractResponse(JSON.stringify({
     group: { observe: [], new: [], contradict: [] },
@@ -75,6 +79,51 @@ test('extract response preserves group events and accepts older responses withou
 
   assert.deepEqual(parsed?.events, events);
   assert.deepEqual(legacy?.events, []);
+  assert.equal(asEventItem({ ...events[0], worthRemembering: 'yes' }), undefined);
+  assert.equal(asEventItem({
+    title: '周末漫展',
+    summary: '群友约好周末一同参加漫展',
+    participantIds: [42, 43],
+    messageIds: ['m1', 'm2'],
+  }), undefined);
+});
+
+test('events marked not worth remembering are excluded from the event book', async () => {
+  await withRepository(async (repository) => {
+    const session = { ...groupSession, peer: 8080 };
+    const records = [{
+      sessionId: `${session.account}:group:${session.peer}`,
+      messageId: 'small-talk',
+      senderId: 42,
+      senderName: '成员',
+      isSelf: false,
+      plainText: '今天吃什么？',
+      segments: [],
+      time: baseTime,
+    }];
+    persistExtractedGroupEvents({
+      repository,
+      session,
+      records,
+      events: [
+        {
+          title: '午饭闲聊',
+          summary: '群友随口讨论吃饭。',
+          participantIds: [42],
+          messageIds: ['small-talk'],
+          worthRemembering: false,
+        },
+        {
+          title: '未判断的事件',
+          summary: '没有明确标记是否值得记住。',
+          participantIds: [42],
+          messageIds: ['small-talk'],
+        },
+      ],
+      now: baseTime + 1,
+    });
+    assert.deepEqual(repository.listGroupEvents(session.account, session.peer, 0, 10), []);
+  });
 });
 
 test('标签写法校验去前缀、拒绝近况习惯和作息词，并要求梗语为证据原话', () => {

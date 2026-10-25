@@ -73,7 +73,7 @@ test('persist checks immediate event-note revocations while daytime private mess
       async idle() {},
     };
     const personaMemoryService = {
-      recordMemo(message: { messageId: string }) { memos.push(message.messageId); },
+      observeMessage(message: { messageId: string }) { memos.push(message.messageId); },
       recentDiaryBlock() { return undefined; },
     };
     const adapter = new FakeAdapter();

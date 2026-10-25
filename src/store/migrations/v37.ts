@@ -5,9 +5,16 @@ function hasTable(database: DatabaseSync, table: string): boolean {
   return Boolean(database.prepare('SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?').get('table', table));
 }
 
+function hasColumns(database: DatabaseSync, table: string, expected: readonly string[]): boolean {
+  const columns = new Set((database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>)
+    .map(({ name }) => name));
+  return expected.every((column) => columns.has(column));
+}
+
 function backfillFromMessages(database: DatabaseSync): void {
   if (!hasTable(database, 'messages')) return;
-  if (hasTable(database, 'persona_memos')) {
+  if (hasTable(database, 'persona_memos')
+    && hasColumns(database, 'persona_memos', ['account', 'session_id', 'created_at', 'processed_cycle_key'])) {
     database.exec(`
       WITH sessions AS (
         SELECT DISTINCT

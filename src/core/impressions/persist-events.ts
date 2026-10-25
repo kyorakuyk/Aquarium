@@ -22,7 +22,8 @@ export function persistExtractedGroupEvents(input: {
 
   for (const raw of input.events) {
     const event = asEventItem(raw);
-    if (!event || event.participantIds.some((userId) => !participantIds.has(userId))) continue;
+    if (!event || event.worthRemembering !== true
+      || event.participantIds.some((userId) => !participantIds.has(userId))) continue;
     const evidence = event.messageIds.map((messageId) => recordsById.get(messageId));
     if (evidence.some((record) => !record || record.isSelf || isExternalLinkShareText(record.plainText))) continue;
     const orderedEvidence = evidence

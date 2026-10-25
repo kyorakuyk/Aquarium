@@ -35,7 +35,7 @@ import { createWindowsHost } from '../host/windows/host.ts';
 import { createAccountActivityRouter } from './activity-routing.ts';
 import { createEventAdvocacyScheduler } from './event-advocacy-scheduler.ts';
 import { createMemoryServices } from './memory-services.ts';
-import { createQueuedPersonaMemoryProcessor } from './persona-memory-processor.ts';
+import { createPersonaMemorySegmentProcessor, createQueuedPersonaMemoryProcessor } from './persona-memory-processor.ts';
 import { createAccountStickerService, startStickerSyncTimer } from './stickers.ts';
 import { startAdapterForHost } from './adapter-start.ts';
 import { createAccountInteractionRuntime, createEmojiLikeFeedbackHandler } from './interactions.ts';
@@ -166,50 +166,24 @@ const { impressionsService, memberSummaryService, groupSummaryService, tagClassi
   describeError,
 });
 tagClassificationService.startOnStartup();
+const personaMemorySegmentProcessor = createPersonaMemorySegmentProcessor({
+  repository,
+  impressionsService,
+  privateFactsService,
+  privateMentionService,
+  getConfig: () => configWatcher.getConfig(),
+  getTemplates: () => promptTemplateStore.get(),
+});
 const processPersonaMemorySession = createQueuedPersonaMemoryProcessor({
   isSessionEnabled: (session) => resolveSession(configWatcher.getConfig(), session).enabled,
-  process: async (session, records, now) => {
-    if (session.kind === 'group') {
-      const key = sessionId(session);
-      const release = impressionsService.tryAcquireSession(key);
-      if (!release) return 'failed';
-      try {
-        for (const record of records) {
-          if (record.isSelf) continue;
-          privateMentionService.maybePromote({
-            session,
-            senderId: record.senderId,
-            messageId: record.messageId,
-            now: record.time,
-            template: promptTemplateStore.get().privacyMention,
-          });
-        }
-        await privateMentionService.idle();
-        const summary = await impressionsService.extractWindowUnderSessionLock({
-          session,
-          records,
-          now,
-          template: promptTemplateStore.get().extractTags,
-        });
-        return summary.status === 'done' ? 'done' : summary.status === 'budget' ? 'budget' : 'failed';
-      } finally {
-        release();
-      }
-    }
-    const summary = await privateFactsService.extractWindowUnderSessionLock({
-      session,
-      records,
-      now,
-      template: promptTemplateStore.get().extractPrivate,
-    });
-    return summary.status === 'done' ? 'done' : summary.status === 'budget' ? 'budget' : 'failed';
-  },
+  process: personaMemorySegmentProcessor.process,
 });
 const personaMemoryService = createPersonaMemoryService({
   repository,
   getConfig: () => configWatcher.getConfig(),
   canProcessSession: (session) => resolveSession(configWatcher.getConfig(), session).enabled,
   processSession: processPersonaMemorySession,
+  isSignificantSegment: personaMemorySegmentProcessor.isSignificantSegment,
   onError: () => logger.error('夜间人格记忆整理失败；未完成的 memo 保留待下次重试。'),
 });
 const sleepGoodnightScheduler = createSleepGoodnightScheduler({

@@ -2,33 +2,20 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createPersonaMemoryService } from '../src/core/persona-memory.ts';
 import { createMessagePipeline } from '../src/core/conversation/pipeline.ts';
+import { messageRecord } from '../src/core/conversation/steps/types.ts';
 import { sessionId, type SessionKey } from '../src/core/shared/events.ts';
 import { AquariumConfigSchema } from '../src/config/schema.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
 import { FakeAdapter, baseTime, groupSession, makeConfig, makeIncoming, withRepository } from './pipeline-test-helpers.ts';
 
-interface MemoryRepoTestApi {
-  insertPersonaMemo(input: {
-    account: number; sessionId: string; messageId: string; senderId: number; senderName: string;
-    isSelf: boolean; text: string; createdAt: number;
-  }): boolean;
-  listPersonaMemos(account: number, limit: number): Array<{ messageId: string; processedCycleKey: string | null }>;
-  listPendingPersonaMemos(account: number, limit: number): Array<{ id: number; messageId: string }>;
-  markPersonaMemosProcessed(account: number, memoIds: readonly number[], cycleKey: string): number;
-  startPersonaMemoryRun(input: { account: number; cycleKey: string; memoCount: number; startedAt: number }): boolean;
-  finishPersonaMemoryRun(input: {
-    account: number; cycleKey: string; status: 'done' | 'budget' | 'failed' | 'empty';
-    reason: string | null; processedCount: number; finishedAt: number;
-  }): void;
-  personaMemoryRun(account: number, cycleKey: string): { status: string; reason: string | null } | undefined;
-  insertPersonaDiary(input: {
-    account: number; cycleKey: string; text: string; sourceCount: number; createdAt: number;
-    visibleToAni?: boolean;
-  }): number;
-  listPersonaDiaries(account: number, limit: number): Array<{ id: number; visibleToAni: boolean; text: string }>;
-  listVisiblePersonaDiaries(account: number, limit: number): Array<{ id: number; text: string }>;
-  setPersonaDiaryVisibility(account: number, id: number, visibleToAni: boolean): boolean;
+function saveAndObserveMessage(
+  repository: ReturnType<typeof createRepository>,
+  service: ReturnType<typeof createPersonaMemoryService>,
+  message: ReturnType<typeof makeIncoming>,
+): boolean {
+  if (!repository.saveMessage(messageRecord(message, sessionId(message.session)))) return false;
+  return service.observeMessage(message);
 }
 
 test('persona memory migrations create account-scoped cursor, memo, run, and diary tables', () => {
@@ -36,11 +23,15 @@ test('persona memory migrations create account-scoped cursor, memo, run, and dia
   try {
     const tables = database.prepare(`
       SELECT name FROM sqlite_master
-      WHERE type = 'table' AND name IN ('memory_cursors', 'persona_memos', 'persona_diaries', 'persona_memory_runs')
+      WHERE type = 'table' AND name IN (
+        'memory_cursors', 'persona_memory_tails', 'persona_memos', 'persona_memos_legacy_v26',
+        'persona_diaries', 'persona_memory_runs'
+      )
       ORDER BY name
     `).all() as Array<{ name: string }>;
     assert.deepEqual(tables.map(({ name }) => name), [
-      'memory_cursors', 'persona_diaries', 'persona_memory_runs', 'persona_memos',
+      'memory_cursors', 'persona_diaries', 'persona_memory_runs', 'persona_memory_tails',
+      'persona_memos', 'persona_memos_legacy_v26',
     ]);
   } finally {
     database.close();
@@ -50,7 +41,7 @@ test('persona memory migrations create account-scoped cursor, memo, run, and dia
 test('persona memos and diaries are account-scoped, idempotent, and diary visibility defaults on', () => {
   const database = openDatabase(':memory:');
   try {
-    const repository = createRepository(database) as ReturnType<typeof createRepository> & MemoryRepoTestApi;
+    const repository = createRepository(database);
     const memo = {
       account: 7101,
       sessionId: '7101:private:82',
@@ -139,11 +130,11 @@ test('daytime pipeline records memos instead of extracting knowledge or promotin
         maybePromote() { mentionPromotions += 1; },
       } as unknown as Parameters<typeof createMessagePipeline>[0]['privateMentionService'],
       personaMemoryService: {
-        recordMemo(message: { messageId: string }) { memoIds.push(message.messageId); return true; },
+        observeMessage(message: { messageId: string }) { memoIds.push(message.messageId); return true; },
         recentDiaryBlock() { return undefined; },
       },
     } as Parameters<typeof createMessagePipeline>[0] & {
-      personaMemoryService: { recordMemo(message: { messageId: string }): boolean; recentDiaryBlock(): undefined };
+      personaMemoryService: { observeMessage(message: { messageId: string }): boolean; recentDiaryBlock(): undefined };
     });
 
     await pipeline(makeIncoming({
@@ -196,7 +187,7 @@ test('sleep organization is idempotent, writes one visible diary, and redacts it
         time: baseTime + 1,
       }),
     ];
-    for (const message of messages) assert.equal(service.recordMemo(message), true);
+    for (const message of messages) assert.equal(saveAndObserveMessage(repository, service, message), true);
 
     const cycleKey = '2026-10-23';
     const first = await service.organizeAtSleep({ account: groupSession.account, cycleKey, now: baseTime + 10 });
@@ -204,7 +195,8 @@ test('sleep organization is idempotent, writes one visible diary, and redacts it
     assert.equal(first.status, 'done');
     assert.equal(second.status, 'already_run');
     assert.equal(sessionIds.length, 2);
-    assert.equal(repository.listPendingPersonaMemos(groupSession.account, 10).length, 0);
+    assert.equal(repository.listPersonaMemoryCursorSummaries(groupSession.account)
+      .reduce((total, cursor) => total + cursor.pendingMessageCount, 0), 0);
     const diary = repository.listPersonaDiaries(groupSession.account, 10)[0];
     assert.ok(diary?.visibleToAni);
     assert.match(diary?.text ?? '', /\[敏感内容已隐藏\]/u);
@@ -229,7 +221,7 @@ test('sleep organization records budget skips without processing or consuming me
       getConfig: () => config,
       processSession: async () => { processCalls += 1; return 'done'; },
     });
-    service.recordMemo(makeIncoming({
+    saveAndObserveMessage(repository, service, makeIncoming({
       session: groupSession,
       messageId: 'budget-memo',
       senderId: 82,
@@ -245,7 +237,7 @@ test('sleep organization records budget skips without processing or consuming me
     assert.equal(result.status, 'budget');
     assert.equal(processCalls, 0);
     assert.equal(repository.personaMemoryRun(groupSession.account, '2026-10-23')?.status, 'budget');
-    assert.equal(repository.listPendingPersonaMemos(groupSession.account, 10).length, 1);
+    assert.equal(repository.listPersonaMemoryCursorSummaries(groupSession.account)[0]?.pendingMessageCount, 1);
     assert.equal(repository.listPersonaDiaries(groupSession.account, 10).length, 0);
   });
 });
@@ -324,7 +316,7 @@ test('diary persistence failure leaves processed memos pending and records a fai
       getConfig: () => makeConfig(),
       processSession: async () => 'done',
     });
-    service.recordMemo(makeIncoming({
+    saveAndObserveMessage(repository, service, makeIncoming({
       session: groupSession,
       messageId: 'diary-write-failure',
       senderId: 82,
@@ -338,7 +330,7 @@ test('diary persistence failure leaves processed memos pending and records a fai
       now: baseTime + 1,
     });
     assert.equal(result.status, 'failed');
-    assert.equal(repository.listPendingPersonaMemos(groupSession.account, 10).length, 1);
+    assert.equal(repository.listPersonaMemoryCursorSummaries(groupSession.account)[0]?.pendingMessageCount, 1);
     assert.equal(repository.personaMemoryRun(groupSession.account, '2026-10-23')?.status, 'failed');
     assert.equal(repository.listPersonaDiaries(groupSession.account, 10).length, 0);
   });
@@ -353,19 +345,19 @@ test('interrupted running sleep cycle resumes pending memos after restart', asyn
       getConfig: () => makeConfig(),
       processSession: async (_session, records) => { newlyProcessed += records.length; return 'done'; },
     });
-    service.recordMemo(makeIncoming({
+    saveAndObserveMessage(repository, service, makeIncoming({
       session: groupSession,
       messageId: 'resume-running-memory-1',
       senderId: 82,
       plainText: '中断后仍需整理的第一条计划。',
       time: baseTime,
     }));
-    service.recordMemo(makeIncoming({
+    saveAndObserveMessage(repository, service, makeIncoming({
       session: groupSession,
       messageId: 'resume-running-memory-2',
       senderId: 82,
       plainText: '中断后仍需整理的第二条计划。',
-      time: baseTime + 1,
+      time: baseTime + 21 * 60_000,
     }));
     assert.equal(repository.startPersonaMemoryRun({
       account: groupSession.account,
@@ -373,25 +365,41 @@ test('interrupted running sleep cycle resumes pending memos after restart', asyn
       memoCount: 2,
       startedAt: baseTime,
     }), true);
+    assert.equal(repository.resumePersonaMemoryRun({
+      account: groupSession.account,
+      cycleKey,
+      memoCount: 2,
+      processedCount: 1,
+    }), true);
+    const processedRowId = repository.listPersonaMemoryPendingMessages(groupSession.account, sessionId(groupSession))[0]!.rowId;
+    repository.savePersonaMemoryCursor({
+      account: groupSession.account,
+      sessionId: sessionId(groupSession),
+      organizedUntilMessageTime: baseTime, organizedUntilMessageRowId: processedRowId,
+      openSegmentStart: baseTime + 21 * 60_000,
+    });
     repository.insertPersonaDiary({
       account: groupSession.account,
       cycleKey,
       text: '中断前写入的完整日记。',
       sourceCount: 2,
-      createdAt: baseTime + 1,
+      createdAt: baseTime + 21 * 60_000,
+      sourceEntries: [{
+        sessionId: sessionId(groupSession),
+        messageId: 'resume-running-memory-1',
+        senderName: '成员',
+        text: '中断后仍需整理的第一条计划。',
+        createdAt: baseTime,
+      }],
     });
-    const firstMemo = repository.listPendingPersonaMemos(groupSession.account, 10)
-      .find((memo) => memo.messageId === 'resume-running-memory-1');
-    assert.ok(firstMemo);
-    assert.equal(repository.markPersonaMemosProcessed(groupSession.account, [firstMemo.id], cycleKey), 1);
 
-    const result = await service.organizeAtSleep({ account: groupSession.account, cycleKey, now: baseTime + 1 });
+    const result = await service.organizeAtSleep({ account: groupSession.account, cycleKey, now: baseTime + 30 * 60_000 });
     assert.equal(result.status, 'done');
     assert.equal(result.processedCount, 2);
     assert.equal(newlyProcessed, 1);
     assert.equal(repository.personaMemoryRun(groupSession.account, cycleKey)?.status, 'done');
     assert.equal(repository.personaMemoryRun(groupSession.account, cycleKey)?.processedCount, 2);
-    assert.equal(repository.listPendingPersonaMemos(groupSession.account, 10).length, 0);
+    assert.equal(repository.listPersonaMemoryCursorSummaries(groupSession.account)[0]?.pendingMessageCount, 0);
     assert.equal(repository.listPersonaDiaries(groupSession.account, 10).length, 1);
     const diary = repository.listPersonaDiaries(groupSession.account, 10)[0];
     assert.match(diary?.text ?? '', /中断前写入的完整日记/u);
@@ -411,7 +419,7 @@ test('disabled sessions keep their memos pending without invoking model processi
       canProcessSession: (session: SessionKey) => boolean;
     };
     const service = createPersonaMemoryService(options);
-    service.recordMemo(makeIncoming({
+    saveAndObserveMessage(repository, service, makeIncoming({
       session: groupSession,
       messageId: 'disabled-session-memo',
       senderId: 82,
@@ -426,7 +434,7 @@ test('disabled sessions keep their memos pending without invoking model processi
     });
     assert.equal(result.status, 'failed');
     assert.equal(processCalls, 0);
-    assert.equal(repository.listPendingPersonaMemos(groupSession.account, 10).length, 1);
+    assert.equal(repository.listPersonaMemoryCursorSummaries(groupSession.account)[0]?.pendingMessageCount, 1);
     assert.equal(repository.listPersonaDiaries(groupSession.account, 10).length, 0);
   });
 });
@@ -545,40 +553,48 @@ test('newer unrelated private diaries do not crowd older authorized session memo
 
 test('a sleep run reports an unfinished memo backlog instead of claiming done', async () => {
   await withRepository(async (repository) => {
-    const session = groupSession;
-    for (let index = 0; index < 1_001; index += 1) {
-      repository.insertPersonaMemo({
-        account: session.account,
-        sessionId: sessionId(session),
-        messageId: `backlog-${index}`,
-        senderId: 82,
-        senderName: '朋友',
-        isSelf: false,
-        text: `待整理 memo ${index}`,
-        createdAt: baseTime + index,
-      });
-    }
     let processedRecords = 0;
-    let largestBatch = 0;
     const service = createPersonaMemoryService({
       repository,
       getConfig: () => makeConfig(),
       processSession: async (_session, records) => {
         processedRecords += records.length;
-        largestBatch = Math.max(largestBatch, records.length);
         return 'done';
       },
     });
+    const sessions: Array<[SessionKey, number]> = [
+      [groupSession, 600],
+      [{ account: groupSession.account, kind: 'group', peer: 83 }, 400],
+      [{ account: groupSession.account, kind: 'group', peer: 84 }, 1],
+    ];
+    let messageIndex = 0;
+    for (const [session, count] of sessions) {
+      let lastMessage: ReturnType<typeof makeIncoming> | undefined;
+      for (let index = 0; index < count; index += 1) {
+        const message = makeIncoming({
+          session,
+          messageId: `backlog-${messageIndex++}`,
+          senderId: 82,
+          plainText: '待整理消息',
+          time: baseTime + index,
+        });
+        assert.equal(repository.saveMessage(messageRecord(message, sessionId(session))), true);
+        lastMessage = message;
+      }
+      assert.ok(lastMessage);
+      assert.equal(service.observeMessage(lastMessage), true);
+    }
 
     const result = await service.organizeAtSleep({
-      account: session.account,
+      account: groupSession.account,
       cycleKey: '2026-10-23',
       now: baseTime + 2_000,
     });
     assert.equal(result.status, 'partial');
     assert.equal(processedRecords, 1_000);
-    assert.ok(largestBatch <= 80);
-    assert.equal(repository.listPendingPersonaMemos(session.account, 10).length, 1);
-    assert.equal(repository.personaMemoryRun(session.account, '2026-10-23')?.status, 'partial');
+    assert.deepEqual(repository.listPersonaMemoryCursorSummaries(groupSession.account)
+      .filter(({ pendingMessageCount }) => pendingMessageCount > 0)
+      .map(({ sessionId: pendingSession }) => pendingSession), [`${groupSession.account}:group:84`]);
+    assert.equal(repository.personaMemoryRun(groupSession.account, '2026-10-23')?.status, 'partial');
   });
 });

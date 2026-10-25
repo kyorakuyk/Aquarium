@@ -7,6 +7,7 @@ export const PRIVATE_MEMORY_SEGMENT_LIMIT = 60;
 export interface MemorySegmentMessage {
   messageId: string;
   time: number;
+  rowId?: number;
   senderId: number;
   isSelf: boolean;
   plainText: string;
@@ -46,18 +47,22 @@ export function segmentMemoryMessages(input: {
   sessionKind: 'group' | 'private';
   messages: readonly MemorySegmentMessage[];
   now: number;
+  forceClose?: boolean;
 }): MemorySegment[] {
   if (!Number.isSafeInteger(input.now) || input.now < 0) throw new RangeError('记忆分段时间无效');
   for (const message of input.messages) {
     if (typeof message.messageId !== 'string' || message.messageId.length === 0
       || !Number.isSafeInteger(message.time) || message.time < 0
+      || (message.rowId !== undefined && (!Number.isSafeInteger(message.rowId) || message.rowId <= 0))
       || !Number.isSafeInteger(message.senderId) || message.senderId < 0
       || typeof message.isSelf !== 'boolean' || typeof message.plainText !== 'string') {
       throw new RangeError('记忆分段消息无效');
     }
   }
   const messages = [...input.messages].sort((first, second) => first.time - second.time
-    || first.messageId.localeCompare(second.messageId));
+    || (first.rowId !== undefined && second.rowId !== undefined
+      ? first.rowId - second.rowId
+      : first.messageId.localeCompare(second.messageId)));
   const silenceMs = memorySilenceMs(input.sessionKind);
   const limit = input.sessionKind === 'group' ? GROUP_MEMORY_SEGMENT_LIMIT : PRIVATE_MEMORY_SEGMENT_LIMIT;
   const segments: MemorySegment[] = [];
@@ -72,15 +77,16 @@ export function segmentMemoryMessages(input: {
     open.push(message);
     while (open.length >= limit) {
       const splitAt = lastLongGapIndex(open);
-      if (splitAt < 0) break;
-      segments.push(toSegment(open.slice(0, splitAt), true));
-      open = open.slice(splitAt);
+      const boundary = splitAt < 0 ? limit : splitAt;
+      segments.push(toSegment(open.slice(0, boundary), true));
+      open = open.slice(boundary);
     }
   }
 
   if (open.length > 0) {
     const last = open.at(-1);
-    segments.push(toSegment(open, last !== undefined && input.now - last.time >= silenceMs));
+    segments.push(toSegment(open, input.forceClose === true
+      || (last !== undefined && input.now - last.time >= silenceMs)));
   }
   return segments;
 }

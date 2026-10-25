@@ -57,12 +57,17 @@ export function registerPersonaMemoryRoutes(app: Hono, options: PersonaMemoryRou
       return session?.account === account
         && now - cursor.latestPendingMessageTime < memorySilenceMs(session.kind);
     }).length;
-    const memos = options.repository.listPersonaMemos(account, MEMORY_VIEW_LIMIT).map((memo) => ({
+    const memos = options.repository.listPersonaEventMemos(account, MEMORY_VIEW_LIMIT).map((memo) => ({
       id: memo.id,
-      senderName: safeMemoText(memo.senderName),
-      text: safeMemoText(memo.text),
+      eventId: memo.eventId,
+      title: safeMemoText(memo.title),
+      summary: safeMemoText(memo.summary),
+      participantIds: memo.participantIds,
+      startMessageId: memo.startMessageId,
+      endMessageId: memo.endMessageId,
+      level: memo.level,
       createdAt: memo.createdAt,
-      processedCycleKey: memo.processedCycleKey,
+      diaryCycle: memo.diaryCycle,
     }));
     const diaries = options.repository.listPersonaDiaries(account, MEMORY_VIEW_LIMIT).map((diary) => ({
       id: diary.id,

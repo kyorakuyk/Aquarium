@@ -14,14 +14,16 @@ test('persona memory read is authenticated, account-scoped, and redacts stored t
     assert.deepEqual(await accountsResponse.json(), [{ account, name: 'Aquarium 测试' }]);
     const bearerValue = ['FAKE', '_SECRET', '_TOKEN', '_123456'].join('');
     const canary = `Authorization: Bearer ${bearerValue}`;
-    repository.insertPersonaMemo({
+    repository.insertPersonaEventMemo({
       account,
       sessionId: `${account}:private:42`,
-      messageId: 'panel-memo',
-      senderId: 42,
-      senderName: 'token=FAKE_TOKEN_VALUE_123456',
-      isSelf: false,
-      text: `今天的记录 ${canary}`,
+      eventId: null,
+      title: '周末计划',
+      summary: `今天提到的安排 ${canary}`,
+      participantIds: [42],
+      startMessageId: 'panel-memo',
+      endMessageId: 'panel-memo',
+      level: 'L0',
       createdAt: now,
     });
     const pendingSessionId = `${account}:private:42`;
@@ -48,14 +50,16 @@ test('persona memory read is authenticated, account-scoped, and redacts stored t
       sourceCount: 1,
       createdAt: now,
     });
-    repository.insertPersonaMemo({
+    repository.insertPersonaEventMemo({
       account: account + 1,
       sessionId: `${account + 1}:private:42`,
-      messageId: 'other-account-memo',
-      senderId: 42,
-      senderName: '其他',
-      isSelf: false,
-      text: '别的账号内容',
+      eventId: null,
+      title: '别的账号',
+      summary: '别的账号内容',
+      participantIds: [42],
+      startMessageId: 'other-account-memo',
+      endMessageId: 'other-account-memo',
+      level: 'L0',
       createdAt: now,
     });
 
@@ -66,15 +70,15 @@ test('persona memory read is authenticated, account-scoped, and redacts stored t
       account: number;
       pendingMessageCount: number;
       openSegmentCount: number;
-      memos: Array<{ senderName: string; text: string }>;
+      memos: Array<{ title: string; summary: string; level: string; eventId: number | null }>;
       diaries: Array<{ text: string; visibleToAni: boolean }>;
     };
     assert.equal(body.account, account);
     assert.equal(body.pendingMessageCount, 1);
     assert.equal(body.openSegmentCount, 1);
     assert.equal(body.memos.length, 1);
-    assert.equal(body.memos[0]?.senderName, '[敏感内容已隐藏]');
-    assert.ok(body.memos[0]?.text.includes('[敏感内容已隐藏]'));
+    assert.equal(body.memos[0]?.title, '周末计划');
+    assert.ok(body.memos[0]?.summary.includes('[敏感内容已隐藏]'));
     assert.doesNotMatch(JSON.stringify(body), new RegExp(bearerValue));
     assert.doesNotMatch(JSON.stringify(body), /abcdefghijklmnop/u);
     assert.doesNotMatch(JSON.stringify(body), /别的账号内容/u);

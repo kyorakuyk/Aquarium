@@ -18,10 +18,24 @@ interface PersonaDiaryView {
   createdAt: number;
 }
 
+interface PersonaEventMemoView {
+  id: number;
+  eventId: number | null;
+  title: string;
+  summary: string;
+  participantIds: number[];
+  startMessageId: string;
+  endMessageId: string;
+  level: 'L0' | 'L1' | 'L2';
+  createdAt: number;
+  diaryCycle: string | null;
+}
+
 interface PersonaMemoryView {
   account: number;
   pendingMessageCount: number;
   openSegmentCount: number;
+  memos: PersonaEventMemoView[];
   diaries: PersonaDiaryView[];
 }
 
@@ -122,6 +136,26 @@ export function PersonaMemoryPanel() {
             <strong>{visibleMemory.openSegmentCount}</strong> 段进行中
           </p>
           {visibleMemory.pendingMessageCount === 0 && <p className="muted">暂存区当前为空。</p>}
+        </section>
+        <section className="persona-memory-section" aria-labelledby="persona-event-memos-title">
+          <div className="persona-memory-section-heading">
+            <h3 id="persona-event-memos-title">已整理 memo</h3>
+            <span className="muted">最近 {visibleMemory.memos.length} 条</span>
+          </div>
+          {visibleMemory.memos.length === 0 ? <p className="muted">事件整理完成后会在这里留下摘要。</p> : (
+            <ul className="persona-memory-list">
+              {visibleMemory.memos.map((memo) => (
+                <li className="persona-memory-entry" key={memo.id}>
+                  <div className="persona-memory-meta">
+                    <strong>{memo.title}</strong>
+                    <time dateTime={new Date(memo.createdAt).toISOString()}>{formatTime(memo.createdAt)}</time>
+                    <span>{memo.level}</span>
+                  </div>
+                  <p>{memo.summary}</p>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
         <section className="persona-memory-section" aria-labelledby="persona-diaries-title">
           <div className="persona-memory-section-heading">

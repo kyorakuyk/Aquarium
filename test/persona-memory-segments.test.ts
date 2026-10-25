@@ -42,12 +42,18 @@ test('达到群聊 80 条时在最后一个至少 3 分钟的间隙切段', () =
   assert.deepEqual(result.map(({ messages: items, closed }) => [items.length, closed]), [[40, true], [40, false]]);
 });
 
-test('没有 3 分钟间隙时保留超长段，直到静默边界闭合', () => {
+test('没有 3 分钟间隙时按会话提取上限切分且不丢消息', () => {
   const split = segmenter();
   if (!split) return;
-  const uninterrupted = messages(81);
-  const active = split({ sessionKind: 'group', messages: uninterrupted, now: uninterrupted.at(-1)!.time + 1 });
-  assert.deepEqual(active.map(({ messages: items, closed }) => [items.length, closed]), [[81, false]]);
-  const quiet = split({ sessionKind: 'group', messages: uninterrupted, now: uninterrupted.at(-1)!.time + 20 * 60_000 });
-  assert.deepEqual(quiet.map(({ messages: items, closed }) => [items.length, closed]), [[81, true]]);
+  const groupMessages = messages(81);
+  const group = split({ sessionKind: 'group', messages: groupMessages, now: groupMessages.at(-1)!.time + 1 });
+  assert.deepEqual(group.map(({ messages: items, closed }) => [items.length, closed]), [[80, true], [1, false]]);
+  assert.deepEqual(group.flatMap(({ messages: items }) => items.map(({ messageId }) => messageId)),
+    groupMessages.map(({ messageId }) => messageId));
+
+  const privateMessages = messages(61);
+  const privateChat = split({ sessionKind: 'private', messages: privateMessages, now: privateMessages.at(-1)!.time + 1 });
+  assert.deepEqual(privateChat.map(({ messages: items, closed }) => [items.length, closed]), [[60, true], [1, false]]);
+  assert.deepEqual(privateChat.flatMap(({ messages: items }) => items.map(({ messageId }) => messageId)),
+    privateMessages.map(({ messageId }) => messageId));
 });

@@ -29,11 +29,11 @@ export const persistStep: PipelineStep = async (ctx) => traceStep(ctx, 'persist'
     }
   }
   if (!inserted) {
-    if (!ctx.processOptions.replay) ctx.options.personaMemoryService?.recordMemo(ctx.message);
+    if (!ctx.processOptions.replay) ctx.options.personaMemoryService?.observeMessage(ctx.message);
     return { next: false, reason: 'duplicate' };
   }
   if (!ctx.processOptions.replay && ctx.options.personaMemoryService) {
-    ctx.options.personaMemoryService.recordMemo(ctx.message);
+    ctx.options.personaMemoryService.observeMessage(ctx.message);
   } else if (!ctx.processOptions.replay && ctx.message.session.kind === 'group') {
     ctx.options.privateMentionService?.maybePromote({
       session: ctx.message.session,

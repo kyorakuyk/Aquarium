@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { createPersonaEventMemoRepository, type PersonaEventMemoRepository } from './persona-memory-event-repo.ts';
 import { createMemoryCursorRepository, type PersonaMemoryCursorRepository } from './memory-cursor-repo.ts';
 
 export interface PersonaMemoInput {
@@ -68,7 +69,7 @@ export interface PersonaDiaryRecord extends Required<PersonaDiaryInput> {
   id: number;
 }
 
-export interface PersonaMemoryRepository extends PersonaMemoryCursorRepository {
+export interface PersonaMemoryRepository extends PersonaMemoryCursorRepository, PersonaEventMemoRepository {
   insertPersonaMemo(memo: PersonaMemoInput): boolean;
   listPersonaMemos(account: number, limit: number): PersonaMemoRecord[];
   listPendingPersonaMemos(account: number, limit: number): PersonaMemoRecord[];
@@ -209,19 +210,20 @@ function memoryRunRecord(row: Record<string, unknown>): PersonaMemoryRunRecord {
 }
 
 export function createPersonaMemoryRepository(database: DatabaseSync): PersonaMemoryRepository {
+  const eventMemos = createPersonaEventMemoRepository(database);
   const memoryCursors = createMemoryCursorRepository(database);
   const insertMemo = database.prepare(`
-    INSERT OR IGNORE INTO persona_memos
+    INSERT OR IGNORE INTO persona_memos_legacy_v26
       (account, session_id, message_id, sender_id, sender_name, is_self, text, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const selectMemos = database.prepare(`
     SELECT id, account, session_id, message_id, sender_id, sender_name, is_self, text, created_at, processed_cycle_key
-    FROM persona_memos WHERE account = ? ORDER BY created_at DESC, id DESC LIMIT ?
+    FROM persona_memos_legacy_v26 WHERE account = ? ORDER BY created_at DESC, id DESC LIMIT ?
   `);
   const selectPendingMemos = database.prepare(`
     SELECT id, account, session_id, message_id, sender_id, sender_name, is_self, text, created_at, processed_cycle_key
-    FROM persona_memos WHERE account = ? AND processed_cycle_key IS NULL
+    FROM persona_memos_legacy_v26 WHERE account = ? AND processed_cycle_key IS NULL
     ORDER BY created_at, id LIMIT ?
   `);
 
@@ -241,7 +243,7 @@ export function createPersonaMemoryRepository(database: DatabaseSync): PersonaMe
     WHERE account = ? AND cycle_key = ? AND status = 'running'
   `);
   const countProcessedMemos = database.prepare(`
-    SELECT COUNT(*) AS count FROM persona_memos
+    SELECT COUNT(*) AS count FROM persona_memos_legacy_v26
     WHERE account = ? AND processed_cycle_key = ?
   `);
   const selectMemoryRun = database.prepare(`
@@ -282,6 +284,7 @@ export function createPersonaMemoryRepository(database: DatabaseSync): PersonaMe
   );
 
   return {
+    ...eventMemos,
     ...memoryCursors,
     insertPersonaMemo(memo) {
       if (!validId(memo.account) || !validId(memo.senderId)
@@ -330,7 +333,7 @@ export function createPersonaMemoryRepository(database: DatabaseSync): PersonaMe
         if (batch.length === 0) continue;
         const placeholders = batch.map(() => '?').join(', ');
         const statement = database.prepare(`
-          UPDATE persona_memos SET processed_cycle_key = ?
+          UPDATE persona_memos_legacy_v26 SET processed_cycle_key = ?
           WHERE account = ? AND processed_cycle_key IS NULL AND id IN (${placeholders})
         `);
         const result = statement.run(cycleKey, account, ...batch);

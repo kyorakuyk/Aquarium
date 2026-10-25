@@ -19,14 +19,16 @@ test('v37 backfills organized time and pending start from legacy messages and me
       CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT NOT NULL, message_id TEXT NOT NULL, time INTEGER NOT NULL);
       CREATE TABLE persona_memos (
         id INTEGER PRIMARY KEY, account INTEGER NOT NULL, session_id TEXT NOT NULL,
-        message_id TEXT NOT NULL, created_at INTEGER NOT NULL, processed_cycle_key TEXT
+        message_id TEXT NOT NULL, sender_id INTEGER NOT NULL, sender_name TEXT NOT NULL,
+        is_self INTEGER NOT NULL, text TEXT NOT NULL, created_at INTEGER NOT NULL, processed_cycle_key TEXT
       );
       INSERT INTO messages VALUES
         (1, '7101:group:82', 'done-1', 100),
         (2, '7101:group:82', 'pending-1', 200),
         (3, '7101:private:83', 'private-1', 300),
         (4, 'invalid:group:82', 'invalid', 400);
-      INSERT INTO persona_memos VALUES (1, 7101, '7101:group:82', 'done-1', 100, '2026-10-20');
+      INSERT INTO persona_memos VALUES
+        (1, 7101, '7101:group:82', 'done-1', 82, '朋友', 0, '已整理消息', 100, '2026-10-20');
     `);
     legacy.close();
     legacy = undefined;
