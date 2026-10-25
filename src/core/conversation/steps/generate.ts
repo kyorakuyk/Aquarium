@@ -3,6 +3,7 @@ import type { SlotRequestParams } from '../../../llm/slots.ts';
 import { isBudgetExceededError } from '../../../llm/budget.ts';
 import { canSendStickerOnly } from '../../stickers/selection.ts';
 import { parseStickerReply } from '../../stickers/parse.ts';
+import { extractAsides } from '../../shared/inner-voice.ts';
 import { errorDetails } from './errors.ts';
 import { traceStep, type PipelineStep } from './types.ts';
 
@@ -44,8 +45,10 @@ export const generateStep: PipelineStep = async (ctx) => traceStep(ctx, 'generat
   const params = safeRequestParams(result.params);
   const offer = ctx.processOptions.replay ? undefined : ctx.state.stickerOffer;
   const parsed = parseStickerReply(cleanReply(result.text, [nickname, ...settings.nicknames]), offer);
-  const replyText = parsed.text;
-  ctx.state.replyText = replyText;
+  const extracted = extractAsides(parsed.text, ctx.state.innerVoiceMode ?? 'light');
+  const replyText = extracted.spoken;
+  ctx.state.innerVoice = extracted.asides;
+  ctx.state.replyText = extracted.spoken;
   if (parsed.sticker) ctx.state.chosenSticker = parsed.sticker;
   if (!replyText && parsed.sticker) {
     const service = ctx.options.stickerService;

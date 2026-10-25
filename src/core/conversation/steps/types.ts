@@ -18,7 +18,12 @@ import type { ImpressionsService } from '../../impressions/service.ts';
 import type { PrivateFactsService } from '../../privacy/service.ts';
 import type { PrivacyGateDecision, PrivacyGateDetail, PrivacyGateService } from '../../privacy/group-gate.ts';
 import type { PrivateMentionService } from '../../privacy/mentions.ts';
-import type { PersonaEnergySource, PersonaTraits, StructuredPersona } from '../../../persona/load.ts';
+import type {
+  PersonaEnergySource,
+  PersonaInnerVoiceMode,
+  PersonaTraits,
+  StructuredPersona,
+} from '../../../persona/load.ts';
 import type { PersonaEnergyMultipliers } from '../../../persona/energy.ts';
 import type { PersonaAffinitySettings } from '../../../persona/affinity.ts';
 import type { PersonaMoodSettings } from '../../../persona/mood.ts';
@@ -132,6 +137,8 @@ export interface PipelineState {
   suppressSensitiveDebugTrace?: boolean;
   result?: SlotResult;
   replyText?: string;
+  innerVoiceMode?: PersonaInnerVoiceMode;
+  innerVoice?: string[];
   parts?: string[];
   sentMessageIds: string[];
   promptHash?: string;

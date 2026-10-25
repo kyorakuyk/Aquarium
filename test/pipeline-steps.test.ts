@@ -213,6 +213,7 @@ test('context step loads the persona and assembles a prompt', async (t) => {
 
   assert.deepEqual(await contextStep(ctx), { next: true });
   assert.equal(ctx.state.persona?.includes('# Bot'), true);
+  assert.equal(ctx.state.innerVoiceMode, 'light');
   assert.equal(Array.isArray(ctx.state.prompt), true);
   traceFor(ctx, 'context');
 });
@@ -313,6 +314,34 @@ test('generate step records empty replies without continuing to delivery', async
   });
   const generateTrace = ctx.trace.find((entry) => entry.step === 'generate');
   assert.deepEqual(generateTrace?.detail, { params: { temperature: 0.4, maxTokens: 77, reasoning: 'high' } });
+});
+
+test('generate step applies hidden-mode extraction during replay and preserves empty-reply handling', async (t) => {
+  const ctx = makeContext(t);
+  ctx.processOptions.replay = true;
+  ctx.state.settings = resolveSession(exampleConfig, session);
+  ctx.state.nickname = 'Bot';
+  ctx.state.callOptions = {
+    config: exampleConfig,
+    costToday: () => 0,
+    recordUsage: () => {},
+  };
+  ctx.state.prompt = [{ role: 'user', content: 'prompt' }];
+  ctx.state.innerVoiceMode = 'hidden';
+  ctx.modelCall = async () => ({
+    text: '（紧张得一句话也说不出来，只能看着屏幕发呆）',
+    provider: 'fake',
+    model: 'fake-model',
+    usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 8, costCny: 0.01 },
+  });
+
+  assert.deepEqual(await generateStep(ctx), {
+    next: false,
+    reason: 'empty_reply',
+    detail: { model: 'fake-model', params: {} },
+  });
+  assert.equal(ctx.state.replyText, '');
+  assert.deepEqual(ctx.state.innerVoice, ['（紧张得一句话也说不出来，只能看着屏幕发呆）']);
 });
 
 test('deliver step sends and stores each reply part before returning replied', async (t) => {

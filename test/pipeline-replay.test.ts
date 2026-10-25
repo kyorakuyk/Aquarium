@@ -74,7 +74,7 @@ test('replay uses historical context, counts usage, and performs no live deliver
           inputTokens: 10, cachedTokens: 0, outputTokens: 4, costCny: 0.003, latencyMs: 4, ok: true,
         });
         return {
-          text: '当前配置生成的新回复。',
+          text: '当前配置生成的新回复。\n\n（这是足够长的旁白，需要进入心声而不出现在轻量回复中。）',
           provider: 'fake',
           model: 'fake-model',
           usage: { inputTokens: 10, cachedTokens: 0, outputTokens: 4, costCny: 0.003 },

@@ -102,6 +102,7 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     historyText: context.slice(-8).map((record) => record.plainText).join('\n'),
   });
   const innerVoiceMode = resolveInnerVoice(config.sessions[ctx.currentSessionId], loadedPersona);
+  ctx.state.innerVoiceMode = innerVoiceMode;
   const innerVoiceRule = {
     full: ctx.state.promptTemplates.replySystem.innerVoiceFull,
     light: ctx.state.promptTemplates.replySystem.innerVoiceLight,
