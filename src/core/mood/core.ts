@@ -8,6 +8,8 @@ export const MOOD_BASELINE = { valence: 0.1, arousal: 0.4 } as const;
 export const DEFAULT_SURFACE_HALF_LIFE_MIN = 40;
 export const DEFAULT_AROUSAL_HALF_LIFE_MIN = 40;
 export const DEFAULT_MOOD_HALF_LIFE_MIN = DEFAULT_SURFACE_HALF_LIFE_MIN;
+export const DEFAULT_SURFACE_HOLD_SHAPE = 3;
+export const DEFAULT_AROUSAL_HOLD_SHAPE = 2;
 export const DEFAULT_RESERVE = 0.8;
 export const RESERVE_BUFFER_RATIO = 0.85;
 export const RESERVE_BUFFER_MAX = 0.05;
@@ -30,6 +32,7 @@ export const STATIC_FRICTION = 0.05;
 export const SLIDING_FRICTION = 0.02;
 export const SLIDING_FRICTION_WINDOW_MS = 5 * 60 * 1000;
 export const MIN_BAND_DWELL_MS = 10 * 60 * 1000;
+const MOOD_ANCHOR_EPSILON = 0.005;
 
 export const MOOD_REGION_ORDER: readonly MoodBand[] = ['unpleasant', 'oppressed', 'calm', 'aroused', 'excited'];
 export const RESERVE_BAND_ORDER: readonly ReserveBand[] = ['drained', 'tired', 'full'];
@@ -61,6 +64,12 @@ export interface MoodDynamicsState {
   arousal: number;
   dominance: number;
   reserve: number;
+  valenceD0?: number;
+  valenceU?: number;
+  arousalD0?: number;
+  arousalU?: number;
+  dominanceD0?: number;
+  dominanceU?: number;
 }
 
 export interface AdvanceMoodStateOptions {
@@ -69,6 +78,8 @@ export interface AdvanceMoodStateOptions {
   baseline: { valence: number; arousal: number };
   surfaceHalfLifeMin: number;
   arousalHalfLifeMin: number;
+  surfaceHoldShape?: number;
+  arousalHoldShape?: number;
   energySource: EnergySource;
   energyMultipliers?: Partial<PersonaEnergyMultipliers>;
   lastReplyAt: number | null;
@@ -102,6 +113,27 @@ export function decayValue(value: number, baseline: number, elapsedMs: number, h
   if (!(halfLifeMin > 0)) throw new RangeError('半衰期必须为正数');
   if (elapsedMs <= 0) return value;
   return baseline + (value - baseline) * 2 ** (-elapsedMs / (halfLifeMin * 60_000));
+}
+
+// Hill 停留曲线：u=1 时剩余偏移正好减半。
+export function holdDecay(d0: number, u: number, n: number): number {
+  if (!Number.isFinite(d0) || !Number.isFinite(u) || u < 0 || !Number.isFinite(n) || n <= 0) {
+    throw new RangeError('Hill 曲线参数无效');
+  }
+  return d0 / (1 + u ** n);
+}
+
+export function reanchor(currentDelta: number, nextDelta: number, u: number, n: number): { d0: number; u: number } {
+  if (!Number.isFinite(currentDelta) || !Number.isFinite(nextDelta) || !Number.isFinite(u) || u < 0) {
+    throw new RangeError('情绪锚点参数无效');
+  }
+  if (Math.abs(nextDelta) < MOOD_ANCHOR_EPSILON) return { d0: 0, u: 0 };
+  if (Math.abs(currentDelta) < MOOD_ANCHOR_EPSILON
+    || currentDelta * nextDelta < 0
+    || (currentDelta * nextDelta > 0 && Math.abs(nextDelta) > Math.abs(currentDelta))) {
+    return { d0: nextDelta, u: 0 };
+  }
+  return { d0: nextDelta / holdDecay(1, u, n), u };
 }
 
 // 同一发送者过去 60 分钟的累计变化越大，后续事件的应用比例越低。
@@ -221,11 +253,24 @@ export function advanceMoodState(state: MoodDynamicsState, input: AdvanceMoodSta
   }
   if (!(input.surfaceHalfLifeMin > 0)) throw new RangeError('表层半衰期必须为正数');
   if (!(input.arousalHalfLifeMin > 0)) throw new RangeError('兴奋度半衰期必须为正数');
+  const surfaceHoldShape = input.surfaceHoldShape ?? DEFAULT_SURFACE_HOLD_SHAPE;
+  const arousalHoldShape = input.arousalHoldShape ?? DEFAULT_AROUSAL_HOLD_SHAPE;
+  if (!Number.isFinite(surfaceHoldShape) || surfaceHoldShape <= 0
+    || !Number.isFinite(arousalHoldShape) || arousalHoldShape <= 0) {
+    throw new RangeError('停留感形状参数必须为正数');
+  }
+  const dominance = Number.isFinite(state.dominance) ? state.dominance : 0;
   let current = {
     valence: state.valence,
     arousal: state.arousal,
-    dominance: state.dominance,
+    dominance,
     reserve: Math.max(0, Math.min(1, state.reserve)),
+    valenceD0: state.valenceD0 ?? state.valence - input.baseline.valence,
+    valenceU: state.valenceU ?? 0,
+    arousalD0: state.arousalD0 ?? state.arousal - input.baseline.arousal,
+    arousalU: state.arousalU ?? 0,
+    dominanceD0: state.dominanceD0 ?? dominance,
+    dominanceU: state.dominanceU ?? 0,
   };
   let cursor = input.from;
   while (cursor < input.to) {
@@ -235,14 +280,12 @@ export function advanceMoodState(state: MoodDynamicsState, input: AdvanceMoodSta
     if (replyBoundaries.length > 0) end = Math.min(end, ...replyBoundaries);
     const elapsedMs = end - cursor;
     const previousValence = current.valence;
-    current.valence = decayValue(
-      current.valence,
-      input.baseline.valence,
-      elapsedMs,
-      surfaceHalfLifeMin(current.reserve, input.surfaceHalfLifeMin),
-    );
-    current.arousal = decayValue(current.arousal, input.baseline.arousal, elapsedMs, input.arousalHalfLifeMin);
-    current.dominance = decayValue(current.dominance, 0, elapsedMs, input.arousalHalfLifeMin);
+    current.valenceU += elapsedMs / (surfaceHalfLifeMin(current.reserve, input.surfaceHalfLifeMin) * 60_000);
+    current.arousalU += elapsedMs / input.arousalHalfLifeMin / 60_000;
+    current.dominanceU += elapsedMs / input.arousalHalfLifeMin / 60_000;
+    current.valence = input.baseline.valence + holdDecay(current.valenceD0, current.valenceU, surfaceHoldShape);
+    current.arousal = input.baseline.arousal + holdDecay(current.arousalD0, current.arousalU, arousalHoldShape);
+    current.dominance = holdDecay(current.dominanceD0, current.dominanceU, arousalHoldShape);
     if (previousValence < input.baseline.valence) {
       const recovered = Math.max(0, current.valence - previousValence);
       current.reserve = Math.max(0, current.reserve - recovered * RESERVE_RECOVERY_COST

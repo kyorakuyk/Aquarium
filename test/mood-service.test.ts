@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { createAffinityService } from '../src/core/affinity/service.ts';
+import { holdDecay } from '../src/core/mood/core.ts';
 import { createMoodService } from '../src/core/mood/service.ts';
 import { createMessagePipeline } from '../src/core/conversation/pipeline.ts';
 import { promptTemplateStore } from '../src/core/prompt/templates.ts';
@@ -130,8 +131,8 @@ test('回复后异步评估并更新 PAD 状态，下一次提示词带情绪块
     const state = repository.getMoodState(account);
     const decayMs = 5_000;
     const surfaceHalfLife = 40 * 1.4 / (0.4 + 0.8);
-    const decayedValence = 0.1 + (-0.14 - 0.1) * 2 ** (-decayMs / (surfaceHalfLife * 60_000));
-    const decayedArousal = 0.4 + (0.75 + (1 - 0.75) * 0.05 - 0.4) * 2 ** (-decayMs / (40 * 60_000));
+    const decayedValence = 0.1 + holdDecay(-0.24, decayMs / (surfaceHalfLife * 60_000), 3);
+    const decayedArousal = 0.4 + holdDecay(0.75 + (1 - 0.75) * 0.05 - 0.4, decayMs / (40 * 60_000), 2);
     const absorption = Math.min(0.15 * 0.85 * Math.min(1, 0.8 / 0.5), 0.05);
     const expectedValence = decayedValence - 0.15 + absorption;
     const expectedArousal = decayedArousal + 0.1 * (1 - decayedArousal);

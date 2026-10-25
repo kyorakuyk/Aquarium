@@ -10,13 +10,27 @@ import {
   isCompanionshipActive,
   bandOf,
   bufferNegativeDelta,
+  reanchor,
   surfaceHalfLifeMin,
   applyArousalDelta,
   applyDominanceDelta,
   SENDER_VALENCE_CAP,
+  type MoodDynamicsState,
 } from '../src/core/mood/core.ts';
 
 const minute = 60 * 1000;
+
+function applyValenceEvent(state: MoodDynamicsState, delta: number, baseline: number): MoodDynamicsState {
+  const currentDelta = state.valence - baseline;
+  const nextDelta = currentDelta + delta;
+  const anchor = reanchor(currentDelta, nextDelta, state.valenceU ?? 0, 3);
+  return {
+    ...state,
+    valence: baseline + nextDelta,
+    valenceD0: anchor.d0,
+    valenceU: anchor.u,
+  };
+}
 
 test('衰减数值按半衰期折半逼近基线', () => {
   assert.ok(Math.abs(decayValue(0.5, 0.1, 30 * minute, 30) - 0.3) < 1e-12);
@@ -149,7 +163,7 @@ test('动态水位控制表层恢复速度，低于难过阈值时恢复水位�
 test('水位为零时连续负向事件进入压抑区域', () => {
   const baseline = { valence: 0.1, arousal: 0.4 };
   const dynamics = { valence: 0.1, arousal: 0.4, dominance: 0, reserve: 0 };
-  let value = dynamics;
+  let value: MoodDynamicsState = dynamics;
 
   for (let index = 1; index <= 4; index += 1) {
     const time = index * 2 * minute;
@@ -166,7 +180,7 @@ test('水位为零时连续负向事件进入压抑区域', () => {
       });
     }
     const buffered = bufferNegativeDelta(-0.15, value.reserve);
-    value = { ...value, valence: value.valence + buffered.surfaceDelta, reserve: buffered.reserve };
+    value = { ...applyValenceEvent(value, buffered.surfaceDelta, baseline.valence), reserve: buffered.reserve };
   }
 
   assert.equal(bandOf(value.valence, value.arousal), 'oppressed');
@@ -175,7 +189,7 @@ test('水位为零时连续负向事件进入压抑区域', () => {
 test('满水位会延后负向事件进入压抑区域', () => {
   const baseline = { valence: 0.1, arousal: 0.4 };
   const firstSuppressedIndex = (initialReserve: number) => {
-    let value = { valence: baseline.valence, arousal: baseline.arousal, dominance: 0, reserve: initialReserve };
+    let value: MoodDynamicsState = { valence: baseline.valence, arousal: baseline.arousal, dominance: 0, reserve: initialReserve };
     for (let index = 1; index <= 11; index += 1) {
       const time = index * 3 * minute;
       if (index > 1) {
@@ -191,7 +205,7 @@ test('满水位会延后负向事件进入压抑区域', () => {
         });
       }
       const buffered = bufferNegativeDelta(-0.08, value.reserve);
-      value = { ...value, valence: value.valence + buffered.surfaceDelta, reserve: buffered.reserve };
+      value = { ...applyValenceEvent(value, buffered.surfaceDelta, baseline.valence), reserve: buffered.reserve };
       if (bandOf(value.valence, value.arousal) === 'oppressed') return index;
     }
     return Infinity;

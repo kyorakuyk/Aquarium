@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { recoverReserve } from '../src/core/mood/core.ts';
+import { holdDecay, recoverReserve } from '../src/core/mood/core.ts';
 import { sessionId } from '../src/core/shared/events.ts';
 import type { MoodBand } from '../src/store/affect-repo.ts';
 import { account, authHeaders, groupSession, now, withPanel } from './panel-test-helpers.ts';
@@ -173,7 +173,7 @@ test('mood series samples decay, five regions, and the latest reply injection tr
     assert.equal(body.points.find((point) => point.time === now - 12 * hourMs)?.absorbed, 0.05);
     const interpolated = body.points.find((point) => point.time === now - 12 * hourMs + 15 * 60_000);
     const surfaceHalfLife = 40 * 1.4 / (0.4 + 0.725);
-    const interpolatedValence = 0.1 + (-0.5 - 0.1) * 2 ** (-15 / surfaceHalfLife);
+    const interpolatedValence = 0.1 + holdDecay(-0.6, 15 / surfaceHalfLife, 3);
     const interpolatedReserve = 0.725 - (interpolatedValence + 0.5) * 0.3;
     assert.ok(Math.abs((interpolated?.valence ?? 0) - interpolatedValence) < 1e-9);
     assert.ok(Math.abs((interpolated?.reserve ?? 0) - interpolatedReserve) < 1e-9);
