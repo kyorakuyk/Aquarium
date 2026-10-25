@@ -13,7 +13,7 @@ import {
 } from '../../../src/persona/mood.ts';
 import type { PersonaSectionsForm } from '../persona-sections.ts';
 import {
-  moodOutgoingTargets,
+  PERSONA_MOOD_PREVIEW_ERRORS,
   resolveMoodEdge,
   selectMoodEdge,
   selectMoodSource,
@@ -21,7 +21,7 @@ import {
   updateMoodEdgeSetting,
   withPersonaMoodSettings,
   type EmotionEdgeSetting,
-  type MoodEdgeSelection,
+  type MoodGraphSelection,
 } from './persona-mood-utils.ts';
 import { PersonaMoodEdgeMatrix } from './PersonaMoodEdgeMatrix.tsx';
 import { PersonaMoodGraph } from './PersonaMoodGraph.tsx';
@@ -91,16 +91,14 @@ export function PersonaMoodEditor({
   const [previewError, setPreviewError] = useState('');
   const edgeEditorRef = useRef<HTMLDivElement>(null);
   const emotionSignature = settings.emotions.join('\u0000');
-  const [selection, setSelection] = useState<MoodEdgeSelection>(() => ({
-    from: settings.emotions[0] ?? '',
-    to: settings.emotions[1] ?? settings.emotions[0] ?? '',
-  }));
+  const [selection, setSelection] = useState<MoodGraphSelection>({ from: null, to: null });
 
   useEffect(() => {
     setSelection((current) => {
-      if (settings.emotions.includes(current.from) && settings.emotions.includes(current.to) && current.from !== current.to) return current;
-      const from = settings.emotions[0] ?? '';
-      return { from, to: settings.emotions.find((name) => name !== from) ?? from };
+      if (current.from === null) return current;
+      if (!settings.emotions.includes(current.from)) return { from: null, to: null };
+      if (current.to === null || settings.emotions.includes(current.to) && current.to !== current.from) return current;
+      return { from: current.from, to: null };
     });
   }, [emotionSignature]);
 
@@ -114,10 +112,10 @@ export function PersonaMoodEditor({
         .then((value) => {
           if (!active) return;
           if (moodSettingsAreValid(value.settings)) setGlobalMoodSettings(value.settings);
-          else setPreviewError('返回的全局心情设置无效。');
+          else setPreviewError(PERSONA_MOOD_PREVIEW_ERRORS.globalInvalid);
         })
-        .catch((error: unknown) => {
-          if (active) setPreviewError(error instanceof Error ? error.message : '读取全局心情设置失败');
+        .catch(() => {
+          if (active) setPreviewError(PERSONA_MOOD_PREVIEW_ERRORS.global);
         })
         .finally(() => { if (active) setPreviewBusy(false); });
       return () => { active = false; };
@@ -136,10 +134,10 @@ export function PersonaMoodEditor({
             dominance: value.dominance,
           });
           setGlobalMoodSettings(value.settings);
-        } else setPreviewError('返回的预览账号或心情坐标无效，请重新读取。');
+        } else setPreviewError(PERSONA_MOOD_PREVIEW_ERRORS.invalid);
       })
-      .catch((error: unknown) => {
-        if (active) setPreviewError(error instanceof Error ? error.message : '读取当前心情失败');
+      .catch(() => {
+        if (active) setPreviewError(PERSONA_MOOD_PREVIEW_ERRORS.account);
       })
       .finally(() => { if (active) setPreviewBusy(false); });
     return () => { active = false; };
@@ -151,8 +149,8 @@ export function PersonaMoodEditor({
     setMessage('');
   }
 
-  function changeSelectionFrom(from: string) {
-    setSelection((current) => selectMoodSource(current, from, settings.emotions));
+  function changePointSelection(name: string) {
+    setSelection((current) => selectMoodSource(current, name, settings.emotions));
   }
 
   function changeSelectionTo(from: string, to: string) {
@@ -160,7 +158,7 @@ export function PersonaMoodEditor({
   }
 
   function changeEdge(key: EmotionEdgeSetting, value: number | boolean) {
-    if (disabled || selection.from === selection.to) return;
+    if (disabled || selection.from === null || selection.to === null) return;
     try {
       const next = key === 'jump'
         ? updateMoodEdgeSetting(settings, selection.from, selection.to, 'jump', value === true)
@@ -172,7 +170,7 @@ export function PersonaMoodEditor({
   }
 
   function resetEdge() {
-    if (disabled || selection.from === selection.to) return;
+    if (disabled || selection.from === null || selection.to === null) return;
     const library = buildEmotionLibrary(settings.emotions, settings.coordinates);
     const source = library.find((emotion) => emotion.name === selection.from);
     const target = library.find((emotion) => emotion.name === selection.to);
@@ -208,9 +206,9 @@ export function PersonaMoodEditor({
     () => buildEmotionLibrary(settings.emotions, settings.coordinates),
     [settings.emotions, settings.coordinates],
   );
-  const selectedSource = library.find((emotion) => emotion.name === selection.from);
-  const selectedTarget = library.find((emotion) => emotion.name === selection.to);
-  const selectedEdge = selectedSource && selectedTarget && selectedSource.name !== selectedTarget.name
+  const selectedSource = selection.from === null ? undefined : library.find((emotion) => emotion.name === selection.from);
+  const selectedTarget = selection.to === null ? undefined : library.find((emotion) => emotion.name === selection.to);
+  const selectedEdge = selection.from !== null && selection.to !== null && selectedSource && selectedTarget
     ? resolveMoodEdge(settings, selection.from, selection.to)
     : null;
   const selectedPreview = preview?.account === previewAccountId ? preview : null;
@@ -238,36 +236,24 @@ export function PersonaMoodEditor({
 
       <section className="persona-form-card persona-mood-card" aria-labelledby="persona-mood-graph-title">
         <header className="persona-mood-card-heading">
-          <div><h3 id="persona-mood-graph-title">切换难度</h3><p>点一个情绪查看它的出边；拖动情绪点可调整愉悦度与唤醒度。</p></div>
+          <div><h3 id="persona-mood-graph-title">切换难度</h3><p>点来源，再点目标；再点来源可取消。拖动超过 4px 才会调整坐标。</p></div>
           <span className="muted">愉悦 V × 唤醒 A</span>
         </header>
         <PersonaMoodGraph
           settings={settings}
           selectedFrom={selection.from}
           selectedTo={selection.to}
-          onSelectFrom={changeSelectionFrom}
-          onSelectTo={(to) => changeSelectionTo(selection.from, to)}
+          onSelectPoint={changePointSelection}
+          onSelectTo={(to) => { if (selection.from !== null) changeSelectionTo(selection.from, to); }}
           onCoordinatesChange={changeCoordinates}
           disabled={disabled || !parsed.success}
         />
         {selectedEdge && selectedSource && selectedTarget ? (
           <div className="persona-mood-edge-editor" ref={edgeEditorRef}>
             <div className="persona-mood-edge-heading">
-              <strong>{selection.from} → {selection.to}</strong>
+              <strong>{selection.from ?? ''} → {selection.to ?? ''}</strong>
               <span className={selectedEdge.modified ? 'is-custom' : ''}>{selectedEdge.modified ? '已修改' : '默认值'}</span>
             </div>
-            <label className="persona-mood-slider" htmlFor="persona-mood-target">
-              <span className="persona-mood-slider-heading"><span>到</span></span>
-              <select
-                id="persona-mood-target"
-                value={selection.to}
-                aria-label="选择切换目标情绪"
-                disabled={disabled || settings.emotions.length < 2}
-                onChange={(event) => changeSelectionTo(selection.from, event.currentTarget.value)}
-              >
-                {moodOutgoingTargets(settings, selection.from).map((name) => <option value={name} key={name}>{name}</option>)}
-              </select>
-            </label>
             <div className="persona-mood-edge-controls">
               <SettingsRange
                 id="persona-mood-margin"
@@ -313,12 +299,12 @@ export function PersonaMoodEditor({
                 step={0.05}
                 display={selectedSource.dominance.toFixed(2)}
                 disabled={disabled || !parsed.success}
-                onChange={(value) => commit(updateMoodCoordinate(settings, selection.from, 'dominance', value))}
+                onChange={(value) => selection.from !== null && commit(updateMoodCoordinate(settings, selection.from, 'dominance', value))}
               />
             </div>
           </div>
         ) : (
-          <p className="persona-mood-empty-edge">至少需要两种情绪，才能编辑情绪之间的切换。</p>
+          <p className="persona-mood-empty-edge">{settings.emotions.length < 2 ? '至少需要两种情绪，才能编辑切换。' : selection.from === null ? '先点一个情绪作为来源。' : '再点一个目标情绪，或选下方出边标签。'}</p>
         )}
       </section>
 
@@ -331,8 +317,8 @@ export function PersonaMoodEditor({
           selectedFrom={selection.from}
           selectedTo={selection.to}
           onSelect={(from, to) => {
-            setSelection(selectMoodEdge(selection, from, to, settings.emotions));
-            edgeEditorRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            setSelection((current) => selectMoodEdge(current, from, to, settings.emotions));
+            requestAnimationFrame(() => edgeEditorRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
           }}
         />
       </section>

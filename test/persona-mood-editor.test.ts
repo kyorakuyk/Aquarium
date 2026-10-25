@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createElement } from 'react';
 import type { ReactElement } from 'react';
@@ -11,8 +12,14 @@ import { emptyPersonaSections } from '../panel/src/persona-sections.ts';
 
 import {
   addMoodEmotion,
+  PERSONA_MOOD_PREVIEW_ERRORS,
   moodCoordinateFromPointer,
+  isMoodDragStarted,
+  isMoodMatrixHeaderHovered,
+  moodMarginColorPercent,
   moodOutgoingTargets,
+  nearestMoodPoint,
+  placeMoodEmotionLabels,
   removeMoodEmotion,
   restoreMissingMoodEmotions,
   resolveMoodEdge,
@@ -139,24 +146,116 @@ test('persona mood editor renders its five planned cards', async () => {
       disabled: false,
       active: true,
     }));
+    const moodStyles = readFileSync(fileURLToPath(new URL('../panel/src/styles/personas.css', import.meta.url)), 'utf8');
     for (const title of ['我的情绪', '切换难度', '全部切换一览', '主情绪与副情绪', '其他']) {
       assert.ok(html.includes(title), `缺少卡片标题：${title}`);
     }
-    assert.equal(html.match(/<g class="persona-mood-edge/g)?.length, 15);
-    assert.match(html, /aria-label="兴奋到开心，门槛/u);
+    const matrixCellBodies = [...html.matchAll(/<button class="persona-mood-matrix-cell[^"]*"[^>]*>(.*?)<\/button>/gu)]
+      .map((match) => match[1] ?? '');
+    assert.equal(matrixCellBodies.length, DEFAULT_PERSONA_MOOD.emotions.length * (DEFAULT_PERSONA_MOOD.emotions.length - 1));
+    assert.ok(matrixCellBodies.every((body) => !/\d/u.test(body.replace(/<i[^>]*><\/i>/gu, ''))), '矩阵格子不直接显示数字');
+    assert.match(moodStyles, /\.persona-mood-matrix-cell\s*\{[^}]*width:\s*20px/su);
+    assert.match(moodStyles, /\.persona-mood-matrix\s*\{[^}]*width:\s*max-content/su);
+    assert.match(moodStyles, /\.persona-mood-matrix-scroll\s*\{[^}]*overflow-x:\s*auto[^}]*overflow-y:\s*hidden/su);
+    assert.match(moodStyles, /\.persona-mood-matrix thead th:not\(:first-child\)[^{]*\{[^}]*writing-mode:\s*vertical-rl/su);
+    assert.match(moodStyles, /\.persona-mood-matrix th\.is-hovered/u);
+    assert.match(moodStyles, /persona-mood-edge-hit\s*\{[^}]*stroke-width:\s*12/su);
+    assert.match(html, /易/u);
+    assert.match(html, /难/u);
+    assert.match(PERSONA_MOOD_PREVIEW_ERRORS.account, /不影响人设配置的编辑和保存/u);
+    assert.equal(html.match(/<g class="persona-mood-edge/g)?.length ?? 0, 0);
+    assert.match(html, /先点一个情绪/u);
+
+    const { PersonaMoodGraph } = await vite.ssrLoadModule('/src/pages/PersonaMoodGraph.tsx') as {
+      PersonaMoodGraph: (props: {
+        settings: typeof DEFAULT_PERSONA_MOOD;
+        selectedFrom: string;
+        selectedTo: string;
+        onSelectPoint: (name: string) => void;
+        onSelectTo: (name: string) => void;
+        onCoordinatesChange: (name: string, valence: number, arousal: number) => void;
+        disabled: boolean;
+      }) => ReactElement;
+    };
+    const graph = renderToStaticMarkup(createElement(PersonaMoodGraph, {
+      settings: DEFAULT_PERSONA_MOOD,
+      selectedFrom: '兴奋',
+      selectedTo: '开心',
+      onSelectPoint: () => undefined,
+      onSelectTo: () => undefined,
+      onCoordinatesChange: () => undefined,
+      disabled: false,
+    }));
+    assert.equal(graph.match(/<g class="persona-mood-edge/g)?.length, 15);
+    assert.equal(graph.match(/<button class="persona-mood-edge-chip/g)?.length, 15);
+    assert.match(graph, /markerWidth="6" markerHeight="6"[^>]*markerUnits="userSpaceOnUse"/u);
+    assert.match(graph, /class="persona-mood-edge is-selected/u);
+    assert.deepEqual(
+      [...graph.matchAll(/<span>→ ([^<]+)<\/span>/gu)].map((match) => match[1]),
+      moodOutgoingTargets(DEFAULT_PERSONA_MOOD, '兴奋'),
+    );
+    assert.match(graph, /愉快 →/u);
+    assert.doesNotMatch(graph, /愉悦 V/u);
   } finally {
     await vite.close();
   }
 });
 
-test('emotion and matrix selection helpers expose the expected outgoing edges and selected pair', () => {
-  assert.equal(moodOutgoingTargets(DEFAULT_PERSONA_MOOD, '平静').length, 15);
-  assert.deepEqual(selectMoodSource({ from: '兴奋', to: '开心' }, '平静', DEFAULT_PERSONA_MOOD.emotions), {
-    from: '平静',
-    to: '开心',
-  });
+test('mood graph selection, hit testing, label placement, and outgoing chips are deterministic', () => {
+  const selectedFrom = selectMoodSource({ from: null, to: null }, '平静', DEFAULT_PERSONA_MOOD.emotions);
+  assert.deepEqual(selectedFrom, { from: '平静', to: null });
+  const selectedEdge = selectMoodSource(selectedFrom, '开心', DEFAULT_PERSONA_MOOD.emotions);
+  assert.deepEqual(selectedEdge, { from: '平静', to: '开心' });
+  assert.deepEqual(selectMoodSource(selectedEdge, '平静', DEFAULT_PERSONA_MOOD.emotions), { from: null, to: null });
   assert.deepEqual(selectMoodEdge({ from: '平静', to: '开心' }, '害羞', '生气', DEFAULT_PERSONA_MOOD.emotions), {
     from: '害羞',
     to: '生气',
   });
+  assert.deepEqual(selectMoodEdge({ from: '兴奋', to: null }, '兴奋', '开心', DEFAULT_PERSONA_MOOD.emotions), {
+    from: '兴奋',
+    to: '开心',
+  });
+  const outgoing = moodOutgoingTargets(DEFAULT_PERSONA_MOOD, '平静');
+  assert.equal(outgoing.length, 15);
+  const margins = outgoing.map((name) => resolveMoodEdge(DEFAULT_PERSONA_MOOD, '平静', name).margin);
+  assert.deepEqual(margins, [...margins].sort((left, right) => left - right));
+
+  assert.equal(nearestMoodPoint([
+    { name: '较远', x: 10, y: 0 },
+    { name: '最近', x: 3, y: 0 },
+    { name: '圈外', x: 16, y: 0 },
+  ], 0, 0), '最近');
+  assert.equal(isMoodDragStarted(0, 0, 4, 0), false);
+  assert.equal(isMoodDragStarted(0, 0, 4.01, 0), true);
+  const labels = placeMoodEmotionLabels([
+    { name: '被挡', x: 100, y: 100 },
+    { name: '挡点', x: 118, y: 100 },
+    { name: '远点', x: 300, y: 300 },
+  ]);
+  assert.equal(labels.find(({ name }) => name === '被挡')?.direction, 'left');
+  assert.deepEqual(labels.map(({ direction }) => direction).filter((direction) => !['right', 'left', 'up', 'down'].includes(direction)), []);
+  const layoutOfCenter = (...blockers: Array<{ name: string; x: number; y: number }>) => placeMoodEmotionLabels([
+    { name: '中心', x: 100, y: 100 },
+    ...blockers,
+  ])[0]?.direction;
+  assert.equal(layoutOfCenter(), 'right');
+  assert.equal(layoutOfCenter({ name: '右侧', x: 118, y: 100 }), 'left');
+  assert.equal(layoutOfCenter(
+    { name: '右侧', x: 122, y: 100 },
+    { name: '左侧', x: 78, y: 100 },
+    { name: '下方', x: 100, y: 118 },
+  ), 'up');
+  assert.equal(layoutOfCenter(
+    { name: '右侧', x: 122, y: 100 },
+    { name: '左侧', x: 78, y: 100 },
+    { name: '上方', x: 100, y: 82 },
+  ), 'down');
+  const hovered = { from: '平静', to: '开心' };
+  assert.equal(isMoodMatrixHeaderHovered('row', '平静', hovered), true);
+  assert.equal(isMoodMatrixHeaderHovered('column', '开心', hovered), true);
+  assert.equal(isMoodMatrixHeaderHovered('row', '开心', hovered), false);
+  assert.equal(moodMarginColorPercent(0), 10);
+  assert.equal(moodMarginColorPercent(0.15), 42.5);
+  assert.equal(moodMarginColorPercent(0.3), 75);
+  assert.equal(moodMarginColorPercent(0.5), 75);
 });

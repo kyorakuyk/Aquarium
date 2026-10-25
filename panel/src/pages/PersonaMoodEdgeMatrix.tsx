@@ -1,11 +1,6 @@
+import { useState } from 'react';
 import type { PersonaMoodSettings } from '../../../src/persona/mood.ts';
-import { resolveMoodEdge } from './persona-mood-utils.ts';
-
-function difficulty(margin: number): 'easy' | 'medium' | 'hard' {
-  if (margin < 0.08) return 'easy';
-  if (margin < 0.2) return 'medium';
-  return 'hard';
-}
+import { isMoodMatrixHeaderHovered, moodMarginColorPercent, resolveMoodEdge } from './persona-mood-utils.ts';
 
 export function PersonaMoodEdgeMatrix({
   settings,
@@ -14,44 +9,68 @@ export function PersonaMoodEdgeMatrix({
   onSelect,
 }: {
   settings: PersonaMoodSettings;
-  selectedFrom: string;
-  selectedTo: string;
+  selectedFrom: string | null;
+  selectedTo: string | null;
   onSelect: (from: string, to: string) => void;
 }) {
+  const [pointerHovered, setPointerHovered] = useState<{ from: string; to: string } | null>(null);
+  const [focused, setFocused] = useState<{ from: string; to: string } | null>(null);
+  const hovered = pointerHovered ?? focused;
+  const edgeTitle = (from: string, to: string) => {
+    const edge = resolveMoodEdge(settings, from, to);
+    return `${from} → ${to} · 门槛 ${edge.margin.toFixed(2)} · 停留 ${edge.dwell} 分钟 · ${edge.jump ? '允许直接切换' : '不可直接切换'} · ${edge.modified ? '已修改' : '默认值'}`;
+  };
   return (
     <div className="persona-mood-matrix-scroll" role="region" aria-label="全部切换一览" tabIndex={0}>
       <table className="persona-mood-matrix">
         <thead>
           <tr>
             <th scope="col">从＼到</th>
-            {settings.emotions.map((name) => <th scope="col" key={name}>{name}</th>)}
+            {settings.emotions.map((name) => (
+              <th scope="col" key={name} className={isMoodMatrixHeaderHovered('column', name, hovered) ? 'is-hovered' : ''}>
+                <span>{name}</span>
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
           {settings.emotions.map((from) => (
             <tr key={from}>
-              <th scope="row">{from}</th>
+              <th scope="row" className={isMoodMatrixHeaderHovered('row', from, hovered) ? 'is-hovered' : ''}>{from}</th>
               {settings.emotions.map((to) => {
-                if (from === to) return <td className="persona-mood-matrix-diagonal" key={to} aria-label={`${from}到${to}（同一情绪）`} />;
+                if (from === to) return (
+                  <td
+                    className="persona-mood-matrix-diagonal"
+                    key={to}
+                    aria-label={`${from}到${to}（同一情绪）`}
+                    onPointerEnter={() => setPointerHovered({ from, to })}
+                    onPointerLeave={() => setPointerHovered(null)}
+                  />
+                );
                 const edge = resolveMoodEdge(settings, from, to);
                 const selected = selectedFrom === from && selectedTo === to;
                 const modified = edge.modified;
                 const className = [
                   'persona-mood-matrix-cell',
-                  `is-${difficulty(edge.margin)}`,
                   edge.jump ? '' : 'is-blocked',
                   selected ? 'is-selected' : '',
                 ].filter(Boolean).join(' ');
+                const title = edgeTitle(from, to);
                 return (
                   <td key={to}>
                     <button
                       className={className}
                       type="button"
-                      aria-label={`${from}到${to}，门槛 ${edge.margin.toFixed(2)}，至少停留 ${edge.dwell} 分钟${edge.jump ? '' : '，不可直接切换'}，${modified ? '已修改' : '默认值'}`}
+                      style={{ backgroundColor: `color-mix(in srgb, var(--accent-soft) ${moodMarginColorPercent(edge.margin)}%, var(--surface))` }}
+                      title={title}
+                      aria-label={title}
                       aria-pressed={selected}
+                      onPointerEnter={() => setPointerHovered({ from, to })}
+                      onPointerLeave={() => setPointerHovered(null)}
+                      onFocus={() => setFocused({ from, to })}
+                      onBlur={() => setFocused(null)}
                       onClick={() => onSelect(from, to)}
                     >
-                      <span>{edge.margin.toFixed(2)}</span>
                       {modified && <i aria-hidden="true" />}
                     </button>
                   </td>
@@ -61,7 +80,14 @@ export function PersonaMoodEdgeMatrix({
           ))}
         </tbody>
       </table>
-      <p className="persona-mood-matrix-hint">颜色越深，切换门槛越高；斜线表示不可直接切换，圆点表示已修改。</p>
+      <div className="persona-mood-matrix-legend" role="img" aria-label="门槛从易到难">
+        <span>易</span>
+        {[10, 32, 54, 75].map((percent, index) => (
+          <i key={percent} className={`is-step-${index + 1}`} style={{ backgroundColor: `color-mix(in srgb, var(--accent-soft) ${percent}%, var(--surface))` }} aria-hidden="true" />
+        ))}
+        <span>难</span>
+      </div>
+      <p className="persona-mood-matrix-hint">斜线表示不可直接切换，右上角小点表示已修改。</p>
     </div>
   );
 }

@@ -14,8 +14,14 @@ import type { PersonaSectionsForm } from '../persona-sections.ts';
 
 export type EmotionCoordinateAxis = 'valence' | 'arousal' | 'dominance';
 export type EmotionEdgeSetting = keyof EmotionEdge;
-export interface MoodEdgeSelection { from: string; to: string }
+export interface MoodGraphSelection { from: string | null; to: string | null }
 export interface ResolvedMoodEdge extends EmotionEdge { modified: boolean }
+export const PERSONA_MOOD_PREVIEW_ERRORS = {
+  global: '暂时无法读取全局心情设置，已用默认底色展示；这不影响人设配置的编辑和保存。',
+  account: '暂时无法读取所选 QQ 的心情预览；这不影响人设配置的编辑和保存，请稍后重试。',
+  invalid: '返回的心情预览数据无效，请重新选择预览账号；这不影响人设配置的编辑和保存。',
+  globalInvalid: '返回的全局心情设置无效，已用默认底色展示；这不影响人设配置的编辑和保存。',
+} as const;
 
 export function resolveMoodEdge(settings: PersonaMoodSettings, from: string, to: string): ResolvedMoodEdge {
   const library = buildEmotionLibrary(settings.emotions, settings.coordinates);
@@ -54,29 +60,32 @@ export const MOOD_CHART_VIEW = {
   bottom: 322,
 } as const;
 
-export function moodOutgoingTargets(settings: PersonaMoodSettings, from: string): string[] {
-  if (!settings.emotions.includes(from)) return [];
-  return settings.emotions.filter((name) => name !== from);
+export function moodOutgoingTargets(settings: PersonaMoodSettings, from: string | null): string[] {
+  if (from === null || !settings.emotions.includes(from)) return [];
+  return settings.emotions
+    .filter((name) => name !== from)
+    .map((name, index) => ({ name, index, margin: resolveMoodEdge(settings, from, name).margin }))
+    .sort((left, right) => left.margin - right.margin || left.index - right.index)
+    .map(({ name }) => name);
 }
 
 export function selectMoodSource(
-  current: MoodEdgeSelection,
+  current: MoodGraphSelection,
   from: string,
   emotions: readonly string[],
-): MoodEdgeSelection {
+): MoodGraphSelection {
   if (!emotions.includes(from)) return current;
-  const to = current.to !== from && emotions.includes(current.to)
-    ? current.to
-    : emotions.find((name) => name !== from) ?? from;
-  return { from, to };
+  if (current.from === null || !emotions.includes(current.from)) return { from, to: null };
+  if (current.from === from) return { from: null, to: null };
+  return { from: current.from, to: from };
 }
 
 export function selectMoodEdge(
-  current: MoodEdgeSelection,
+  current: MoodGraphSelection,
   from: string,
   to: string,
   emotions: readonly string[],
-): MoodEdgeSelection {
+): MoodGraphSelection {
   if (from === to || !emotions.includes(from) || !emotions.includes(to)) return current;
   return { from, to };
 }
@@ -209,4 +218,93 @@ export function withPersonaMoodSettings(
   if (overrides) metadata.mood = overrides;
   else delete metadata.mood;
   return { ...form, metadata };
+}
+
+export interface MoodGraphPointLayout { name: string; x: number; y: number }
+export type MoodGraphLabelDirection = 'right' | 'left' | 'up' | 'down';
+export interface MoodGraphLabelPosition extends MoodGraphPointLayout {
+  anchor: 'start' | 'end' | 'middle';
+  direction: MoodGraphLabelDirection;
+}
+
+export function nearestMoodPoint(
+  points: readonly MoodGraphPointLayout[],
+  x: number,
+  y: number,
+  hitRadius = 15,
+): string | null {
+  if (![x, y, hitRadius].every(Number.isFinite) || hitRadius < 0) return null;
+  let nearest: string | null = null;
+  let nearestDistance = hitRadius;
+  for (const point of points) {
+    const distance = Math.hypot(point.x - x, point.y - y);
+    if (distance <= hitRadius && (nearest === null || distance < nearestDistance)) {
+      nearest = point.name;
+      nearestDistance = distance;
+    }
+  }
+  return nearest;
+}
+
+export function isMoodDragStarted(startX: number, startY: number, x: number, y: number, threshold = 4): boolean {
+  return Math.hypot(x - startX, y - startY) > threshold;
+}
+
+export function placeMoodEmotionLabels(points: readonly MoodGraphPointLayout[]): MoodGraphLabelPosition[] {
+  const labelWidth = (name: string) => Math.max(10, Array.from(name).length * 10 + 2);
+  const boxes: Array<{ name: string; left: number; right: number; top: number; bottom: number }> = [];
+  const overlaps = (left: typeof boxes[number], right: typeof boxes[number]): boolean => (
+    left.left < right.right + 2 && left.right + 2 > right.left
+      && left.top < right.bottom + 2 && left.bottom + 2 > right.top
+  );
+  const nodeBox = (point: MoodGraphPointLayout) => ({
+    name: point.name,
+    left: point.x - 8,
+    right: point.x + 8,
+    top: point.y - 8,
+    bottom: point.y + 8,
+  });
+  const result: MoodGraphLabelPosition[] = [];
+
+  for (const point of points) {
+    const width = labelWidth(point.name);
+    const candidates: Array<MoodGraphLabelPosition & { box: typeof boxes[number] }> = [
+      { ...point, x: point.x + 10, y: point.y + 3, anchor: 'start', direction: 'right', box: { name: point.name, left: point.x + 10, right: point.x + 10 + width, top: point.y - 7, bottom: point.y + 5 } },
+      { ...point, x: point.x - 10, y: point.y + 3, anchor: 'end', direction: 'left', box: { name: point.name, left: point.x - 10 - width, right: point.x - 10, top: point.y - 7, bottom: point.y + 5 } },
+      { ...point, x: point.x, y: point.y - 10, anchor: 'middle', direction: 'up', box: { name: point.name, left: point.x - width / 2, right: point.x + width / 2, top: point.y - 22, bottom: point.y - 10 } },
+      { ...point, x: point.x, y: point.y + 18, anchor: 'middle', direction: 'down', box: { name: point.name, left: point.x - width / 2, right: point.x + width / 2, top: point.y + 6, bottom: point.y + 18 } },
+    ];
+    const scored = candidates.map((candidate) => {
+      const pointCollisions = points.filter((other) => other.name !== point.name)
+        .filter((other) => overlaps(candidate.box, nodeBox(other))).length;
+      const labelCollisions = boxes.filter((box) => overlaps(candidate.box, box)).length;
+      return { candidate, score: pointCollisions + labelCollisions };
+    });
+    const selected = scored.find(({ score }) => score === 0) ?? scored.reduce((best, item) => (
+      item.score < best.score ? item : best
+    ));
+    result.push({
+      name: point.name,
+      x: selected.candidate.x,
+      y: selected.candidate.y,
+      anchor: selected.candidate.anchor,
+      direction: selected.candidate.direction,
+    });
+    boxes.push(selected.candidate.box);
+  }
+  return result;
+}
+
+export function isMoodMatrixHeaderHovered(
+  axis: 'row' | 'column',
+  name: string,
+  hovered: { from: string; to: string } | null,
+): boolean {
+  return hovered !== null && (axis === 'row' ? hovered.from === name : hovered.to === name);
+}
+
+export function moodMarginColorPercent(margin: number): number {
+  if (!Number.isFinite(margin)) return 10;
+  const bounded = Math.max(0, Math.min(0.3, margin));
+  return Number((10 + (bounded / 0.3) * 65).toFixed(2));
 }
