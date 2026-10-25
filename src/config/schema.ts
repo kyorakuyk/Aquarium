@@ -13,6 +13,7 @@ const rateSchema = z.object({
 }).strict();
 
 const modeSchema = z.enum(['mention_only', 'active', 'natural', 'busy']);
+const innerVoiceSchema = z.enum(['full', 'light', 'hidden']);
 export const SelfEditScopeSchema = z.enum([
   'persona_behavior',
   'persona_traits',
@@ -48,6 +49,7 @@ const sessionSettingsSchema = z.object({
 const sessionOverrideSchema = z.object({
   enabled: z.boolean().optional(),
   mode: modeSchema.optional(),
+  innerVoice: innerVoiceSchema.optional(),
   modeSchedule: ModeScheduleSchema.optional(),
   proactiveCooldownSec: z.number().int().min(0).max(3600).optional(),
   talkOffset: z.number().int().min(-2).max(2).optional(),

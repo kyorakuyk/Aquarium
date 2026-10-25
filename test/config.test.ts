@@ -254,6 +254,22 @@ test('talkOffset 默认继承为 0，会话覆盖限制在 -2 到 2', () => {
   }).success, false);
 });
 
+test('innerVoice 会话覆盖只接受 full、light 或 hidden', () => {
+  const session = '7:group:9';
+  const config = AquariumConfigSchema.parse({
+    ...exampleConfig,
+    sessions: { [session]: { innerVoice: 'hidden' } },
+  });
+
+  assert.equal(config.sessions[session]?.innerVoice, 'hidden');
+  for (const innerVoice of ['verbose', '', null]) {
+    assert.equal(AquariumConfigSchema.safeParse({
+      ...exampleConfig,
+      sessions: { [session]: { innerVoice } },
+    }).success, false);
+  }
+});
+
 test('作息旧配置得到关闭默认值并校验时间格式', () => {
   const legacyConfig = structuredClone(exampleConfig) as Record<string, any>;
   delete legacyConfig.sleep;

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { resolveInnerVoice } from '../src/core/conversation/steps/inner-voice-mode.ts';
 import { loadPersona, parsePersonaMarkdown } from '../src/persona/load.ts';
 import { DEFAULT_PERSONA_MOOD } from '../src/persona/mood.ts';
 
@@ -159,6 +160,7 @@ test('parsePersonaMarkdown 解析结构化字段并将四维档位映射为数�
     '  firstPerson: 我',
     '  length: { min: 1, max: 150 }',
     '  segmenting: one_message',
+    '  innerVoice: full',
     '  catchphrases: [在的呀, 诶?]',
     'audience:',
     '  stranger: 关切收敛',
@@ -186,6 +188,7 @@ test('parsePersonaMarkdown 解析结构化字段并将四维档位映射为数�
   ].join('\n');
 
   const loaded = parsePersonaMarkdown(source);
+  const withoutInnerVoice = parsePersonaMarkdown(source.replace('  innerVoice: full\n', ''));
 
   assert.deepEqual(loaded.traits, {
     order: -1,
@@ -202,6 +205,10 @@ test('parsePersonaMarkdown 解析结构化字段并将四维档位映射为数�
   assert.deepEqual(loaded.profile?.aliases, ['小鲸鱼', '鲸鱼妈妈']);
   assert.equal(loaded.profile?.identity.kind, 'AI 网络角色');
   assert.equal(loaded.profile?.speech.segmenting, 'one_message');
+  assert.equal(loaded.profile?.speech.innerVoice, 'full');
+  assert.equal(resolveInnerVoice(undefined, loaded), 'full');
+  assert.equal(resolveInnerVoice({ innerVoice: 'hidden' }, loaded), 'hidden');
+  assert.equal(resolveInnerVoice(undefined, withoutInnerVoice), 'light');
   assert.equal(loaded.profile?.audience?.close, '可以直接管人');
   assert.equal(loaded.profile?.modes?.[1]?.name, '认真');
   assert.deepEqual(loaded.profile?.reply.mustReply, ['被@', '身体不适']);
@@ -210,6 +217,8 @@ test('parsePersonaMarkdown 解析结构化字段并将四维档位映射为数�
   const defaultEnergy = parsePersonaMarkdown(source.replace('energySource: inner\n', '')).profile?.energySource;
   assert.equal(defaultEnergy, 'mixed');
   assert.throws(() => parsePersonaMarkdown(source.replace('energySource: inner', 'energySource: sideways')), /energySource/u);
+  assert.equal(parsePersonaMarkdown(source.replace('  innerVoice: full\n', '')).profile?.speech.innerVoice, undefined);
+  assert.throws(() => parsePersonaMarkdown(source.replace('innerVoice: full', 'innerVoice: sideways')), /speech\.innerVoice/u);
 });
 
 test('旧角色卡正文中的横线分隔符不会被误当成 YAML 文件头', () => {

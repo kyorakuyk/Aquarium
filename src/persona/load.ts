@@ -22,6 +22,7 @@ export type PersonaEnergySource = 'inner' | 'outer' | 'mixed';
 export type PersonaAudienceTier = 'stranger' | 'acquaintance' | 'close';
 export type PersonaSpeechMode = 'normal' | 'restricted';
 export type PersonaSegmenting = 'one_message' | 'multi';
+export type PersonaInnerVoiceMode = 'full' | 'light' | 'hidden';
 
 export interface PersonaMode {
   name: string;
@@ -56,6 +57,7 @@ export interface StructuredPersona {
     firstPerson: string;
     length: { min: number; max: number };
     segmenting: PersonaSegmenting;
+    innerVoice?: PersonaInnerVoiceMode;
     catchphrases: string[];
     forbidden: string[];
     vocabulary: string[];
@@ -239,6 +241,10 @@ function parseStructuredPersona(
   if (segmenting !== 'one_message' && segmenting !== 'multi') {
     throw new Error('结构化人设字段 speech.segmenting 必须是 one_message 或 multi');
   }
+  const innerVoice = speech.innerVoice;
+  if (innerVoice !== undefined && innerVoice !== 'full' && innerVoice !== 'light' && innerVoice !== 'hidden') {
+    throw new Error('结构化人设字段 speech.innerVoice 必须是 full、light 或 hidden');
+  }
   const minLength = length.min;
   const maxLength = length.max;
   if (!Number.isSafeInteger(minLength) || !Number.isSafeInteger(maxLength)
@@ -277,6 +283,7 @@ function parseStructuredPersona(
       firstPerson: requiredText(speech.firstPerson, 'speech.firstPerson'),
       length: { min: minLength as number, max: maxLength as number },
       segmenting,
+      ...(innerVoice === undefined ? {} : { innerVoice }),
       catchphrases: parseStringArray(speech.catchphrases, 'speech.catchphrases'),
       forbidden: parseStringArray(speech.forbidden, 'speech.forbidden', true),
       vocabulary: vocabulary.length > 0 ? vocabulary : parseStringArray(speech.catchphrases, 'speech.catchphrases'),
