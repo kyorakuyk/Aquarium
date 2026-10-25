@@ -84,6 +84,7 @@ export function PersonaEnergyEditor({
   const [preview, setPreview] = useState<MoodPreview | null>(null);
   const [previewError, setPreviewError] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const parsed = PersonaEnergySchema.safeParse(form.metadata.energy ?? {});
   const settings = parsed.success ? parsed.data : DEFAULT_PERSONA_ENERGY;
   const source = isEnergySource(form.metadata.energySource) ? form.metadata.energySource : 'mixed';
@@ -103,15 +104,22 @@ export function PersonaEnergyEditor({
     void apiRequest<MoodPreview>(`/api/mood?account=${previewAccountId}`)
       .then((result) => {
         if (!active) return;
-        if (result.account === previewAccountId && isMoodPreview(result)) setPreview(result);
-        else setPreviewError('返回的 QQ 号或水位无效，请重新读取。');
+        if (!isMoodPreview(result)) {
+          console.warn('心灵能量预览返回数据无效', result);
+          setPreviewError('服务端还是旧版本，重启后再看');
+        } else if (result.account === previewAccountId) setPreview(result);
+        else setPreviewError('返回的 QQ 号与所选眷属不一致，请重新读取。');
       })
       .catch((error: unknown) => {
-        if (active) setPreviewError(error instanceof Error ? error.message : '读取当前心灵能量失败');
+        if (!active) return;
+        const message = error instanceof Error ? error.message : '';
+        setPreviewError(message === 'Not found' || message.includes('404')
+          ? '服务端还是旧版本，重启后再看'
+          : message || '读取当前心灵能量失败');
       })
       .finally(() => { if (active) setPreviewBusy(false); });
     return () => { active = false; };
-  }, [previewAccountId]);
+  }, [previewAccountId, reloadKey]);
 
   function updateMultiplier(key: keyof PersonaEnergyMultipliers, rawValue: string) {
     if (disabled || !parsed.success) return;
@@ -140,7 +148,12 @@ export function PersonaEnergyEditor({
           <button className="button button-secondary" type="button" disabled={disabled} onClick={resetMultipliers}>全部恢复 ×1</button>
         </header>
         {!parsed.success && <p className="persona-energy-error" role="alert">人设 energy 配置无效，请修复 YAML 后再保存。</p>}
-        {previewError && <p className="persona-energy-error" role="alert">{previewError}</p>}
+        {previewError && (
+          <div>
+            <p className="persona-energy-error" role="alert">{previewError}</p>
+            <button className="button button-secondary" type="button" disabled={previewBusy} onClick={() => setReloadKey((value) => value + 1)}>重新读取</button>
+          </div>
+        )}
         <div className="persona-energy-current">
           <span>所选来源：<strong>{source === 'inner' ? '向内（I）' : source === 'outer' ? '向外（E）' : '混合'}</strong></span>
           <span>当前水位：<strong>{selectedPreview ? `${Math.round(selectedPreview.reserve * 100)}%` : previewBusy ? '读取中…' : '未读取'}</strong></span>

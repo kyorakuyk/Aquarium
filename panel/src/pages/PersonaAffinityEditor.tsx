@@ -242,6 +242,7 @@ export function PersonaAffinityEditor({
   const [preview, setPreview] = useState<PersonaAffinityPreviewView | null>(null);
   const [previewError, setPreviewError] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const parsed = PersonaAffinitySchema.safeParse(form.metadata.affinity ?? {});
   const settings = parsed.success ? parsed.data : undefined;
 
@@ -262,10 +263,16 @@ export function PersonaAffinityEditor({
         if (result.account === previewAccountId) setPreview(result);
         else setPreviewError('返回的 QQ 号与所选眷属不一致，请重新读取。');
       })
-      .catch((error: unknown) => { if (active) setPreviewError(error instanceof Error ? error.message : '读取当前好感失败'); })
+      .catch((error: unknown) => {
+        if (!active) return;
+        const message = error instanceof Error ? error.message : '';
+        setPreviewError(message === 'Not found' || message.includes('404')
+          ? '服务端还是旧版本，重启后再看'
+          : message || '读取当前好感失败');
+      })
       .finally(() => { if (active) setPreviewBusy(false); });
     return () => { active = false; };
-  }, [personaId, previewAccountId]);
+  }, [personaId, previewAccountId, reloadKey]);
 
   const displayedPreview = preview?.account === previewAccountId ? preview : null;
   const defaults = displayedPreview?.curveDefaults ?? DEFAULT_AFFINITY_CURVES;
@@ -306,7 +313,12 @@ export function PersonaAffinityEditor({
             : <span className="persona-affinity-current-readout">{previewBusy ? '正在读取当前好感…' : '选择预览眷属以读取当前好感'}</span>}
         </div>
         {!parsed.success && <p className="persona-affinity-error" role="alert">人设 affinity 配置无效，请切换到 Markdown 源码修复后再保存。</p>}
-        {previewError && <p className="persona-affinity-error" role="alert">{previewError}</p>}
+        {previewError && (
+          <div>
+            <p className="persona-affinity-error" role="alert">{previewError}</p>
+            <button className="button button-secondary" type="button" disabled={previewBusy} onClick={() => setReloadKey((value) => value + 1)}>重新读取</button>
+          </div>
+        )}
         <div className="persona-affinity-mode-actions" role="group" aria-label="好感数据模式">
           <button className={`button ${mode === 'inherit' ? 'button-primary' : 'button-secondary'}`} type="button" disabled={disabled || !settings} aria-pressed={mode === 'inherit'} onClick={() => settings && updateSettings({ ...settings, mode: 'inherit' })}>继承账号共用记录</button>
           <button className={`button ${mode === 'independent' ? 'button-primary' : 'button-secondary'}`} type="button" disabled={disabled || !settings} aria-pressed={mode === 'independent'} onClick={() => settings && updateSettings({ ...settings, mode: 'independent' })}>使用人设独立记录</button>
