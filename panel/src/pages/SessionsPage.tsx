@@ -223,7 +223,7 @@ export function SessionsPage({
         <section className="session-detail panel-card">
           {selected
             ? <SessionSettingsPanel
-              key={selected.id}
+              key={`settings:${selected.id}`}
               target={selected}
               busy={busy}
               onPatch={patchSettings}
@@ -232,7 +232,7 @@ export function SessionsPage({
             />
             : <div className="empty-state">{selectedId === GLOBAL_DEFAULT_ID ? '正在读取全局默认设置…' : '选择一个会话查看设置。'}</div>}
           {selectedSession && <InteractionSettingsPanel
-            key={selectedSession.sessionId}
+            key={`interaction:${selectedSession.sessionId}`}
             session={selectedSession}
             busy={busy}
             onPatch={patchSettings}
