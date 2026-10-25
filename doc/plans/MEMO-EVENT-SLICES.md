@@ -1,4 +1,4 @@
-# Memo 改为事件切片（方案稿，2026-10-26，待雪拍板）
+# Memo 改为事件切片（已定稿，2026-10-26，待 Hermes 实现）
 
 ## 现在是怎样的（读代码确认）
 - `persist.ts` 每收到一条消息就 `recordMemo()`，把原文整句复制进 `persona_memos`（v26），所以记忆页是逐句流水账。这些原文其实 `messages` 表里本来就有一份。
@@ -46,23 +46,29 @@ SnowLuma ──► messages 表（= 暂存区，不再复制）
 - 输入：当天 memo（标题+经过）+ 零散尾巴的抽样（≤ 40 条）。memo 已覆盖的原文不再送。
 - 输出眷属口吻的日记 ≤ 600 字，`persona_diaries` 改为存模型生成的正文 + 引用的 memo id。
 - 之后推进游标；原文保留 `memory.rawRetentionDays`（默认 7）天，作为下次 history-import / 拉取历史的缓存，过期清理。
+- 手动清缓存：面板记忆页加「清除暂存缓存」按钮（可选范围：某会话 / 全部；仅清已整理过、游标之前的原文，未整理的不动），二次确认后执行；对应 panel-server 路由。memo、日记、事件簿不受影响。
 
 ### 5. 固定整理时刻
 - 新配置 `memory.organizeAt`（默认 `04:00`）。开了作息就在入睡时整理；没开作息就在 organizeAt 整理。调度器从 goodnight 里拆出来，单独一个 `memory/scheduler.ts`。
 
 ### 6. 睡着与醒来
 - 睡着：gate 照旧不回复，消息照旧入 messages；切段/整理**暂停**（醒来一起做，省钱也符合「睡着」）。
-- 自然醒（wake 时刻）：闭合睡眠期所有段 → 整理成 memo → 生成一段「睡着时发生的事」注入各相关会话上下文（有效 6 小时，≤ 5 条）→ 找出未回复的：私聊里对她说的话、群里 @她/叫她名字的 → 进主动私信队列，按积极模式频率限制和 budget 逐个发。
+- 自然醒（wake 时刻）：闭合睡眠期所有段 → 整理成 memo → 生成一段「睡着时发生的事」注入各相关会话上下文（有效 6 小时，≤ 5 条）→ 找出未回复的：私聊里对她说的话、群里 @她/叫她名字的 → 进「补回复」队列：私聊里的就在该私聊回，群里的就在该群回（同一个群的多条合成一条，@ 到相关的人）。按积极模式频率限制和 budget 逐个发，睡着时不发。
 - 唤醒词唤醒：只取唤醒词那条消息前后同会话的段（最近一段 + 前 20 条）立即整理并作为上下文回复；更早的积压在这轮对话静默 10 分钟后，再走上面的「醒来」流程，主动问起。
 
-## 待雪决定
-1. 没开作息时的固定整理时刻：默认 04:00 可以吗？
-2. 群里 @ 她但她睡着没回的：私信对方（不是好友就发不了），还是醒后在群里统一回一句？
-3. 原文暂存保留多久：7 天后删，还是永久归档？
+## 雪的决定（2026-10-26）
+1. 没开作息时固定整理时刻默认 04:00。
+2. 没回的消息在哪来就在哪回：群里的在群里回，私聊的在私聊回。
+3. 原文暂存 7 天后删除；同时支持在面板手动清除缓存。
 
 ## 分步（定稿后转 Hermes）
 1. 游标表 + 规则切段 + 面板暂存计数（不调模型）。
 2. 事件整理调用 + 新 memo 表 + 群段同时写事件簿；移除逐句 recordMemo。
-3. 日记改为模型生成 + 游标推进 + 原文保留清理 + 固定整理时刻调度器。
-4. 醒来整理 + 「睡着时发生的事」注入 + 未回复主动私信队列。
+3. 日记改为模型生成 + 游标推进 + 7 天清理 + 面板手动清缓存 + 固定整理时刻调度器（04:00）。
+4. 醒来整理 + 「睡着时发生的事」注入 + 补回复队列（原处回复）。
 5. 唤醒词：就近优先，稍后补问。
+
+每步一个提交，跑 npm run check 与 npm run panel:build。不运行 npm start，不启动 QQ 或 SnowLuma。
+
+## 给 Hermes 的提示词
+请读 E:\Teamworks\Aquarium\doc\plans\MEMO-EVENT-SLICES.md，按「分步」1→5 实现，每步一个提交，每步完成后跑 npm run check 和 npm run panel:build。相关代码：E:\Teamworks\Aquarium\src\core\persona-memory.ts、E:\Teamworks\Aquarium\src\core\persona-memory-prompt.ts、E:\Teamworks\Aquarium\src\app\persona-memory-processor.ts、E:\Teamworks\Aquarium\src\app\main.ts（personaMemoryService 与 onSleep 部分）、E:\Teamworks\Aquarium\src\store\persona-memory-repo.ts、E:\Teamworks\Aquarium\src\store\migrations\v26.ts 与 v28.ts（事件簿 events），E:\Teamworks\Aquarium\src\core\conversation\steps\persist.ts、gate.ts、context.ts，E:\Teamworks\Aquarium\src\core\sleep\goodnight.ts 与 index.ts，E:\Teamworks\Aquarium\src\core\impressions\extract.ts，E:\Teamworks\Aquarium\src\core\impressions\history-import.ts，E:\Teamworks\Aquarium\src\core\privacy\policy.ts，E:\Teamworks\Aquarium\src\config\schema.ts，E:\Teamworks\Aquarium\src\panel-server\persona-memory-routes.ts，E:\Teamworks\Aquarium\panel\src\components\PersonaMemoryPanel.tsx，提示词在 E:\Teamworks\Aquarium\prompts\。新迁移号接在当前最新（v35）之后。隐私规则只在 policy.ts 的 decide() 里加，不另立。模型调用一律走 extract 槽和 budget 检查。不运行 npm start，不启动 QQ 或 SnowLuma，需要时请 AnI 自己启动。
