@@ -16,6 +16,11 @@ import { CURVE_PRESETS, LEVEL_LABELS, NEGATIVE_NAMES, PLOT, POSITIVE_NAMES, clam
 
 type Direction = 'gain' | 'loss';
 type DragState = { kind: 'point' | 'tier'; index: number };
+function Pill({ x, y, text, start = false }: { x: number; y: number; text: string; start?: boolean }) {
+  const width = [...text].reduce((sum, char) => sum + (char.charCodeAt(0) > 255 ? 9 : 5.6), 0) + 12;
+  return <g className={`persona-affinity-pill${start ? ' is-start' : ''}`} pointerEvents="none"><rect x={x - width / 2} y={y} width={width} height="14" rx="7" /><text x={x} y={y + 10} textAnchor="middle">{text}</text></g>;
+}
+
 function AffinityCurveChart({
   negative,
   tiers,
@@ -150,7 +155,7 @@ function AffinityCurveChart({
       <header className="persona-affinity-chart-heading">
         <div>
           <h4>{negative ? '零下（−100 ～ 0）' : '零上（0 ～ 100）'}</h4>
-          <p>{presetName} · {direction === 'gain' ? negative ? '回暖' : '增加' : negative ? '下滑' : '减少'}</p>
+          <p>{presetName === '默认函数' ? '按分档拟合' : presetName} · {direction === 'gain' ? negative ? '回暖' : '增加' : negative ? '下滑' : '减少'}</p>
         </div>
         <div className="persona-affinity-direction" role="group" aria-label="变化方向">
           {(['gain', 'loss'] as const).map((item) => (
@@ -174,24 +179,27 @@ function AffinityCurveChart({
       >
         {[0, 1, 2, 3].map((tick) => {
           const y = PLOT.bottom - (tick / 3) * (PLOT.bottom - PLOT.top);
-          return <g key={tick}><line className={tick === 1 ? 'is-baseline' : ''} x1={PLOT.left} x2={PLOT.right} y1={y} y2={y} /><text className="persona-affinity-axis-label" x={PLOT.left - 8} y={y + 4} textAnchor="end">×{tick}</text></g>;
+          return <g key={tick}><line className={tick === 1 ? 'is-baseline' : tick === 0 ? 'is-axis' : ''} x1={PLOT.left} x2={PLOT.right} y1={y} y2={y} /><text className="persona-affinity-axis-label" x={PLOT.left - 8} y={y + 3.5} textAnchor="end">×{tick}</text></g>;
         })}
-        <text className="persona-affinity-axis-title" x="10" y={PLOT.top + 2}>倍率</text>
+        <text className="persona-affinity-axis-title" x="0" y={PLOT.top - 16}>倍率</text>
         <path className="persona-affinity-ghost-curve" d={ghostPath} />
         {values.map((value, index) => {
           const x = thresholdX(value);
           const isStartBoundary = start !== null && !negative && index === 0 && Math.abs(value - start) < 0.5;
           return <g key={`${index}-${value}`}>
-            <line className="persona-affinity-tier-line" x1={x} x2={x} y1={PLOT.top} y2={PLOT.bottom} />
-            <line className="persona-affinity-tier-hit" x1={x} x2={x} y1={PLOT.top} y2={PLOT.bottom} data-tier-index={index} role="slider" tabIndex={disabled ? -1 : 0} aria-label={`分界线 ${formatAffinity(value)}`} aria-valuemin={index === 0 ? startValue : values[index - 1]! + 3} aria-valuemax={index === values.length - 1 ? startValue + 100 : values[index + 1]! - 3} aria-valuenow={value} />
-            {!isStartBoundary && <text className="persona-affinity-threshold-label" x={x} y="25" textAnchor="middle">{formatAffinity(value)}</text>}
+            <line className={`persona-affinity-tier-line${isStartBoundary ? ' is-start' : ''}`} x1={x} x2={x} y1={PLOT.top - 8} y2={PLOT.bottom} />
+            <line className="persona-affinity-tier-hit" x1={x} x2={x} y1={PLOT.top - 8} y2={PLOT.bottom} data-tier-index={index} role="slider" tabIndex={disabled ? -1 : 0} aria-label={`分界线 ${formatAffinity(value)}`} aria-valuemin={index === 0 ? startValue : values[index - 1]! + 3} aria-valuemax={index === values.length - 1 ? startValue + 100 : values[index + 1]! - 3} aria-valuenow={value} />
+            {!isStartBoundary && <Pill x={x} y={PLOT.top - 18} text={formatAffinity(value)} />}
           </g>;
         })}
         {start !== null && start >= startValue && start <= startValue + 100 && (
-          <g><line className="persona-affinity-start-line" x1={thresholdX(start)} x2={thresholdX(start)} y1={PLOT.top} y2={PLOT.bottom} /><text className="persona-affinity-start-label" x={thresholdX(start)} y="25" textAnchor="middle">起点 {formatAffinity(start)}</text></g>
+          <g>
+            {!(!negative && values[0] !== undefined && Math.abs(values[0] - start) < 0.5) && <line className="persona-affinity-start-line" x1={thresholdX(start)} x2={thresholdX(start)} y1={PLOT.top - 8} y2={PLOT.bottom} />}
+            <Pill x={thresholdX(start)} y={PLOT.top - 18} text={`起点 ${formatAffinity(start)}`} start />
+          </g>
         )}
         {currentIsVisible && currentValue !== null && (
-          <line className="persona-affinity-current-line" x1={thresholdX(currentValue)} x2={thresholdX(currentValue)} y1={PLOT.top} y2={PLOT.bottom} aria-label={`当前好感 ${formatAffinity(currentValue)}`} />
+          <line className="persona-affinity-current-line" x1={thresholdX(currentValue)} x2={thresholdX(currentValue)} y1={PLOT.top - 8} y2={PLOT.bottom} aria-label={`当前好感 ${formatAffinity(currentValue)}`} />
         )}
         <path className="persona-affinity-active-curve" d={path} />
         <path className="persona-affinity-curve-hit" d={path} data-curve-handle="true" pointerEvents="stroke" />
@@ -200,11 +208,11 @@ function AffinityCurveChart({
           const affinity = startValue + point.x * 100;
           const value = affinityCurveValue(curveId, curve, affinity, tiers);
           const y = PLOT.bottom - (value / 3) * (PLOT.bottom - PLOT.top);
-          return <circle key={`${point.x}-${index}`} className="persona-affinity-point" cx={x} cy={y} r="5" data-point-index={index} role="slider" tabIndex={disabled ? -1 : 0} aria-label={`局部曲线点 ${index + 1}，好感 ${formatAffinity(affinity)}，倍率 ${value.toFixed(2)}；方向键调整，删除键移除`} aria-valuemin={0} aria-valuemax={3} aria-valuenow={value} />;
+          return <circle key={`${point.x}-${index}`} className="persona-affinity-point" cx={x} cy={y} r="5.5" data-point-index={index} role="slider" tabIndex={disabled ? -1 : 0} aria-label={`局部曲线点 ${index + 1}，好感 ${formatAffinity(affinity)}，倍率 ${value.toFixed(2)}；方向键调整，删除键移除`} aria-valuemin={0} aria-valuemax={3} aria-valuenow={value} />;
         })}
         {[0, 20, 40, 60, 80, 100].map((offset) => {
           const x = PLOT.left + (offset / 100) * (PLOT.right - PLOT.left);
-          return <g key={offset}><line className="persona-affinity-x-tick" x1={x} x2={x} y1={PLOT.bottom} y2={PLOT.bottom + 4} /><text className="persona-affinity-axis-label" x={x} y={PLOT.bottom + 18} textAnchor="middle">{formatAffinity(startValue + offset)}</text></g>;
+          return <text className="persona-affinity-axis-label" key={offset} x={x} y={PLOT.bottom + 17} textAnchor="middle">{formatAffinity(startValue + offset)}</text>;
         })}
         {names.map((name, index) => {
           const left = labelPositions[index] ?? startValue;
@@ -214,13 +222,12 @@ function AffinityCurveChart({
         })}
       </svg>
       <div className="persona-affinity-readout">
-        <span>好感 <strong>{formatAffinity(sample)}</strong>（{LEVEL_LABELS[sampleLevel]}）时倍率 <strong>×{multiplier.toFixed(2)}</strong></span>
-        <span>一次原本 {baseDelta > 0 ? '+3' : '−3'} 的{direction === 'gain' ? '好事' : '坏事'}，实际 <strong>{formatDelta(baseDelta * multiplier)}</strong></span>
-      </div>
-      <div className="persona-affinity-presets" role="group" aria-label="曲线预设">
-        {CURVE_PRESETS.map((preset) => (
-          <button className={`button ${curve.preset === preset.id ? 'button-primary' : 'button-secondary'}`} type="button" key={preset.id} disabled={disabled} aria-pressed={curve.preset === preset.id} onClick={() => onCurveChange(curveId, { preset: preset.id, points: [] })}>{preset.label}</button>
-        ))}
+        <span>好感 <strong>{formatAffinity(sample)}</strong>（{LEVEL_LABELS[sampleLevel]}）时倍率 <strong>×{multiplier.toFixed(2)}</strong>：一次原本 {baseDelta > 0 ? '+3' : '−3'} 的{direction === 'gain' ? '好事' : '坏事'}，实际 <strong>{formatDelta(baseDelta * multiplier)}</strong></span>
+        <div className="persona-affinity-presets" role="group" aria-label="曲线预设">
+          {CURVE_PRESETS.map((preset) => (
+            <button className={`pae-btn${curve.preset === preset.id ? ' is-active' : ''}`} type="button" key={preset.id} disabled={disabled} aria-pressed={curve.preset === preset.id} onClick={() => onCurveChange(curveId, { preset: preset.id, points: [] })}>{preset.label}</button>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -307,23 +314,25 @@ export function PersonaAffinityEditor({
     <div className="persona-affinity-editor">
       <section className="persona-affinity-mode-card" aria-labelledby="persona-affinity-mode-title">
         <div className="persona-affinity-mode-heading">
-          <div><h3 id="persona-affinity-mode-title">关系数据</h3><p>选择这个人设使用哪一份好感记录；分档与倍率曲线始终按人设保存。</p></div>
+          <div><h3 id="persona-affinity-mode-title">关系数据<span>选择这个人设使用哪一份好感记录；分档与倍率曲线始终按人设保存。</span></h3></div>
           {currentValue !== null && currentLevel
             ? <span className="persona-affinity-current-readout">当前 {formatAffinity(currentValue)} · {LEVEL_LABELS[currentLevel]}</span>
             : <span className="persona-affinity-current-readout">{previewBusy ? '正在读取当前好感…' : '选择预览眷属以读取当前好感'}</span>}
         </div>
         {!parsed.success && <p className="persona-affinity-error" role="alert">人设 affinity 配置无效，请切换到 Markdown 源码修复后再保存。</p>}
         {previewError && (
-          <div>
+          <div className="persona-affinity-error-row">
             <p className="persona-affinity-error" role="alert">{previewError}</p>
-            <button className="button button-secondary" type="button" disabled={previewBusy} onClick={() => setReloadKey((value) => value + 1)}>重新读取</button>
+            <button className="pae-btn" type="button" disabled={previewBusy} onClick={() => setReloadKey((value) => value + 1)}>重新读取</button>
           </div>
         )}
-        <div className="persona-affinity-mode-actions" role="group" aria-label="好感数据模式">
-          <button className={`button ${mode === 'inherit' ? 'button-primary' : 'button-secondary'}`} type="button" disabled={disabled || !settings} aria-pressed={mode === 'inherit'} onClick={() => settings && updateSettings({ ...settings, mode: 'inherit' })}>继承账号共用记录</button>
-          <button className={`button ${mode === 'independent' ? 'button-primary' : 'button-secondary'}`} type="button" disabled={disabled || !settings} aria-pressed={mode === 'independent'} onClick={() => settings && updateSettings({ ...settings, mode: 'independent' })}>使用人设独立记录</button>
+        <div className="persona-affinity-mode-row">
+          <div className="persona-affinity-mode-actions" role="group" aria-label="好感数据模式">
+            <button className={`pae-btn${mode === 'inherit' ? ' is-active' : ''}`} type="button" disabled={disabled || !settings} aria-pressed={mode === 'inherit'} onClick={() => settings && updateSettings({ ...settings, mode: 'inherit' })}>继承账号共用记录</button>
+            <button className={`pae-btn${mode === 'independent' ? ' is-active' : ''}`} type="button" disabled={disabled || !settings} aria-pressed={mode === 'independent'} onClick={() => settings && updateSettings({ ...settings, mode: 'independent' })}>使用人设独立记录</button>
+          </div>
+          <p className="persona-affinity-mode-note">独立记录按 QQ 账号、用户和人设隔离；首次启用从全局起点初始化。切回继承不会删除独立记录。</p>
         </div>
-        <p className="persona-affinity-mode-note">独立记录按 QQ 账号、用户和人设隔离；首次启用从全局起点初始化。切回继承不会删除独立记录。</p>
       </section>
       {settings && (
         <div className="persona-affinity-charts">

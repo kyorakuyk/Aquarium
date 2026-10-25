@@ -1,0 +1,85 @@
+/* 参数 › 好感 / 心灵能量：紧凑的卡片、小按钮与滑杆行。 */
+.pae-btn { min-height: 28px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-2); font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap; }
+.pae-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.pae-btn.is-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.pae-btn:disabled { cursor: default; opacity: .55; }
+.pae-btn:focus-visible, .persona-affinity-direction button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.persona-affinity-editor, .persona-affinity-charts, .persona-energy-editor { display: grid; min-width: 0; gap: 12px; }
+.persona-affinity-mode-card, .persona-affinity-chart-card, .persona-energy-group { min-width: 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.persona-affinity-chart-card { padding-bottom: 14px; }
+
+.persona-affinity-mode-heading, .persona-affinity-chart-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.persona-affinity-mode-heading h3, .persona-affinity-chart-heading h4, .persona-energy-group > h3 { margin: 0; font-family: var(--sans); font-family: var(--sans); color: var(--ink); font-size: 14px; font-weight: 700; }
+.persona-affinity-mode-heading h3 span, .persona-energy-group > h3 span { margin-left: 8px; color: var(--muted); font-size: 11px; font-weight: 400; }
+.persona-affinity-chart-heading p { margin: 2px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.persona-affinity-current-readout { flex: none; color: var(--accent); font-family: var(--mono); font-size: 11px; text-align: right; }
+.persona-affinity-mode-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 8px; }
+.persona-affinity-mode-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.persona-affinity-mode-note, .persona-affinity-editor-note, .persona-energy-note { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.persona-affinity-editor-note, .persona-energy-note { padding: 0 4px; }
+.persona-affinity-error, .persona-energy-error { margin: 6px 0 0; color: var(--warn-ink); font-size: 12px; line-height: 1.5; }
+.persona-affinity-error-row, .persona-energy-error-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.persona-affinity-error-row p, .persona-energy-error-row p { margin: 0; }
+
+.persona-affinity-direction { display: flex; flex: none; gap: 3px; padding: 3px; border-radius: 9px; background: var(--surface-2); }
+.persona-affinity-direction button { min-height: 32px; padding: 0 14px; border: 0; border-radius: 7px; background: transparent; color: var(--ink-2); cursor: pointer; font: inherit; font-size: 12px; }
+.persona-affinity-direction button.is-active { background: var(--surface); color: var(--accent); font-weight: 700; }
+
+.persona-affinity-chart { display: block; width: 100%; height: auto; margin-top: 6px; overflow: visible; touch-action: none; user-select: none; }
+.persona-affinity-chart line { stroke: var(--line); stroke-width: 1; }
+.persona-affinity-chart line.is-baseline { stroke: #B9C9C6; stroke-dasharray: 4 4; }
+.persona-affinity-chart line.is-axis { stroke: #D6D3CA; }
+.persona-affinity-axis-label, .persona-affinity-axis-title, .persona-affinity-tier-name { fill: var(--muted); font-family: var(--sans); font-size: 10.5px; }
+.persona-affinity-axis-label { font-family: var(--mono); }
+.persona-affinity-tier-name { fill: var(--ink-2); font-size: 12px; }
+.persona-affinity-ghost-curve { fill: none; stroke: #C9C6BD; stroke-dasharray: 3 4; stroke-width: 1.5; pointer-events: none; }
+.persona-affinity-chart line.persona-affinity-tier-line { stroke: #8FA9A5; stroke-dasharray: 4 3; stroke-width: 1.5; pointer-events: none; }
+.persona-affinity-chart line.persona-affinity-tier-line.is-start { stroke: #C2702B; }
+.persona-affinity-chart line.persona-affinity-tier-hit { stroke: transparent; stroke-width: 12; cursor: ew-resize; pointer-events: stroke; }
+.persona-affinity-tier-hit:focus-visible, .persona-affinity-point:focus-visible { outline: none; stroke: var(--accent); stroke-width: 3; }
+.persona-affinity-chart line.persona-affinity-start-line { stroke: #C2702B; stroke-dasharray: 4 3; stroke-width: 1.5; pointer-events: none; }
+.persona-affinity-pill rect { fill: var(--surface); stroke: #D6D3CA; stroke-width: 1; }
+.persona-affinity-pill text { fill: var(--ink-2); font-family: var(--mono); font-size: 10px; }
+.persona-affinity-pill.is-start rect { stroke: #C2702B; }
+.persona-affinity-pill.is-start text { fill: #9A5B12; font-family: var(--sans); }
+.persona-affinity-chart line.persona-affinity-current-line { stroke: #3B6EA8; stroke-dasharray: 1 3; stroke-width: 1.5; pointer-events: none; }
+.persona-affinity-active-curve { fill: none; stroke: var(--accent); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; pointer-events: none; }
+.persona-affinity-curve-hit { fill: none; stroke: transparent; stroke-width: 18; cursor: crosshair; pointer-events: stroke; }
+.persona-affinity-point { fill: var(--surface); stroke: var(--accent); stroke-width: 2; cursor: grab; }
+
+.persona-affinity-readout { display: flex; align-items: center; justify-content: space-between; gap: 6px 10px; margin-top: 8px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.persona-affinity-readout > span { min-width: 0; }
+.persona-affinity-readout strong { color: var(--ink-2); font-weight: 600; }
+.persona-affinity-presets { display: flex; flex: none; gap: 4px; }
+
+/* 心灵能量 */
+.persona-energy-intro { padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink-2); font-size: 12px; line-height: 1.6; }
+.persona-energy-intro p { margin: 0; }
+.persona-energy-intro p + p { margin-top: 2px; }
+.persona-energy-current { display: flex; flex-wrap: wrap; gap: 2px 16px; color: var(--muted); font-size: 11px; }
+.persona-energy-current strong, .persona-energy-estimates strong { color: var(--ink); font-family: var(--mono); font-weight: 600; }
+.persona-energy-group > h3 { padding-bottom: 4px; }
+.persona-energy-controls { display: grid; }
+.persona-energy-row { display: grid; grid-template-columns: 190px minmax(0, 1fr) 200px; align-items: center; gap: 14px; padding: 6px 0; }
+.persona-energy-row-heading { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.persona-energy-row-heading label { color: var(--ink-2); font-size: 12px; font-weight: 700; }
+.persona-energy-row-heading p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.4; }
+.persona-energy-range { width: 100%; min-height: 32px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.persona-energy-range:disabled { cursor: default; }
+.persona-energy-value { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; min-width: 0; }
+.persona-energy-value output { color: var(--accent); font-family: var(--mono); font-size: 12px; font-weight: 700; }
+.persona-energy-readout { color: var(--muted); font-size: 10px; line-height: 1.4; text-align: right; }
+.persona-energy-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; padding: 0 4px; }
+.persona-energy-estimates { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+
+@media (max-width: 760px) {
+  .persona-affinity-mode-heading, .persona-affinity-chart-heading { align-items: stretch; flex-direction: column; }
+  .persona-affinity-direction { width: 100%; }
+  .persona-affinity-direction button { flex: 1; }
+  .persona-affinity-current-readout { text-align: left; }
+  .persona-affinity-readout { align-items: flex-start; flex-direction: column; }
+  .persona-energy-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .persona-energy-value { align-items: flex-start; flex-direction: row; justify-content: space-between; }
+  .persona-energy-readout { text-align: left; }
+}

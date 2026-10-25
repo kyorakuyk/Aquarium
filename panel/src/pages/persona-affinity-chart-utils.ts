@@ -16,7 +16,7 @@ export const LEVEL_LABELS: Record<AffinityLevel, string> = {
 };
 export const POSITIVE_NAMES = ['不熟', '认识', '普通朋友', '朋友以上', '恋人'];
 export const NEGATIVE_NAMES = ['仇人', '憎恶', '讨厌', '不爽', '冷淡'];
-export const PLOT = { left: 48, right: 700, top: 34, bottom: 236, width: 720, height: 310 } as const;
+export const PLOT = { left: 40, right: 656, top: 36, bottom: 236, width: 676, height: 280 } as const;
 export const CURVE_PRESETS = [
   { id: 'default', label: '默认函数' },
   { id: 'flat', label: '平直 ×1' },

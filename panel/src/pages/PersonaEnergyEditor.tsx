@@ -26,10 +26,10 @@ const ENERGY_CONTROLS: ReadonlyArray<{
   key: keyof PersonaEnergyMultipliers;
   title: string;
   description: string;
-  group: '恢复' | '获得' | '消耗' | '界限';
+  group: '获得' | '消耗' | '界限';
 }> = [
-  { key: 'aloneRecovery', title: '独处时恢复', description: '半衰期按倍率反向变化；0 表示暂停独处回能。', group: '恢复' },
-  { key: 'companyRecovery', title: '有人陪时恢复', description: '只在能量来源允许的陪伴状态下生效。', group: '恢复' },
+  { key: 'aloneRecovery', title: '独处时恢复', description: '半衰期按倍率反向变化；0 表示暂停独处回能。', group: '获得' },
+  { key: 'companyRecovery', title: '有人陪时恢复', description: '只在能量来源允许的陪伴状态下生效。', group: '获得' },
   { key: 'warmCharge', title: '暖心事件充能', description: '调节正向评估给水位带来的增量。', group: '获得' },
   { key: 'bufferCost', title: '缓冲坏情绪的代价', description: '调节水库吸收负面情绪时的耗水。', group: '消耗' },
   { key: 'calmRecoveryCost', title: '平复心情的代价', description: '调节负面心情回到基线时的耗水。', group: '消耗' },
@@ -134,43 +134,35 @@ export function PersonaEnergyEditor({
     onChange({ ...form, metadata: { ...form.metadata, energy: { ...DEFAULT_PERSONA_ENERGY } } });
   }
 
-  const groupedControls = ['恢复', '获得', '消耗', '界限'] as const;
+  const groupedControls = [
+    { title: '获得', sub: '怎么回满' },
+    { title: '消耗', sub: '怎么被耗掉' },
+    { title: '界限', sub: '防止一个人把我掏空' },
+  ] as const;
   const recovery = settings as PersonaEnergyMultipliers;
+  const sourceLabel = source === 'inner' ? '向内（I）' : source === 'outer' ? '向外（E）' : '混合';
 
   return (
     <div className="persona-energy-editor">
-      <section className="persona-energy-summary persona-form-card" aria-labelledby="persona-energy-summary-title">
-        <header className="persona-energy-summary-heading">
-          <div>
-            <h3 id="persona-energy-summary-title">心灵能量调节</h3>
-            <p>所有倍率按原有数值缩放；×1 保持原行为。能量来源在「我是谁」中设置。</p>
-          </div>
-          <button className="button button-secondary" type="button" disabled={disabled} onClick={resetMultipliers}>全部恢复 ×1</button>
-        </header>
-        {!parsed.success && <p className="persona-energy-error" role="alert">人设 energy 配置无效，请修复 YAML 后再保存。</p>}
-        {previewError && (
-          <div>
-            <p className="persona-energy-error" role="alert">{previewError}</p>
-            <button className="button button-secondary" type="button" disabled={previewBusy} onClick={() => setReloadKey((value) => value + 1)}>重新读取</button>
-          </div>
-        )}
-        <div className="persona-energy-current">
-          <span>所选来源：<strong>{source === 'inner' ? '向内（I）' : source === 'outer' ? '向外（E）' : '混合'}</strong></span>
+      <div className="persona-energy-intro">
+        <p>我的能量来源：<strong>{sourceLabel}</strong>。来源在「我是谁」里改。每个滑杆是在默认值上乘的倍率，×1 保持原行为。</p>
+        <p className="persona-energy-current">
           <span>当前水位：<strong>{selectedPreview ? `${Math.round(selectedPreview.reserve * 100)}%` : previewBusy ? '读取中…' : '未读取'}</strong></span>
           {previewAccountId !== null && <span>预览 QQ：<strong>{previewAccountId}</strong></span>}
-        </div>
-        {!selectedPreview && !previewBusy && !previewError && <p className="persona-energy-note">选择预览 QQ 后读取真实水位；估算会按当前人设来源和滑杆值计算。</p>}
-        {selectedPreview && (
-          <div className="persona-energy-estimates" aria-label="预计恢复到百分之八十的时间">
-            <div><span>独处恢复到 80%</span><strong>{formatRecoveryEstimate(estimateRecoveryTo80(selectedPreview.reserve, source, false, recovery.aloneRecovery), source, false, recovery.aloneRecovery)}</strong></div>
-            <div><span>有人陪时恢复到 80%</span><strong>{formatRecoveryEstimate(estimateRecoveryTo80(selectedPreview.reserve, source, true, recovery.companyRecovery), source, true, recovery.companyRecovery)}</strong></div>
+        </p>
+        {!parsed.success && <p className="persona-energy-error" role="alert">人设 energy 配置无效，请修复 YAML 后再保存。</p>}
+        {previewError && (
+          <div className="persona-energy-error-row">
+            <p className="persona-energy-error" role="alert">{previewError}</p>
+            <button className="pae-btn" type="button" disabled={previewBusy} onClick={() => setReloadKey((value) => value + 1)}>重新读取</button>
           </div>
         )}
-      </section>
+        {!selectedPreview && !previewBusy && !previewError && <p className="persona-energy-note">选择预览 QQ 后读取真实水位；估算会按当前人设来源和滑杆值计算。</p>}
+      </div>
 
-      {groupedControls.map((group) => (
-        <section className="persona-energy-group persona-form-card" key={group} aria-labelledby={`persona-energy-${group}`}>
-          <h3 id={`persona-energy-${group}`}>{group}</h3>
+      {groupedControls.map(({ title: group, sub }) => (
+        <section className="persona-energy-group" key={group} aria-labelledby={`persona-energy-${group}`}>
+          <h3 id={`persona-energy-${group}`}>{group}<span>{sub}</span></h3>
           <div className="persona-energy-controls">
             {ENERGY_CONTROLS.filter((control) => control.group === group).map((control) => {
               const value = settings[control.key];
@@ -179,9 +171,8 @@ export function PersonaEnergyEditor({
                 <div className="persona-energy-row" key={control.key}>
                   <div className="persona-energy-row-heading">
                     <label htmlFor={id}>{control.title}</label>
-                    <output htmlFor={id}>×{value.toFixed(2)}</output>
+                    <p>{control.description}</p>
                   </div>
-                  <p>{control.description}</p>
                   <input
                     id={id}
                     className="persona-energy-range"
@@ -195,13 +186,25 @@ export function PersonaEnergyEditor({
                     disabled={disabled || !parsed.success}
                     onChange={(event) => updateMultiplier(control.key, event.currentTarget.value)}
                   />
-                  <span className="persona-energy-readout">{controlReadout(control.key, value, source)}</span>
+                  <div className="persona-energy-value">
+                    <output htmlFor={id}>×{value.toFixed(2)}</output>
+                    <span className="persona-energy-readout">{controlReadout(control.key, value, source)}</span>
+                  </div>
                 </div>
               );
             })}
           </div>
         </section>
       ))}
+      <div className="persona-energy-footer">
+        {selectedPreview ? (
+          <p className="persona-energy-estimates" aria-label="预计恢复到百分之八十的时间">
+            <span>独处恢复到 80%：<strong>{formatRecoveryEstimate(estimateRecoveryTo80(selectedPreview.reserve, source, false, recovery.aloneRecovery), source, false, recovery.aloneRecovery)}</strong></span>
+            <span>有人陪时恢复到 80%：<strong>{formatRecoveryEstimate(estimateRecoveryTo80(selectedPreview.reserve, source, true, recovery.companyRecovery), source, true, recovery.companyRecovery)}</strong></span>
+          </p>
+        ) : <span />}
+        <button className="pae-btn" type="button" disabled={disabled} onClick={resetMultipliers}>全部恢复 ×1</button>
+      </div>
       <p className="persona-energy-note">预览按当前水位估算；“心情回升耗水”只统计水位支出。负向评估、缓冲、恢复与单人上限仍按核心计算顺序分别生效。</p>
     </div>
   );
