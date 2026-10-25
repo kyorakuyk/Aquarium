@@ -5,12 +5,12 @@ import {
   post,
   type HistoryImportJobView,
   type HistoryImportMode,
-  type ImpressionsView,
   type SessionView,
   type TagCategory,
   type TagPolarity,
   type TagStatus,
 } from '../api.ts';
+import type { ImpressionsViewWithCounterparts } from '../persona-counterpart-api.ts';
 import { AffinityPanel } from '../components/AffinityPanel.tsx';
 import { ImpressionsDataMenu } from '../components/ImpressionsDataMenu.tsx';
 import { ImpressionsDetail } from '../components/ImpressionsDetail.tsx';
@@ -59,7 +59,7 @@ export function ImpressionsPage() {
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState(() => currentImpressionsRoute()?.sessionId ?? '');
   const [tab, setTab] = useState<'groups' | 'people' | 'privacy' | 'kin-groups' | 'memory'>('groups');
-  const [view, setView] = useState<ImpressionsView>();
+  const [view, setView] = useState<ImpressionsViewWithCounterparts>();
   const [selectedUserId, setSelectedUserId] = useState<number | undefined>(() => currentImpressionsRoute()?.userId);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -129,7 +129,7 @@ export function ImpressionsPage() {
     const startedAt = Date.now();
     lastViewLoadStartedAt.current = startedAt;
     try {
-      setView(await apiRequest<ImpressionsView>(`/api/impressions/${sessionId}`));
+      setView(await apiRequest<ImpressionsViewWithCounterparts>(`/api/impressions/${sessionId}`));
       setRefreshVersion((current) => current + 1);
       setError('');
       return true;

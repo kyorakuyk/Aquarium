@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 import type { QqProfileActions } from '../src/adapters/types.ts';
 import { resolveSession } from '../src/config/resolve.ts';
 import { createAnchoredContextWindow } from '../src/core/conversation/context-window.ts';
 import { contextStep } from '../src/core/conversation/steps/context.ts';
-import type { StepContext } from '../src/core/conversation/steps/types.ts';
+import { messageRecord, type StepContext } from '../src/core/conversation/steps/types.ts';
 import { createQqProfileService } from '../src/core/profiles/qq-profile-service.ts';
 import { sessionId, type SessionKey } from '../src/core/shared/events.ts';
 import { promptTemplateStore } from '../src/core/prompt/templates.ts';
@@ -135,6 +137,113 @@ function makeGroupContext(
     },
   } as StepContext;
 }
+
+test('counterpart context marks exact bindings and pending claims without following alt links', async () => {
+  await withRepository(async (repository, personaRoot) => {
+    fs.writeFileSync(path.join(personaRoot, 'personas', 'default.md'), [
+      '---',
+      'counterparts:',
+      '  - name: 岛村抱月',
+      '    aliases: [岛村, 抱月, 小岛, しまむら]',
+      '    label: 恋人',
+      '    matchByName: prompt',
+      '  - name: 樽见',
+      '    aliases: [樽见]',
+      '    label: 旧友',
+      '    matchByName: off',
+      '---',
+      '安达的人设。',
+    ].join('\n'), 'utf8');
+    repository.linkAltAccount({
+      account: groupSession.account,
+      aUserId: 42,
+      bUserId: 43,
+      createdAt: baseTime - 10_000,
+    });
+
+    repository.createPersonaCounterpartBinding({
+      account: groupSession.account,
+      personaId: 'default',
+      counterpartName: '岛村抱月',
+      userId: 43,
+      createdAt: baseTime - 5_000,
+    });
+    repository.upsertPersonaCounterpartClaim({
+      account: groupSession.account,
+      personaId: 'default',
+      counterpartName: '岛村抱月',
+      userId: 46,
+      sessionId: sessionId(groupSession),
+      evidence: '昵称含 岛村',
+      firstSeen: baseTime - 5_000,
+      lastSeen: baseTime - 5_000,
+    });
+    repository.dismissPersonaCounterpartClaim(groupSession.account, 'default', '岛村抱月', 46);
+    repository.saveQqGroupProfile({
+      account: groupSession.account,
+      groupId: groupSession.peer,
+      json: JSON.stringify({ groupInfo: null, honors: null, latestNotice: null, essenceCount: null, membersAvailable: true }),
+      fetchedAt: baseTime,
+    });
+    repository.replaceQqMemberProfiles(groupSession.account, groupSession.peer, [{
+      account: groupSession.account,
+      groupId: groupSession.peer,
+      userId: 48,
+      json: JSON.stringify({ userId: 48, nickname: '岛村', card: '普通群名片' }),
+      fetchedAt: baseTime,
+    }]);
+
+    const history = [
+      { userId: 42, name: '正常同学', text: '普通发言' },
+      { userId: 43, name: '普通昵称', text: '普通发言' },
+      { userId: 44, name: '岛村', text: '今天也在' },
+      { userId: 45, name: '田中', text: '我就是岛村，Bearer abcdefghijk' },
+      { userId: 46, name: '岛村同学', text: '普通发言' },
+      { userId: 48, name: '普通群名片', text: '普通发言' },
+      { userId: 49, name: '樽见', text: '普通发言' },
+    ];
+    for (const [index, item] of history.entries()) {
+      const message = makeIncoming({
+        messageId: `counterpart-history-${item.userId}`,
+        senderId: item.userId,
+        plainText: item.text,
+        time: baseTime - (history.length - index) * 1_000,
+      });
+      message.senderName = item.name;
+      repository.saveMessage(messageRecord(message, sessionId(groupSession)));
+    }
+
+    const context = makeGroupContext(repository, personaRoot, 47, '我是岛村');
+    context.message.senderName = '同学';
+    repository.saveMessage(messageRecord(context.message, context.currentSessionId));
+    assert.deepEqual(await contextStep(context), { next: true });
+
+    const system = String(context.state.prompt?.[0]?.content);
+    const prompt = String(context.state.prompt?.[1]?.content);
+    assert.ok(system.includes('标注为（你的X）的人就是X本人'));
+    assert.ok(system.includes('{"name":"岛村抱月","label":"恋人"}'));
+    const linkedNames = prompt.split('\n').filter((line) => line.includes('"正常同学"'));
+    assert.equal(linkedNames.length, 2);
+    assert.ok(!linkedNames[0]?.includes('（你的岛村抱月）'));
+    assert.ok(linkedNames[1]?.includes('（你的岛村抱月）'));
+    assert.ok(prompt.includes('"岛村"（可能是岛村抱月，未确认）'));
+    assert.ok(prompt.includes('"田中"（可能是岛村抱月，未确认）'));
+    assert.ok(prompt.includes('"同学"（可能是岛村抱月，未确认）'));
+    assert.ok(prompt.includes('"普通群名片"（可能是岛村抱月，未确认）'));
+    assert.ok(!prompt.includes('"岛村同学"（可能是岛村抱月，未确认）'));
+    assert.ok(!prompt.includes('"樽见"（可能是樽见，未确认）'));
+    assert.deepEqual(repository.listPersonaCounterpartClaims(groupSession.account, 'default')
+      .filter((claim) => claim.status === 'pending')
+      .map((claim) => claim.userId)
+      .sort(), [44, 45, 47, 48]);
+    assert.equal(repository.listPersonaCounterpartClaims(groupSession.account, 'default')
+      .find((claim) => claim.userId === 46)?.status, 'dismissed');
+    const selfClaim = repository.listPersonaCounterpartClaims(groupSession.account, 'default')
+      .find((claim) => claim.userId === 45);
+    assert.ok(selfClaim?.evidence.includes('[敏感内容已隐藏]'));
+    assert.ok(!selfClaim?.evidence.includes('Bearer abcdefghijk'));
+  });
+});
 
 test('private context injects up to three fresh, member-visible group events with keyword priority', async () => {
   await withRepository(async (repository, personaRoot) => {

@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { TagEvidence, StoredTag, TagRecord, TagRepositoryQueries } from './tag-repo.ts';
 import type { TagVetoRepository } from './tag-veto-repo.ts';
+import { createPersonaCounterpartQueries, type PersonaCounterpartRepository } from './persona-counterpart-repo.ts';
 
 export const ACCOUNT_KINDS = ['human', 'bot', 'alt', 'owner'] as const;
 export type AccountKind = (typeof ACCOUNT_KINDS)[number];
@@ -28,7 +29,7 @@ export interface StoredRelation {
 
 export interface RelationRecord extends Omit<StoredRelation, 'id'> {}
 
-export interface IdentityRepository {
+export interface IdentityRepository extends PersonaCounterpartRepository {
   getAccountKind(account: number, userId: number): AccountKindRecord | undefined;
   listAccountKinds(account: number): AccountKindRecord[];
   setAccountKind(account: number, userId: number, kind: AccountKind, createdAt: number): AccountKindRecord;
@@ -255,6 +256,7 @@ export function createIdentityQueries(
   }
 
   return {
+    ...createPersonaCounterpartQueries(database),
     getAccountKind: readKind,
     listAccountKinds(account) {
       positiveInteger(account, 'account');

@@ -53,7 +53,7 @@ export function parseReplySystemTemplate(
     knownFacts: fields.knownFacts,
     stickers: fields.stickers,
   };
-  validatePlaceholders('reply-system.md', replySystem.system, ['ownerRule'], ['ownerRule']);
+  validatePlaceholders('reply-system.md', replySystem.system, ['ownerRule', 'counterpartRule'], ['ownerRule', 'counterpartRule']);
   validatePlaceholders('reply-system.md', replySystem.groupNote, ['groupNote'], ['groupNote']);
   validatePlaceholders('reply-system.md', replySystem.request, [], []);
   validatePlaceholders('reply-system.md', replySystem.groupTags, ['tags'], ['tags']);

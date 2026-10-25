@@ -16,6 +16,7 @@ import { createAffinityService } from '../core/affinity/service.ts';
 import { loadPersona } from '../persona/load.ts';
 import type { StoredTag } from '../store/affect-repo.ts';
 import type { StoreRepository } from '../store/repository.ts';
+import type { PersonaCounterpartClaim } from '../store/persona-counterpart-repo.ts';
 import type { PanelAccountRuntime } from './types.ts';
 import type { HistoryImportService } from '../core/impressions/history-import.ts';
 import {
@@ -214,6 +215,18 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
       template: promptTemplateStore.get().replySystem,
     });
     const { groupTagsText, groupScheduleDrop, messageActivity, memberIds, memberScheduleDrops } = layout;
+    const personaId = options.getConfig().accounts.find((entry) => entry.uin === key.account)?.persona ?? 'default';
+    const counterpartClaimsByUserId = new Map<number, Array<PersonaCounterpartClaim & { senderName: string }>>();
+    for (const claim of options.repository.listPersonaCounterpartClaims(key.account, personaId)) {
+      if (claim.status !== 'pending') continue;
+      const claims = counterpartClaimsByUserId.get(claim.userId) ?? [];
+      claims.push({
+        ...claim,
+        status: 'pending',
+        senderName: redactSensitiveText(options.repository.senderNameFor(claim.sessionId, claim.userId) ?? ''),
+      });
+      counterpartClaimsByUserId.set(claim.userId, claims);
+    }
     const members = memberIds.map((userId) => {
       const name = accountUserName(options.repository, key.account, id, userId);
       const memberTags = tags.filter((tag) => tag.userId !== null
@@ -285,6 +298,7 @@ export function registerAffectRoutes(app: Hono, options: AffectRouteOptions): vo
           };
         })(),
         tags: memberTags.map((tag) => tagView(tag, at)),
+        counterpartClaims: counterpartClaimsByUserId.get(userId) ?? [],
         memberTagsAllowed: memberAllowed,
         memberTagsText: memberTagsText === null ? null : redactSensitiveText(memberTagsText),
       };

@@ -136,6 +136,19 @@ test('模板中的重复占位符都会被替换', () => {
   assert.ok(systemContent.includes('本会话补充说明：群公告 / 群公告'));
 });
 
+test('counterpartRule 替换为数据文本且不会递归解释其中的占位符', () => {
+  const literal = '原作对象文本 {{ownerRule}} $&';
+  const messages = buildPromptMessages({
+    persona: '人设',
+    ownerId: 12345,
+    groupNote: '',
+    context: [],
+    counterpartRule: literal,
+  });
+
+  assert.ok(String(messages[0]?.content).includes(literal));
+});
+
 test('提示词块按固定顺序渲染并跳过空块', () => {
   const options = {
     persona: '块-人设',

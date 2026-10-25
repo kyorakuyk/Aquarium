@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 import { sessionId } from '../src/core/shared/events.ts';
 import { account, authHeaders, groupSession, now, withPanel } from './panel-test-helpers.ts';
@@ -139,5 +141,165 @@ test('关系 API 支持双向关系、锁定 read-back 和小号标签单向合�
     assert.equal(repository.mainUserIdFor(account, 43), 43);
     assert.equal(repository.tagById(mainTagId)?.userId, 42);
     assert.equal(repository.tagById(altTagId)?.status, 'superseded');
+  });
+});
+
+test('原作对象 API 精确绑定 QQ、清除 claim 并 read-back dismissed 状态', async () => {
+  await withPanel(async ({ app, repository, root }) => {
+    fs.writeFileSync(path.join(root, 'personas', 'default.md'), [
+      '---',
+      'counterparts:',
+      '  - name: 岛村抱月',
+      '    aliases: [岛村, 抱月]',
+      '    label: 恋人',
+      '    matchByName: prompt',
+      '---',
+      '角色卡。',
+    ].join('\n'), 'utf8');
+    const query = `?account=${account}`;
+    const endpoint = `/api/personas/default/counterparts${query}`;
+    const initialResponse = await app.request(endpoint, { headers: authHeaders() });
+    assert.equal(initialResponse.status, 200);
+    const initial = await initialResponse.json() as {
+      counterparts: Array<{ name: string; aliases: string[]; label: string; matchByName: string }>;
+      bindings: unknown[];
+      claims: unknown[];
+    };
+    assert.deepEqual(initial.counterparts, [{
+      name: '岛村抱月', aliases: ['岛村', '抱月'], label: '恋人', matchByName: 'prompt',
+    }]);
+    assert.deepEqual(initial.bindings, []);
+    assert.deepEqual(initial.claims, []);
+
+    repository.upsertPersonaCounterpartClaim({
+      account,
+      personaId: 'default',
+      counterpartName: '岛村抱月',
+      userId: 43,
+      sessionId: sessionId(groupSession),
+      evidence: '消息：我是岛村',
+      firstSeen: now - 1_000,
+      lastSeen: now,
+    });
+    const refreshedClaim = repository.upsertPersonaCounterpartClaim({
+      account,
+      personaId: 'default',
+      counterpartName: '岛村抱月',
+      userId: 43,
+      sessionId: sessionId(groupSession),
+      evidence: '消息：我是岛村，第二次出现',
+      firstSeen: now,
+      lastSeen: now + 1_000,
+    });
+    assert.equal(refreshedClaim.firstSeen, now - 1_000);
+    assert.equal(refreshedClaim.lastSeen, now + 1_000);
+    const bindResponse = await app.request(
+      `/api/personas/default/counterparts/${encodeURIComponent('岛村抱月')}/bindings${query}`,
+      { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ userId: 43 }) },
+    );
+    assert.equal(bindResponse.status, 201);
+    assert.deepEqual(await bindResponse.json(), {
+      account,
+      personaId: 'default',
+      counterpartName: '岛村抱月',
+      userId: 43,
+      createdAt: now,
+    });
+    assert.equal(repository.listPersonaCounterpartBindings(account, 'default')[0]?.userId, 43);
+    assert.deepEqual(repository.listPersonaCounterpartClaims(account, 'default'), []);
+    const secondBindResponse = await app.request(
+      `/api/personas/default/counterparts/${encodeURIComponent('岛村抱月')}/bindings${query}`,
+      { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ userId: 44 }) },
+    );
+    assert.equal(secondBindResponse.status, 201);
+    assert.deepEqual(repository.listPersonaCounterpartBindings(account, 'default').map(({ userId }) => userId), [43, 44]);
+
+    repository.upsertPersonaCounterpartClaim({
+      account,
+      personaId: 'default',
+      counterpartName: '岛村抱月',
+      userId: 46,
+      sessionId: sessionId(groupSession),
+      evidence: '昵称含 岛村',
+      firstSeen: now,
+      lastSeen: now,
+    });
+    const dismissResponse = await app.request(
+      `/api/personas/default/counterparts/${encodeURIComponent('岛村抱月')}/claims/46/dismiss${query}`,
+      { method: 'POST', headers: authHeaders() },
+    );
+    assert.equal(dismissResponse.status, 200);
+    assert.equal((await dismissResponse.json() as { status: string }).status, 'dismissed');
+    const dismissedClaim = repository.listPersonaCounterpartClaims(account, 'default')[0];
+    const repeatedClaim = repository.upsertPersonaCounterpartClaim({
+      account,
+      personaId: 'default',
+      counterpartName: '岛村抱月',
+      userId: 46,
+      sessionId: sessionId(groupSession),
+      evidence: '新的昵称证据',
+      firstSeen: now,
+      lastSeen: now + 2_000,
+    });
+    assert.deepEqual(repeatedClaim, dismissedClaim);
+    assert.equal(repository.listPersonaCounterpartClaims(account, 'default')[0]?.status, 'dismissed');
+
+    const deleteResponse = await app.request(
+      `/api/personas/default/counterparts/${encodeURIComponent('岛村抱月')}/bindings/43${query}`,
+      { method: 'DELETE', headers: authHeaders() },
+    );
+    assert.equal(deleteResponse.status, 200);
+    assert.deepEqual(repository.listPersonaCounterpartBindings(account, 'default').map(({ userId }) => userId), [44]);
+  });
+});
+
+test('成员画像只展示该精确 QQ 的待认领记录，不把小号 claim 合并到主号', async () => {
+  await withPanel(async ({ app, repository, root, getConfig }) => {
+    const personaId = getConfig().accounts.find(({ uin }) => uin === account)?.persona ?? 'default';
+    fs.writeFileSync(path.join(root, 'personas', `${personaId}.md`), [
+      '---',
+      'counterparts:',
+      '  - name: 岛村抱月',
+      '    aliases: [岛村]',
+      '    label: 恋人',
+      '---',
+      '角色卡。',
+    ].join('\n'), 'utf8');
+    const key = sessionId(groupSession);
+    for (const [userId, senderName] of [[42, '正常同学'], [43, '岛村']] as const) {
+      repository.saveMessage({
+        sessionId: key,
+        messageId: `counterpart-impressions-${userId}`,
+        senderId: userId,
+        senderName,
+        isSelf: false,
+        plainText: '普通发言',
+        segments: [{ type: 'text', text: '普通发言' }],
+        time: now,
+      });
+    }
+    repository.linkAltAccount({ account, aUserId: 42, bUserId: 43, createdAt: now });
+    for (const userId of [42, 43]) {
+      repository.upsertPersonaCounterpartClaim({
+        account,
+        personaId,
+        counterpartName: '岛村抱月',
+        userId,
+        sessionId: key,
+        evidence: '昵称含 岛村',
+        firstSeen: now,
+        lastSeen: now,
+      });
+    }
+
+    const response = await app.request(`/api/impressions/${encodeURIComponent(key)}`, { headers: authHeaders() });
+    assert.equal(response.status, 200);
+    const view = await response.json() as {
+      members: Array<{ userId: number; counterpartClaims?: Array<{ userId: number; senderName: string }> }>;
+    };
+    const main = view.members.find((member) => member.userId === 42);
+    assert.deepEqual(main?.counterpartClaims?.map(({ userId, senderName }) => [userId, senderName]), [
+      [42, '正常同学'],
+    ]);
   });
 });

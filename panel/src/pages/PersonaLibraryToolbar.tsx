@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import type { PanelStatus } from '../api.ts';
+import { useEffect, useState } from 'react';
+import { apiRequest, type PanelStatus } from '../api.ts';
+import type { PersonaCounterpartsView } from '../persona-counterpart-api.ts';
+import { PERSONA_COUNTERPARTS_UPDATED_EVENT } from '../persona-counterpart-events.ts';
 
 export interface PersonaCard {
   id: string;
@@ -27,6 +29,29 @@ export function PersonaLibraryToolbar({
   onNew: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [pendingCounts, setPendingCounts] = useState<Record<string, number>>({});
+  const [counterpartRefresh, setCounterpartRefresh] = useState(0);
+  useEffect(() => {
+    let active = true;
+    void Promise.all(personas.map(async (persona) => {
+      try {
+        const result = await apiRequest<PersonaCounterpartsView>(
+          `/api/personas/${encodeURIComponent(persona.id)}/counterparts`,
+        );
+        return [persona.id, result.claims.length] as const;
+      } catch {
+        return [persona.id, 0] as const;
+      }
+    })).then((entries) => {
+      if (active) setPendingCounts(Object.fromEntries(entries));
+    });
+    const refresh = () => setCounterpartRefresh((current) => current + 1);
+    window.addEventListener(PERSONA_COUNTERPARTS_UPDATED_EVENT, refresh);
+    return () => {
+      active = false;
+      window.removeEventListener(PERSONA_COUNTERPARTS_UPDATED_EVENT, refresh);
+    };
+  }, [counterpartRefresh, personas]);
   const selectedIndex = personas.findIndex((persona) => persona.id === selectedId);
   const collapsedLimit = 3;
   const visible = expanded || personas.length <= collapsedLimit + 1
@@ -39,6 +64,7 @@ export function PersonaLibraryToolbar({
       <div className="persona-library-row" role="group" aria-label="人设库">
         {visible.map((persona) => {
           const bound = accounts.filter((account) => account.persona === persona.id);
+          const pendingCount = pendingCounts[persona.id] ?? 0;
           return (
             <button
               className={`persona-library-chip ${selectedId === persona.id ? 'is-selected' : ''}`}
@@ -51,6 +77,7 @@ export function PersonaLibraryToolbar({
             >
               <strong>{persona.id}</strong>
               {bound.length > 0 && <small aria-label={`${bound.length} 个眷属在用`}>· 在用</small>}
+              {pendingCount > 0 && <span className="persona-counterpart-count" aria-label={`${pendingCount} 条待认领`}>{pendingCount}</span>}
             </button>
           );
         })}

@@ -219,3 +219,35 @@ test('旧角色卡正文中的横线分隔符不会被误当成 YAML 文件头',
   assert.equal(loaded.text, source);
   assert.deepEqual(loaded.traits, { order: 0, morality: 0, talk: 0, mind: 0, humor: 0, openness: 0, imitation: 0 });
 });
+
+test('人设原作对象可声明别名与认领提示，旧人设默认关闭且拒绝未知匹配模式', () => {
+  const loaded = parsePersonaMarkdown([
+    '---',
+    'counterparts:',
+    '  - name: 岛村抱月',
+    '    aliases: [岛村, 抱月, 小岛, しまむら]',
+    '    label: 恋人',
+    '    matchByName: prompt',
+    '  - name: 樽见',
+    '    aliases: [樽见]',
+    '    label: 旧友',
+    '    matchByName: off',
+    '---',
+    '正文',
+  ].join('\n'));
+  assert.deepEqual(loaded.counterparts, [
+    { name: '岛村抱月', aliases: ['岛村', '抱月', '小岛', 'しまむら'], label: '恋人', matchByName: 'prompt' },
+    { name: '樽见', aliases: ['樽见'], label: '旧友', matchByName: 'off' },
+  ]);
+  assert.equal(parsePersonaMarkdown('---\ntraits: {}\n---\n旧人设').counterparts, undefined);
+  assert.throws(() => parsePersonaMarkdown([
+    '---',
+    'counterparts:',
+    '  - name: 岛村抱月',
+    '    aliases: [岛村]',
+    '    label: 恋人',
+    '    matchByName: trust',
+    '---',
+    '正文',
+  ].join('\n')), /counterparts\[0\]\.matchByName/u);
+});

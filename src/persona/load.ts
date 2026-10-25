@@ -4,6 +4,7 @@ import yaml from 'yaml';
 import { parsePersonaAffinity, type PersonaAffinitySettings } from './affinity.ts';
 import { parsePersonaEnergy, type PersonaEnergyMultipliers } from './energy.ts';
 import { parsePersonaMood, type PersonaMoodSettings } from './mood.ts';
+import { parsePersonaCounterparts, type PersonaCounterpart } from './counterparts.ts';
 import { validPersonaId } from './persona-id.ts';
 
 export interface PersonaTraits {
@@ -76,6 +77,7 @@ export interface LoadedPersona {
   energy: PersonaEnergyMultipliers;
   affinity: PersonaAffinitySettings;
   mood: PersonaMoodSettings;
+  counterparts?: PersonaCounterpart[];
   profile?: StructuredPersona;
 }
 
@@ -307,6 +309,9 @@ export function parsePersonaMarkdown(source: string): LoadedPersona {
   const energy = parsePersonaEnergy(match ? header.energy : undefined);
   const affinity = parsePersonaAffinity(match ? header.affinity : undefined);
   const mood = parsePersonaMood(match ? header.mood : undefined);
+  const counterparts = match && Object.hasOwn(header, 'counterparts')
+    ? parsePersonaCounterparts(header.counterparts)
+    : undefined;
   const profile = match ? parseStructuredPersona(header, text, traits, energySource) : undefined;
   return {
     text,
@@ -315,6 +320,7 @@ export function parsePersonaMarkdown(source: string): LoadedPersona {
     energy,
     affinity,
     mood,
+    ...(counterparts === undefined ? {} : { counterparts }),
     ...(profile === undefined ? {} : { profile }),
   };
 }
@@ -328,6 +334,7 @@ export function validatePersonaSettingsFrontmatter(source: string): void {
   parsePersonaAffinity(header.affinity);
   parsePersonaEnergy(header.energy);
   parsePersonaMood(header.mood);
+  parsePersonaCounterparts(header.counterparts);
 }
 
 export function updatePersonaTraits(source: string, traits: PersonaTraits): string {
@@ -375,6 +382,7 @@ export function loadPersona(
     energy: loaded.energy,
     affinity: loaded.affinity,
     mood: loaded.mood,
+    ...(loaded.counterparts === undefined ? {} : { counterparts: loaded.counterparts }),
     ...(loaded.profile === undefined
       ? {}
       : { profile: replaceNameTokens(loaded.profile, displayName) as StructuredPersona }),

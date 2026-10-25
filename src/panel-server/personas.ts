@@ -28,6 +28,7 @@ import {
 } from '../persona/sections.ts';
 import type { StoreRepository } from '../store/repository.ts';
 import { personaPath, validPersonaId } from './persona-paths.ts';
+import { registerPersonaCounterpartRoutes } from './persona-counterpart-routes.ts';
 import { recordPersonaVersionOnSave, registerPersonaVersionRoutes } from './persona-version-routes.ts';
 
 const personaTraitValueSchema = z.number().min(-2).max(2).refine(
@@ -125,6 +126,11 @@ function parseBody<T>(body: unknown, schema: z.ZodType<T>): T | undefined {
 }
 
 export function registerPersonaRoutes(app: Hono, root: string, options: PersonaRouteOptions): void {
+  registerPersonaCounterpartRoutes(app, root, {
+    getConfig: options.getConfig,
+    repository: options.repository,
+    now: options.now ?? Date.now,
+  });
   app.put('/api/accounts/:uin/persona', async (context) => {
     const uinText = context.req.param('uin');
     if (!/^[1-9]\d*$/u.test(uinText)) return context.json({ error: 'Invalid account UIN' }, 400);

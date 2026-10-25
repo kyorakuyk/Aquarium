@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { sessionId, type SessionKey } from '../src/core/shared/events.ts';
 import { openDatabase } from '../src/store/db.ts';
@@ -145,5 +149,38 @@ test('linking an alt merges tags with message-id deduplication; unlinking does n
     assert.equal(repository.tagById(altTagId)?.status, 'superseded');
   } finally {
     database.close();
+  }
+});
+
+test('v32→v33 counterpart migration creates both tables and safely reopens', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-v33-'));
+  const databasePath = path.join(root, 'aquarium.db');
+  const seed = new DatabaseSync(databasePath);
+  seed.exec('CREATE TABLE schema_version (id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL); INSERT INTO schema_version (id, version) VALUES (1, 32);');
+  seed.close();
+  try {
+    const database = openDatabase(databasePath);
+    const version = database.prepare('SELECT version FROM schema_version WHERE id = 1').get() as { version: number };
+    const bindings = database.prepare("PRAGMA table_info('persona_counterpart_bindings')").all() as Array<{ name: string }>;
+    const claims = database.prepare("PRAGMA table_info('persona_counterpart_claims')").all() as Array<{ name: string }>;
+
+    assert.equal(version.version, CURRENT_SCHEMA_VERSION);
+    assert.equal(version.version, 33);
+    assert.deepEqual(bindings.map(({ name }) => name), [
+      'account', 'persona_id', 'counterpart_name', 'user_id', 'created_at',
+    ]);
+    assert.deepEqual(claims.map(({ name }) => name), [
+      'account', 'persona_id', 'counterpart_name', 'user_id', 'session_id', 'evidence',
+      'first_seen', 'last_seen', 'status',
+    ]);
+    database.close();
+
+    const reopened = openDatabase(databasePath);
+    assert.equal((reopened.prepare('SELECT version FROM schema_version WHERE id = 1').get() as { version: number }).version, 33);
+    assert.deepEqual(reopened.prepare("PRAGMA table_info('persona_counterpart_claims')").all()
+      .map((column) => (column as { name: string }).name), claims.map(({ name }) => name));
+    reopened.close();
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });

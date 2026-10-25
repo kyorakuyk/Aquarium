@@ -1,11 +1,11 @@
 import type {
-  ImpressionsView,
   QqMemberTargetView,
   TagCategory,
   TagPolarity,
   TagStatus,
   TagView,
 } from '../api.ts';
+import type { ImpressionsViewWithCounterparts } from '../persona-counterpart-api.ts';
 import { GroupProfileCard } from './GroupProfileCard.tsx';
 import { MemberProfileCard } from './MemberProfileCard.tsx';
 import type { MemberTagAdd } from './MemberTagRows.tsx';
@@ -14,9 +14,9 @@ export function ImpressionsDetail({ sessionId, groupName, enabled, view, refresh
   sessionId: string;
   groupName: string;
   enabled: boolean;
-  view: ImpressionsView;
+  view: ImpressionsViewWithCounterparts;
   refreshVersion: number;
-  member: ImpressionsView['members'][number] | undefined;
+  member: ImpressionsViewWithCounterparts['members'][number] | undefined;
   relationTargets: QqMemberTargetView[];
   busy: boolean;
   onReload: () => Promise<boolean>;

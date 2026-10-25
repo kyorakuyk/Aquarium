@@ -22,6 +22,7 @@ import type { PersonaEnergySource, PersonaTraits, StructuredPersona } from '../.
 import type { PersonaEnergyMultipliers } from '../../../persona/energy.ts';
 import type { PersonaAffinitySettings } from '../../../persona/affinity.ts';
 import type { PersonaMoodSettings } from '../../../persona/mood.ts';
+import type { PersonaCounterpart } from '../../../persona/counterparts.ts';
 import type { SleepWakeState } from '../../sleep/index.ts';
 import type { PersonaMemoryService } from '../../persona-memory.ts';
 import type { StickerService } from '../../stickers/service.ts';
@@ -111,6 +112,7 @@ export interface PipelineState {
   persona?: string;
   personaTraits?: PersonaTraits;
   personaProfile?: StructuredPersona;
+  personaCounterparts?: PersonaCounterpart[];
   personaEnergySource?: PersonaEnergySource;
   personaEnergy?: PersonaEnergyMultipliers;
   personaAffinity?: PersonaAffinitySettings;

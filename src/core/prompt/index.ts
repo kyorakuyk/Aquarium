@@ -10,6 +10,8 @@ export interface BuildPromptOptions {
   ownerId: number;
   groupNote: string;
   context: MessageStorageRecord[];
+  counterpartRule?: string;
+  speakerAnnotations?: ReadonlyMap<string, string>;
   modeHint?: string;
   request?: string;
   replySystemTemplate?: ReplySystemTemplate;
@@ -63,7 +65,9 @@ function resolvePromptBlocks(options: BuildPromptOptions): RenderedPromptBlock[]
     { id: 'traits', text: options.blocks?.traits ?? '' },
     {
       id: 'rules',
-      text: template.system.replaceAll('{{ownerRule}}', ownerRule),
+      text: template.system.replace(/\{\{(ownerRule|counterpartRule)\}\}/gu, (_placeholder, name: string) => (
+        name === 'ownerRule' ? ownerRule : options.counterpartRule ?? ''
+      )),
     },
     { id: 'groupNote', text: groupNote },
     { id: 'groupTags', text: options.blocks?.groupTags ?? '' },
@@ -105,7 +109,8 @@ export function buildPromptMessages(
     const ownerLabel = options.ownerId !== 0 && message.senderId === options.ownerId
       ? '（主人）'
       : '';
-    const speaker = message.isSelf ? '你' : `${JSON.stringify(message.senderName)}${ownerLabel}`;
+    const counterpartLabel = options.speakerAnnotations?.get(message.messageId) ?? '';
+    const speaker = message.isSelf ? '你' : `${JSON.stringify(message.senderName)}${ownerLabel}${counterpartLabel}`;
     return `[${formatTime(message.time)}] ${speaker}: ${message.plainText}`;
   });
   const userContent = contextLines.length > 0

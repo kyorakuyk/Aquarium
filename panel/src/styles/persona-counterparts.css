@@ -1,0 +1,55 @@
+.personas-page .persona-counterpart-editor { min-width: 0; }
+.persona-counterpart-heading,
+.persona-counterpart-item-heading,
+.persona-counterpart-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.persona-counterpart-heading h3 { margin-bottom: 0; }
+.persona-counterpart-heading .persona-form-hint { margin: 4px 0 0; }
+.persona-counterpart-scope { font-size: 11px; }
+.persona-counterpart-list { display: grid; gap: 14px; }
+.persona-counterpart-item { display: grid; min-width: 0; gap: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.persona-counterpart-item-heading { align-items: center; }
+.persona-counterpart-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.persona-counterpart-fields label,
+.persona-counterpart-add-binding label { display: grid; min-width: 0; gap: 5px; color: var(--muted); font-size: 11px; }
+.persona-counterpart-fields input,
+.persona-counterpart-fields select,
+.persona-counterpart-add-binding input { width: 100%; min-width: 0; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; }
+.persona-counterpart-associations { display: grid; min-width: 0; gap: 8px; }
+.persona-counterpart-section-heading { align-items: baseline; flex-wrap: wrap; }
+.persona-counterpart-section-heading .muted { font-size: 11px; }
+.persona-counterpart-associations > .muted { margin: 0; font-size: 12px; }
+.persona-counterpart-binding-list,
+.persona-counterpart-claim-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.persona-counterpart-binding-list li,
+.persona-counterpart-claim-list li { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.persona-counterpart-binding-list li > span { overflow-wrap: anywhere; }
+.persona-counterpart-binding-avatar { display: grid; width: 32px; height: 32px; flex: none; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--accent); font-family: var(--serif); }
+.persona-counterpart-binding-name { display: flex; min-width: 0; flex: 1; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.persona-counterpart-add-binding { display: grid; grid-template-columns: minmax(70px, 100px) minmax(100px, 1fr) auto; align-items: end; gap: 8px; }
+.persona-counterpart-add-binding .button,
+.persona-counterpart-item-heading .button,
+.persona-counterpart-binding-list .button,
+.persona-counterpart-claim-actions .button { min-height: 44px; }
+.persona-counterpart-claim-copy { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.persona-counterpart-claim-copy > * { overflow-wrap: anywhere; }
+.persona-counterpart-claim-actions { display: flex; flex-shrink: 0; gap: 8px; }
+.persona-counterpart-error,
+.member-counterpart-claim-error { margin: 0; color: var(--warn-ink); font-size: 12px; }
+.persona-counterpart-add-object { min-height: 44px; justify-self: start; }
+.persona-counterpart-count { display: inline-grid; min-width: 20px; height: 20px; place-items: center; padding: 0 5px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-family: var(--mono); font-size: 11px; line-height: 1; }
+.member-counterpart-claims { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.member-counterpart-claim { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.member-counterpart-claim-copy { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.member-counterpart-claim-copy > * { overflow-wrap: anywhere; }
+.member-counterpart-claim-actions { display: flex; gap: 8px; }
+.member-counterpart-claim-actions .button { min-height: 44px; }
+
+@media (max-width: 600px) {
+  .persona-counterpart-fields { grid-template-columns: minmax(0, 1fr); }
+  .persona-counterpart-add-binding { grid-template-columns: minmax(0, 1fr) auto; }
+  .persona-counterpart-add-binding label { grid-column: 1 / -1; }
+  .persona-counterpart-claim-list li,
+  .member-counterpart-claim { grid-template-columns: minmax(0, 1fr); }
+  .persona-counterpart-claim-actions,
+  .member-counterpart-claim-actions { justify-content: flex-start; }
+}

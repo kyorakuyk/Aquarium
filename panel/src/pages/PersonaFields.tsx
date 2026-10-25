@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PersonaTraits } from '../api.ts';
 import type { PersonaEditorTab, PersonaParameterTab } from '../persona-page-tabs.ts';
 import { PersonaParametersPanel } from './PersonaParametersPanel.tsx';
+import { PersonaCounterpartEditor } from './PersonaCounterpartEditor.tsx';
+import type { PersonaCounterpart } from '../persona-counterpart-api.ts';
 import {
   PERSONA_TRAIT_LABELS,
   personaNameFromTitle,
@@ -239,6 +241,9 @@ export function PersonaFields({
   function setEnergySource(value: PersonaEnergySource) {
     onChange({ ...form, metadata: { ...form.metadata, energySource: value } });
   }
+  function setCounterparts(counterparts: PersonaCounterpart[]) {
+    onChange({ ...form, metadata: { ...form.metadata, counterparts } });
+  }
   function setOther(index: number, change: Partial<PersonaSectionsForm['other'][number]>) {
     onChange({ ...form, other: form.other.map((section, itemIndex) => itemIndex === index ? { ...section, ...change } : section) });
   }
@@ -344,6 +349,14 @@ export function PersonaFields({
           <h3>底线</h3>
           <RuleListField heading="底线" items={form.fields.底线} disabled={disabled} onFocus={() => onFocus('persona-section-底线')} onChange={(value) => setList('底线', value)} />
         </section>
+        <PersonaCounterpartEditor
+          key={personaId}
+          personaId={personaId}
+          accountId={previewAccountId}
+          counterparts={Array.isArray(form.metadata.counterparts) ? form.metadata.counterparts as PersonaCounterpart[] : []}
+          onChange={setCounterparts}
+          disabled={disabled}
+        />
       </div>
     </div>
   );

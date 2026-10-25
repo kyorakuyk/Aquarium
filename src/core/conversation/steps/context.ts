@@ -10,6 +10,7 @@ import { buildPrivateGroupEventsBlock } from '../../impressions/group-events-pro
 import { buildGroupEventContextBlock } from '../../privacy/event-notes.ts';
 import { buildEventAdvocacyConfirmationRequest } from '../../privacy/event-advocacy.ts';
 import { createSlotCallOptions } from './call-options.ts';
+import { resolvePersonaCounterpartContext } from '../counterpart-context.ts';
 import { errorDetails } from './errors.ts';
 import { getPersonaForMessage } from './persona.ts';
 import { traceStep, type PipelineStep } from './types.ts';
@@ -56,13 +57,28 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   });
 
   const contextCount = ctx.state.proactiveMode ? 8 : settings.contextMessages;
-  const contextRecords = (ctx.processOptions.replay
+  const rawContextRecords = ctx.processOptions.replay
     ? ctx.options.repository.recentMessagesThrough(ctx.currentSessionId, ctx.message.messageId, contextCount)
     : ctx.contextWindow.select(
       ctx.currentSessionId,
       contextCount,
       ctx.options.repository.recentMessages(ctx.currentSessionId, contextCount * 2),
-    )).map((record) => mapMessageToMainIdentity(ctx.options.repository, ctx.message.session.account, record));
+    );
+  const counterpartContext = resolvePersonaCounterpartContext({
+    account: ctx.message.session.account,
+    personaId: account?.persona ?? 'default',
+    sessionId: ctx.currentSessionId,
+    sessionKind: ctx.message.session.kind,
+    ...(ctx.message.session.kind === 'group' ? { groupId: ctx.message.session.peer } : {}),
+    currentUserId: ctx.message.senderId,
+    counterparts: loadedPersona.counterparts ?? [],
+    records: rawContextRecords,
+    replay: ctx.processOptions.replay === true,
+    repository: ctx.options.repository,
+    now: ctx.now,
+  });
+  const contextRecords = rawContextRecords
+    .map((record) => mapMessageToMainIdentity(ctx.options.repository, ctx.message.session.account, record));
   const context = contextRecords.map((record) => ({
     ...record,
     plainText: messageTextWithImageCaptions(
@@ -78,7 +94,9 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     ctx.now(),
   ).level;
   const personaPrompt = renderPersonaPrompt(loadedPersona, {
-    audienceTier: personaAudienceTierFromAffinity(affinityLevel) ?? 'stranger',
+    audienceTier: counterpartContext.currentUserBound
+      ? 'close'
+      : personaAudienceTierFromAffinity(affinityLevel) ?? 'stranger',
     messageText: ctx.message.plainText,
     historyText: context.slice(-8).map((record) => record.plainText).join('\n'),
   });
@@ -191,6 +209,8 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
     modeHint: settings.mode === 'busy' ? '你现在有点忙，回得简短随意。' : '',
     request,
     context,
+    counterpartRule: counterpartContext.rule,
+    speakerAnnotations: counterpartContext.speakerAnnotations,
     blocks: {
       traits: traitsBlock,
       ...moodBlocks,

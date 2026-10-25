@@ -2,6 +2,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { PersonaAffinitySchema } from '../../src/persona/affinity.ts';
 import { PersonaEnergySchema } from '../../src/persona/energy.ts';
 import { PersonaMoodSchema } from '../../src/persona/mood.ts';
+import { parsePersonaCounterparts } from '../../src/persona/counterparts.ts';
 import { parsePersonaTraits } from './persona-traits.ts';
 import type { PersonaTraits } from './api.ts';
 
@@ -154,6 +155,7 @@ function parseMetadata(source: string): Record<string, unknown> {
     const mood = PersonaMoodSchema.safeParse(metadata.mood);
     if (!mood.success) throw new Error('人设情绪字段 mood 无效');
   }
+  parsePersonaCounterparts(metadata.counterparts);
   return metadata;
 }
 
