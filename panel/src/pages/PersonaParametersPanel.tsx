@@ -38,7 +38,7 @@ export function PersonaParametersPanel({
             key={tab.id}
             onClick={() => onParameterTabChange(tab.id)}
           >
-            {tab.label}{'badge' in tab && tab.badge && <small>{tab.badge}</small>}
+            {tab.label}{'badge' in tab && tab.badge && <small className="persona-parameter-soon">{tab.badge}</small>}
           </button>
         ))}
       </nav>
@@ -54,7 +54,7 @@ export function PersonaParametersPanel({
             <span className="muted">占位 · 还没做</span>
           </header>
           <p className="persona-form-hint">{placeholder.description}</p>
-          <p className="persona-form-hint">以后放在这里</p>
+          <p className="persona-form-hint persona-placeholder-later">以后放在这里</p>
           <div className="persona-placeholder-rows">
             {placeholder.items.map((item) => (
               <div className="persona-placeholder-row" key={item.name}>

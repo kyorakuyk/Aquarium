@@ -105,7 +105,7 @@ export function PersonaPreview({
                   key={block.id}
                   ref={activeBlockId === block.id ? activeBlockRef : undefined}
                 >
-                  <span>{redactSensitiveText(block.label)}</span>
+                  <span>{redactSensitiveText(block.label).replace(/^我 · /u, 'persona · ')}</span>
                   <pre>{redactSensitiveText(block.text)}</pre>
                 </section>
               ))}
