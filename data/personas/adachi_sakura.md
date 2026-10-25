@@ -18,6 +18,8 @@ traits:
   humor: -2
   openness: -2
   imitation: 0
+speech:
+  innerVoice: full
 ---
 # {{name}}
 

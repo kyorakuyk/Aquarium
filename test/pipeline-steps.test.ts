@@ -16,6 +16,7 @@ import { contextStep } from '../src/core/conversation/steps/context.ts';
 import { deliverStep, replayDeliverStep } from '../src/core/conversation/steps/deliver.ts';
 import { gateStep } from '../src/core/conversation/steps/gate.ts';
 import { generateStep } from '../src/core/conversation/steps/generate.ts';
+import { getPersonaForMessage } from '../src/core/conversation/steps/persona.ts';
 import { persistStep } from '../src/core/conversation/steps/persist.ts';
 import { boundedTraceSummary, traceStep, type StepContext, type StepResult } from '../src/core/conversation/steps/types.ts';
 import type { StoreRepository } from '../src/store/repository.ts';
@@ -216,6 +217,28 @@ test('context step loads the persona and assembles a prompt', async (t) => {
   assert.equal(ctx.state.innerVoiceMode, 'light');
   assert.equal(Array.isArray(ctx.state.prompt), true);
   traceFor(ctx, 'context');
+});
+
+test('context step keeps legacy speech.innerVoice after persona metadata is cached', async (t) => {
+  const ctx = makeContext(t);
+  ctx.state.config = exampleConfig;
+  ctx.state.settings = resolveSession(exampleConfig, session);
+  fs.writeFileSync(path.join(ctx.options.personaRoot ?? '', 'personas', 'default.md'), [
+    '---',
+    'traits: { order: 0, morality: 0, talk: 0, mind: 0 }',
+    'speech:',
+    '  innerVoice: full',
+    '---',
+    '# Bot',
+    '普通旧式人设正文。',
+  ].join('\n'), 'utf8');
+
+  const loaded = getPersonaForMessage(ctx);
+  assert.equal(loaded.profile, undefined);
+  assert.equal(loaded.innerVoice, 'full');
+  assert.equal(ctx.state.personaInnerVoice, 'full');
+  assert.deepEqual(await contextStep(ctx), { next: true });
+  assert.equal(ctx.state.innerVoiceMode, 'full');
 });
 
 test('context step injects only the affinity-matched audience and triggered persona mode', async (t) => {

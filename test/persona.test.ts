@@ -229,6 +229,29 @@ test('旧角色卡正文中的横线分隔符不会被误当成 YAML 文件头',
   assert.deepEqual(loaded.traits, { order: 0, morality: 0, talk: 0, mind: 0, humor: 0, openness: 0, imitation: 0 });
 });
 
+test('旧式人设可以只配置 speech.innerVoice 而不变成结构化人设', () => {
+  const loaded = parsePersonaMarkdown([
+    '---',
+    'traits: { order: 0, morality: 0, talk: 0, mind: 0 }',
+    'speech:',
+    '  innerVoice: full',
+    '---',
+    '保留原有角色卡正文。',
+  ].join('\n'));
+
+  assert.equal(loaded.innerVoice, 'full');
+  assert.equal(loaded.profile, undefined);
+  assert.equal(loaded.text, '保留原有角色卡正文。');
+  assert.equal(resolveInnerVoice(undefined, loaded), 'full');
+  assert.throws(() => parsePersonaMarkdown([
+    '---',
+    'speech:',
+    '  innerVoice: sideways',
+    '---',
+    '旧式正文。',
+  ].join('\n')), /speech\.innerVoice/u);
+});
+
 test('人设原作对象可声明别名与认领提示，旧人设默认关闭且拒绝未知匹配模式', () => {
   const loaded = parsePersonaMarkdown([
     '---',

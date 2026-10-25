@@ -117,6 +117,7 @@ export interface PipelineState {
   persona?: string;
   personaTraits?: PersonaTraits;
   personaProfile?: StructuredPersona;
+  personaInnerVoice?: PersonaInnerVoiceMode;
   personaCounterparts?: PersonaCounterpart[];
   personaEnergySource?: PersonaEnergySource;
   personaEnergy?: PersonaEnergyMultipliers;

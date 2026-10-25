@@ -76,6 +76,7 @@ export interface LoadedPersona {
   text: string;
   traits: PersonaTraits;
   energySource: PersonaEnergySource;
+  innerVoice?: PersonaInnerVoiceMode;
   energy: PersonaEnergyMultipliers;
   affinity: PersonaAffinitySettings;
   mood: PersonaMoodSettings;
@@ -223,6 +224,17 @@ function parseEnergySource(value: unknown): PersonaEnergySource {
   return energySource;
 }
 
+function parsePersonaInnerVoice(header: Record<string, unknown>): PersonaInnerVoiceMode | undefined {
+  if (header.speech === undefined) return undefined;
+  const speech = requiredRecord(header.speech, 'speech');
+  const innerVoice = speech.innerVoice;
+  if (innerVoice === undefined) return undefined;
+  if (innerVoice !== 'full' && innerVoice !== 'light' && innerVoice !== 'hidden') {
+    throw new Error('结构化人设字段 speech.innerVoice 必须是 full、light 或 hidden');
+  }
+  return innerVoice;
+}
+
 function parseStructuredPersona(
   header: Record<string, unknown>,
   text: string,
@@ -232,19 +244,23 @@ function parseStructuredPersona(
   const structuredKeys = [
     'name', 'aliases', 'identity', 'speech', 'speechMode', 'audience', 'modes', 'reactions', 'reply', 'boundaries', 'examples', 'background',
   ];
+  const speech = header.speech;
+  const speechOnlyInnerVoice = isRecord(speech)
+    && Object.keys(speech).every((key) => key === 'innerVoice')
+    && Object.hasOwn(speech, 'innerVoice');
+  if (!structuredKeys.some((key) => key !== 'speech' && Object.hasOwn(header, key)) && speechOnlyInnerVoice) {
+    return undefined;
+  }
   if (!structuredKeys.some((key) => Object.hasOwn(header, key))) return undefined;
 
   const identity = requiredRecord(header.identity, 'identity');
-  const speech = requiredRecord(header.speech, 'speech');
-  const length = requiredRecord(speech.length, 'speech.length');
-  const segmenting = speech.segmenting;
+  const structuredSpeech = requiredRecord(header.speech, 'speech');
+  const length = requiredRecord(structuredSpeech.length, 'speech.length');
+  const segmenting = structuredSpeech.segmenting;
   if (segmenting !== 'one_message' && segmenting !== 'multi') {
     throw new Error('结构化人设字段 speech.segmenting 必须是 one_message 或 multi');
   }
-  const innerVoice = speech.innerVoice;
-  if (innerVoice !== undefined && innerVoice !== 'full' && innerVoice !== 'light' && innerVoice !== 'hidden') {
-    throw new Error('结构化人设字段 speech.innerVoice 必须是 full、light 或 hidden');
-  }
+  const innerVoice = parsePersonaInnerVoice(header);
   const minLength = length.min;
   const maxLength = length.max;
   if (!Number.isSafeInteger(minLength) || !Number.isSafeInteger(maxLength)
@@ -265,7 +281,7 @@ function parseStructuredPersona(
   if (hard.length === 0) throw new Error('结构化人设字段 boundaries.hard 至少需要一条');
   const aliases = parseStringArray(header.aliases, 'aliases');
 
-  const vocabulary = parseStringArray(speech.vocabulary, 'speech.vocabulary', true);
+  const vocabulary = parseStringArray(structuredSpeech.vocabulary, 'speech.vocabulary', true);
   const flavor = parseFlavor(isRecord(header.traits) ? header.traits.flavor : undefined);
   const audience = parseAudience(header.audience);
   return {
@@ -280,13 +296,13 @@ function parseStructuredPersona(
     energySource,
     ...(flavor === undefined ? {} : { flavor }),
     speech: {
-      firstPerson: requiredText(speech.firstPerson, 'speech.firstPerson'),
+      firstPerson: requiredText(structuredSpeech.firstPerson, 'speech.firstPerson'),
       length: { min: minLength as number, max: maxLength as number },
       segmenting,
       ...(innerVoice === undefined ? {} : { innerVoice }),
-      catchphrases: parseStringArray(speech.catchphrases, 'speech.catchphrases'),
-      forbidden: parseStringArray(speech.forbidden, 'speech.forbidden', true),
-      vocabulary: vocabulary.length > 0 ? vocabulary : parseStringArray(speech.catchphrases, 'speech.catchphrases'),
+      catchphrases: parseStringArray(structuredSpeech.catchphrases, 'speech.catchphrases'),
+      forbidden: parseStringArray(structuredSpeech.forbidden, 'speech.forbidden', true),
+      vocabulary: vocabulary.length > 0 ? vocabulary : parseStringArray(structuredSpeech.catchphrases, 'speech.catchphrases'),
     },
     speechMode,
     ...(audience === undefined ? {} : { audience }),
@@ -316,6 +332,7 @@ export function parsePersonaMarkdown(source: string): LoadedPersona {
   const energy = parsePersonaEnergy(match ? header.energy : undefined);
   const affinity = parsePersonaAffinity(match ? header.affinity : undefined);
   const mood = parsePersonaMood(match ? header.mood : undefined);
+  const innerVoice = match ? parsePersonaInnerVoice(header) : undefined;
   const counterparts = match && Object.hasOwn(header, 'counterparts')
     ? parsePersonaCounterparts(header.counterparts)
     : undefined;
@@ -324,6 +341,7 @@ export function parsePersonaMarkdown(source: string): LoadedPersona {
     text,
     traits,
     energySource,
+    ...(innerVoice === undefined ? {} : { innerVoice }),
     energy,
     affinity,
     mood,
@@ -342,6 +360,7 @@ export function validatePersonaSettingsFrontmatter(source: string): void {
   parsePersonaEnergy(header.energy);
   parsePersonaMood(header.mood);
   parsePersonaCounterparts(header.counterparts);
+  parsePersonaInnerVoice(header);
 }
 
 export function updatePersonaTraits(source: string, traits: PersonaTraits): string {
@@ -386,6 +405,7 @@ export function loadPersona(
     text: loaded.text.replaceAll('{{name}}', () => displayName),
     traits: loaded.traits,
     energySource: loaded.energySource,
+    ...(loaded.innerVoice === undefined ? {} : { innerVoice: loaded.innerVoice }),
     energy: loaded.energy,
     affinity: loaded.affinity,
     mood: loaded.mood,

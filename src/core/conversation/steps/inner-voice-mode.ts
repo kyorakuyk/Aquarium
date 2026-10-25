@@ -5,5 +5,5 @@ export function resolveInnerVoice(
   sessionOverride: Pick<SessionOverride, 'innerVoice'> | undefined,
   persona: LoadedPersona,
 ): PersonaInnerVoiceMode {
-  return sessionOverride?.innerVoice ?? persona.profile?.speech.innerVoice ?? 'light';
+  return sessionOverride?.innerVoice ?? persona.innerVoice ?? persona.profile?.speech.innerVoice ?? 'light';
 }
