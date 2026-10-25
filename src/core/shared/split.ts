@@ -135,6 +135,75 @@ function attachPunctuationOnlyParts(parts: ReplyPart[], maxPartLength: number): 
   return result.filter((part) => part.text !== '' && !isPunctuationOnly(part.text));
 }
 
+function isStandaloneShortAside(text: string): boolean {
+  const value = text.trim();
+  const open = value[0];
+  const close = open === '（' ? '）' : open === '(' ? ')' : undefined;
+  if (!close || value.at(-1) !== close) return false;
+  return characterCount(value.slice(1, -1)) <= 8;
+}
+
+function attachStandaloneShortAsides(parts: ReplyPart[], maxPartLength: number): ReplyPart[] {
+  const result = parts.map((part) => ({ ...part }));
+  let index = 0;
+  while (index < result.length) {
+    const aside = result[index];
+    if (!aside || !isStandaloneShortAside(aside.text)) {
+      index += 1;
+      continue;
+    }
+
+    const previous = result[index - 1];
+    if (previous) {
+      const combined = joinParts(previous, aside);
+      if (characterCount(combined.text) <= maxPartLength) {
+        result[index - 1] = combined;
+        result.splice(index, 1);
+      } else {
+        const separator = previous.lastParagraph === aside.firstParagraph ? '' : '\n';
+        const available = Math.max(1, maxPartLength - characterCount(aside.text) - characterCount(separator));
+        const previousCharacters = Array.from(previous.text);
+        const moveLength = Math.min(available, previousCharacters.length);
+        const moved = previousCharacters.slice(-moveLength).join('');
+        const remaining = previousCharacters.slice(0, -moveLength).join('');
+        const attached: ReplyPart = {
+          text: moved + separator + aside.text,
+          firstParagraph: previous.lastParagraph,
+          lastParagraph: aside.lastParagraph,
+        };
+        result.splice(index - 1, 2, ...(remaining ? [{ ...previous, text: remaining }, attached] : [attached]));
+      }
+      index = Math.max(0, index - 1);
+      continue;
+    }
+
+    const next = result[index + 1];
+    if (!next) {
+      index += 1;
+      continue;
+    }
+    const combined = joinParts(aside, next);
+    if (characterCount(combined.text) <= maxPartLength) {
+      result[index] = combined;
+      result.splice(index + 1, 1);
+      continue;
+    }
+    const separator = aside.lastParagraph === next.firstParagraph ? '' : '\n';
+    const available = Math.max(1, maxPartLength - characterCount(aside.text) - characterCount(separator));
+    const nextCharacters = Array.from(next.text);
+    const moveLength = Math.min(available, nextCharacters.length);
+    const attached: ReplyPart = {
+      text: aside.text + separator + nextCharacters.slice(0, moveLength).join(''),
+      firstParagraph: aside.firstParagraph,
+      lastParagraph: next.firstParagraph,
+    };
+    const remaining = nextCharacters.slice(moveLength).join('');
+    result.splice(index, 2, attached, ...(remaining ? [{ ...next, text: remaining }] : []));
+    index += 1;
+  }
+  return result;
+}
+
 function attachToPrevious(parts: ReplyPart[], index: number, part: ReplyPart): void {
   const previous = parts[index - 1];
   if (!previous) return;
@@ -198,7 +267,7 @@ export function splitReply(
     })));
   });
   const merged = mergeAdjacentParts(
-    attachPunctuationOnlyParts(parts, maxPartLength),
+    attachStandaloneShortAsides(attachPunctuationOnlyParts(parts, maxPartLength), maxPartLength),
     maxPartLength,
     segmenting === 'one_message',
   );

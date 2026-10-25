@@ -110,6 +110,14 @@ test('splitReply 默认把多行短句分别发送并丢弃空白行', () => {
   ]);
 });
 
+test('splitReply 不把短括号动作单独拆成消息', () => {
+  const input = '前面说完了。\n（捂脸）\n后面继续。';
+  const parts = splitReply(input);
+
+  assert.ok(!parts.includes('（捂脸）'));
+  assert.equal(parts.join('\n'), input);
+});
+
 test('splitReply 超出 maxParts 时把多余行并入最后一条', () => {
   assert.deepEqual(splitReply('第一句\n第二句\n第三句', 2), [
     '第一句',

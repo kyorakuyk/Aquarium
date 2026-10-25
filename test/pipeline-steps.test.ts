@@ -13,7 +13,7 @@ import { createRateLimiter } from '../src/core/shared/rate-limit.ts';
 import { createAnchoredContextWindow } from '../src/core/conversation/context-window.ts';
 import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { contextStep } from '../src/core/conversation/steps/context.ts';
-import { deliverStep } from '../src/core/conversation/steps/deliver.ts';
+import { deliverStep, replayDeliverStep } from '../src/core/conversation/steps/deliver.ts';
 import { gateStep } from '../src/core/conversation/steps/gate.ts';
 import { generateStep } from '../src/core/conversation/steps/generate.ts';
 import { persistStep } from '../src/core/conversation/steps/persist.ts';
@@ -375,6 +375,67 @@ test('deliver step sends and stores each reply part before returning replied', a
   assert.equal(saved.length, 1);
   assert.deepEqual(ctx.state.sentMessageIds, ['step-sent']);
   traceFor(ctx, 'deliver');
+});
+
+test('full 模式只单独发送一个心声，且不占 spoken 的三条上限', async (t) => {
+  const ctx = makeContext(t);
+  const firstAside = '（她紧张得说不出话，只能一直盯着屏幕）';
+  const extraAside = '（第二段心声保留但不再单独发送）';
+  const sentTexts: string[] = [];
+  ctx.options.adapter.send = async (_key, segments) => {
+    const text = segments.find((segment) => segment.type === 'text');
+    if (text?.type === 'text') sentTexts.push(text.text);
+    return { messageId: `step-sent-${sentTexts.length}` };
+  };
+  ctx.options.repository.saveMessage = () => true;
+  ctx.wait = async () => {};
+  ctx.state.nickname = 'Bot';
+  ctx.state.innerVoiceMode = 'full';
+  ctx.state.innerVoice = [firstAside, extraAside];
+  ctx.state.replyText = `第一段。\n${firstAside}\n第二段。\n${extraAside}\n第三段。`;
+  ctx.state.result = {
+    text: ctx.state.replyText,
+    provider: 'fake',
+    model: 'fake-model',
+    usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 2, costCny: 0.01 },
+  };
+
+  const result = await deliverStep(ctx);
+
+  assert.equal(result.next, false);
+  if (result.next) assert.fail('deliver must stop the pipeline');
+  assert.equal(result.reason, 'replied');
+  assert.deepEqual(sentTexts, ['第一段。', '第二段。', '第三段。', firstAside]);
+  assert.deepEqual(ctx.state.parts, sentTexts);
+  assert.deepEqual(ctx.state.innerVoice, [firstAside, extraAside]);
+});
+
+test('full 模式 replay 把心声作为单独一条计入预览但不发送', async (t) => {
+  const ctx = makeContext(t);
+  const firstAside = '（她紧张得说不出话，只能一直盯着屏幕）';
+  let sends = 0;
+  ctx.options.adapter.send = async () => {
+    sends += 1;
+    return { messageId: 'unexpected-send' };
+  };
+  ctx.processOptions.replay = true;
+  ctx.state.innerVoiceMode = 'full';
+  ctx.state.innerVoice = [firstAside];
+  ctx.state.replyText = `第一段。\n${firstAside}\n第二段。`;
+  ctx.state.result = {
+    text: ctx.state.replyText,
+    provider: 'fake',
+    model: 'fake-model',
+    usage: { inputTokens: 1, cachedTokens: 0, outputTokens: 2, costCny: 0.01 },
+  };
+
+  const result = await replayDeliverStep(ctx);
+
+  assert.equal(result.next, false);
+  if (result.next) assert.fail('replay deliver must stop the pipeline');
+  assert.equal(result.reason, 'replay');
+  assert.deepEqual(ctx.state.parts, ['第一段。', '第二段。', firstAside]);
+  assert.equal(sends, 0);
 });
 
 test('deliver step multiplies each busy-mode reply delay by 2.5', async (t) => {

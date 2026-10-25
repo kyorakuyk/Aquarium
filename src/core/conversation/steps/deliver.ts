@@ -22,6 +22,30 @@ function splitOptionsForContext(ctx: StepContext): { maxParts: 1 | 2 | 3; option
   };
 }
 
+function splitReplyForDelivery(
+  ctx: StepContext,
+  replyText: string,
+  maxParts: 1 | 2 | 3,
+  options: SplitReplyOptions,
+): { spokenParts: string[]; parts: string[] } {
+  const asides = ctx.state.innerVoiceMode === 'full' ? ctx.state.innerVoice ?? [] : [];
+  let spokenText = replyText;
+  for (const aside of asides) {
+    if (!aside) continue;
+    const index = spokenText.indexOf(aside);
+    if (index >= 0) spokenText = spokenText.slice(0, index) + spokenText.slice(index + aside.length);
+  }
+  const cleanedSpokenText = spokenText
+    .split(/\r\n|\r|\n/u)
+    .map((line) => line.trim())
+    .join('\n')
+    .replace(/\n{3,}/gu, '\n\n')
+    .trim();
+  const spokenParts = splitReply(cleanedSpokenText, maxParts, options);
+  const firstAside = asides.find((aside) => aside.length > 0);
+  return { spokenParts, parts: [...spokenParts, ...(firstAside ? [firstAside] : [])] };
+}
+
 function stickerFallbackSegments(base64: string): Segment[] {
   return [{ type: 'image', url: `base64://${base64}`, file: `base64://${base64}` }];
 }
@@ -87,7 +111,7 @@ export const replayDeliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'de
     throw new Error('generate step must run before replay delivery');
   }
   const splitOptions = splitOptionsForContext(ctx);
-  ctx.state.parts = splitReply(replyText, splitOptions.maxParts, splitOptions.options);
+  ctx.state.parts = splitReplyForDelivery(ctx, replyText, splitOptions.maxParts, splitOptions.options).parts;
   return { next: false, reason: 'replay', replied: false };
 });
 
@@ -115,7 +139,12 @@ export const deliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'deliver'
     };
   }
   const splitOptions = splitOptionsForContext(ctx);
-  const parts = splitReply(replyText, splitOptions.maxParts, splitOptions.options);
+  const { spokenParts, parts } = splitReplyForDelivery(
+    ctx,
+    replyText,
+    splitOptions.maxParts,
+    splitOptions.options,
+  );
   ctx.state.parts = parts;
   const sticker = ctx.state.chosenSticker;
 
@@ -163,7 +192,7 @@ export const deliverStep: PipelineStep = async (ctx) => traceStep(ctx, 'deliver'
       segments,
       time: ctx.now(),
     });
-    if (ctx.state.eventAdvocacyPromptEventId !== undefined) {
+    if (index < spokenParts.length && ctx.state.eventAdvocacyPromptEventId !== undefined) {
       try {
         markEventAdvocacyConfirmationPrompt({
           repository: ctx.options.repository,
