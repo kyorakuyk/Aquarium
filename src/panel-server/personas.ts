@@ -16,6 +16,7 @@ import type { PipelineModelCall } from '../core/conversation/pipeline.ts';
 import { createAffinityService } from '../core/affinity/service.ts';
 import { promptTemplateStore } from '../core/prompt/templates.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
+import { isBudgetExceededError } from '../llm/budget.ts';
 import { callSlot } from '../llm/slots.ts';
 import { effectiveTalkLevel, renderTraitsBlock } from '../persona/traits.ts';
 import { loadPersona, parsePersonaMarkdown, updatePersonaTraits, validatePersonaSettingsFrontmatter, type PersonaTraits } from '../persona/load.ts';
@@ -318,7 +319,14 @@ export function registerPersonaRoutes(app: Hono, root: string, options: PersonaR
         costToday: options.repository.costToday,
         recordUsage: options.repository.recordUsage,
       });
-    } catch {
+    } catch (error) {
+      if (isBudgetExceededError(error)) {
+        return context.json({
+          error: 'Persona import failed',
+          reason: '预算已用尽',
+          code: 'budget_exceeded',
+        }, 429);
+      }
       return context.json({ error: 'Persona import failed', reason: '模型调用失败' }, 502);
     }
     let modelJson: unknown;

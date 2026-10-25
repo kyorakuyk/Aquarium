@@ -62,6 +62,24 @@ test('callSlot runs a CLI provider without shell, records zero-cost usage, and r
   assert.equal(records[0]?.costCny, 0);
 });
 
+test('日预算耗尽时仍允许零成本 CLI 槽位', async () => {
+  const records: Array<Record<string, unknown>> = [];
+  const config = AquariumConfigSchema.parse({
+    ...cliConfig(echoStdin),
+    budget: { ...baseConfig.budget, dailyCny: 0 },
+  });
+  const result = await callSlot('reply', [{ role: 'user', content: 'ping' }], {
+    config,
+    account: null,
+    costToday: () => 0,
+    recordUsage: (usage) => records.push(usage),
+  });
+
+  assert.equal(result.text, '[对话] ping');
+  assert.equal(records[0]?.slot, 'reply');
+  assert.equal(records[0]?.costCny, 0);
+});
+
 test('CLI failures fall back to the next provider and record the failed attempt', async () => {
   const records: Array<Record<string, unknown>> = [];
   const config = AquariumConfigSchema.parse({

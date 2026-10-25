@@ -6,7 +6,7 @@ import { messageTrigger } from '../core/activity/trigger.ts';
 import type { IncomingMessage } from '../core/shared/events.ts';
 import { isManagementCommand, type ManagementCommands } from '../core/conversation/management.ts';
 import type { SessionQueue } from '../core/conversation/session-queue.ts';
-import { budgetState } from '../llm/budget.ts';
+import { canCallWithDailyBudget } from '../llm/budget.ts';
 
 export interface AccountActivityRouterOptions<Timer> {
   now: () => number;
@@ -34,7 +34,7 @@ export function createAccountActivityRouter<Timer>(
       const config = options.getConfig();
       const settings = resolveSession(config, message.session);
       if (!settings.enabled || options.management.isMuted(message.session)) return false;
-      if (budgetState(config, options.costToday()) === 'exceeded') return false;
+      if (!canCallWithDailyBudget(config, 'reply', options.costToday())) return false;
       if (resolveMode(settings, options.now()) === 'mention_only') return false;
       if (messageTrigger(message, settings.nicknames) !== 'none') return false;
       return !isManagementCommand(message, config.owner);

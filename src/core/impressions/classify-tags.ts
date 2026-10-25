@@ -1,6 +1,6 @@
 import type OpenAI from 'openai';
 import type { AquariumConfig } from '../../config/schema.ts';
-import { budgetState } from '../../llm/budget.ts';
+import { canCallWithDailyBudget, isBudgetExceededError } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
 import type { PipelineModelCall } from '../conversation/steps/types.ts';
 import type { ClassifyTagsPromptTemplate } from '../prompt/templates.ts';
@@ -294,7 +294,7 @@ export function createTagClassificationService(options: TagClassificationService
         if (account === undefined) continue;
         currentStage = '读取配置和预算';
         const config = options.getConfig();
-        if (budgetState(config, options.repository.costToday()) === 'exceeded') {
+        if (!canCallWithDailyBudget(config, 'extract', options.repository.costToday())) {
           updateStatus({ state: 'budget', remaining: remainingCount() });
           return;
         }
@@ -408,14 +408,15 @@ export function createTagClassificationService(options: TagClassificationService
     }
     const task = classifyRemaining()
       .catch((error: unknown) => {
-        reportError(error, currentStage);
+        const budgetExceeded = isBudgetExceededError(error);
+        if (!budgetExceeded) reportError(error, currentStage);
         let remaining = current.remaining;
         try {
           remaining = remainingCount();
         } catch {
           // 读取剩余条数失败时仍保留错误状态供面板诊断和重试。
         }
-        updateStatus({ state: 'error', remaining });
+        updateStatus({ state: budgetExceeded ? 'budget' : 'error', remaining });
       })
       .finally(() => {
         if (pending === task) pending = undefined;

@@ -345,6 +345,26 @@ test('persona import returns 422 with a reason for invalid JSON and schema value
   });
 });
 
+test('persona import reports budget exhaustion without treating it as a provider failure', async () => {
+  await withPanel(async ({ app }) => {
+    const response = await app.request('/api/personas/import', {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: 'draft.md', text: '来源文本' }),
+    });
+    assert.equal(response.status, 429);
+    assert.deepEqual(await response.json(), {
+      error: 'Persona import failed',
+      reason: '预算已用尽',
+      code: 'budget_exceeded',
+    });
+  }, undefined, {
+    callModel: async () => {
+      throw Object.assign(new Error('budget cap'), { name: 'BudgetExceededError', code: 'BUDGET_EXCEEDED' });
+    },
+  });
+});
+
 test('persona versions seed on first read and retain only the newest 50 saves', async () => {
   await withPanel(async ({ app }) => {
     const initialResponse = await app.request('/api/personas/default/versions', { headers: authHeaders() });

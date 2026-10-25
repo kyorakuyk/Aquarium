@@ -1,5 +1,5 @@
 import type { AquariumConfig } from '../../config/schema.ts';
-import { budgetState } from '../../llm/budget.ts';
+import { canCallWithDailyBudget, isBudgetExceededError } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
 import type { PipelineModelCall } from '../conversation/steps/types.ts';
 import type { MemberSummaryPromptTemplate } from '../prompt/templates/member-summary.ts';
@@ -80,6 +80,7 @@ export function createGroupSummaryService(options: GroupSummaryServiceOptions): 
   const running = new Set<string>();
 
   function reportError(error: unknown): void {
+    if (isBudgetExceededError(error)) return;
     try {
       options.onError?.(error);
     } catch {
@@ -109,7 +110,7 @@ export function createGroupSummaryService(options: GroupSummaryServiceOptions): 
 
       const tagText = formatGroupSummaryTags(tags);
       const config = options.getConfig();
-      if (!tagText || budgetState(config, options.repository.costToday()) === 'exceeded') return;
+      if (!tagText || !canCallWithDailyBudget(config, 'extract', options.repository.costToday())) return;
       const template = options.getTemplate();
       const expectedUpdatedAt = previous?.updatedAt;
       running.add(key);

@@ -1,4 +1,5 @@
 import type OpenAI from 'openai';
+import { isBudgetExceededError } from '../../llm/budget.ts';
 import type { JudgePromptTemplate } from '../prompt/templates.ts';
 
 export interface JudgeContextMessage {
@@ -15,7 +16,7 @@ export interface ParsedJudgeResponse {
 
 export type JudgeResult =
   | { ok: true; probability: number; reason: string }
-  | { ok: false; reason: 'judge_parse_error' | 'judge_error' };
+  | { ok: false; reason: 'judge_parse_error' | 'judge_error' | 'budget' };
 
 export type JudgeSlotCall = (
   slot: 'judge',
@@ -78,7 +79,8 @@ export async function runJudge(
   let response: { text: string };
   try {
     response = await callModel('judge', messages);
-  } catch {
+  } catch (error) {
+    if (isBudgetExceededError(error)) return { ok: false, reason: 'budget' };
     return { ok: false, reason: 'judge_error' };
   }
 

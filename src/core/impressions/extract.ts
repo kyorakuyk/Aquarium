@@ -1,4 +1,5 @@
 import type OpenAI from 'openai';
+import { isBudgetExceededError } from '../../llm/budget.ts';
 import type { StoredTag } from '../../store/affect-repo.ts';
 import type { MessageStorageRecord } from '../../store/repository.ts';
 import {
@@ -56,6 +57,7 @@ export interface ParsedExtractResponse {
 export type ExtractResult =
   | { ok: true; parsed: ParsedExtractResponse }
   | { ok: false; reason: 'extract_parse_error' }
+  | { ok: false; reason: 'budget' }
   | { ok: false; reason: 'extract_error'; error: unknown };
 
 export type ExtractSlotCall = (
@@ -262,6 +264,7 @@ export async function runExtract(
   try {
     response = await callModel('extract', messages);
   } catch (error) {
+    if (isBudgetExceededError(error)) return { ok: false, reason: 'budget' };
     return { ok: false, reason: 'extract_error', error };
   }
 

@@ -1,4 +1,5 @@
 import type OpenAI from 'openai';
+import { isBudgetExceededError } from '../../llm/budget.ts';
 import { sessionId, type IncomingMessage, type Segment } from '../shared/events.ts';
 import type { ImageCaptionRecord, MessageStorageRecord, StoreRepository } from '../../store/repository.ts';
 import type { SlotResult } from '../../llm/slots.ts';
@@ -337,7 +338,7 @@ export async function captionIncomingImages(options: {
       };
       options.repository.setImageCaption(record);
     } catch (error) {
-      options.onError?.(error, options.message);
+      if (!isBudgetExceededError(error)) options.onError?.(error, options.message);
     }
   }
 

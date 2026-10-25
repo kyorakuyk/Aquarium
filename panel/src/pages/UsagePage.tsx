@@ -15,6 +15,7 @@ const SLOT_LABELS: Record<string, string> = {
   vision: '看图',
   appraise: '情绪评估',
   extract: '印象提取',
+  oneoff: '一次性任务',
 };
 
 function number(value: number): string {

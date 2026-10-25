@@ -81,8 +81,14 @@ test('精判区分解析失败与模型调用失败且不泄漏错误文本', as
     promptTemplateStore.get().judge,
     async () => { throw new Error('private provider detail'); },
   );
+  const budgetFailure = await runJudge(
+    [contextMessage(1)],
+    promptTemplateStore.get().judge,
+    async () => { throw Object.assign(new Error('budget cap'), { name: 'BudgetExceededError', code: 'BUDGET_EXCEEDED' }); },
+  );
 
   assert.deepEqual(parseFailure, { ok: false, reason: 'judge_parse_error' });
   assert.deepEqual(callFailure, { ok: false, reason: 'judge_error' });
+  assert.deepEqual(budgetFailure, { ok: false, reason: 'budget' });
   assert.equal(JSON.stringify(callFailure).includes('private provider detail'), false);
 });

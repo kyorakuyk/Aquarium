@@ -1,6 +1,6 @@
 import type OpenAI from 'openai';
 import type { AquariumConfig } from '../../config/schema.ts';
-import { budgetState } from '../../llm/budget.ts';
+import { canCallWithDailyBudget, isBudgetExceededError } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
 import type { PrivateFactMentionEvidence, PrivateFactRecord } from '../../store/privacy-repo.ts';
 import type { StoreRepository } from '../../store/repository.ts';
@@ -139,7 +139,7 @@ export function createPrivacyMentionService(options: PrivateMentionServiceOption
           && allowedForGate(fact, input.session)
           && !mentionsAlreadyRecorded(fact, message.messageId, dayStart, nextDayStart)
           && fact.keywords.some((keyword) => message.plainText.toLocaleLowerCase().includes(keyword.trim().toLocaleLowerCase())));
-      if (candidates.length === 0 || budgetState(config, options.repository.costToday()) === 'exceeded') return;
+      if (candidates.length === 0 || !canCallWithDailyBudget(config, 'judge', options.repository.costToday())) return;
 
       let responseText: string;
       try {
@@ -151,8 +151,8 @@ export function createPrivacyMentionService(options: PrivateMentionServiceOption
           now: () => input.now,
         });
         responseText = response.text;
-      } catch {
-        reportError(input.session.account, groupSessionId);
+      } catch (error) {
+        if (!isBudgetExceededError(error)) reportError(input.session.account, groupSessionId);
         return;
       }
 
@@ -196,8 +196,8 @@ export function createPrivacyMentionService(options: PrivateMentionServiceOption
           });
         }
       }
-    } catch {
-      reportError(input.session.account, groupSessionId);
+    } catch (error) {
+      if (!isBudgetExceededError(error)) reportError(input.session.account, groupSessionId);
     }
   }
 

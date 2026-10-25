@@ -1,4 +1,5 @@
 import type OpenAI from 'openai';
+import { isBudgetExceededError } from '../../llm/budget.ts';
 import type { AppraisePromptTemplate } from '../prompt/templates.ts';
 import { MAX_AROUSAL_DELTA, MAX_DOMINANCE_DELTA, MAX_RESERVE_DELTA, MAX_VALENCE_DELTA } from './core.ts';
 
@@ -20,7 +21,7 @@ export interface ParsedAppraiseResponse {
 
 export type AppraiseResult =
   | { ok: true; valence: number; reserve: number; arousal: number; dominance: number; causeTag: string; reason: string }
-  | { ok: false; reason: 'appraise_parse_error' | 'appraise_error' };
+  | { ok: false; reason: 'appraise_parse_error' | 'appraise_error' | 'budget' };
 
 export type AppraiseSlotCall = (
   slot: 'extract',
@@ -105,7 +106,8 @@ export async function runAppraise(
   let response: { text: string };
   try {
     response = await callModel('extract', messages);
-  } catch {
+  } catch (error) {
+    if (isBudgetExceededError(error)) return { ok: false, reason: 'budget' };
     return { ok: false, reason: 'appraise_error' };
   }
 

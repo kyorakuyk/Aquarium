@@ -1,6 +1,6 @@
 import type { AquariumConfig } from '../../config/schema.ts';
 import { resolveSession } from '../../config/resolve.ts';
-import { budgetState } from '../../llm/budget.ts';
+import { canCallWithDailyBudget } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
 import type { StoredTag } from '../../store/affect-repo.ts';
 import type { MessageStorageRecord, StoreRepository } from '../../store/repository.ts';
@@ -444,7 +444,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       return summary;
     };
 
-    if (budgetState(config, options.repository.costToday()) === 'exceeded') {
+    if (!canCallWithDailyBudget(config, 'extract', options.repository.costToday())) {
       return finish('budget');
     }
 
@@ -520,6 +520,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
     };
 
     if (!result.ok) {
+      if (result.reason === 'budget') return finish('budget');
       advanceTagRun();
       if (result.reason === 'extract_error') {
         const classified = classifyExtractFailure(result.error);

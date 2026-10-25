@@ -1,6 +1,6 @@
 import type OpenAI from 'openai';
 import type { AquariumConfig } from '../../config/schema.ts';
-import { budgetState } from '../../llm/budget.ts';
+import { canCallWithDailyBudget, isBudgetExceededError } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
 import type { PrivateFactLevel, PrivateFactRecord } from '../../store/privacy-repo.ts';
 import type { MessageStorageRecord, StoreRepository } from '../../store/repository.ts';
@@ -200,7 +200,7 @@ export function createPrivacyGateService(options: PrivacyGateServiceOptions): Pr
 
       if (prefiltered.length > 0) {
         const ids = new Set(prefiltered.map((fact) => fact.id));
-        const overBudget = budgetState(config, options.repository.costToday()) === 'exceeded';
+        const overBudget = !canCallWithDailyBudget(config, 'judge', options.repository.costToday());
         if (overBudget) {
           touched = prefiltered;
           judge = 'fallback_all';
@@ -222,10 +222,10 @@ export function createPrivacyGateService(options: PrivacyGateServiceOptions): Pr
               touched = prefiltered.filter((fact) => touchedIds.has(fact.id));
               judge = 'judged';
             }
-          } catch {
+          } catch (error) {
             touched = prefiltered;
             judge = 'fallback_all';
-            reportError(input.session.account, currentSessionId);
+            if (!isBudgetExceededError(error)) reportError(input.session.account, currentSessionId);
           }
         }
       }
@@ -269,8 +269,8 @@ export function createPrivacyGateService(options: PrivacyGateServiceOptions): Pr
         ...(knownFactsBlock === undefined ? {} : { knownFacts: knownFactsBlock }),
         suppressDebugTrace: knownFactsBlock !== undefined || prefiltered.some((fact) => fact.level === 'L0'),
       };
-    } catch {
-      reportError(input.session.account, currentSessionId);
+    } catch (error) {
+      if (!isBudgetExceededError(error)) reportError(input.session.account, currentSessionId);
       if (!input.triggered) {
         const detail = { ...emptyDetail(), judge: 'fallback_all' as const };
         const until = input.now + config.privacy.avoidMinutes * minuteMs;

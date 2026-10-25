@@ -1,5 +1,5 @@
 import type { AquariumConfig } from '../../config/schema.ts';
-import { budgetState } from '../../llm/budget.ts';
+import { canCallWithDailyBudget } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
 import type { MoodBand, MoodEventRecord } from '../../store/affect-repo.ts';
 import type { StoreRepository } from '../../store/repository.ts';
@@ -314,7 +314,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
       const last = lastAppraiseAt.get(input.sessionId);
       if (last !== undefined && input.now - last < APPRAISE_MIN_INTERVAL_MS) return;
 
-      if (budgetState(config, options.repository.costToday()) === 'exceeded') {
+      if (!canCallWithDailyBudget(config, 'extract', options.repository.costToday())) {
         recordEvent(input.account, input.now, {
           source: 'appraise',
           sessionId: input.sessionId,

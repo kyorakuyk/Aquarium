@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
-import { budgetState } from '../../llm/budget.ts';
+import { canCallWithDailyBudget, isBudgetExceededError } from '../../llm/budget.ts';
 import { downloadImageAsDataUrl } from '../images/index.ts';
 import { computeImageMd5 } from '../images/fingerprint.ts';
 import { sessionId, type IncomingMessage, type Segment, type SessionKey } from '../shared/events.ts';
@@ -237,7 +237,7 @@ export function createStickerService(options: StickerServiceOptions): StickerSer
     let described = 0;
     let skippedByBudget = false;
     for (const sticker of options.repository.stickersNeedingDescription(options.account, MAX_DESCRIPTION_ATTEMPTS)) {
-      if (budgetState(options.getConfig(), options.repository.costToday()) === 'exceeded') {
+      if (!canCallWithDailyBudget(options.getConfig(), 'vision', options.repository.costToday())) {
         skippedByBudget = true;
         break;
       }
@@ -255,7 +255,11 @@ export function createStickerService(options: StickerServiceOptions): StickerSer
         }
         options.repository.saveStickerDescription(sticker.id, parsed.desc, parsed.tags, now());
         described += 1;
-      } catch {
+      } catch (error) {
+        if (isBudgetExceededError(error)) {
+          skippedByBudget = true;
+          break;
+        }
         options.repository.recordStickerDescriptionAttempt(sticker.id, now());
         options.onError?.('describe');
       }

@@ -22,6 +22,14 @@ test('config.example.yaml 符合配置 schema 并默认关闭所有会话', () =
   assert.equal(result.data.debug.enabled, false);
   assert.equal(result.data.debug.retainDays, 7);
   assert.equal(result.data.accounts.length, 1);
+  assert.equal((result.data.budget as { oneoffTaskCny?: number }).oneoffTaskCny, 3);
+  assert.equal(result.data.slots.oneoff?.[0]?.model, 'deepseek-v4-pro');
+  assert.equal(result.data.slots.oneoff?.[0]?.reasoning, 'high');
+  assert.equal(result.data.slots.oneoff?.[0]?.maxTokens, 8_000);
+  assert.equal(result.data.slots.oneoff?.[0]?.timeoutSec, 240);
+  const legacyBudgetConfig = structuredClone(exampleConfig) as Record<string, any>;
+  delete legacyBudgetConfig.budget.oneoffTaskCny;
+  assert.equal((AquariumConfigSchema.parse(legacyBudgetConfig).budget as { oneoffTaskCny?: number }).oneoffTaskCny, 3);
   assert.equal(result.data.affinity.start, 15);
   assert.deepEqual(result.data.affinity.tiers, {
     positive: [15, 35, 60, 85],

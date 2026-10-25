@@ -274,6 +274,27 @@ test('judge call or parse failure treats every prefiltered fact as touched', asy
       assert.equal(decision.detail.touched[0]?.id, id);
       assert.equal(decision.detail.judge, 'fallback_all');
     }
+
+    const budgetErrors: Array<{ account: number; sessionId: string }> = [];
+    const budgetService = createPrivacyGateService({
+      repository,
+      getConfig: makeConfig,
+      callModel: async () => { throw Object.assign(new Error('budget cap'), { name: 'BudgetExceededError', code: 'BUDGET_EXCEEDED' }); },
+      onError: (entry) => budgetErrors.push(entry),
+    });
+    const budgetDecision = await budgetService.evaluateGroup({
+      session: groupSession,
+      senderId: 50,
+      triggered: false,
+      now,
+      messages: repository.recentMessages(groupKey, 8),
+      template: promptTemplateStore.get().privacyGate,
+      knownFactsTemplate: promptTemplateStore.get().replySystem.knownFacts,
+    });
+    assert.equal(budgetDecision.action, 'avoid');
+    assert.equal(budgetDecision.detail.touched[0]?.id, id);
+    assert.equal(budgetDecision.detail.judge, 'fallback_all');
+    assert.deepEqual(budgetErrors, []);
   });
 });
 

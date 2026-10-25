@@ -1,5 +1,6 @@
 import { cleanReply } from '../../shared/text.ts';
 import type { SlotRequestParams } from '../../../llm/slots.ts';
+import { isBudgetExceededError } from '../../../llm/budget.ts';
 import { canSendStickerOnly } from '../../stickers/selection.ts';
 import { parseStickerReply } from '../../stickers/parse.ts';
 import { errorDetails } from './errors.ts';
@@ -34,6 +35,7 @@ export const generateStep: PipelineStep = async (ctx) => traceStep(ctx, 'generat
   try {
     result = await ctx.modelCall('reply', prompt, callOptions);
   } catch (error) {
+    if (isBudgetExceededError(error)) return { next: false, reason: 'budget', detail: { budget: 'exceeded' } };
     ctx.options.onError?.(error, ctx.message);
     return { next: false, reason: 'llm_error', detail: errorDetails(error) };
   }

@@ -151,7 +151,7 @@ export function createRepository(
   const selectTodayCost = database.prepare(`
     SELECT COALESCE(SUM(cost_cny), 0) AS total
     FROM usage
-    WHERE time >= ? AND time < ?
+    WHERE time >= ? AND time < ? AND slot <> 'oneoff'
   `);
 
   const selectCaption = database.prepare('SELECT caption FROM image_captions WHERE key = ?');

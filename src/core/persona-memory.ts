@@ -1,5 +1,5 @@
 import type { AquariumConfig } from '../config/schema.ts';
-import { budgetState } from '../llm/budget.ts';
+import { canCallWithDailyBudget, isBudgetExceededError } from '../llm/budget.ts';
 import type { MessageStorageRecord, StoreRepository } from '../store/repository.ts';
 import type { PersonaDiarySourceEntry } from '../store/persona-memory-repo.ts';
 import { sessionId, type IncomingMessage, type SessionKey } from './shared/events.ts';
@@ -171,7 +171,7 @@ export function createPersonaMemoryService(options: PersonaMemoryServiceOptions)
         });
         return { ...inputBase, status, memoCount: observedMemoCount, processedCount: recoveredCount };
       }
-      if (budgetState(options.getConfig(), options.repository.costToday()) === 'exceeded') {
+      if (!canCallWithDailyBudget(options.getConfig(), 'extract', options.repository.costToday())) {
         options.repository.finishPersonaMemoryRun({
           account,
           cycleKey,
@@ -223,7 +223,7 @@ export function createPersonaMemoryService(options: PersonaMemoryServiceOptions)
             sessionIssueReason ??= sessionCheckFailed ? 'session-check-failed' : 'session-disabled';
             continue batchLoop;
           }
-          if (budgetState(options.getConfig(), options.repository.costToday()) === 'exceeded') {
+          if (!canCallWithDailyBudget(options.getConfig(), 'extract', options.repository.costToday())) {
             status = 'budget';
             reason = 'budgetState=exceeded';
             break batchLoop;
@@ -243,8 +243,11 @@ export function createPersonaMemoryService(options: PersonaMemoryServiceOptions)
             }));
             result = await options.processSession(batch.session, records, now);
           } catch (error) {
-            reportError(error, account);
-            result = 'failed';
+            if (isBudgetExceededError(error)) result = 'budget';
+            else {
+              reportError(error, account);
+              result = 'failed';
+            }
           }
           if (result === 'budget') {
             status = 'budget';

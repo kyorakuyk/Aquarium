@@ -2,7 +2,11 @@ import { createHash } from 'node:crypto';
 import OpenAI from 'openai';
 import type { AquariumConfig } from '../config/schema.ts';
 import { getProviderClient } from './client.ts';
-import { budgetState } from './budget.ts';
+import {
+  BudgetExceededError,
+  filterNonBillableEntries,
+  type BudgetScope,
+} from './budget.ts';
 import { buildCliInput, getCliRuntime, type CliRuntime } from './cli.ts';
 
 const retryableNetworkCodes = new Set([
@@ -35,6 +39,8 @@ export interface SlotCallOptions {
   config: AquariumConfig;
   account: number | null;
   costToday: () => number;
+  budgetScope?: BudgetScope;
+  oneoffTaskCostCny?: () => number;
   recordUsage: (usage: UsageAttempt) => void;
   getClient?: (provider: string) => OpenAI;
   now?: () => number;
@@ -149,12 +155,20 @@ export async function callSlot(
 ): Promise<SlotResult> {
   const configuredChain = options.config.slots[slot];
   if (!configuredChain?.length) throw new Error(`模型槽位不存在或没有降级项：${slot}`);
-  const lastConfiguredEntry = configuredChain[configuredChain.length - 1];
-  const chain = slot === 'reply'
-    && budgetState(options.config, options.costToday()) === 'exceeded'
-    && lastConfiguredEntry
-    ? [lastConfiguredEntry]
-    : configuredChain;
+  const budgetScope = options.budgetScope ?? (slot === 'oneoff' ? 'oneoff' : 'daily');
+  const usedCny = budgetScope === 'daily'
+    ? options.costToday()
+    : options.oneoffTaskCostCny?.();
+  if (usedCny === undefined) throw new TypeError('oneoff 预算范围必须提供当前任务累计费用');
+  if (!Number.isFinite(usedCny) || usedCny < 0) throw new RangeError('预算累计费用必须是非负有限数');
+  const limitCny = budgetScope === 'daily'
+    ? options.config.budget.dailyCny
+    : options.config.budget.oneoffTaskCny;
+  const exceeded = usedCny >= limitCny;
+  if (exceeded && budgetScope === 'oneoff') throw new BudgetExceededError(slot, budgetScope, usedCny, limitCny);
+  const chain = exceeded ? filterNonBillableEntries(options.config, slot) : configuredChain;
+  if (chain.length === 0) throw new BudgetExceededError(slot, budgetScope, usedCny, limitCny);
+  const usageSlot = budgetScope === 'oneoff' ? 'oneoff' : slot;
   const now = options.now ?? Date.now;
   const promptJson = options.debugTrace ? JSON.stringify(messages) : undefined;
   const promptHash = promptJson === undefined
@@ -232,7 +246,7 @@ export async function callSlot(
       options.recordUsage({
         time: completedAt,
         account: options.account,
-        slot,
+        slot: usageSlot,
         provider: entry.provider,
         model: entry.model,
         inputTokens: 0,
@@ -282,7 +296,7 @@ export async function callSlot(
     options.recordUsage({
       time: completedAt,
       account: options.account,
-      slot,
+      slot: usageSlot,
       provider: entry.provider,
       model: entry.model,
       ...slotUsage,

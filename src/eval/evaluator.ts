@@ -35,7 +35,7 @@ function createEvaluationConfig(): AquariumConfig {
     providers: {},
     slots: {},
     pricing: {},
-    budget: { dailyCny: 0, warnRatio: 0 },
+    budget: { dailyCny: 1, warnRatio: 0 },
     defaults: {
       enabled: true,
       mode: 'mention_only',
@@ -118,6 +118,7 @@ function createGateContext(sample: EvalSample, config: AquariumConfig): StepCont
     getConfig: () => config,
     repository: {
       getAccountKind: () => undefined,
+      costToday: () => 0,
     } as unknown as StoreRepository,
     adapter: {} as ProtocolAdapter,
     getNickname: () => 'Bot',

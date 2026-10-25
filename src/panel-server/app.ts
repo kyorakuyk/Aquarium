@@ -33,7 +33,7 @@ import { registerUsageRoutes } from './usage-routes.ts';
 import { registerProviderRoutes } from './provider-routes.ts';
 import type { CliRuntime } from '../llm/cli.ts';
 import type { ContactSnapshot, PanelAccountRuntime } from './types.ts';
-import { budgetState } from '../llm/budget.ts';
+import { budgetState, isBudgetExceededError } from '../llm/budget.ts';
 import type { SleepWakeState } from '../core/sleep/index.ts';
 import type { HistoryImportService } from '../core/impressions/history-import.ts';
 import type { ImpressionsService } from '../core/impressions/service.ts';
@@ -502,6 +502,9 @@ export function createPanelApp(options: PanelServerOptions): Hono {
   app.all('/api/*', (context) => context.json({ error: 'Not found' }, 404));
 
   app.onError((error, context) => {
+    if (isBudgetExceededError(error)) {
+      return context.json({ error: '预算已用尽', code: 'budget_exceeded' }, 429);
+    }
     const request = context.req.raw;
     options.onError?.(error, {
       method: request.method,

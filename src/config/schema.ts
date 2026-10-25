@@ -323,6 +323,7 @@ export const AquariumConfigSchema = z.object({
   budget: z.object({
     dailyCny: z.number().nonnegative(),
     warnRatio: z.number().min(0).max(1),
+    oneoffTaskCny: z.number().nonnegative().default(3),
   }).strict(),
   mood: moodSchema,
   affinity: affinitySchema,

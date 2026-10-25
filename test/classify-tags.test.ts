@@ -325,6 +325,21 @@ test('预算超限后保留未完成状态，后续启动续跑且锁定 misc �
     assert.equal(classificationRepository.isLegacyMiscClassificationComplete(), false);
     assert.ok(prompts.every((prompt) => !prompt.includes('锁定misc')));
 
+    const budgetErrors: unknown[] = [];
+    const racingService = createTagClassificationService({
+      repository: { ...baseRepository, costToday: () => 0 },
+      classificationRepository,
+      getConfig: () => config,
+      getTemplate: () => promptTemplateStore.get().classifyTags,
+      now: () => at,
+      callModel: async () => { throw Object.assign(new Error('budget cap'), { name: 'BudgetExceededError', code: 'BUDGET_EXCEEDED' }); },
+      onError: (error) => budgetErrors.push(error),
+    });
+    assert.equal(racingService.startManual(), true);
+    await racingService.idle();
+    assert.equal(racingService.status().state, 'budget');
+    assert.deepEqual(budgetErrors, []);
+
     const resumedService = createTagClassificationService({
       repository: { ...baseRepository, costToday: () => 0 },
       classificationRepository,

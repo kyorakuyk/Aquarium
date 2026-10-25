@@ -97,10 +97,10 @@ test('costToday 只累计本地自然日内的用量', () => {
   withRepository((repository) => {
     const dayStart = new Date(2026, 9, 12).getTime();
     const nextDay = new Date(2026, 9, 13).getTime();
-    const record = (time: number, cost: number) => repository.recordUsage({
+    const record = (time: number, cost: number, slot = 'reply') => repository.recordUsage({
       time,
       account: null,
-      slot: 'reply',
+      slot,
       provider: 'deepseek',
       model: 'test-model',
       inputTokens: 10,
@@ -114,9 +114,14 @@ test('costToday 只累计本地自然日内的用量', () => {
     record(dayStart - 1, 100);
     record(dayStart, 1);
     record(nextDay - 1, 2);
+    record(dayStart + 1, 5, 'oneoff');
     record(nextDay, 100);
 
     assert.equal(repository.costToday(), 3);
+    assert.equal(repository.usageToday().costCny, 8);
+    const report = repository.usageByRange('today', nextDay - 1);
+    assert.equal(report.totals.costCny, 8);
+    assert.equal(report.rows[0]?.bySlot.find(({ slot }) => slot === 'oneoff')?.costCny, 5);
   });
 });
 

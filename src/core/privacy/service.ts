@@ -1,5 +1,5 @@
 import type { AquariumConfig } from '../../config/schema.ts';
-import { budgetState } from '../../llm/budget.ts';
+import { canCallWithDailyBudget, isBudgetExceededError } from '../../llm/budget.ts';
 import { callSlot } from '../../llm/slots.ts';
 import type { MessageStorageRecord, StoreRepository } from '../../store/repository.ts';
 import type { NewPrivateFactRecord, PrivateFactEvidence, PrivateFactRecord } from '../../store/privacy-repo.ts';
@@ -282,7 +282,7 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
     newestMessageTime: number,
   ): Promise<PrivateFactsSummary> {
     const summary = emptySummary(input.session.account, sessionIdValue, 'failed');
-    if (budgetState(config, options.repository.costToday()) === 'exceeded') {
+    if (!canCallWithDailyBudget(config, 'extract', options.repository.costToday())) {
       const skipped = { ...summary, status: 'budget' as const };
       report(skipped);
       return skipped;
@@ -333,7 +333,12 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
         now: () => input.now,
       });
       responseText = response.text;
-    } catch {
+    } catch (error) {
+      if (isBudgetExceededError(error)) {
+        const skipped = { ...summary, status: 'budget' as const };
+        report(skipped);
+        return skipped;
+      }
       reportError(input.session.account, sessionIdValue);
       report(summary);
       return summary;
@@ -367,7 +372,7 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
       || (newMessageCount >= fiveMessages && elapsed >= sixHours);
     if (!due) return;
 
-    if (budgetState(config, options.repository.costToday()) === 'exceeded') {
+    if (!canCallWithDailyBudget(config, 'extract', options.repository.costToday())) {
       report(emptySummary(input.session.account, sessionIdValue, 'budget'));
       return;
     }
@@ -480,7 +485,7 @@ export function createPrivateFactsService(options: PrivateFactsServiceOptions): 
         now: input.now,
         template: input.template,
       };
-      if (budgetState(config, options.repository.costToday()) === 'exceeded') {
+      if (!canCallWithDailyBudget(config, 'extract', options.repository.costToday())) {
         const summary = emptySummary(input.session.account, sessionIdValue, 'budget');
         report(summary);
         return summary;

@@ -1,5 +1,5 @@
 import { resolveInteractions, resolveSession } from '../../../config/resolve.ts';
-import { budgetState } from '../../../llm/budget.ts';
+import { canCallWithDailyBudget, isBudgetExceededError } from '../../../llm/budget.ts';
 import { runJudge } from '../../activity/judge.ts';
 import { calculatePrefilterActivity, calculatePrefilterFeatures, evaluatePrefilter } from '../../activity/prefilter.ts';
 import { messageTrigger } from '../../activity/trigger.ts';
@@ -124,6 +124,10 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
   }
 
   const trigger = messageTrigger(ctx.message, settings.nicknames);
+  if ((trigger !== 'none' || personaMustReply)
+    && !canCallWithDailyBudget(config, 'reply', ctx.options.repository.costToday())) {
+    return { next: false, reason: 'budget', detail: { budget: 'exceeded' } };
+  }
   if (trigger === 'none' && !personaMustReply && settings.mode !== 'mention_only') {
     const proactivePrivacyAvoid = ctx.options.privacyGateService?.activeAvoid({
       session: ctx.message.session,
@@ -199,7 +203,7 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
   }
 
   const detail: Record<string, unknown> = { trigger: 'proactive' };
-  if (budgetState(config, ctx.options.repository.costToday()) === 'exceeded') {
+  if (!canCallWithDailyBudget(config, 'reply', ctx.options.repository.costToday())) {
     return { next: false, reason: 'budget', detail: { ...detail, budget: 'exceeded' } };
   }
 
@@ -260,12 +264,15 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
       try {
         return await ctx.modelCall(slot, messages, callOptions);
       } catch (error) {
-        ctx.options.onError?.(error, ctx.message);
+        if (!isBudgetExceededError(error)) ctx.options.onError?.(error, ctx.message);
         throw error;
       }
     },
   );
   if (!judge.ok) {
+    if (judge.reason === 'budget') {
+      return { next: false, reason: 'budget', detail: prefilterDecisionDetail };
+    }
     if (!ctx.processOptions.replay) backoff.recordNoReply(ctx.currentSessionId, ctx.now());
     return { next: false, reason: judge.reason, detail: prefilterDecisionDetail };
   }

@@ -4,7 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import yaml from 'yaml';
 import { AquariumConfigSchema, type AquariumConfig } from '../src/config/schema.ts';
-import { callSlot } from '../src/llm/slots.ts';
+import { callSlot, type UsageAttempt } from '../src/llm/slots.ts';
 
 const config = AquariumConfigSchema.parse(yaml.parse(
   fs.readFileSync(path.resolve('config.example.yaml'), 'utf8'),
@@ -60,6 +60,98 @@ test('callSlot 在 5xx 时降级并分别记录失败与成功用量', async () 
   assert.equal(usageRecords[1]?.cachedTokens, 40);
   assert.equal(usageRecords[1]?.outputTokens, 20);
   assert.equal(usageRecords[1]?.costCny, (60 * 1.1 + 40 * 0.02 + 20 * 4.3) / 1_000_000);
+});
+
+test('日预算耗尽时非 reply 槽不会调用付费模型', async () => {
+  const configured = configWith({
+    budget: { ...config.budget, dailyCny: 0 },
+    slots: { ...config.slots, extract: [{ provider: 'deepseek', model: 'deepseek-flash' }] },
+  });
+  let modelCalls = 0;
+  const usageRecords: Array<Record<string, unknown>> = [];
+
+  await assert.rejects(callSlot('extract', [{ role: 'user', content: 'fixture' }], {
+    config: configured,
+    account: null,
+    costToday: () => 0,
+    getClient: () => {
+      modelCalls += 1;
+      return clientFor(async () => ({ choices: [{ message: { content: '不应调用' } }], usage: null }));
+    },
+    recordUsage: (usage) => usageRecords.push(usage),
+  }), (error: unknown) => error instanceof Error && error.name === 'BudgetExceededError');
+  assert.equal(modelCalls, 0);
+  assert.equal(usageRecords.length, 0);
+});
+
+test('日预算耗尽时降级链只保留零价格模型', async () => {
+  const configured = configWith({
+    budget: { ...config.budget, dailyCny: 0 },
+    slots: {
+      ...config.slots,
+      extract: [
+        { provider: 'deepseek', model: 'deepseek-v4-pro' },
+        { provider: 'deepseek', model: 'deepseek-flash' },
+      ],
+    },
+    pricing: {
+      ...config.pricing,
+      'deepseek-flash': { input: 0, cachedInput: 0, output: 0 },
+    },
+  });
+  const models: string[] = [];
+  const result = await callSlot('extract', [{ role: 'user', content: 'fixture' }], {
+    config: configured,
+    account: null,
+    costToday: () => 0,
+    getClient: () => clientFor(async ({ model }) => {
+      models.push(model);
+      return { choices: [{ message: { content: 'free fallback' } }], usage: null };
+    }),
+    recordUsage: () => {},
+  });
+
+  assert.deepEqual(models, ['deepseek-flash']);
+  assert.equal(result.text, 'free fallback');
+});
+
+test('oneoff 不计日预算、独立记入用量槽并遵守单任务上限', async () => {
+  const configured = {
+    ...config,
+    budget: { ...config.budget, dailyCny: 0, oneoffTaskCny: 3 },
+    slots: { ...config.slots, oneoff: [{ provider: 'deepseek', model: 'deepseek-flash' }] },
+  } as unknown as AquariumConfig;
+  const usageRecords: UsageAttempt[] = [];
+  let modelCalls = 0;
+  const getClient = () => clientFor(async () => {
+    modelCalls += 1;
+    return {
+      choices: [{ message: { content: '导入结果' } }],
+      usage: { prompt_tokens: 100, completion_tokens: 20 },
+    };
+  });
+  const recordUsage = (usage: UsageAttempt) => usageRecords.push(usage);
+  const options = {
+    config: configured,
+    account: null,
+    costToday: () => 100,
+    budgetScope: 'oneoff' as const,
+    oneoffTaskCostCny: () => 0,
+    getClient,
+    recordUsage,
+  };
+
+  const result = await callSlot('oneoff', [{ role: 'user', content: 'fixture' }], options);
+  assert.equal(result.text, '导入结果');
+  assert.equal(modelCalls, 1);
+  assert.equal(usageRecords[0]?.slot, 'oneoff');
+  assert.ok(Number(usageRecords[0]?.costCny) > 0);
+
+  await assert.rejects(callSlot('oneoff', [{ role: 'user', content: 'next task turn' }], {
+    ...options,
+    oneoffTaskCostCny: () => 3,
+  }), (error: unknown) => error instanceof Error && error.name === 'BudgetExceededError');
+  assert.equal(modelCalls, 1);
 });
 
 test('callSlot injects configured API parameters and reports only sent params', async () => {
@@ -299,7 +391,7 @@ test('callSlot 支持 DeepSeek 的顶层缓存命中 token 字段', async () => 
   assert.equal(usageRecords[0]?.cachedTokens, 30);
 });
 
-test('预算超限时 reply 槽位只调用降级链最后一项', async () => {
+test('预算超限时 reply 槽位没有免费降级项就拒绝调用', async () => {
   const models: string[] = [];
   const usageRecords: Array<Record<string, unknown>> = [];
   const client = clientFor(async ({ model }) => {
@@ -307,17 +399,15 @@ test('预算超限时 reply 槽位只调用降级链最后一项', async () => {
     return { choices: [{ message: { content: '预算内回复' } }], usage: null };
   });
 
-  await callSlot('reply', [{ role: 'user', content: '你好' }], {
+  await assert.rejects(callSlot('reply', [{ role: 'user', content: '你好' }], {
     config,
     account: null,
     costToday: () => config.budget.dailyCny,
     getClient: () => client,
     now: () => 3_000,
     recordUsage: (record) => usageRecords.push(record),
-  });
+  }), (error: unknown) => error instanceof Error && error.name === 'BudgetExceededError');
 
-  assert.deepEqual(models, ['deepseek-flash']);
-  assert.equal(usageRecords.length, 1);
-  assert.equal(usageRecords[0]?.inputTokens, 0);
-  assert.equal(usageRecords[0]?.costCny, 0);
+  assert.deepEqual(models, []);
+  assert.equal(usageRecords.length, 0);
 });

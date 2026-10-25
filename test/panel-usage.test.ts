@@ -24,6 +24,7 @@ test('usage API groups by provider/account, honors local ranges, and keeps seven
     record(start30d, 'deepseek', account, 'reply', 20, 10, 0.1);
     record(start7d, 'deepseek', account, 'judge', 20, 10, 0.2);
     record(today, 'deepseek', account, 'vision', 0, 0, 0);
+    record(today, 'deepseek', account, 'oneoff', 10, 0, 0.5);
     record(tomorrow - 1, 'deepseek', account, 'reply', 10, 0, 0.3);
     record(tomorrow, 'deepseek', account, 'reply', 10, 0, 1);
     record(today, 'deepseek', account + 1, 'reply', 30, 15, 0.4);
@@ -41,21 +42,21 @@ test('usage API groups by provider/account, honors local ranges, and keeps seven
     const todayReport = await todayResponse.json() as { totals: { calls: number } };
     const weekReport = await weekResponse.json() as {
       totals: { calls: number; cacheHitRatio: number | null; budgetToday: { used: number } };
-      rows: Array<{ provider: string; account: number | null; calls: number; cacheHitRatio: number | null; daily: number[]; bySlot: Array<{ slot: string }> }>;
+      rows: Array<{ provider: string; account: number | null; calls: number; cacheHitRatio: number | null; daily: number[]; bySlot: Array<{ slot: string; costCny: number }> }>;
     };
     const monthReport = await monthResponse.json() as { totals: { calls: number } };
 
-    assert.equal(todayReport.totals.calls, 4);
-    assert.equal(weekReport.totals.calls, 5);
-    assert.equal(monthReport.totals.calls, 6);
+    assert.equal(todayReport.totals.calls, 5);
+    assert.equal(weekReport.totals.calls, 6);
+    assert.equal(monthReport.totals.calls, 7);
     assert.equal(weekReport.rows.length, 3);
     const known = weekReport.rows.find((row) => row.provider === 'deepseek' && row.account === account);
     const other = weekReport.rows.find((row) => row.provider === 'deepseek' && row.account === account + 1);
     const legacy = weekReport.rows.find((row) => row.provider === 'cli' && row.account === null);
-    assert.equal(known?.calls, 3);
+    assert.equal(known?.calls, 4);
     assert.equal(known?.daily.length, 7);
-    assert.deepEqual(known?.daily, [1, 0, 0, 0, 0, 0, 2]);
-    assert.deepEqual(known?.bySlot.map((slot) => slot.slot), ['judge', 'reply', 'vision']);
+    assert.deepEqual(known?.daily, [1, 0, 0, 0, 0, 0, 3]);
+    assert.equal(known?.bySlot.find((slot) => slot.slot === 'oneoff')?.costCny, 0.5);
     assert.equal(other?.calls, 1);
     assert.equal(legacy?.cacheHitRatio, null);
     assert.deepEqual(usageAccountLabels(legacy?.account ?? null, []), {
@@ -63,7 +64,7 @@ test('usage API groups by provider/account, honors local ranges, and keeps seven
       secondary: '旧记录未关联眷属',
     });
     assert.equal(usageCostLabel('cli', 0), '—');
-    assert.equal(weekReport.totals.cacheHitRatio, 25 / 60);
+    assert.equal(weekReport.totals.cacheHitRatio, 25 / 70);
     assert.equal(weekReport.totals.budgetToday.used, 0.7);
   });
 });
