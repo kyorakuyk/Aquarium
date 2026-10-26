@@ -17,13 +17,14 @@ test('persona memory migrations create account-scoped cursor, memo, run, and dia
       SELECT name FROM sqlite_master
       WHERE type = 'table' AND name IN (
         'memory_cursors', 'persona_memory_tails', 'persona_memos', 'persona_memos_legacy_v26',
-        'persona_diaries', 'persona_memory_runs', 'persona_memory_sleep_contexts', 'persona_memory_wake_followups'
+        'persona_diaries', 'persona_memory_runs', 'persona_memory_sleep_contexts', 'persona_memory_wake_followups',
+        'persona_memory_wake_word_jobs'
       )
       ORDER BY name
     `).all() as Array<{ name: string }>;
     assert.deepEqual(tables.map(({ name }) => name), [
       'memory_cursors', 'persona_diaries', 'persona_memory_runs', 'persona_memory_sleep_contexts',
-      'persona_memory_tails', 'persona_memory_wake_followups', 'persona_memos', 'persona_memos_legacy_v26',
+      'persona_memory_tails', 'persona_memory_wake_followups', 'persona_memory_wake_word_jobs', 'persona_memos', 'persona_memos_legacy_v26',
     ]);
   } finally {
     database.close();

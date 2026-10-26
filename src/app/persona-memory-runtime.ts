@@ -1,6 +1,6 @@
 import type { AquariumConfig } from '../config/schema.ts';
 import { resolveSession } from '../config/resolve.ts';
-import { sleepPlan } from '../core/sleep/index.ts';
+import { sleepPlan, type SleepWakeState } from '../core/sleep/index.ts';
 import type { ImpressionsService } from '../core/impressions/service.ts';
 import type { PrivateMentionService } from '../core/privacy/mentions.ts';
 import type { PrivateFactsService } from '../core/privacy/service.ts';
@@ -13,6 +13,7 @@ import type { IncomingMessage } from '../core/shared/events.ts';
 import { createPersonaMemoryDiaryGenerator } from './persona-memory-diary.ts';
 import { createPersonaMemorySegmentProcessor, createQueuedPersonaMemoryProcessor } from './persona-memory-processor.ts';
 import { processPersonaMemoryWakeFollowups } from './persona-memory-wake.ts';
+import { processPersonaMemoryWakeWordJobs } from './persona-memory-wakeword.ts';
 
 const DAY_MS = 24 * 60 * 60_000;
 
@@ -32,6 +33,8 @@ export function createPersonaMemoryRuntime(options: {
   privateFactsService: PrivateFactsService;
   privateMentionService: PrivateMentionService;
   dispatchWakeFollowup: (message: IncomingMessage, options: ProcessMessageOptions) => Promise<PipelineResult>;
+  sleepWakeState?: SleepWakeState;
+  now?: () => number;
   onInfo?: (message: string) => void;
   onWarning?: (message: string) => void;
   onError?: (message: string) => void;
@@ -153,10 +156,26 @@ export function createPersonaMemoryRuntime(options: {
   async function dispatchPendingFollowups(now: number): Promise<void> {
     if (followupsRunning || wakePreparations > 0) return;
     const config = options.getConfig();
-    if (config.sleep.enabled && sleepPlan(now, config.sleep.bedtime, config.sleep.wake).asleep) return;
+    const sleepScheduled = config.sleep.enabled && sleepPlan(now, config.sleep.bedtime, config.sleep.wake).asleep;
+    const awake = !sleepScheduled || (options.sleepWakeState?.isAwake(now) ?? false);
     followupsRunning = true;
     const task = (async () => {
       for (const account of options.getConfig().accounts) {
+        try {
+          const wakeWordResult = await processPersonaMemoryWakeWordJobs({
+            repository: options.repository,
+            service,
+            account: account.uin,
+            now,
+            awake,
+          });
+          if (wakeWordResult.scheduled > 0) {
+            report(options.onInfo, `账号 ${account.uin} 的唤醒词积压已整理并进入受控补回复队列 ${wakeWordResult.scheduled} 条。`);
+          }
+        } catch {
+          report(options.onError, `账号 ${account.uin} 唤醒词积压任务处理失败。`);
+        }
+        if (sleepScheduled && !awake) continue;
         try {
           const result = await processPersonaMemoryWakeFollowups({
             repository: options.repository,
@@ -187,18 +206,24 @@ export function createPersonaMemoryRuntime(options: {
     getConfig: options.getConfig,
     runCycle,
     onTick: dispatchPendingFollowups,
+    now: options.now,
     onError: () => report(options.onError, '人格记忆调度器运行失败。'),
   });
 
   function start(): () => void {
     if (!recoveredSending) {
       recoveredSending = true;
-      const now = Date.now();
+      const now = options.now?.() ?? Date.now();
       for (const account of options.getConfig().accounts) {
         const recovered = options.repository.recoverPersonaMemoryWakeFollowups(account.uin, now);
         if (recovered > 0) report(
           options.onWarning,
           `账号 ${account.uin} 有 ${recovered} 条补回复在进程中断时发送状态不确定，未自动重试。`,
+        );
+        const recoveredWakeWordJobs = options.repository.recoverPersonaMemoryWakeWordJobs(account.uin, now);
+        if (recoveredWakeWordJobs > 0) report(
+          options.onWarning,
+          `账号 ${account.uin} 有 ${recoveredWakeWordJobs} 条唤醒词积压任务已从中断状态恢复。`,
         );
       }
     }

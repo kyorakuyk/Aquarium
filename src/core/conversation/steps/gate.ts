@@ -123,7 +123,14 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
     return { next: false, reason: 'persona_error', detail: errorDetails(error) };
   }
 
-  const trigger = messageTrigger(ctx.message, settings.nicknames);
+  const sleepNow = ctx.now();
+  const plan = sleepPlan(sleepNow, config.sleep.bedtime, config.sleep.wake);
+  const wakeState = ctx.options.sleepWakeState;
+  const ownerMessage = config.owner !== 0 && ctx.message.senderId === config.owner;
+  const ownerWakeWord = config.sleep.enabled && !ctx.processOptions.replay && plan.asleep && ownerMessage
+    && config.sleep.wakeWords.some((word) => ctx.message.plainText.includes(word));
+  const detectedTrigger = messageTrigger(ctx.message, settings.nicknames);
+  const trigger = detectedTrigger === 'none' && ownerWakeWord ? 'nickname' : detectedTrigger;
   if ((trigger !== 'none' || personaMustReply)
     && !canCallWithDailyBudget(config, 'reply', ctx.options.repository.costToday())) {
     return { next: false, reason: 'budget', detail: { budget: 'exceeded' } };
@@ -142,17 +149,25 @@ export const gateStep: PipelineStep = async (ctx) => traceStep(ctx, 'gate', asyn
       };
     }
   }
-  const sleepNow = ctx.now();
-  const plan = sleepPlan(sleepNow, config.sleep.bedtime, config.sleep.wake);
-  const wakeState = ctx.options.sleepWakeState;
   const temporarilyAwake = plan.asleep && (wakeState?.isAwake(sleepNow) ?? false);
   if (config.sleep.enabled && !ctx.processOptions.replay) {
-    const ownerMessage = config.owner !== 0 && ctx.message.senderId === config.owner;
+    if (plan.asleep && ownerWakeWord && wakeState && plan.bedAt !== null) {
+      ctx.state.sleepWakeWord = { bedAt: plan.bedAt, cycleKey: plan.cycleKey };
+      if (plan.wakeAt !== null) {
+        ctx.options.personaMemoryService?.scheduleWakeWordBacklog?.({
+          session: ctx.message.session,
+          cycleKey: plan.cycleKey,
+          wakeMessageId: ctx.message.messageId,
+          bedAt: plan.bedAt,
+          wakeAt: plan.wakeAt,
+          now: sleepNow,
+        });
+      }
+    }
     if (temporarilyAwake) {
       if (ownerMessage) wakeState?.activate(sleepNow);
     } else if (plan.asleep) {
-      const hasWakeWord = config.sleep.wakeWords.some((word) => ctx.message.plainText.includes(word));
-      if (ownerMessage && trigger !== 'none' && hasWakeWord && wakeState) wakeState.activate(sleepNow);
+      if (ownerWakeWord && wakeState) wakeState.activate(sleepNow);
       else return { next: false, reason: 'asleep', detail: { asleep: true } };
     }
   }

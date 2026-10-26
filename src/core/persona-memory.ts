@@ -10,6 +10,9 @@ import { organizePersonaMemoryAtWake, type PersonaMemoryWakeInput, type PersonaM
 
 export { segmentMemoryMessages } from './persona-memory-segments.ts';
 
+const WAKE_WORD_QUIET_MS = 10 * 60_000;
+const WAKE_WORD_TTL_MS = 6 * 60 * 60_000;
+
 export type PersonaMemoryProcessStatus = 'done' | 'budget' | 'failed';
 
 export interface PersonaMemoryProcessResult {
@@ -56,10 +59,20 @@ export interface PersonaMemoryOrganizeResult extends PersonaMemoryOrganizeInput 
   processedCount: number;
 }
 
+export interface PersonaMemoryWakeWordScheduleInput {
+  session: SessionKey;
+  cycleKey: string;
+  wakeMessageId: string;
+  bedAt: number;
+  wakeAt: number;
+  now: number;
+}
+
 export interface PersonaMemoryService {
   observeMessage(message: IncomingMessage): boolean;
   organizeAtSleep(input: PersonaMemoryOrganizeInput): Promise<PersonaMemoryOrganizeResult>;
   organizeAtWake(input: PersonaMemoryWakeInput): Promise<PersonaMemoryWakeResult>;
+  scheduleWakeWordBacklog(input: PersonaMemoryWakeWordScheduleInput): boolean;
   recentDiaryBlock(account: number, session: SessionKey, now: number): string | undefined;
   sleepMemoryBlock(account: number, session: SessionKey, now: number): string | undefined;
 }
@@ -121,6 +134,63 @@ export function createPersonaMemoryService(options: PersonaMemoryServiceOptions)
 
     async organizeAtWake(input) {
       return organizePersonaMemoryAtWake(options, activeRuns, input);
+    },
+
+    scheduleWakeWordBacklog(input) {
+      const { session } = input;
+      const account = session.account;
+      if (!Number.isSafeInteger(account) || account <= 0 || !/^\d{4}-\d{2}-\d{2}$/u.test(input.cycleKey)
+        || typeof input.wakeMessageId !== 'string' || input.wakeMessageId.length < 1 || input.wakeMessageId.length > 512
+        || !Number.isSafeInteger(input.bedAt) || input.bedAt < 0
+        || !Number.isSafeInteger(input.wakeAt) || input.wakeAt <= input.bedAt
+        || !Number.isSafeInteger(input.now) || input.now < input.bedAt || input.now >= input.wakeAt) return false;
+      try {
+        const targetSessionId = sessionId(session);
+        const pending = options.repository.listPersonaMemoryPendingMessages(account, targetSessionId)
+          .filter((message) => message.time >= input.bedAt && message.time <= input.now);
+        const wakeIndex = pending.findIndex((message) => message.messageId === input.wakeMessageId);
+        if (wakeIndex < 0) return false;
+        const segments = segmentMemoryMessages({
+          sessionKind: session.kind,
+          messages: pending.map((message, rowId) => ({
+            messageId: message.messageId,
+            rowId: rowId + 1,
+            time: message.time,
+            senderId: message.senderId,
+            isSelf: message.isSelf,
+            plainText: message.plainText,
+          })),
+          now: input.now,
+          forceClose: true,
+        });
+        const recentSegment = segments.findLast((segment) => segment.messages.some(
+          (message) => message.messageId === input.wakeMessageId,
+        ));
+        const segmentStartId = recentSegment?.messages[0]?.messageId;
+        const segmentStartIndex = segmentStartId === undefined
+          ? -1
+          : pending.findIndex((message) => message.messageId === segmentStartId);
+        if (segmentStartIndex < 0 || segmentStartIndex <= 20) return false;
+        const messageIds = pending.slice(0, segmentStartIndex - 20)
+          .filter((message) => !message.isSelf && message.senderId !== account)
+          .map(({ messageId }) => messageId);
+        if (messageIds.length === 0) return false;
+        return options.repository.enqueuePersonaMemoryWakeWordJob({
+          account,
+          sessionId: targetSessionId,
+          cycleKey: input.cycleKey,
+          wakeMessageId: input.wakeMessageId,
+          bedAt: input.bedAt,
+          wakeAt: input.wakeAt,
+          messageIds,
+          createdAt: input.now,
+          nextAttemptAt: input.now + WAKE_WORD_QUIET_MS,
+          expiresAt: input.now + WAKE_WORD_TTL_MS,
+        });
+      } catch (error) {
+        reportError(error, account);
+        return false;
+      }
     },
 
     recentDiaryBlock,

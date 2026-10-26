@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { openDatabase } from '../src/store/db.ts';
+import { migration as v41 } from '../src/store/migrations/v41.ts';
 
 test('v37 backfills organized time and pending start from legacy messages and memos', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-memory-cursor-backfill-'));
@@ -45,11 +46,13 @@ test('v37 backfills organized time and pending start from legacy messages and me
     assert.equal(migratedDiary.source_memo_ids_json, '[]');
     const wakeTables = upgraded.prepare(`
       SELECT name FROM sqlite_master
-      WHERE type = 'table' AND name IN ('persona_memory_sleep_contexts', 'persona_memory_wake_followups')
+      WHERE type = 'table' AND name IN (
+        'persona_memory_sleep_contexts', 'persona_memory_wake_followups', 'persona_memory_wake_word_jobs'
+      )
       ORDER BY name
     `).all() as Array<{ name: string }>;
     assert.deepEqual(wakeTables.map(({ name }) => name), [
-      'persona_memory_sleep_contexts', 'persona_memory_wake_followups',
+      'persona_memory_sleep_contexts', 'persona_memory_wake_followups', 'persona_memory_wake_word_jobs',
     ]);
     const sourceEntriesJson = JSON.stringify([{
       sessionId: '7101:private:83', messageId: 'sleep-1', senderName: '事件 memo',
@@ -94,8 +97,53 @@ test('v37 backfills organized time and pending start from legacy messages and me
     assert.equal(reenteredDiary.source_memo_ids_json, '[10,11]');
     const reenteredContext = upgraded.prepare('SELECT source_entries_json FROM persona_memory_sleep_contexts WHERE account = 7101').get() as { source_entries_json: string };
     assert.equal(reenteredContext.source_entries_json, sourceEntriesJson);
-    const reenteredFollowup = upgraded.prepare('SELECT message_ids_json FROM persona_memory_wake_followups WHERE account = 7101').get() as { message_ids_json: string };
+    const reenteredFollowup = upgraded.prepare('SELECT message_ids_json, job_key FROM persona_memory_wake_followups WHERE account = 7101').get() as { message_ids_json: string; job_key: string };
     assert.equal(reenteredFollowup.message_ids_json, '["sleep-1"]');
+    assert.equal(reenteredFollowup.job_key, 'natural');
+
+    const migrationProbe = new DatabaseSync(':memory:');
+    try {
+      migrationProbe.exec(`
+        CREATE TABLE persona_memory_wake_followups (
+          id INTEGER PRIMARY KEY,
+          account INTEGER NOT NULL,
+          session_id TEXT NOT NULL,
+          cycle_key TEXT NOT NULL,
+          message_ids_json TEXT NOT NULL,
+          mention_ids_json TEXT NOT NULL,
+          status TEXT NOT NULL,
+          attempt_count INTEGER NOT NULL,
+          next_attempt_at INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          last_reason TEXT,
+          UNIQUE (account, session_id, cycle_key)
+        );
+        CREATE INDEX idx_persona_memory_wake_followups_pending
+          ON persona_memory_wake_followups (account, status, next_attempt_at, expires_at);
+        INSERT INTO persona_memory_wake_followups VALUES
+          (1, 7101, '7101:group:82', '2026-10-20', '["old"]', '[82]', 'pending', 0, 500, 500, 1000, 500, NULL);
+      `);
+      v41.up(migrationProbe);
+      const preserved = migrationProbe.prepare(
+        'SELECT job_key, message_ids_json FROM persona_memory_wake_followups WHERE id = 1',
+      ).get() as { job_key: string; message_ids_json: string };
+      assert.equal(preserved.job_key, 'natural');
+      assert.equal(preserved.message_ids_json, '["old"]');
+      migrationProbe.prepare(`
+        INSERT INTO persona_memory_wake_followups
+          (account, session_id, cycle_key, job_key, message_ids_json, mention_ids_json, status,
+            attempt_count, next_attempt_at, created_at, expires_at, updated_at, last_reason)
+        VALUES (7101, '7101:group:82', '2026-10-20', 'wakeword:1', '["new"]', '[82]', 'pending', 0, 600, 600, 1200, 600, NULL)
+      `).run();
+      const independentJobs = migrationProbe.prepare(
+        'SELECT COUNT(*) AS count FROM persona_memory_wake_followups WHERE account = 7101',
+      ).get() as { count: number };
+      assert.equal(independentJobs.count, 2);
+    } finally {
+      migrationProbe.close();
+    }
   } finally {
     if (legacy?.isOpen) legacy.close();
     if (upgraded?.isOpen) upgraded.close();

@@ -64,6 +64,7 @@ test('openDatabase 开启 WAL 并创建当前 schema 数据表', () => {
       'persona_memory_sleep_contexts',
       'persona_memory_tails',
       'persona_memory_wake_followups',
+      'persona_memory_wake_word_jobs',
       'persona_memos',
       'persona_memos_legacy_v26',
       'persona_versions',

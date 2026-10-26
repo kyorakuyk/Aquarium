@@ -81,7 +81,16 @@ export async function processPersonaMemoryWakeFollowups(
     }
     const replies = input.repository.decisionsInRange(followup.sessionId, storedMessages[0]!.time, input.now);
     const repliedIds = new Set(replies.filter((decision) => decision.replied).map((decision) => decision.messageId));
-    const messages = storedMessages.filter(({ messageId }) => !repliedIds.has(messageId));
+    const assignedIds = new Set(input.repository.listPersonaMemoryWakeFollowupsForCycle(
+      input.account,
+      followup.sessionId,
+      followup.cycleKey,
+    ).filter((other) => other.id !== followup.id && (
+      other.status === 'sending' || other.status === 'sent' || other.status === 'needs_review'
+      || (other.status === 'pending' && (other.createdAt < followup.createdAt
+        || (other.createdAt === followup.createdAt && other.id < followup.id)))
+    )).flatMap(({ messageIds }) => messageIds));
+    const messages = storedMessages.filter(({ messageId }) => !repliedIds.has(messageId) && !assignedIds.has(messageId));
     if (messages.length === 0) {
       input.repository.skipPersonaMemoryWakeFollowup(input.account, followup.id, input.now, 'already-replied');
       result.skipped += 1;
@@ -91,7 +100,7 @@ export async function processPersonaMemoryWakeFollowups(
     const latest = messages.at(-1)!;
     const incoming: IncomingMessage = {
       session,
-      messageId: `sleep-followup-${followup.cycleKey}-${session.kind}-${session.peer}`,
+      messageId: `sleep-followup-${followup.id}`,
       senderId: latest.senderId,
       senderName: latest.senderName,
       segments: [{ type: 'text', text: latest.plainText }],

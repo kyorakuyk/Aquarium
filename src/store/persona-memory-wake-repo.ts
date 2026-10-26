@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { PersonaDiarySourceEntry } from './persona-memory-repo.ts';
+import { createPersonaMemoryWakeWordRepository, type PersonaMemoryWakeWordRepository } from './persona-memory-wakeword-repo.ts';
 
 export type PersonaMemoryWakeFollowupStatus =
   | 'pending' | 'sending' | 'sent' | 'skipped' | 'needs_review' | 'expired';
@@ -19,14 +20,17 @@ export interface PersonaMemoryWakeFollowupInput {
   account: number;
   sessionId: string;
   cycleKey: string;
+  jobKey?: string;
   messageIds: string[];
   mentionIds: number[];
   createdAt: number;
   expiresAt: number;
+  nextAttemptAt?: number;
 }
 
 export interface PersonaMemoryWakeFollowupRecord extends PersonaMemoryWakeFollowupInput {
   id: number;
+  jobKey: string;
   status: PersonaMemoryWakeFollowupStatus;
   attemptCount: number;
   nextAttemptAt: number;
@@ -34,11 +38,12 @@ export interface PersonaMemoryWakeFollowupRecord extends PersonaMemoryWakeFollow
   lastReason: string | null;
 }
 
-export interface PersonaMemoryWakeRepository {
+export interface PersonaMemoryWakeRepository extends PersonaMemoryWakeWordRepository {
   upsertPersonaMemorySleepContext(input: PersonaMemorySleepContextInput): void;
   personaMemorySleepContext(account: number, sessionId: string, now: number): PersonaMemorySleepContextRecord | undefined;
   deleteExpiredPersonaMemorySleepContexts(account: number, now: number): number;
   enqueuePersonaMemoryWakeFollowup(input: PersonaMemoryWakeFollowupInput): number;
+  listPersonaMemoryWakeFollowupsForCycle(account: number, sessionId: string, cycleKey: string): PersonaMemoryWakeFollowupRecord[];
   listPendingPersonaMemoryWakeFollowups(account: number, now: number, limit: number): PersonaMemoryWakeFollowupRecord[];
   claimPersonaMemoryWakeFollowup(account: number, id: number, now: number): boolean;
   finishPersonaMemoryWakeFollowup(account: number, id: number, now: number): boolean;
@@ -80,6 +85,10 @@ function validSourceEntries(value: unknown, sessionId: string): value is Persona
 function validMessageIds(value: unknown): value is string[] {
   return Array.isArray(value) && value.length > 0 && value.length <= 1_000
     && value.every((id) => typeof id === 'string' && id.length > 0 && id.length <= 512);
+}
+
+function validJobKey(value: string): boolean {
+  return typeof value === 'string' && /^[a-z0-9:_-]{1,128}$/u.test(value);
 }
 
 function validMentionIds(value: unknown): value is number[] {
@@ -151,13 +160,14 @@ function followupRecord(row: Record<string, unknown>): PersonaMemoryWakeFollowup
   const account = numberValue(row.account, 'account');
   const sessionId = stringValue(row.session_id, 'session_id');
   const cycleKey = stringValue(row.cycle_key, 'cycle_key');
+  const jobKey = stringValue(row.job_key, 'job_key');
   const status = stringValue(row.status, 'status');
   const createdAt = numberValue(row.created_at, 'created_at');
   const expiresAt = numberValue(row.expires_at, 'expires_at');
   const updatedAt = numberValue(row.updated_at, 'updated_at');
   const nextAttemptAt = numberValue(row.next_attempt_at, 'next_attempt_at');
   const lastReason = row.last_reason;
-  if (!validScope(account, sessionId) || !CYCLE_KEY_PATTERN.test(cycleKey)
+  if (!validScope(account, sessionId) || !CYCLE_KEY_PATTERN.test(cycleKey) || !validJobKey(jobKey)
     || !['pending', 'sending', 'sent', 'skipped', 'needs_review', 'expired'].includes(status)
     || !validTimestamp(createdAt) || !validTimestamp(expiresAt) || expiresAt <= createdAt
     || !validTimestamp(updatedAt) || !validTimestamp(nextAttemptAt)
@@ -169,6 +179,7 @@ function followupRecord(row: Record<string, unknown>): PersonaMemoryWakeFollowup
     account,
     sessionId,
     cycleKey,
+    jobKey,
     messageIds: stringIdsValue(row.message_ids_json, 'message_ids_json'),
     mentionIds: mentionIdsValue(row.mention_ids_json),
     status: status as PersonaMemoryWakeFollowupStatus,
@@ -182,6 +193,7 @@ function followupRecord(row: Record<string, unknown>): PersonaMemoryWakeFollowup
 }
 
 export function createPersonaMemoryWakeRepository(database: DatabaseSync): PersonaMemoryWakeRepository {
+  const wakeWordJobs = createPersonaMemoryWakeWordRepository(database);
   const selectContext = database.prepare(`
     SELECT account, session_id, cycle_key, source_entries_json, created_at, expires_at
     FROM persona_memory_sleep_contexts WHERE account = ? AND session_id = ? AND expires_at > ?
@@ -203,16 +215,23 @@ export function createPersonaMemoryWakeRepository(database: DatabaseSync): Perso
     'DELETE FROM persona_memory_sleep_contexts WHERE account = ? AND expires_at <= ?',
   );
   const selectFollowupByCycle = database.prepare(`
-    SELECT id, account, session_id, cycle_key, message_ids_json, mention_ids_json, status,
+    SELECT id, account, session_id, cycle_key, job_key, message_ids_json, mention_ids_json, status,
       attempt_count, next_attempt_at, created_at, expires_at, updated_at, last_reason
-    FROM persona_memory_wake_followups WHERE account = ? AND session_id = ? AND cycle_key = ?
+    FROM persona_memory_wake_followups WHERE account = ? AND session_id = ? AND cycle_key = ? AND job_key = ?
+  `);
+  const selectFollowupsForCycle = database.prepare(`
+    SELECT id, account, session_id, cycle_key, job_key, message_ids_json, mention_ids_json, status,
+      attempt_count, next_attempt_at, created_at, expires_at, updated_at, last_reason
+    FROM persona_memory_wake_followups
+    WHERE account = ? AND session_id = ? AND cycle_key = ?
+    ORDER BY created_at, id LIMIT 1_000
   `);
   const insertFollowup = database.prepare(`
     INSERT INTO persona_memory_wake_followups
-      (account, session_id, cycle_key, message_ids_json, mention_ids_json, status,
+      (account, session_id, cycle_key, job_key, message_ids_json, mention_ids_json, status,
         attempt_count, next_attempt_at, created_at, expires_at, updated_at, last_reason)
-    VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?, ?, NULL)
-    ON CONFLICT (account, session_id, cycle_key) DO UPDATE SET
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?, ?, NULL)
+    ON CONFLICT (account, session_id, cycle_key, job_key) DO UPDATE SET
       message_ids_json = excluded.message_ids_json,
       mention_ids_json = excluded.mention_ids_json,
       expires_at = MIN(persona_memory_wake_followups.expires_at, excluded.expires_at),
@@ -220,7 +239,7 @@ export function createPersonaMemoryWakeRepository(database: DatabaseSync): Perso
     WHERE persona_memory_wake_followups.status = 'pending'
   `);
   const selectPending = database.prepare(`
-    SELECT id, account, session_id, cycle_key, message_ids_json, mention_ids_json, status,
+    SELECT id, account, session_id, cycle_key, job_key, message_ids_json, mention_ids_json, status,
       attempt_count, next_attempt_at, created_at, expires_at, updated_at, last_reason
     FROM persona_memory_wake_followups
     WHERE account = ? AND status = 'pending' AND next_attempt_at <= ? AND expires_at > ?
@@ -259,6 +278,7 @@ export function createPersonaMemoryWakeRepository(database: DatabaseSync): Perso
   `);
 
   return {
+    ...wakeWordJobs,
     upsertPersonaMemorySleepContext(input) {
       if (!validScope(input.account, input.sessionId) || !CYCLE_KEY_PATTERN.test(input.cycleKey)
         || !validSourceEntries(input.sourceEntries, input.sessionId)
@@ -295,12 +315,15 @@ export function createPersonaMemoryWakeRepository(database: DatabaseSync): Perso
     },
 
     enqueuePersonaMemoryWakeFollowup(input) {
+      const jobKey = input.jobKey ?? 'natural';
+      const nextAttemptAt = input.nextAttemptAt ?? input.createdAt;
       if (!validScope(input.account, input.sessionId) || !CYCLE_KEY_PATTERN.test(input.cycleKey)
-        || !validMessageIds(input.messageIds) || !validMentionIds(input.mentionIds)
-        || !validTimestamp(input.createdAt) || !validTimestamp(input.expiresAt) || input.expiresAt <= input.createdAt) {
+        || !validJobKey(jobKey) || !validMessageIds(input.messageIds) || !validMentionIds(input.mentionIds)
+        || !validTimestamp(input.createdAt) || !validTimestamp(input.expiresAt) || input.expiresAt <= input.createdAt
+        || !validTimestamp(nextAttemptAt) || nextAttemptAt < input.createdAt || nextAttemptAt >= input.expiresAt) {
         throw new RangeError('人格补回复队列记录无效');
       }
-      const existingRow = selectFollowupByCycle.get(input.account, input.sessionId, input.cycleKey) as Record<string, unknown> | undefined;
+      const existingRow = selectFollowupByCycle.get(input.account, input.sessionId, input.cycleKey, jobKey) as Record<string, unknown> | undefined;
       const existing = existingRow ? followupRecord(existingRow) : undefined;
       const messageIds = [...new Set([...(existing?.messageIds ?? []), ...input.messageIds])];
       const mentionIds = [...new Set([...(existing?.mentionIds ?? []), ...input.mentionIds])];
@@ -309,16 +332,22 @@ export function createPersonaMemoryWakeRepository(database: DatabaseSync): Perso
         input.account,
         input.sessionId,
         input.cycleKey,
+        jobKey,
         JSON.stringify(messageIds),
         JSON.stringify(mentionIds),
-        Math.min(existing?.nextAttemptAt ?? input.createdAt, input.createdAt),
+        Math.min(existing?.nextAttemptAt ?? nextAttemptAt, nextAttemptAt),
         existing ? Math.min(existing.createdAt, input.createdAt) : input.createdAt,
         existing ? Math.min(existing.expiresAt, input.expiresAt) : input.expiresAt,
         input.createdAt,
       );
-      const row = selectFollowupByCycle.get(input.account, input.sessionId, input.cycleKey) as Record<string, unknown> | undefined;
+      const row = selectFollowupByCycle.get(input.account, input.sessionId, input.cycleKey, jobKey) as Record<string, unknown> | undefined;
       if (!row) throw new Error('人格补回复队列写入失败');
       return numberValue(row.id, 'id');
+    },
+
+    listPersonaMemoryWakeFollowupsForCycle(account, sessionId, cycleKey) {
+      if (!validScope(account, sessionId) || !CYCLE_KEY_PATTERN.test(cycleKey)) return [];
+      return (selectFollowupsForCycle.all(account, sessionId, cycleKey) as Array<Record<string, unknown>>).map(followupRecord);
     },
 
     listPendingPersonaMemoryWakeFollowups(account, now, limit) {

@@ -23,6 +23,7 @@ function createSleepHarness(
 ) {
   const adapter = new FakeAdapter();
   const modelSlots: string[] = [];
+  let replyPrompt = '';
   const pipeline = createMessagePipeline({
     getConfig: () => config,
     repository,
@@ -31,8 +32,11 @@ function createSleepHarness(
     personaRoot,
     now,
     wait: async () => {},
-    callModel: async (slot) => {
+    callModel: async (slot, messages) => {
       modelSlots.push(slot);
+      if (slot === 'reply') {
+        replyPrompt = messages.map((message) => typeof message.content === 'string' ? message.content : '').join('\n');
+      }
       return {
         text: '收到。',
         provider: 'fake',
@@ -41,7 +45,7 @@ function createSleepHarness(
       };
     },
   });
-  return { adapter, modelSlots, pipeline };
+  return { adapter, modelSlots, pipeline, replyPrompt: () => replyPrompt };
 }
 
 const sleepTime = () => new Date(2026, 9, 18, 23).getTime();
@@ -109,13 +113,35 @@ test('睡着时被叫也不回，但消息照常落库', async () => {
 
 test('主人叫醒后延长 30 分钟；非主人不能启动或刷新醒来状态', async () => {
   await withRepository(async (repository, personaRoot) => {
-    let now = sleepTime();
-    const config = sleepConfig();
+    let now = new Date(2026, 9, 19, 6, 59).getTime();
+    const baseConfig = sleepConfig();
+    const config = AquariumConfigSchema.parse({
+      ...baseConfig,
+      sleep: { ...baseConfig.sleep, wake: '10:00' },
+    });
     const harness = createSleepHarness(repository, personaRoot, config, () => now);
+    const groupId = sessionId(groupSession);
+    const bedAt = new Date(2026, 9, 18, 22).getTime();
+    for (let index = 0; index < 25; index += 1) {
+      repository.saveMessage({
+        sessionId: groupId,
+        messageId: `sleep-history-${index}`,
+        senderId: 42,
+        senderName: '群友',
+        isSelf: false,
+        plainText: `睡眠历史${index}`,
+        segments: [],
+        time: bedAt + (index + 1) * 20 * 60_000,
+      });
+    }
     const ownerWake = await harness.pipeline(makeIncoming({
-      messageId: 'owner-wake', senderId: config.owner, plainText: '小鱼，醒醒', mentionsSelf: true,
+      messageId: 'owner-wake', senderId: config.owner, plainText: '醒醒', mentionsSelf: false, time: now,
     }));
     assert.equal(ownerWake.replied, true);
+    assert.match(harness.replyPrompt(), /睡眠历史5/u);
+    assert.match(harness.replyPrompt(), /睡眠历史24/u);
+    assert.doesNotMatch(harness.replyPrompt(), /睡眠历史4/u);
+    assert.match(harness.replyPrompt(), /唤醒词附近的睡眠消息.*不可信/u);
 
     now += 20 * 60_000;
     const ownerFollowup = await harness.pipeline(makeIncoming({

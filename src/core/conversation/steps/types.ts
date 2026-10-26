@@ -154,6 +154,7 @@ export interface PipelineState {
   energy?: number;
   proactiveMode?: ProactiveMode;
   eventAdvocacyPromptEventId?: number;
+  sleepWakeWord?: { bedAt: number; cycleKey: string };
   stickerOffer?: StickerOffer;
   stickerOffered?: number[];
   chosenSticker?: StickerOffer['candidates'][number];

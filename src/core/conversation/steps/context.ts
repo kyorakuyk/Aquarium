@@ -13,9 +13,48 @@ import { buildEventAdvocacyConfirmationRequest } from '../../privacy/event-advoc
 import { createSlotCallOptions } from './call-options.ts';
 import { resolvePersonaCounterpartContext } from '../counterpart-context.ts';
 import { createSleepFollowupPromptBlock } from '../../persona-memory-prompt.ts';
+import {
+  GROUP_MEMORY_SEGMENT_LIMIT,
+  PRIVATE_MEMORY_SEGMENT_LIMIT,
+  segmentMemoryMessages,
+} from '../../persona-memory-segments.ts';
 import { errorDetails } from './errors.ts';
 import { getPersonaForMessage } from './persona.ts';
-import { traceStep, type PipelineStep } from './types.ts';
+import { traceStep, type PipelineStep, type StepContext } from './types.ts';
+
+function sleepWakeWordContextRecords(ctx: StepContext): ReturnType<typeof ctx.options.repository.recentMessagesThrough> {
+  const wakeWord = ctx.state.sleepWakeWord;
+  if (!wakeWord) return [];
+  const previousCount = ctx.message.session.kind === 'group'
+    ? GROUP_MEMORY_SEGMENT_LIMIT + 20
+    : PRIVATE_MEMORY_SEGMENT_LIMIT + 20;
+  const records = ctx.options.repository.recentMessagesThrough(
+    ctx.currentSessionId,
+    ctx.message.messageId,
+    previousCount,
+  ).filter((record) => record.time >= wakeWord.bedAt);
+  const segments = segmentMemoryMessages({
+    sessionKind: ctx.message.session.kind,
+    messages: records.map((record, index) => ({
+      messageId: record.messageId,
+      rowId: index + 1,
+      time: record.time,
+      senderId: record.senderId,
+      isSelf: record.isSelf,
+      plainText: record.plainText,
+    })),
+    now: ctx.now(),
+    forceClose: true,
+  });
+  const latestSegment = segments.findLast((segment) => segment.messages.some(
+    (message) => message.messageId === ctx.message.messageId,
+  ));
+  const startMessageId = latestSegment?.messages[0]?.messageId;
+  const startIndex = startMessageId === undefined
+    ? -1
+    : records.findIndex((record) => record.messageId === startMessageId);
+  return records.slice(Math.max(0, (startIndex < 0 ? records.length : startIndex) - 20));
+}
 
 export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context', async () => {
   const config = ctx.state.config;
@@ -59,9 +98,10 @@ export const contextStep: PipelineStep = async (ctx) => traceStep(ctx, 'context'
   });
 
   const contextCount = ctx.state.proactiveMode ? 8 : settings.contextMessages;
+  const wakeWordContext = ctx.state.sleepWakeWord ? sleepWakeWordContextRecords(ctx) : undefined;
   const rawContextRecords = ctx.processOptions.replay
     ? ctx.options.repository.recentMessagesThrough(ctx.currentSessionId, ctx.message.messageId, contextCount)
-    : ctx.contextWindow.select(
+    : wakeWordContext ?? ctx.contextWindow.select(
       ctx.currentSessionId,
       contextCount,
       ctx.options.repository.recentMessages(ctx.currentSessionId, contextCount * 2),

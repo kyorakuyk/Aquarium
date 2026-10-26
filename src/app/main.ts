@@ -168,6 +168,7 @@ const personaMemoryRuntime = createPersonaMemoryRuntime({
   impressionsService,
   privateFactsService,
   privateMentionService,
+  sleepWakeState,
   dispatchWakeFollowup: (message, processOptions) => {
     const pipeline = pipelines.get(message.session.account);
     if (!pipeline) return Promise.resolve({ replied: false, reason: 'offline' });

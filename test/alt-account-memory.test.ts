@@ -205,7 +205,7 @@ test('altRecent escapes embedded line breaks as JSON data', async () => {
     const prompt = buildPromptMessages({
       persona: '人设', ownerId: 0, groupNote: '', context: [], blocks: { altRecent: block },
     });
-    assert.match(String(prompt[0]?.content), /近期日记、睡眠期间摘要、补回复引用、小号近期对话.*不可信/u);
+    assert.match(String(prompt[0]?.content), /近期日记、睡眠期间摘要、唤醒词附近的睡眠消息、补回复引用、小号近期对话.*不可信/u);
     assert.ok(String(prompt[1]?.content).includes(block));
     assert.equal(String(prompt[0]?.content).includes(hostileText), false);
   });
