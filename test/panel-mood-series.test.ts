@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { holdDecay, recoverReserve } from '../src/core/mood/core.ts';
+import { holdDecay, recoverReserve, surfaceHalfLifeMin } from '../src/core/mood/core.ts';
 import { sessionId } from '../src/core/shared/events.ts';
 import type { MoodBand } from '../src/store/affect-repo.ts';
 import { account, authHeaders, groupSession, now, withPanel } from './panel-test-helpers.ts';
@@ -165,7 +165,40 @@ test('mood series samples decay, five regions, and the latest reply injection tr
 
     assert.equal(body.from, from);
     assert.equal(body.to, now);
-    assert.equal(body.points.length, 97);
+    const gridTimes = new Set<number>([from, now]);
+    for (let time = from + 15 * 60_000; time < now; time += 15 * 60_000) gridTimes.add(time);
+    const expectedTimes = new Set(gridTimes);
+    const curveEvents = [
+      { time: from, reserve: 0.8 },
+      { time: now - 12 * hourMs, reserve: 0.725 },
+      { time: now - hourMs, reserve: 0.8 },
+    ];
+    for (const event of curveEvents) {
+      const curves = [
+        { halfLifeMin: surfaceHalfLifeMin(event.reserve, 40), shape: 3 },
+        { halfLifeMin: 40, shape: 2 },
+      ];
+      for (const { halfLifeMin, shape } of curves) {
+        const t50Ms = halfLifeMin * 60_000;
+        const tau10Ms = t50Ms * (1 / 9) ** (1 / shape);
+        for (const time of [event.time + Math.round(tau10Ms), event.time + Math.round(t50Ms)]) {
+          if (time >= from && time <= now) expectedTimes.add(time);
+        }
+      }
+    }
+    const actualTimes = new Set(body.points.map((point) => point.time));
+    assert.equal(gridTimes.size, 97);
+    assert.ok([...gridTimes].every((time) => actualTimes.has(time)));
+    assert.deepEqual(
+      [...actualTimes].filter((time) => !expectedTimes.has(time)),
+      [],
+    );
+    assert.deepEqual(
+      [...expectedTimes].filter((time) => !actualTimes.has(time)),
+      [],
+    );
+    assert.equal(actualTimes.size, body.points.length);
+    assert.equal(body.points.length, expectedTimes.size);
     assert.equal(body.points[0]?.valence, 0.6);
     assert.equal(body.points[0]?.reserve, 0.8);
     assert.equal(body.points.find((point) => point.time === now - 12 * hourMs)?.valence, -0.5);
