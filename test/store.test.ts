@@ -132,12 +132,13 @@ test('openDatabase 创建当前 schema 的情绪、好感度、标签、人设�
       'account', 'valence', 'arousal', 'updated_at', 'band', 'band_since', 'last_band_change_at',
       'reserve', 'reserve_band', 'reserve_band_since', 'reserve_last_change_at', 'last_reply_at',
       'dominance', 'main_emotion', 'emotion_since', 'last_emotion_change_at',
+      'valence_d0', 'valence_u', 'arousal_d0', 'arousal_u', 'dominance_d0', 'dominance_u',
     ]);
     assert.deepEqual(eventColumns.map((column) => column.name), [
       'id', 'account', 'time', 'source', 'session_id', 'sender_id', 'dv', 'da',
       'applied_dv', 'applied_da', 'reason', 'band_before', 'band_after', 'valence_after', 'arousal_after',
       'dr', 'applied_dr', 'absorbed', 'reserve_after', 'appraisal_valid', 'dd', 'applied_dd',
-      'dominance_after', 'cause_tag',
+      'dominance_after', 'cause_tag', 'valence_u_after', 'arousal_u_after', 'dominance_u_after',
     ]);
     const personaVersionColumns = database.prepare("PRAGMA table_info('persona_versions')").all() as Array<{ name: string; notnull: number }>;
     const personaVersionIndexes = database.prepare("PRAGMA index_list('persona_versions')").all() as Array<{ name: string }>;

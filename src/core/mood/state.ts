@@ -16,6 +16,12 @@ export interface ResolvedMoodState {
   valence: number;
   arousal: number;
   dominance: number;
+  valenceD0: number;
+  valenceU: number;
+  arousalD0: number;
+  arousalU: number;
+  dominanceD0: number;
+  dominanceU: number;
   reserve: number;
   band: MoodBand;
   bandSince: number;
@@ -45,6 +51,12 @@ export function resolveMoodState(input: {
       valence: settings.baseline.valence,
       arousal: settings.baseline.arousal,
       dominance: 0,
+      valenceD0: 0,
+      valenceU: 0,
+      arousalD0: 0,
+      arousalU: 0,
+      dominanceD0: 0,
+      dominanceU: 0,
       reserve: settings.reserve.initial,
       band: bandOf(settings.baseline.valence, settings.baseline.arousal),
       bandSince: at,
@@ -76,6 +88,12 @@ export function resolveMoodState(input: {
     valence: stored.valence,
     arousal: stored.arousal,
     dominance: stored.dominance,
+    valenceD0: stored.valenceD0 ?? stored.valence - settings.baseline.valence,
+    valenceU: stored.valenceU ?? 0,
+    arousalD0: stored.arousalD0 ?? stored.arousal - settings.baseline.arousal,
+    arousalU: stored.arousalU ?? 0,
+    dominanceD0: stored.dominanceD0 ?? stored.dominance,
+    dominanceU: stored.dominanceU ?? 0,
     reserve: stored.reserve,
     lastReplyAt: priorReplies.at(-1) !== undefined
       && (stored.lastReplyAt === null || (priorReplies.at(-1) ?? -Infinity) > stored.lastReplyAt)
@@ -141,6 +159,12 @@ export function resolveMoodState(input: {
     valence: state.valence,
     arousal: state.arousal,
     dominance: state.dominance,
+    valenceD0: state.valenceD0,
+    valenceU: state.valenceU,
+    arousalD0: state.arousalD0,
+    arousalU: state.arousalU,
+    dominanceD0: state.dominanceD0,
+    dominanceU: state.dominanceU,
     reserve: state.reserve,
     band: stored.band,
     bandSince: stored.bandSince,

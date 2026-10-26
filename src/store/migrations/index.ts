@@ -38,6 +38,7 @@ import { migration as v38 } from './v38.ts';
 import { migration as v39 } from './v39.ts';
 import { migration as v40 } from './v40.ts';
 import { migration as v41 } from './v41.ts';
+import { migration as v42 } from './v42.ts';
 import type { Migration } from './types.ts';
 
 export const migrations: Migration[] = [
@@ -81,4 +82,5 @@ export const migrations: Migration[] = [
   v39,
   v40,
   v41,
+  v42,
 ].sort((first, second) => first.version - second.version);
