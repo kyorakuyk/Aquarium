@@ -51,9 +51,38 @@ test('sleepEnergy 随清醒时长和过去一小时回复数下降并限制范�
   const later = sleepEnergy(at(2026, 9, 18, 13), wakeAt, bedAt, 0, true);
   const busier = sleepEnergy(at(2026, 9, 18, 13), wakeAt, bedAt, 5, true);
   assert.equal(early, 1);
+  assert.ok(Math.abs(later - (1 - 0.8 * (6 / 15) ** 2)) < 1e-12);
+  assert.ok(Math.abs(busier - (1 - 0.8 * (6 / 15) ** 2 - 0.05)) < 1e-12);
   assert.ok(later < early);
   assert.ok(busier < later);
   assert.equal(sleepEnergy(at(2026, 9, 18, 22), wakeAt, bedAt, 100, true), 0);
+});
+
+test('sleepEnergy 在 06:00 起床、02:00 入睡的当天 21:00 仍高于 0.5', () => {
+  const wakeAt = at(2026, 9, 18, 6);
+  const bedAt = at(2026, 9, 19, 2);
+  const energy = sleepEnergy(at(2026, 9, 18, 21), wakeAt, bedAt, 0, true);
+
+  assert.ok(energy > 0.5);
+  assert.ok(Math.abs(energy - (1 - 0.8 * (15 / 20) ** 2)) < 1e-12);
+});
+
+test('sleepEnergy 在入睡前一分钟约为 0.2', () => {
+  const wakeAt = at(2026, 9, 18, 6);
+  const bedAt = at(2026, 9, 19, 2);
+  const energy = sleepEnergy(at(2026, 9, 19, 1, 59), wakeAt, bedAt, 0, true);
+
+  assert.ok(Math.abs(energy - 0.2) < 0.01);
+});
+
+test('sleepEnergy 将早于醒来时间的 ratio 限制到零', () => {
+  const wakeAt = at(2026, 9, 18, 6);
+  const bedAt = at(2026, 9, 19, 2);
+  const energy = sleepEnergy(at(2026, 9, 18, 5), wakeAt, bedAt, 0, true);
+
+  assert.ok(Number.isFinite(energy));
+  assert.ok(energy <= 1);
+  assert.equal(energy, 1);
 });
 
 test('sleepEnergy 在作息未启用时恒为 1', () => {

@@ -193,7 +193,7 @@ test('低精力在真实 pipeline 提示词中加入困意浮动词', async () =
 
 test('低于 0.25 的精力在主动判断阈值上增加 0.1', async () => {
   await withRepository(async (repository, personaRoot) => {
-    const now = new Date(2026, 9, 18, 21).getTime();
+    const now = new Date(2026, 9, 18, 21, 45).getTime();
     recordRecentReply(repository, now);
     const harness = createEnergyHarness(repository, personaRoot, now, [], '{"probability":0.4,"reason":"question"}');
     const result = await harness.pipeline(makeIncoming({

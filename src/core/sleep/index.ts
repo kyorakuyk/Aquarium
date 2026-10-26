@@ -6,6 +6,8 @@ export interface SleepPlan {
 }
 
 const WAKE_WINDOW_MS = 30 * 60_000;
+const SLEEP_ENERGY_DROP = 0.8;
+const SLEEP_ENERGY_SHAPE = 2;
 
 export interface SleepWakeState {
   isAwake(now: number): boolean;
@@ -109,7 +111,7 @@ export function sleepEnergy(
 ): number {
   if (!enabled || wakeAt === null || bedAt === null || bedAt <= wakeAt) return 1;
   const awakeWindow = bedAt - wakeAt;
-  const elapsedRatio = (now - wakeAt) / awakeWindow;
+  const elapsedRatio = Math.max(0, Math.min(1, (now - wakeAt) / awakeWindow));
   const replyPenalty = Math.max(0, repliesLastHour) * 0.01;
-  return Math.max(0, Math.min(1, 1 - 0.8 * elapsedRatio - replyPenalty));
+  return Math.max(0, Math.min(1, 1 - SLEEP_ENERGY_DROP * elapsedRatio ** SLEEP_ENERGY_SHAPE - replyPenalty));
 }

@@ -97,7 +97,7 @@ test('sleep status and energy use schedule, recent replies, and the in-memory wa
     const awakeResponse = await app.request('/api/sleep', { headers: authHeaders() });
     const awake = await awakeResponse.json() as { status: string; energy: number | null; nextChangeAt: number | null };
     assert.equal(awake.status, 'awake');
-    assert.ok(Math.abs((awake.energy ?? 0) - (1 - 0.8 * (5 / 13) - 0.01)) < 1e-9);
+    assert.ok(Math.abs((awake.energy ?? 0) - (1 - 0.8 * (5 / 13) ** 2 - 0.01)) < 1e-9);
     assert.equal(awake.nextChangeAt, new Date(2026, 9, 13, 20).getTime());
 
     await patchSleep(app, { bedtime: '09:00', wake: '20:00' });
