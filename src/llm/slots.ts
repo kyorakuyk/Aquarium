@@ -117,10 +117,22 @@ function canFallback(error: unknown): boolean {
 
 function debugErrorDetails(error: unknown): Record<string, unknown> {
   if (!error || typeof error !== 'object') return { errorName: 'UnknownError' };
-  const details = error as { name?: unknown; status?: unknown };
+  const details = error as {
+    name?: unknown;
+    status?: unknown;
+    constructor?: { name?: unknown };
+    cause?: unknown;
+  };
+  const cause = details.cause && typeof details.cause === 'object'
+    ? details.cause as { code?: unknown }
+    : undefined;
   return {
     errorName: typeof details.name === 'string' ? details.name : 'Error',
     ...(typeof details.status === 'number' ? { status: details.status } : {}),
+    ...(typeof details.constructor?.name === 'string'
+      ? { errorConstructorName: details.constructor.name }
+      : {}),
+    ...(typeof cause?.code === 'string' ? { causeCode: cause.code } : {}),
   };
 }
 
@@ -216,33 +228,42 @@ export async function callSlot(
         : {}),
     } as OpenAI.ChatCompletionCreateParamsNonStreaming;
 
-    const startedAt = now();
     let response: OpenAI.ChatCompletion | undefined;
     let cliText: string | undefined;
     let attemptError: unknown;
     let failed = false;
-    try {
-      if (provider.kind === 'cli') {
-        cliText = await (options.cliRuntime ?? getCliRuntime()).call(
-          entry.provider,
-          provider,
-          buildCliInput(messages),
-          timeoutMs,
-        );
-      } else {
-        const client = options.getClient
-          ? options.getClient(entry.provider)
-          : getProviderClient(options.config, entry.provider);
-        response = await client.chat.completions.create(requestBody, { timeout: timeoutMs, maxRetries: 0 });
+    let completedAt = 0;
+    let latencyMs = 0;
+    let networkRetryUsed = false;
+    while (true) {
+      const startedAt = now();
+      response = undefined;
+      cliText = undefined;
+      attemptError = undefined;
+      failed = false;
+      try {
+        if (provider.kind === 'cli') {
+          cliText = await (options.cliRuntime ?? getCliRuntime()).call(
+            entry.provider,
+            provider,
+            buildCliInput(messages),
+            timeoutMs,
+          );
+        } else {
+          const client = options.getClient
+            ? options.getClient(entry.provider)
+            : getProviderClient(options.config, entry.provider);
+          response = await client.chat.completions.create(requestBody, { timeout: timeoutMs, maxRetries: 0 });
+        }
+      } catch (error) {
+        failed = true;
+        attemptError = error;
       }
-    } catch (error) {
-      failed = true;
-      attemptError = error;
-    }
 
-    const completedAt = now();
-    const latencyMs = Math.max(0, completedAt - startedAt);
-    if (failed) {
+      completedAt = now();
+      latencyMs = Math.max(0, completedAt - startedAt);
+      if (!failed) break;
+
       options.recordUsage({
         time: completedAt,
         account: options.account,
@@ -265,9 +286,24 @@ export async function callSlot(
         detail: debugErrorDetails(attemptError),
       });
       lastError = attemptError;
-      if (provider.kind === 'api' && !canFallback(attemptError) || index === chain.length - 1) throw attemptError;
-      continue;
+
+      const networkFailure = failureStatus(attemptError) === undefined && canFallback(attemptError);
+      if (slot === 'reply'
+        && configuredChain.length === 1
+        && provider.kind === 'api'
+        && !networkRetryUsed
+        && networkFailure) {
+        networkRetryUsed = true;
+        await new Promise<void>((resolve) => setTimeout(resolve, 1_000));
+        continue;
+      }
+
+      if ((provider.kind === 'api' && !canFallback(attemptError)) || index === chain.length - 1) {
+        throw attemptError;
+      }
+      break;
     }
+    if (failed) continue;
 
     if (provider.kind === 'api' && !response) throw new Error(`模型 ${entry.model} 没有返回结果`);
     const responseText = provider.kind === 'cli'

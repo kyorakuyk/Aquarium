@@ -187,9 +187,21 @@ test('callSlot 为失败降级尝试和成功尝试分别记录 trace', async ()
   await withRepository(async (repository) => {
     const config = makeConfig({ enabled: true, sessions: {}, retainDays: 7 });
     let attempts = 0;
+    class ProviderConnectionError extends Error {
+      constructor(message: string) {
+        super(message);
+        this.name = 'APIConnectionError';
+      }
+    }
+    const cause = Object.assign(new Error('底层聊天内容不应进入 trace'), {
+      name: 'SocketError',
+      code: 'ECONNRESET',
+    });
     const client = fakeClient(async () => {
       attempts += 1;
-      if (attempts === 1) throw Object.assign(new Error('服务暂不可用'), { status: 503 });
+      if (attempts === 1) {
+        throw Object.assign(new ProviderConnectionError('用户聊天内容不应进入 trace'), { status: 503, cause });
+      }
       return { choices: [{ message: { content: '降级回复' } }], usage: null };
     });
 
@@ -211,7 +223,13 @@ test('callSlot 为失败降级尝试和成功尝试分别记录 trace', async ()
     const traces = repository.debugTracesFor(sessionId(groupSession), 'fallback-message');
     assert.equal(traces.length, 2);
     assert.equal(traces[0]?.responseText, '');
-    assert.deepEqual(traces[0]?.detail, { errorName: 'Error', status: 503 });
+    assert.deepEqual(traces[0]?.detail, {
+      errorName: 'APIConnectionError',
+      status: 503,
+      errorConstructorName: 'ProviderConnectionError',
+      causeCode: 'ECONNRESET',
+    });
+    assert.doesNotMatch(JSON.stringify(traces[0]?.detail), /聊天内容/u);
     assert.equal(traces[1]?.responseText, '降级回复');
     assert.deepEqual(traces[1]?.detail, {});
   });
