@@ -45,3 +45,7 @@ desktop.ini
 
 # 人设导入原稿（含私聊，不提交）
 /personas/input/
+
+# 原作文本（版权，不提交）
+/doc/original/
+.tmp-*.ts
