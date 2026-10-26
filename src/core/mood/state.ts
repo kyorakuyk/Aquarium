@@ -129,6 +129,12 @@ export function resolveMoodState(input: {
         valence: state.valence,
         arousal: state.arousal,
         dominance: state.dominance,
+        valenceD0: state.valenceD0,
+        valenceU: state.valenceU,
+        arousalD0: state.arousalD0,
+        arousalU: state.arousalU,
+        dominanceD0: state.dominanceD0,
+        dominanceU: state.dominanceU,
         reserve: state.reserve,
       }, {
         from,

@@ -11,6 +11,8 @@ import type { PipelineModelCall } from '../conversation/steps/types.ts';
 import { runAppraise } from './appraise.ts';
 import { renderFloatBlock, renderMoodBlocks, type MoodPromptBlocks } from './render.ts';
 import {
+  DEFAULT_AROUSAL_HOLD_SHAPE,
+  DEFAULT_SURFACE_HOLD_SHAPE,
   bandOf,
   applyArousalDelta,
   applyDominanceDelta,
@@ -18,6 +20,7 @@ import {
   capSenderReserveDelta,
   capSenderValenceDelta,
   isSuccessfulAppraisal,
+  reanchor,
   resolveConfiguredMoodEmotions,
   nextReserveBand,
   SENDER_VALENCE_WINDOW_MS,
@@ -173,6 +176,15 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
     });
   }
 
+  function eventAnchorFields(state: ResolvedMoodState): Pick<MoodEventRecord,
+    'valenceUAfter' | 'arousalUAfter' | 'dominanceUAfter'> {
+    return {
+      valenceUAfter: state.valenceU,
+      arousalUAfter: state.arousalU,
+      dominanceUAfter: state.dominanceU,
+    };
+  }
+
   function reportError(error: unknown): void {
     try {
       options.onError?.(error);
@@ -217,6 +229,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
             bandBefore: current.band, bandAfter: band,
             valenceAfter: current.valence, arousalAfter: current.arousal,
             reserveAfter: current.reserve,
+            ...eventAnchorFields(current),
           });
         }
       }
@@ -229,6 +242,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
             bandBefore: null, bandAfter: null,
             valenceAfter: current.valence, arousalAfter: current.arousal,
             reserveAfter: current.reserve,
+            ...eventAnchorFields(current),
           });
         }
       }
@@ -249,13 +263,27 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
     },
 
     recordCalled(input) {
-      if (!options.getConfig().mood.enabled) return;
+      const moodConfig = options.getConfig().mood;
+      if (!moodConfig.enabled) return;
       const last = lastCalledAt.get(input.sessionId);
       if (last !== undefined && input.now - last < 10 * 60_000) return;
       lastCalledAt.set(input.sessionId, input.now);
       const current = loadState(input.account, input.now, getEnergySource(input.account));
       const arousal = applyArousalDelta(current.arousal, CALLED_AROUSAL_BUMP);
-      saveState(input.account, { ...current, arousal, updatedAt: input.now });
+      const arousalAnchor = reanchor(
+        current.arousal - moodConfig.baseline.arousal,
+        arousal - moodConfig.baseline.arousal,
+        current.arousalU,
+        DEFAULT_AROUSAL_HOLD_SHAPE,
+      );
+      const next = {
+        ...current,
+        arousal,
+        arousalD0: arousalAnchor.d0,
+        arousalU: arousalAnchor.u,
+        updatedAt: input.now,
+      };
+      saveState(input.account, next);
       recordEvent(input.account, input.now, {
         source: 'rule',
         sessionId: input.sessionId,
@@ -274,6 +302,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
         valenceAfter: current.valence,
         arousalAfter: arousal,
         reserveAfter: current.reserve,
+        ...eventAnchorFields(next),
       });
     },
 
@@ -315,6 +344,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
           arousalAfter: afterReply.arousal,
           appliedDr: socialCost,
           reserveAfter: afterReply.reserve,
+          ...eventAnchorFields(afterReply),
         });
       }
       saveState(input.account, afterReply);
@@ -341,6 +371,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
           valenceAfter: afterReply.valence,
           arousalAfter: afterReply.arousal,
           reserveAfter: afterReply.reserve,
+          ...eventAnchorFields(afterReply),
         });
         return;
       }
@@ -389,6 +420,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
             valenceAfter: current.valence,
             arousalAfter: current.arousal,
             reserveAfter: current.reserve,
+            ...eventAnchorFields(current),
           });
           return;
         }
@@ -428,10 +460,40 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
         const valence = Math.max(-1, Math.min(1, current.valence + buffered.surfaceDelta));
         const arousal = applyArousalDelta(current.arousal, result.arousal);
         const dominance = applyDominanceDelta(current.dominance, result.dominance);
+        const valenceAnchor = reanchor(
+          current.valence - config.mood.baseline.valence,
+          valence - config.mood.baseline.valence,
+          current.valenceU,
+          DEFAULT_SURFACE_HOLD_SHAPE,
+        );
+        const arousalAnchor = reanchor(
+          current.arousal - config.mood.baseline.arousal,
+          arousal - config.mood.baseline.arousal,
+          current.arousalU,
+          DEFAULT_AROUSAL_HOLD_SHAPE,
+        );
+        const dominanceAnchor = reanchor(
+          current.dominance,
+          dominance,
+          current.dominanceU,
+          DEFAULT_AROUSAL_HOLD_SHAPE,
+        );
+        const anchored = {
+          ...current,
+          valence,
+          arousal,
+          dominance,
+          valenceD0: valenceAnchor.d0,
+          valenceU: valenceAnchor.u,
+          arousalD0: arousalAnchor.d0,
+          arousalU: arousalAnchor.u,
+          dominanceD0: dominanceAnchor.d0,
+          dominanceU: dominanceAnchor.u,
+        };
         const appliedDd = dominance - current.dominance;
         const band = bandOf(valence, arousal);
         const emotionState = resolveEmotions(
-          { ...current, valence, arousal, dominance },
+          anchored,
           input.account,
           completedAt,
           input.messageId,
@@ -461,6 +523,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
           appliedDr,
           absorbed: buffered.absorbed,
           reserveAfter: reserve,
+          ...eventAnchorFields(emotionState),
         });
         options.affinityService?.recordAppraise({
           account: input.account,
@@ -491,6 +554,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
             valenceAfter: valence,
             arousalAfter: arousal,
             reserveAfter: reserve,
+            ...eventAnchorFields(emotionState),
           });
           bandSince = completedAt;
           lastBandChangeAt = completedAt;
@@ -514,15 +578,13 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
             valenceAfter: valence,
             arousalAfter: arousal,
             reserveAfter: reserve,
+            ...eventAnchorFields(emotionState),
           });
           reserveBandSince = completedAt;
           reserveLastChangeAt = completedAt;
         }
         saveState(input.account, {
           ...emotionState,
-          valence,
-          arousal,
-          dominance,
           reserve,
           band,
           bandSince,

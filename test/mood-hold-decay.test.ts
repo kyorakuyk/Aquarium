@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { advanceMoodState, holdDecay, reanchor, type MoodDynamicsState } from '../src/core/mood/core.ts';
+import { advanceMoodState, holdDecay, reanchor, surfaceHalfLifeMin, type MoodDynamicsState } from '../src/core/mood/core.ts';
 import { resolveMoodState } from '../src/core/mood/state.ts';
 
 const minute = 60_000;
@@ -116,4 +116,62 @@ test('resolveMoodState 为旧状态的空锚点按当前基线补默认值', () 
     dominanceD0: stored.dominance,
     dominanceU: 0,
   });
+});
+
+test('resolveMoodState 从已存锚点继续推进而不是每次读取重开停留期', () => {
+  const settings = {
+    baseline: { valence: 0.1, arousal: 0.4 },
+    surfaceHalfLifeMin: 40,
+    arousalHalfLifeMin: 40,
+    reserve: { initial: 0.8 },
+  } as Parameters<typeof resolveMoodState>[0]['settings'];
+  const elapsedMs = 30 * minute;
+  const surfaceT50 = surfaceHalfLifeMin(0.8, settings.surfaceHalfLifeMin);
+  const stored = Object.assign({
+    account: 900000001,
+    valence: settings.baseline.valence + holdDecay(0.7, 0.5, 3),
+    arousal: settings.baseline.arousal + holdDecay(0.4, 0.25, 2),
+    dominance: holdDecay(-0.2, 0.5, 2),
+    updatedAt: 1_000,
+    band: 'calm' as const,
+    bandSince: 900,
+    lastBandChangeAt: 800,
+    mainEmotion: null,
+    emotionSince: null,
+    lastEmotionChangeAt: null,
+    reserve: 0.8,
+    reserveBand: 'full' as const,
+    reserveBandSince: null,
+    reserveLastChangeAt: null,
+    lastReplyAt: null,
+  }, {
+    valenceD0: 0.7,
+    valenceU: 0.5,
+    arousalD0: 0.4,
+    arousalU: 0.25,
+    dominanceD0: -0.2,
+    dominanceU: 0.5,
+  });
+  const resolved = resolveMoodState({
+    stored,
+    at: stored.updatedAt + elapsedMs,
+    settings,
+    energySource: 'inner',
+    energyMultipliers: { aloneRecovery: 0, calmRecoveryCost: 0 },
+    appraisalEvents: [],
+    replyTimes: [],
+  });
+  const nextValenceU = stored.valenceU + elapsedMs / (surfaceT50 * minute);
+  const nextArousalU = stored.arousalU + elapsedMs / (settings.arousalHalfLifeMin * minute);
+  const nextDominanceU = stored.dominanceU + elapsedMs / (settings.arousalHalfLifeMin * minute);
+  const expectedValence = settings.baseline.valence + holdDecay(stored.valenceD0, nextValenceU, 3);
+  const expectedArousal = settings.baseline.arousal + holdDecay(stored.arousalD0, nextArousalU, 2);
+  const expectedDominance = holdDecay(stored.dominanceD0, nextDominanceU, 2);
+
+  assert.ok(Math.abs(resolved.valence - expectedValence) < 1e-9, `actual=${resolved.valence}, expected=${expectedValence}`);
+  assert.ok(Math.abs(resolved.arousal - expectedArousal) < 1e-9, `actual=${resolved.arousal}, expected=${expectedArousal}`);
+  assert.ok(Math.abs(resolved.dominance - expectedDominance) < 1e-9, `actual=${resolved.dominance}, expected=${expectedDominance}`);
+  assert.equal(resolved.valenceU, nextValenceU);
+  assert.equal(resolved.arousalU, nextArousalU);
+  assert.equal(resolved.dominanceU, nextDominanceU);
 });
