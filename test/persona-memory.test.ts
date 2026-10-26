@@ -8,15 +8,7 @@ import { AquariumConfigSchema } from '../src/config/schema.ts';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
 import { FakeAdapter, baseTime, groupSession, makeConfig, makeIncoming, withRepository } from './pipeline-test-helpers.ts';
-
-function saveAndObserveMessage(
-  repository: ReturnType<typeof createRepository>,
-  service: ReturnType<typeof createPersonaMemoryService>,
-  message: ReturnType<typeof makeIncoming>,
-): boolean {
-  if (!repository.saveMessage(messageRecord(message, sessionId(message.session)))) return false;
-  return service.observeMessage(message);
-}
+import { saveAndObserveMessage } from './persona-memory-test-utils.ts';
 
 test('persona memory migrations create account-scoped cursor, memo, run, and diary tables', () => {
   const database = openDatabase(':memory:');
@@ -25,13 +17,13 @@ test('persona memory migrations create account-scoped cursor, memo, run, and dia
       SELECT name FROM sqlite_master
       WHERE type = 'table' AND name IN (
         'memory_cursors', 'persona_memory_tails', 'persona_memos', 'persona_memos_legacy_v26',
-        'persona_diaries', 'persona_memory_runs'
+        'persona_diaries', 'persona_memory_runs', 'persona_memory_sleep_contexts', 'persona_memory_wake_followups'
       )
       ORDER BY name
     `).all() as Array<{ name: string }>;
     assert.deepEqual(tables.map(({ name }) => name), [
-      'memory_cursors', 'persona_diaries', 'persona_memory_runs', 'persona_memory_tails',
-      'persona_memos', 'persona_memos_legacy_v26',
+      'memory_cursors', 'persona_diaries', 'persona_memory_runs', 'persona_memory_sleep_contexts',
+      'persona_memory_tails', 'persona_memory_wake_followups', 'persona_memos', 'persona_memos_legacy_v26',
     ]);
   } finally {
     database.close();
@@ -154,57 +146,6 @@ test('daytime pipeline records memos instead of extracting knowledge or promotin
     assert.equal(impressionExtractions, 0);
     assert.equal(privateExtractions, 0);
     assert.equal(mentionPromotions, 0);
-  });
-});
-
-test('sleep organization is idempotent, writes one visible diary, and redacts its memo source', async () => {
-  await withRepository(async (repository) => {
-    const config = makeConfig();
-    const privateSession: SessionKey = { account: groupSession.account, kind: 'private', peer: 82 };
-    const sessionIds: string[] = [];
-    const service = createPersonaMemoryService({
-      repository,
-      getConfig: () => config,
-      processSession: async (session, records) => {
-        sessionIds.push(sessionId(session));
-        assert.ok(records.length > 0);
-        return 'done';
-      },
-    });
-    const messages = [
-      makeIncoming({
-        session: groupSession,
-        messageId: 'night-group-memo',
-        senderId: 82,
-        plainText: '今天说了一个尚待确认的计划。',
-        time: baseTime,
-      }),
-      makeIncoming({
-        session: privateSession,
-        messageId: 'night-private-memo',
-        senderId: privateSession.peer,
-        plainText: 'access_token=ABCDEF123456',
-        time: baseTime + 1,
-      }),
-    ];
-    for (const message of messages) assert.equal(saveAndObserveMessage(repository, service, message), true);
-
-    const cycleKey = '2026-10-23';
-    const first = await service.organizeAtSleep({ account: groupSession.account, cycleKey, now: baseTime + 10 });
-    const second = await service.organizeAtSleep({ account: groupSession.account, cycleKey, now: baseTime + 20 });
-    assert.equal(first.status, 'done');
-    assert.equal(second.status, 'already_run');
-    assert.equal(sessionIds.length, 2);
-    assert.equal(repository.listPersonaMemoryCursorSummaries(groupSession.account)
-      .reduce((total, cursor) => total + cursor.pendingMessageCount, 0), 0);
-    const diary = repository.listPersonaDiaries(groupSession.account, 10)[0];
-    assert.ok(diary?.visibleToAni);
-    assert.match(diary?.text ?? '', /\[敏感内容已隐藏\]/u);
-    assert.doesNotMatch(diary?.text ?? '', /ABCDEF123456/u);
-    assert.match(service.recentDiaryBlock(groupSession.account, groupSession, baseTime + 20) ?? '', /尚待确认/u);
-    assert.equal(service.recentDiaryBlock(groupSession.account + 1, groupSession, baseTime + 20), undefined);
-    assert.equal(repository.setPersonaDiaryVisibility(groupSession.account, diary!.id, false), true);
-    assert.equal(service.recentDiaryBlock(groupSession.account, groupSession, baseTime + 20), undefined);
   });
 });
 

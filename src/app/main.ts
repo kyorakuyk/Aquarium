@@ -168,6 +168,11 @@ const personaMemoryRuntime = createPersonaMemoryRuntime({
   impressionsService,
   privateFactsService,
   privateMentionService,
+  dispatchWakeFollowup: (message, processOptions) => {
+    const pipeline = pipelines.get(message.session.account);
+    if (!pipeline) return Promise.resolve({ replied: false, reason: 'offline' });
+    return sessionQueue.run(sessionId(message.session), () => pipeline(message, processOptions));
+  },
   getConfig: () => configWatcher.getConfig(),
   getTemplates: () => promptTemplateStore.get(),
   onInfo: (message) => logger.info(message),
@@ -175,7 +180,6 @@ const personaMemoryRuntime = createPersonaMemoryRuntime({
   onError: (message) => logger.error(message),
 });
 const personaMemoryService = personaMemoryRuntime.service;
-subscriptions.push(personaMemoryRuntime.start());
 const sleepGoodnightScheduler = createSleepGoodnightScheduler({
   getConfig: () => configWatcher.getConfig(),
   adapters: () => adapters,
@@ -187,9 +191,11 @@ const sleepGoodnightScheduler = createSleepGoodnightScheduler({
     return sessionQueue.run(sessionId(session), () => pipeline.sendSystemReply(session, text, cycleKey));
   },
   onSleep: (cycleKey, now) => personaMemoryRuntime.onSleep(cycleKey, now),
-  onError: (error) => logger.error(`定时晚安发送失败：${describeError(error)}`),
+  onWake: (cycleKey, now, bedAt, wakeAt) => personaMemoryRuntime.onWake(cycleKey, now, bedAt, wakeAt),
+  onError: (error) => logger.error(`作息调度任务失败：${describeError(error)}`),
 });
 subscriptions.push(sleepGoodnightScheduler.start());
+subscriptions.push(personaMemoryRuntime.start());
 let panelServer: ReturnType<typeof startPanelServer> | undefined;
 let managedHost: Host | undefined;
 let shuttingDown = false;

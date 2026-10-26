@@ -3,9 +3,10 @@ import type { MessageStorageRecord, StoreRepository } from '../store/repository.
 import type { PersonaEventMemoRecord } from '../store/persona-memory-event-repo.ts';
 import type { PersonaDiarySourceEntry } from '../store/persona-memory-repo.ts';
 import { sessionId, type IncomingMessage, type SessionKey } from './shared/events.ts';
-import { createRecentDiaryBlock } from './persona-memory-prompt.ts';
+import { createRecentDiaryBlock, createRecentSleepMemoryBlock } from './persona-memory-prompt.ts';
 import { segmentMemoryMessages } from './persona-memory-segments.ts';
 import { organizePersonaMemoryAtSleep } from './persona-memory-organize.ts';
+import { organizePersonaMemoryAtWake, type PersonaMemoryWakeInput, type PersonaMemoryWakeResult } from './persona-memory-wake.ts';
 
 export { segmentMemoryMessages } from './persona-memory-segments.ts';
 
@@ -46,6 +47,7 @@ export interface PersonaMemoryOrganizeInput {
   account: number;
   cycleKey: string;
   now: number;
+  skipDiary?: boolean;
 }
 
 export interface PersonaMemoryOrganizeResult extends PersonaMemoryOrganizeInput {
@@ -57,7 +59,9 @@ export interface PersonaMemoryOrganizeResult extends PersonaMemoryOrganizeInput 
 export interface PersonaMemoryService {
   observeMessage(message: IncomingMessage): boolean;
   organizeAtSleep(input: PersonaMemoryOrganizeInput): Promise<PersonaMemoryOrganizeResult>;
+  organizeAtWake(input: PersonaMemoryWakeInput): Promise<PersonaMemoryWakeResult>;
   recentDiaryBlock(account: number, session: SessionKey, now: number): string | undefined;
+  sleepMemoryBlock(account: number, session: SessionKey, now: number): string | undefined;
 }
 
 function truncateText(text: string, max: number): string {
@@ -79,6 +83,7 @@ export function createPersonaMemoryService(options: PersonaMemoryServiceOptions)
   }
   const activeRuns = new Set<string>();
   const recentDiaryBlock = createRecentDiaryBlock(options.repository, truncateText);
+  const sleepMemoryBlock = createRecentSleepMemoryBlock(options.repository, truncateText);
 
   return {
     observeMessage(message) {
@@ -114,6 +119,11 @@ export function createPersonaMemoryService(options: PersonaMemoryServiceOptions)
       return organizePersonaMemoryAtSleep(options, activeRuns, input);
     },
 
+    async organizeAtWake(input) {
+      return organizePersonaMemoryAtWake(options, activeRuns, input);
+    },
+
     recentDiaryBlock,
+    sleepMemoryBlock,
   };
 }

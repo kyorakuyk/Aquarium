@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { createPersonaEventMemoRepository, type PersonaEventMemoRepository } from './persona-memory-event-repo.ts';
 import { createMemoryCursorRepository, type PersonaMemoryCursorRepository } from './memory-cursor-repo.ts';
+import { createPersonaMemoryWakeRepository, type PersonaMemoryWakeRepository } from './persona-memory-wake-repo.ts';
 
 export interface PersonaMemoInput {
   account: number;
@@ -71,7 +72,7 @@ export interface PersonaDiaryRecord extends Required<PersonaDiaryInput> {
   id: number;
 }
 
-export interface PersonaMemoryRepository extends PersonaMemoryCursorRepository, PersonaEventMemoRepository {
+export interface PersonaMemoryRepository extends PersonaMemoryCursorRepository, PersonaEventMemoRepository, PersonaMemoryWakeRepository {
   insertPersonaMemo(memo: PersonaMemoInput): boolean;
   listPersonaMemos(account: number, limit: number): PersonaMemoRecord[];
   listPendingPersonaMemos(account: number, limit: number): PersonaMemoRecord[];
@@ -234,6 +235,7 @@ function memoryRunRecord(row: Record<string, unknown>): PersonaMemoryRunRecord {
 export function createPersonaMemoryRepository(database: DatabaseSync): PersonaMemoryRepository {
   const eventMemos = createPersonaEventMemoRepository(database);
   const memoryCursors = createMemoryCursorRepository(database);
+  const wakeMemory = createPersonaMemoryWakeRepository(database);
   const insertMemo = database.prepare(`
     INSERT OR IGNORE INTO persona_memos_legacy_v26
       (account, session_id, message_id, sender_id, sender_name, is_self, text, created_at)
@@ -261,8 +263,9 @@ export function createPersonaMemoryRepository(database: DatabaseSync): PersonaMe
   `);
   const resumeMemoryRun = database.prepare(`
     UPDATE persona_memory_runs
-    SET memo_count = ?, processed_count = ?, reason = NULL, finished_at = NULL
-    WHERE account = ? AND cycle_key = ? AND status = 'running'
+    SET status = 'running', memo_count = ?, processed_count = ?, reason = NULL, finished_at = NULL
+    WHERE account = ? AND cycle_key = ?
+      AND status IN ('running', 'done', 'budget', 'failed', 'empty', 'partial')
   `);
   const countProcessedMemos = database.prepare(`
     SELECT COUNT(*) AS count FROM persona_memos_legacy_v26
@@ -310,6 +313,7 @@ export function createPersonaMemoryRepository(database: DatabaseSync): PersonaMe
   return {
     ...eventMemos,
     ...memoryCursors,
+    ...wakeMemory,
     insertPersonaMemo(memo) {
       if (!validId(memo.account) || !validId(memo.senderId)
         || typeof memo.sessionId !== 'string' || memo.sessionId.length < 1 || memo.sessionId.length > 512

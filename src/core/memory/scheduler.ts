@@ -3,6 +3,7 @@ import type { AquariumConfig } from '../../config/schema.ts';
 export interface PersonaMemorySchedulerOptions {
   getConfig: () => AquariumConfig;
   runCycle: (cycleKey: string, now: number) => Promise<void>;
+  onTick?: (now: number) => Promise<void>;
   now?: () => number;
   intervalMs?: number;
   onError?: (error: unknown) => void;
@@ -39,12 +40,13 @@ export function createPersonaMemoryScheduler(options: PersonaMemorySchedulerOpti
     running = true;
     try {
       const config = options.getConfig();
+      const currentTime = now();
+      if (!Number.isSafeInteger(currentTime) || currentTime < 0) throw new RangeError('记忆调度时间无效');
+      await options.onTick?.(currentTime);
       if (config.sleep.enabled) {
         handledFixedDate = undefined;
         return;
       }
-      const currentTime = now();
-      if (!Number.isSafeInteger(currentTime) || currentTime < 0) throw new RangeError('记忆调度时间无效');
       const dateKey = localDateKey(currentTime);
       if (handledFixedDate === dateKey) return;
       const [hourText, minuteText] = config.memory.organizeAt.split(':');

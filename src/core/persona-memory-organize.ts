@@ -76,6 +76,7 @@ export async function organizePersonaMemoryAtSleep(
   input: PersonaMemoryOrganizeInput,
 ): Promise<PersonaMemoryOrganizeResult> {
   const { account, cycleKey, now } = input;
+  const skipDiary = input.skipDiary === true;
   if (!Number.isSafeInteger(account) || account <= 0 || !/^\d{4}-\d{2}-\d{2}$/u.test(cycleKey)
     || !Number.isSafeInteger(now) || now < 0) {
     throw new RangeError('人格记忆整理参数无效');
@@ -94,7 +95,13 @@ export async function organizePersonaMemoryAtSleep(
   activeRuns.add(runKey);
   try {
     const existingRun = options.repository.personaMemoryRun(account, cycleKey);
-    if (existingRun && existingRun.status !== 'running') {
+    const totalPending = totalPendingMessages(options.repository, account);
+    const pendingDiarySources = options.generateDiary && !skipDiary
+      ? collectPersonaMemoryDiarySources(options.repository, account, now)
+      : undefined;
+    const hasPendingDiarySources = (pendingDiarySources?.memos.length ?? 0) > 0
+      || (pendingDiarySources?.tails.length ?? 0) > 0;
+    if (existingRun && existingRun.status !== 'running' && totalPending === 0 && !hasPendingDiarySources) {
       return {
         ...inputBase,
         status: 'already_run',
@@ -104,12 +111,6 @@ export async function organizePersonaMemoryAtSleep(
     }
 
     const recoveredCount = existingRun?.processedCount ?? 0;
-    const totalPending = totalPendingMessages(options.repository, account);
-    const pendingDiarySources = options.generateDiary
-      ? collectPersonaMemoryDiarySources(options.repository, account, now)
-      : undefined;
-    const hasPendingDiarySources = (pendingDiarySources?.memos.length ?? 0) > 0
-      || (pendingDiarySources?.tails.length ?? 0) > 0;
     const observedMemoCount = Math.max(existingRun?.memoCount ?? 0, recoveredCount + totalPending);
     const remainingCapacity = Math.max(0, MEMO_BATCH_LIMIT - recoveredCount);
     const runReady = existingRun
@@ -275,7 +276,7 @@ export async function organizePersonaMemoryAtSleep(
               });
             }
             options.repository.savePersonaMemoryCursor(nextCursor);
-            if (!options.generateDiary && entries.length > 0) {
+            if (!skipDiary && !options.generateDiary && entries.length > 0) {
               const existingDiary = options.repository.personaDiary(account, cycleKey);
               const sourceEntries = mergePersonaDiarySourceEntries(existingDiary?.sourceEntries ?? [], entries);
               const generatedText = diaryText(sourceEntries);
@@ -308,7 +309,7 @@ export async function organizePersonaMemoryAtSleep(
       }
     }
 
-    if (options.generateDiary && status !== 'budget') {
+    if (!skipDiary && options.generateDiary && status !== 'budget') {
       const sources = collectPersonaMemoryDiarySources(options.repository, account, now);
       if (sources.memos.length > 0 || sources.tails.length > 0) {
         const diaryStatus = await generatePersonaMemoryDiary({

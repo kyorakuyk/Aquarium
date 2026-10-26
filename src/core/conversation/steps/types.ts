@@ -58,6 +58,11 @@ export interface ProcessMessageOptions {
   batched?: boolean;
   quoteReplyTo?: boolean;
   activityBatch?: ActivityBatch<IncomingMessage>;
+  sleepFollowup?: {
+    cycleKey: string;
+    mentionIds: number[];
+    messages: Array<{ senderName: string; plainText: string; time: number }>;
+  };
 }
 
 export type PipelineModelCall = (

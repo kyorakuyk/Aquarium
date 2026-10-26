@@ -225,6 +225,7 @@ test('睡眠整理回调在每个睡眠周期触发一次，也覆盖启动时�
     adapter.listGroups = async () => [];
     const config = sleepConfig();
     const calls: Array<{ cycleKey: string; at: number }> = [];
+    const wakeCalls: Array<{ cycleKey: string; at: number; bedAt: number; wakeAt: number }> = [];
     const createWithSleepCallback = (clock: () => number) => createSleepGoodnightScheduler({
       getConfig: () => config,
       adapters: () => [adapter],
@@ -234,8 +235,12 @@ test('睡眠整理回调在每个睡眠周期触发一次，也覆盖启动时�
       now: clock,
       random: () => 0,
       onSleep: async (cycleKey: string, now: number) => { calls.push({ cycleKey, at: now }); },
+      onWake: async (cycleKey: string, now: number, bedAt: number, wakeAt: number) => {
+        wakeCalls.push({ cycleKey, at: now, bedAt, wakeAt });
+      },
     } as Parameters<typeof createSleepGoodnightScheduler>[0] & {
       onSleep: (cycleKey: string, now: number) => Promise<void>;
+      onWake: (cycleKey: string, now: number, bedAt: number, wakeAt: number) => Promise<void>;
     });
 
     let now = at(21, 59);
@@ -245,6 +250,23 @@ test('睡眠整理回调在每个睡眠周期触发一次，也覆盖启动时�
     await scheduler.tick();
     await scheduler.tick();
     assert.deepEqual(calls, [{ cycleKey: '2026-10-18', at: now }]);
+    now = new Date(2026, 9, 19, 7).getTime();
+    await scheduler.tick();
+    await scheduler.tick();
+    assert.deepEqual(wakeCalls, [
+      {
+        cycleKey: '2026-10-17',
+        at: at(21, 59),
+        bedAt: new Date(2026, 9, 17, 22).getTime(),
+        wakeAt: new Date(2026, 9, 18, 7).getTime(),
+      },
+      {
+        cycleKey: '2026-10-18',
+        at: now,
+        bedAt: at(22),
+        wakeAt: new Date(2026, 9, 19, 7).getTime(),
+      },
+    ]);
 
     const startupCalls: Array<{ cycleKey: string; at: number }> = [];
     const startupScheduler = createSleepGoodnightScheduler({
@@ -260,6 +282,29 @@ test('睡眠整理回调在每个睡眠周期触发一次，也覆盖启动时�
     });
     await startupScheduler.tick();
     assert.deepEqual(startupCalls, [{ cycleKey: '2026-10-18', at: at(23) }]);
+
+    let recoveryNow = new Date(2026, 9, 19, 8).getTime();
+    const recoveredWakeCalls: Array<{ cycleKey: string; at: number; bedAt: number; wakeAt: number }> = [];
+    const awakeStartupScheduler = createSleepGoodnightScheduler({
+      getConfig: () => config,
+      adapters: () => [adapter],
+      repository,
+      getGoodnightLines: () => ['晚安。'],
+      sendGoodnight: async () => true,
+      now: () => recoveryNow,
+      onWake: async (cycleKey, tickAt, bedAt, wakeAt) => {
+        recoveredWakeCalls.push({ cycleKey, at: tickAt, bedAt, wakeAt });
+      },
+    });
+    await awakeStartupScheduler.tick();
+    recoveryNow += 60_000;
+    await awakeStartupScheduler.tick();
+    assert.deepEqual(recoveredWakeCalls, [{
+      cycleKey: '2026-10-18',
+      at: new Date(2026, 9, 19, 8).getTime(),
+      bedAt: at(22),
+      wakeAt: new Date(2026, 9, 19, 7).getTime(),
+    }]);
   });
 });
 

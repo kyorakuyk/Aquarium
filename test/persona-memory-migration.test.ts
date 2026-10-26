@@ -43,6 +43,29 @@ test('v37 backfills organized time and pending start from legacy messages and me
     upgraded = openDatabase(databasePath);
     const migratedDiary = upgraded.prepare('SELECT source_memo_ids_json FROM persona_diaries WHERE id = 1').get() as { source_memo_ids_json: string };
     assert.equal(migratedDiary.source_memo_ids_json, '[]');
+    const wakeTables = upgraded.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'table' AND name IN ('persona_memory_sleep_contexts', 'persona_memory_wake_followups')
+      ORDER BY name
+    `).all() as Array<{ name: string }>;
+    assert.deepEqual(wakeTables.map(({ name }) => name), [
+      'persona_memory_sleep_contexts', 'persona_memory_wake_followups',
+    ]);
+    const sourceEntriesJson = JSON.stringify([{
+      sessionId: '7101:private:83', messageId: 'sleep-1', senderName: '事件 memo',
+      text: '夜间计划', createdAt: 500, level: 'L0',
+    }]);
+    upgraded.prepare(`
+      INSERT INTO persona_memory_sleep_contexts
+        (account, session_id, cycle_key, source_entries_json, created_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(7101, '7101:private:83', '2026-10-20', sourceEntriesJson, 500, 21_600_500);
+    upgraded.prepare(`
+      INSERT INTO persona_memory_wake_followups
+        (account, session_id, cycle_key, message_ids_json, mention_ids_json, status,
+          attempt_count, next_attempt_at, created_at, expires_at, updated_at, last_reason)
+      VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?, ?, NULL)
+    `).run(7101, '7101:private:83', '2026-10-20', '["sleep-1"]', '[]', 500, 500, 21_600_500, 500);
     const getCursor = upgraded.prepare(`
       SELECT account, session_id, organized_until_message_time, open_segment_start
       FROM memory_cursors WHERE account = ? AND session_id = ?
@@ -69,6 +92,10 @@ test('v37 backfills organized time and pending start from legacy messages and me
     upgraded = openDatabase(databasePath);
     const reenteredDiary = upgraded.prepare('SELECT source_memo_ids_json FROM persona_diaries WHERE id = 1').get() as { source_memo_ids_json: string };
     assert.equal(reenteredDiary.source_memo_ids_json, '[10,11]');
+    const reenteredContext = upgraded.prepare('SELECT source_entries_json FROM persona_memory_sleep_contexts WHERE account = 7101').get() as { source_entries_json: string };
+    assert.equal(reenteredContext.source_entries_json, sourceEntriesJson);
+    const reenteredFollowup = upgraded.prepare('SELECT message_ids_json FROM persona_memory_wake_followups WHERE account = 7101').get() as { message_ids_json: string };
+    assert.equal(reenteredFollowup.message_ids_json, '["sleep-1"]');
   } finally {
     if (legacy?.isOpen) legacy.close();
     if (upgraded?.isOpen) upgraded.close();

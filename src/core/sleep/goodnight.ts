@@ -16,6 +16,7 @@ export interface SleepGoodnightSchedulerOptions {
   getGoodnightLines: () => readonly string[];
   sendGoodnight: (session: SessionKey, text: string, cycleKey: string) => Promise<boolean>;
   onSleep?: (cycleKey: string, now: number) => Promise<void>;
+  onWake?: (cycleKey: string, now: number, bedAt: number, wakeAt: number) => Promise<void>;
   now?: () => number;
   random?: () => number;
   onError?: (error: unknown) => void;
@@ -30,6 +31,7 @@ export function createSleepGoodnightScheduler(options: SleepGoodnightSchedulerOp
   const now = options.now ?? Date.now;
   const random = options.random ?? Math.random;
   let previousAsleep: boolean | undefined;
+  let lastSleepCycle: ReturnType<typeof sleepPlan> | undefined;
   let handledCycleKey: string | undefined;
   let running = false;
   let stopped = false;
@@ -41,6 +43,7 @@ export function createSleepGoodnightScheduler(options: SleepGoodnightSchedulerOp
       const config = options.getConfig();
       if (!config.sleep.enabled) {
         previousAsleep = undefined;
+        lastSleepCycle = undefined;
         handledCycleKey = undefined;
         return;
       }
@@ -48,9 +51,35 @@ export function createSleepGoodnightScheduler(options: SleepGoodnightSchedulerOp
       const currentTime = now();
       const plan = sleepPlan(currentTime, config.sleep.bedtime, config.sleep.wake);
       if (!plan.asleep) {
+        const recoveredSleepCycle = previousAsleep === undefined && plan.wakeAt !== null
+          ? sleepPlan(Math.max(0, plan.wakeAt - 1), config.sleep.bedtime, config.sleep.wake)
+          : undefined;
+        const completedSleepCycle = previousAsleep === true
+          ? lastSleepCycle
+          : recoveredSleepCycle?.asleep ? recoveredSleepCycle : undefined;
         previousAsleep = false;
+        lastSleepCycle = undefined;
+        if (completedSleepCycle?.bedAt !== null && completedSleepCycle?.bedAt !== undefined
+          && completedSleepCycle.wakeAt !== null) {
+          handledCycleKey = completedSleepCycle.cycleKey;
+          const reportWakeError = (error: unknown): void => {
+            try { options.onError?.(error); } catch {}
+          };
+          try {
+            const task = options.onWake?.(
+              completedSleepCycle.cycleKey,
+              currentTime,
+              completedSleepCycle.bedAt,
+              completedSleepCycle.wakeAt,
+            );
+            if (task) void task.catch(reportWakeError);
+          } catch (error) {
+            reportWakeError(error);
+          }
+        }
         return;
       }
+      lastSleepCycle = plan;
       const reportSleepError = (error: unknown): void => {
         try {
           options.onError?.(error);

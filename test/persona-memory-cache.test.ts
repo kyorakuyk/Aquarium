@@ -91,9 +91,11 @@ test('memory scheduling and cache cleanup preserve pending, unscoped, and other-
     let clock = at(3, 59);
     let config = makeConfig();
     const scheduled: Array<{ cycleKey: string; now: number }> = [];
+    const tickTimes: number[] = [];
     const scheduler = createPersonaMemoryScheduler({
       getConfig: () => config,
       runCycle: async (cycleKey, now) => { scheduled.push({ cycleKey, now }); },
+      onTick: async (now) => { tickTimes.push(now); },
       now: () => clock,
       intervalMs: 60_000,
     });
@@ -113,21 +115,25 @@ test('memory scheduling and cache cleanup preserve pending, unscoped, and other-
     await scheduler.onSleep('2026-10-12', clock);
     assert.deepEqual(scheduled[1], { cycleKey: '2026-10-12', now: clock });
     assert.equal(scheduled.length, 2);
+    assert.deepEqual(tickTimes, [at(3, 59), at(4, 0), at(4, 0), at(22, 0)]);
 
     let releaseFixedCycle: () => void = () => {};
+    let markFixedCycleStarted: () => void = () => {};
     const fixedCycleGate = new Promise<void>((resolve) => { releaseFixedCycle = resolve; });
+    const fixedCycleStarted = new Promise<void>((resolve) => { markFixedCycleStarted = resolve; });
     const blockConfig = makeConfig();
     const started: string[] = [];
     const serializedScheduler = createPersonaMemoryScheduler({
       getConfig: () => blockConfig,
       runCycle: async (cycleKey) => {
         started.push(cycleKey);
+        if (started.length === 1) markFixedCycleStarted();
         if (cycleKey === '2026-10-12') await fixedCycleGate;
       },
       now: () => at(4, 0),
     });
     const fixedCycleTask = serializedScheduler.tick();
-    await Promise.resolve();
+    await fixedCycleStarted;
     assert.deepEqual(started, ['2026-10-12']);
     blockConfig.sleep.enabled = true;
     const sleepCycleTask = serializedScheduler.onSleep('2026-10-13', at(22, 0));
