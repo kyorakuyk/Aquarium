@@ -32,7 +32,7 @@ import { buildImpressionsPromptBlocks } from './prompt-blocks.ts';
 import { persistTagPromptStates } from './prompt-state.ts';
 import type { TagSubjectRepository } from '../../store/tag-subject-repo.ts';
 import { recordScheduleTagDrop } from './record-tag-drop.ts';
-import { persistExtractedGroupEvents } from './persist-events.ts';
+import { persistExtractedGroupEvents, type PersistedGroupEvent } from './persist-events.ts';
 import {
   createImpressionsRunState,
   type ImpressionsRunStateEvent,
@@ -58,6 +58,10 @@ export interface ExtractSummary {
   costCny: number;
   failureReason?: ExtractFailureType;
   failureHttpStatus?: number;
+}
+
+export interface ExtractWindowResult extends ExtractSummary {
+  persistedGroupEvents?: PersistedGroupEvent[];
 }
 
 export interface ImpressionsPromptBlocks {
@@ -93,7 +97,8 @@ export interface ImpressionsService {
     slot?: ExtractModelSlot;
     maxContextMessages?: ExtractContextSize;
     oneoffTaskCostCny?: () => number;
-  }): Promise<ExtractSummary>;
+    includePersistedGroupEvents?: boolean;
+  }): Promise<ExtractWindowResult>;
   promptBlocks(input: {
     session: SessionKey;
     sessionId: string;
@@ -429,8 +434,9 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       slot?: ExtractModelSlot;
       maxContextMessages?: ExtractContextSize;
       oneoffTaskCostCny?: () => number;
+      includePersistedGroupEvents?: boolean;
     } = {},
-  ): Promise<ExtractSummary> {
+  ): Promise<ExtractWindowResult> {
     const account = session.account;
     const modelSlot = extractionOptions.slot ?? 'extract';
     if (modelSlot === 'oneoff' && !extractionOptions.oneoffTaskCostCny) {
@@ -446,16 +452,19 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       droppedTagReasons: {} as Partial<Record<TagDropReason, number>>,
     };
     let costCny = 0;
+    let persistedGroupEvents: PersistedGroupEvent[] = [];
     let failureReason: ExtractFailureType | undefined;
     let failureHttpStatus: number | undefined;
-    const finish = (status: ExtractSummary['status']): ExtractSummary => {
+    const finish = (status: ExtractSummary['status']): ExtractWindowResult => {
       const summary = {
         account, sessionId: sessionKey, status, ...counters, costCny,
         ...(failureReason ? { failureReason } : {}),
         ...(failureHttpStatus !== undefined ? { failureHttpStatus } : {}),
       };
       report(summary);
-      return summary;
+      return extractionOptions.includePersistedGroupEvents
+        ? { ...summary, persistedGroupEvents }
+        : summary;
     };
 
     if (modelSlot === 'extract' && !canCallWithDailyBudget(config, 'extract', options.repository.costToday())) {
@@ -569,7 +578,7 @@ export function createImpressionsService(options: ImpressionsServiceOptions): Im
       const current = memberTags.find((entry) => entry.userId === member.userId)?.tags ?? [];
       applySubject(member, current, account, sessionKey, member.userId, recordsById, at, counters);
     }
-    persistExtractedGroupEvents({
+    persistedGroupEvents = persistExtractedGroupEvents({
       repository: options.repository,
       session,
       records: identityRecords,

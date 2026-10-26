@@ -4,6 +4,7 @@ import { createImpressionsService, type ExtractSummary } from '../src/core/impre
 import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { createMessagePipeline } from '../src/core/conversation/pipeline.ts';
 import { sessionId, type SessionKey } from '../src/core/shared/events.ts';
+import type { MessageStorageRecord } from '../src/store/repository-types.ts';
 import {
   FakeAdapter,
   groupSession,
@@ -152,17 +153,18 @@ test('假模型下完成一次提取：观察转正、新标签、成员标签�
 test('one group extraction stores only events backed by window messages and known speakers', async () => {
   await withRepository(async (repository, personaRoot) => {
     const t0 = new Date(2026, 9, 12, 9, 0).getTime();
+    const validEvents = Array.from({ length: 201 }, (_, index) => ({
+      title: `Event${index}`,
+      summary: '群友约好周末一同参加漫展',
+      participantIds: [43, 44],
+      messageIds: ['msg-2', 'msg-4'],
+      worthRemembering: true,
+    }));
     const harness = createImpressionsHarness(repository, makeConfig({ nicknames: [] }), personaRoot, {
       extractText: JSON.stringify({
         group: { observe: [], new: [], contradict: [] },
         members: [],
-        events: [
-          {
-            title: '周末漫展',
-            summary: '群友约好周末一同参加漫展',
-            participantIds: [43, 44],
-            messageIds: ['msg-2', 'msg-4'], worthRemembering: true,
-          },
+        events: [...validEvents,
           {
             title: '无证据事件',
             summary: '引用不在本次提取窗口中的消息',
@@ -181,22 +183,54 @@ test('one group extraction stores only events backed by window messages and know
             participantIds: [43],
             messageIds: ['msg-1'], worthRemembering: true,
           },
+          {
+            title: '不应记住',
+            summary: '这条事件明确标记为不值得记住',
+            participantIds: [43],
+            messageIds: ['msg-1'], worthRemembering: false,
+          },
         ],
       }),
     });
+    const records: MessageStorageRecord[] = [42, 43, 44, 45].map((senderId, index) => ({
+      sessionId: sessionId(groupSession),
+      messageId: `msg-${index + 1}`,
+      senderId,
+      senderName: `成员${senderId}`,
+      isSelf: false,
+      plainText: `群消息 ${index + 1}`,
+      segments: [],
+      time: t0 + index * 1_000,
+    }));
+    const release = harness.impressionsService.tryAcquireSession(sessionId(groupSession));
+    assert.ok(release);
+    let extraction: Awaited<ReturnType<typeof harness.impressionsService.extractWindowUnderSessionLock>>;
+    try {
+      extraction = await harness.impressionsService.extractWindowUnderSessionLock({
+        session: groupSession,
+        records,
+        now: t0 + 10_000,
+        template: promptTemplateStore.get().extractTags,
+        includePersistedGroupEvents: true,
+      });
+    } finally {
+      release();
+    }
 
-    await pump(harness, groupSession, 10);
-    await harness.impressionsService.idle();
-
-    const events = repository.listGroupEvents(account, groupSession.peer, 0, 10);
+    const events = repository.listGroupEvents(account, groupSession.peer, 0, 1_000);
+    const persistedEvents: unknown = Reflect.get(extraction, 'persistedGroupEvents');
     assert.equal(harness.extractRequests.length, 1);
-    assert.equal(events.length, 1);
-    assert.equal(events[0]?.title, '周末漫展');
-    assert.equal(events[0]?.summary, '群友约好周末一同参加漫展');
-    assert.equal(events[0]?.anchorMessageId, 'msg-2');
-    assert.deepEqual(events[0]?.participantIds, [43, 44]);
-    assert.deepEqual(events[0]?.evidenceMessageIds, ['msg-2', 'msg-4']);
-    assert.equal(events[0]?.occurredAt, t0 + 2_000);
+    assert.equal(extraction.status, 'done');
+    assert.equal(events.length, validEvents.length);
+    assert.ok(Array.isArray(persistedEvents));
+    assert.equal(persistedEvents.length, validEvents.length);
+    const persistedIds = new Set((persistedEvents as Array<{ id: number }>).map(({ id }) => id));
+    assert.deepEqual(new Set(events.map(({ id }) => id)), persistedIds);
+    assert.ok(events.every((event) => event.anchorMessageId === 'msg-2'
+      && event.summary === '群友约好周末一同参加漫展'
+      && event.participantIds.join(',') === '43,44'
+      && event.evidenceMessageIds.join(',') === 'msg-2,msg-4'
+      && event.occurredAt === t0 + 1_000));
   });
 });
 

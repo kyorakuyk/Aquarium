@@ -2,7 +2,7 @@ import { createSessionQueue } from '../core/conversation/session-queue.ts';
 import type { AquariumConfig } from '../config/schema.ts';
 import type { PromptTemplateSet } from '../core/prompt/templates.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
-import type { ImpressionsService } from '../core/impressions/service.ts';
+import type { ExtractWindowResult, ImpressionsService } from '../core/impressions/service.ts';
 import type { PrivateMentionService } from '../core/privacy/mentions.ts';
 import type { PrivateFactsService } from '../core/privacy/service.ts';
 import type { PersonaMemoryProcessResult, PersonaMemoryProcessStatus } from '../core/persona-memory.ts';
@@ -75,10 +75,9 @@ export function createPersonaMemorySegmentProcessor(options: {
     session: SessionKey,
     records: MessageStorageRecord[],
     now: number,
+    events: NonNullable<ExtractWindowResult['persistedGroupEvents']>,
   ): NonNullable<PersonaMemoryProcessResult['memos']> {
     const messageIds = new Set(records.map(({ messageId }) => messageId));
-    const since = records.reduce((earliest, record) => Math.min(earliest, record.time), Number.MAX_SAFE_INTEGER);
-    const events = options.repository.listGroupEvents(session.account, session.peer, since, Math.max(200, records.length * 2));
     return events.flatMap((event) => {
       if (!event.evidenceMessageIds.every((messageId) => messageIds.has(messageId))) return [];
       const evidence = records.filter((record) => event.evidenceMessageIds.includes(record.messageId))
@@ -90,9 +89,9 @@ export function createPersonaMemorySegmentProcessor(options: {
         account: session.account,
         sessionId: sessionId(session),
         eventId: event.id,
-        title: redactSensitiveText(event.title),
-        summary: redactSensitiveText(event.summary),
-        participantIds: event.participantIds,
+        title: event.title,
+        summary: event.summary,
+        participantIds: [...event.participantIds],
         startMessageId: first.messageId,
         endMessageId: last.messageId,
         level: 'L0' as const,
@@ -156,9 +155,13 @@ export function createPersonaMemorySegmentProcessor(options: {
             records,
             now,
             template: templates.extractTags,
+            includePersistedGroupEvents: true,
           });
           if (summary.status !== 'done') return summary.status === 'budget' ? 'budget' : 'failed';
-          return { status: 'done', memos: groupEventMemos(session, records, now) };
+          return {
+            status: 'done',
+            memos: groupEventMemos(session, records, now, summary.persistedGroupEvents ?? []),
+          };
         } finally {
           release();
         }

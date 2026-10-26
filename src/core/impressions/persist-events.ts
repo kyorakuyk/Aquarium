@@ -4,14 +4,24 @@ import { redactSensitiveText } from './sensitive-text.ts';
 import { asEventItem, isExternalLinkShareText } from './extract.ts';
 import { sessionId, type SessionKey } from '../shared/events.ts';
 
+export interface PersistedGroupEvent {
+  id: number;
+  title: string;
+  summary: string;
+  participantIds: number[];
+  evidenceMessageIds: string[];
+  occurredAt: number;
+}
+
 export function persistExtractedGroupEvents(input: {
   repository: Pick<StoreRepository, 'upsertGroupEvent'>;
   session: SessionKey;
   records: readonly MessageStorageRecord[];
   events: readonly unknown[];
   now: number;
-}): void {
-  if (input.session.kind !== 'group') return;
+}): PersistedGroupEvent[] {
+  if (input.session.kind !== 'group') return [];
+  const persisted: PersistedGroupEvent[] = [];
   const targetSessionId = sessionId(input.session);
   const recordsById = new Map(input.records
     .filter((record) => record.sessionId === targetSessionId)
@@ -37,7 +47,7 @@ export function persistExtractedGroupEvents(input: {
     if (Array.from(title).length < 1 || Array.from(title).length > 16
       || Array.from(summary).length < 1 || Array.from(summary).length > 60) continue;
     const orderedMessageIds = orderedEvidence.map((record) => record.messageId);
-    input.repository.upsertGroupEvent({
+    const eventId = input.repository.upsertGroupEvent({
       account: input.session.account,
       sourceGroupId: input.session.peer,
       anchorMessageId: firstEvidence.messageId,
@@ -49,5 +59,14 @@ export function persistExtractedGroupEvents(input: {
       createdAt: input.now,
       updatedAt: input.now,
     });
+    persisted.push({
+      id: eventId,
+      title,
+      summary,
+      participantIds: [...event.participantIds],
+      evidenceMessageIds: orderedMessageIds,
+      occurredAt: firstEvidence.time,
+    });
   }
+  return persisted;
 }

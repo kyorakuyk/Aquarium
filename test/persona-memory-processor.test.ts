@@ -124,17 +124,28 @@ test('one segment extraction maps stored group events and private facts into sco
       segments: [],
       time: baseTime + index,
     }));
-    const eventId = repository.upsertGroupEvent({
-      account: groupSession.account,
-      sourceGroupId: groupSession.peer,
-      anchorMessageId: 'group-start',
-      title: '周末看展',
-      summary: '群友约好周末看展。',
-      participantIds: [42],
-      evidenceMessageIds: ['group-start', 'group-end'],
-      occurredAt: baseTime,
-      createdAt: now,
-      updatedAt: now,
+    const persistedGroupEvents = Array.from({ length: 201 }, (_, index) => {
+      const title = `活动${index}`;
+      const id = repository.upsertGroupEvent({
+        account: groupSession.account,
+        sourceGroupId: groupSession.peer,
+        anchorMessageId: 'group-start',
+        title,
+        summary: '群友约好周末看展。',
+        participantIds: [42],
+        evidenceMessageIds: ['group-start', 'group-end'],
+        occurredAt: baseTime,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return {
+        id,
+        title,
+        summary: '群友约好周末看展。',
+        participantIds: [42],
+        evidenceMessageIds: ['group-start', 'group-end'],
+        occurredAt: baseTime,
+      };
     });
     const privateSession: SessionKey = { account: groupSession.account, kind: 'private', peer: 42 };
     repository.insertPrivateFact({
@@ -160,7 +171,7 @@ test('one segment extraction maps stored group events and private facts into sco
         tryAcquireSession: () => () => {},
         extractWindowUnderSessionLock: async () => {
           groupExtractCalls += 1;
-          return { status: 'done' };
+          return { status: 'done', persistedGroupEvents };
         },
       } as never,
       privateFactsService: {
@@ -210,20 +221,21 @@ test('one segment extraction maps stored group events and private facts into sco
 
     const groupResult = await processor.process(groupSession, groupRecords, now);
     assert.equal(groupExtractCalls, 1);
-    assert.deepEqual(groupResult, {
-      status: 'done',
-      memos: [{
-        account: groupSession.account,
-        sessionId: sessionId(groupSession),
-        eventId,
-        title: '周末看展',
-        summary: '群友约好周末看展。',
-        participantIds: [42],
-        startMessageId: 'group-start',
-        endMessageId: 'group-end',
-        level: 'L0',
-        createdAt: now,
-      }],
+    assert.equal(groupResult.status, 'done');
+    assert.equal(groupResult.memos?.length, persistedGroupEvents.length);
+    assert.deepEqual(groupResult.memos?.map(({ eventId: memoEventId }) => memoEventId),
+      persistedGroupEvents.map(({ id }) => id));
+    assert.deepEqual(groupResult.memos?.[0], {
+      account: groupSession.account,
+      sessionId: sessionId(groupSession),
+      eventId: persistedGroupEvents[0]!.id,
+      title: '活动0',
+      summary: '群友约好周末看展。',
+      participantIds: [42],
+      startMessageId: 'group-start',
+      endMessageId: 'group-end',
+      level: 'L0',
+      createdAt: now,
     });
 
     const privateResult = await processor.process(privateSession, [{
