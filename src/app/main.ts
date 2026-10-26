@@ -4,7 +4,6 @@ import type { AdapterStatus } from '../adapters/types.ts';
 import { loadConfig } from '../config/load.ts';
 import { watchConfig } from '../config/watch.ts';
 import { writeConfig } from '../config/write.ts';
-import { resolveSession } from '../config/resolve.ts';
 import { createLogger } from '../core/shared/logger.ts';
 import { createMessagePipeline } from '../core/conversation/pipeline.ts';
 import { bindPromptTemplateReload, promptTemplateStore } from '../core/prompt/templates.ts';
@@ -35,12 +34,11 @@ import { createWindowsHost } from '../host/windows/host.ts';
 import { createAccountActivityRouter } from './activity-routing.ts';
 import { createEventAdvocacyScheduler } from './event-advocacy-scheduler.ts';
 import { createMemoryServices } from './memory-services.ts';
-import { createPersonaMemorySegmentProcessor, createQueuedPersonaMemoryProcessor } from './persona-memory-processor.ts';
+import { createPersonaMemoryRuntime } from './persona-memory-runtime.ts';
 import { createAccountStickerService, startStickerSyncTimer } from './stickers.ts';
 import { startAdapterForHost } from './adapter-start.ts';
 import { createAccountInteractionRuntime, createEmojiLikeFeedbackHandler } from './interactions.ts';
 import { createProfileActivityService } from '../core/profiles/presence-service.ts';
-import { createPersonaMemoryService } from '../core/persona-memory.ts';
 import { loadPersona } from '../persona/load.ts';
 import { createPersonaEnergyResolver } from './persona-energy.ts';
 import { createPersonaMoodResolver } from './persona-mood.ts';
@@ -128,7 +126,6 @@ const eventAdvocacyScheduler = createEventAdvocacyScheduler({
 });
 subscriptions.push(eventAdvocacyScheduler.start());
 const sleepWakeState = createSleepWakeState();
-const sleepOrganizationTasks = new Set<Promise<void>>();
 const affinityService = createAffinityService({
   repository,
   getConfig: () => configWatcher.getConfig(),
@@ -166,26 +163,19 @@ const { impressionsService, memberSummaryService, groupSummaryService, tagClassi
   describeError,
 });
 tagClassificationService.startOnStartup();
-const personaMemorySegmentProcessor = createPersonaMemorySegmentProcessor({
+const personaMemoryRuntime = createPersonaMemoryRuntime({
   repository,
   impressionsService,
   privateFactsService,
   privateMentionService,
   getConfig: () => configWatcher.getConfig(),
   getTemplates: () => promptTemplateStore.get(),
+  onInfo: (message) => logger.info(message),
+  onWarning: (message) => logger.warn(message),
+  onError: (message) => logger.error(message),
 });
-const processPersonaMemorySession = createQueuedPersonaMemoryProcessor({
-  isSessionEnabled: (session) => resolveSession(configWatcher.getConfig(), session).enabled,
-  process: personaMemorySegmentProcessor.process,
-});
-const personaMemoryService = createPersonaMemoryService({
-  repository,
-  getConfig: () => configWatcher.getConfig(),
-  canProcessSession: (session) => resolveSession(configWatcher.getConfig(), session).enabled,
-  processSession: processPersonaMemorySession,
-  isSignificantSegment: personaMemorySegmentProcessor.isSignificantSegment,
-  onError: () => logger.error('夜间人格记忆整理失败；未完成的 memo 保留待下次重试。'),
-});
+const personaMemoryService = personaMemoryRuntime.service;
+subscriptions.push(personaMemoryRuntime.start());
 const sleepGoodnightScheduler = createSleepGoodnightScheduler({
   getConfig: () => configWatcher.getConfig(),
   adapters: () => adapters,
@@ -196,26 +186,7 @@ const sleepGoodnightScheduler = createSleepGoodnightScheduler({
     if (!pipeline) return Promise.resolve(false);
     return sessionQueue.run(sessionId(session), () => pipeline.sendSystemReply(session, text, cycleKey));
   },
-  onSleep: async (cycleKey, now) => {
-    const task = (async () => {
-      for (const account of configWatcher.getConfig().accounts) {
-        try {
-          const result = await personaMemoryService.organizeAtSleep({ account: account.uin, cycleKey, now });
-          if (result.status === 'budget') logger.warn(`账号 ${account.uin} 夜间整理因预算超限跳过。`);
-          else if (result.status === 'partial') logger.warn(`账号 ${account.uin} 本轮夜间整理未完成，剩余 memo 留待下个睡眠周期。`);
-          else if (result.status === 'failed') logger.error(`账号 ${account.uin} 夜间整理失败；待处理 memo 保留。`);
-        } catch {
-          logger.error(`账号 ${account.uin} 夜间整理失败；待处理 memo 保留。`);
-        }
-      }
-    })();
-    sleepOrganizationTasks.add(task);
-    try {
-      await task;
-    } finally {
-      sleepOrganizationTasks.delete(task);
-    }
-  },
+  onSleep: (cycleKey, now) => personaMemoryRuntime.onSleep(cycleKey, now),
   onError: (error) => logger.error(`定时晚安发送失败：${describeError(error)}`),
 });
 subscriptions.push(sleepGoodnightScheduler.start());
@@ -252,9 +223,7 @@ async function shutdown(signal: string): Promise<void> {
   } catch (error) {
     logger.error(`Windows 托管关闭失败：${describeError(error)}`);
   }
-  while (sleepOrganizationTasks.size > 0) {
-    await Promise.all([...sleepOrganizationTasks].map((task) => task.catch(() => undefined)));
-  }
+  await personaMemoryRuntime.idle();
   await sessionQueue.idle();
   await impressionsService.idle();
   await memberSummaryService.idle();

@@ -29,6 +29,8 @@ export interface PersonaMemoryCursorRepository {
   savePersonaMemoryCursor(cursor: PersonaMemoryCursorRecord): void;
   listPersonaMemoryPendingMessages(account: number, sessionId: string): PersonaMemoryCursorMessage[];
   listPersonaMemoryCursorSummaries(account: number): PersonaMemoryCursorSummary[];
+  deleteOrganizedPersonaMemoryMessagesBefore(account: number, cutoff: number): number;
+  clearOrganizedPersonaMemoryMessages(account: number, sessionId?: string): number;
 }
 
 function integerValue(value: unknown, field: string): number {
@@ -94,6 +96,83 @@ export function createMemoryCursorRepository(database: DatabaseSync): PersonaMem
       c.organized_until_message_row_id, c.open_segment_start
     ORDER BY c.session_id
   `);
+  const deleteExpiredTails = database.prepare('DELETE FROM persona_memory_tails WHERE account = ? AND created_at < ?');
+  const deleteExpiredOrganizedMessages = database.prepare(`
+    DELETE FROM messages
+    WHERE time < ? AND EXISTS (
+      SELECT 1 FROM memory_cursors c
+      WHERE c.account = ? AND c.session_id = messages.session_id
+        AND c.organized_until_message_time IS NOT NULL
+        AND (messages.time < c.organized_until_message_time
+          OR (messages.time = c.organized_until_message_time
+            AND c.organized_until_message_row_id IS NOT NULL
+            AND messages.id <= c.organized_until_message_row_id))
+    )
+  `);
+  const deleteOrganizedTailRefs = database.prepare(`
+    DELETE FROM persona_memory_tails
+    WHERE account = ? AND EXISTS (
+      SELECT 1 FROM messages m JOIN memory_cursors c
+        ON c.account = ? AND c.session_id = m.session_id
+      WHERE m.session_id = persona_memory_tails.session_id
+        AND m.message_id = persona_memory_tails.message_id
+        AND c.organized_until_message_time IS NOT NULL
+        AND (m.time < c.organized_until_message_time
+          OR (m.time = c.organized_until_message_time
+            AND c.organized_until_message_row_id IS NOT NULL
+            AND m.id <= c.organized_until_message_row_id))
+    )
+  `);
+  const deleteOrganizedTailRefsForSession = database.prepare(`
+    DELETE FROM persona_memory_tails
+    WHERE account = ? AND session_id = ? AND EXISTS (
+      SELECT 1 FROM messages m JOIN memory_cursors c
+        ON c.account = ? AND c.session_id = m.session_id
+      WHERE m.session_id = persona_memory_tails.session_id
+        AND m.message_id = persona_memory_tails.message_id
+        AND c.organized_until_message_time IS NOT NULL
+        AND (m.time < c.organized_until_message_time
+          OR (m.time = c.organized_until_message_time
+            AND c.organized_until_message_row_id IS NOT NULL
+            AND m.id <= c.organized_until_message_row_id))
+    )
+  `);
+  const deleteOrganizedMessages = database.prepare(`
+    DELETE FROM messages
+    WHERE EXISTS (
+      SELECT 1 FROM memory_cursors c
+      WHERE c.account = ? AND c.session_id = messages.session_id
+        AND c.organized_until_message_time IS NOT NULL
+        AND (messages.time < c.organized_until_message_time
+          OR (messages.time = c.organized_until_message_time
+            AND c.organized_until_message_row_id IS NOT NULL
+            AND messages.id <= c.organized_until_message_row_id))
+    )
+  `);
+  const deleteOrganizedMessagesForSession = database.prepare(`
+    DELETE FROM messages
+    WHERE session_id = ? AND EXISTS (
+      SELECT 1 FROM memory_cursors c
+      WHERE c.account = ? AND c.session_id = messages.session_id
+        AND c.organized_until_message_time IS NOT NULL
+        AND (messages.time < c.organized_until_message_time
+          OR (messages.time = c.organized_until_message_time
+            AND c.organized_until_message_row_id IS NOT NULL
+            AND messages.id <= c.organized_until_message_row_id))
+    )
+  `);
+
+  function inTransaction<T>(task: () => T): T {
+    database.exec('BEGIN IMMEDIATE');
+    try {
+      const result = task();
+      database.exec('COMMIT');
+      return result;
+    } catch (error) {
+      try { database.exec('ROLLBACK'); } catch { /* 保留原始错误。 */ }
+      throw error;
+    }
+  }
 
   return {
     personaMemoryCursor(account, sessionId) {
@@ -163,6 +242,27 @@ export function createMemoryCursorRepository(database: DatabaseSync): PersonaMem
         pendingMessageCount: integerValue(row.pending_message_count, 'pending_message_count'),
         latestPendingMessageTime: nullableInteger(row.latest_pending_message_time, 'latest_pending_message_time'),
       }));
+    },
+
+    deleteOrganizedPersonaMemoryMessagesBefore(account, cutoff) {
+      if (!Number.isSafeInteger(account) || account <= 0 || !Number.isSafeInteger(cutoff) || cutoff < 0) return 0;
+      return inTransaction(() => {
+        deleteExpiredTails.run(account, cutoff);
+        return Number(deleteExpiredOrganizedMessages.run(cutoff, account).changes);
+      });
+    },
+
+    clearOrganizedPersonaMemoryMessages(account, sessionId) {
+      if (!Number.isSafeInteger(account) || account <= 0
+        || (sessionId !== undefined && !validScope(account, sessionId))) return 0;
+      return inTransaction(() => {
+        if (sessionId !== undefined) {
+          deleteOrganizedTailRefsForSession.run(account, sessionId, account);
+          return Number(deleteOrganizedMessagesForSession.run(sessionId, account).changes);
+        }
+        deleteOrganizedTailRefs.run(account, account);
+        return Number(deleteOrganizedMessages.run(account).changes);
+      });
     },
   };
 }

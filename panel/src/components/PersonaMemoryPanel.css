@@ -15,8 +15,15 @@
 .persona-memory-meta time { font-family: var(--mono); }
 .persona-memory-visibility { grid-auto-flow: column; align-items: center; gap: 8px; margin-left: auto; }
 .persona-memory-diary-text { line-height: 1.65; }
+.persona-memory-cache-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
+.persona-memory-cache-scope { display: grid; gap: 5px; color: var(--muted); font-size: 12px; }
+.persona-memory-cache-scope select, .persona-memory-cache-controls button { min-height: 44px; }
+.persona-memory-cache-scope select { padding: 8px 10px; }
+.persona-memory-cache-help, .persona-memory-citations { margin: 0; font-size: 12px; }
 @media (max-width: 760px) {
   .persona-memory-heading { align-items: stretch; flex-direction: column; }
   .persona-memory-account { width: 100%; }
   .persona-memory-visibility { grid-auto-flow: row; align-items: stretch; margin-left: 0; }
+  .persona-memory-cache-controls { align-items: stretch; flex-direction: column; }
+  .persona-memory-cache-scope select, .persona-memory-cache-controls button { width: 100%; }
 }

@@ -48,6 +48,15 @@ export function registerPersonaMemoryRoutes(app: Hono, options: PersonaMemoryRou
     if (account === undefined) return context.json({ error: 'Unknown account' }, 400);
     const cursors = options.repository.listPersonaMemoryCursorSummaries(account);
     const pendingMessageCount = cursors.reduce((total, cursor) => total + cursor.pendingMessageCount, 0);
+    const cacheSessions = cursors.flatMap((cursor) => {
+      const session = parseSessionId(cursor.sessionId);
+      if (!session || session.account !== account) return [];
+      return [{
+        sessionId: cursor.sessionId,
+        label: `${session.kind === 'group' ? '群聊' : '私聊'} ${session.peer}`,
+        pendingMessageCount: cursor.pendingMessageCount,
+      }];
+    });
     const now = options.now?.() ?? Date.now();
     const openSegmentCount = cursors.filter((cursor) => {
       if (cursor.openSegmentStart === null || cursor.pendingMessageCount === 0 || cursor.latestPendingMessageTime === null) {
@@ -74,11 +83,23 @@ export function registerPersonaMemoryRoutes(app: Hono, options: PersonaMemoryRou
       account: diary.account,
       cycleKey: diary.cycleKey,
       text: safeMemoText(diary.text),
+      sourceMemoIds: diary.sourceMemoIds,
       visibleToAni: diary.visibleToAni,
       sourceCount: diary.sourceCount,
       createdAt: diary.createdAt,
     }));
-    return context.json({ account, pendingMessageCount, openSegmentCount, memos, diaries });
+    return context.json({ account, pendingMessageCount, openSegmentCount, cacheSessions, memos, diaries });
+  });
+
+  app.delete('/api/persona-memory/cache', (context) => {
+    const account = activeAccount(options, context.req.query('account'));
+    if (account === undefined) return context.json({ error: 'Unknown account' }, 400);
+    const rawSessionId = context.req.query('sessionId');
+    if (rawSessionId !== undefined && parseSessionId(rawSessionId)?.account !== account) {
+      return context.json({ error: 'Invalid session ID' }, 400);
+    }
+    const deletedMessages = options.repository.clearOrganizedPersonaMemoryMessages(account, rawSessionId);
+    return context.json({ account, sessionId: rawSessionId ?? null, deletedMessages });
   });
 
   app.patch('/api/persona-memory/diaries/:id', async (context) => {

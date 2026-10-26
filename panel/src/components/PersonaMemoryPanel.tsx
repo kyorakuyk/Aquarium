@@ -13,6 +13,7 @@ interface PersonaDiaryView {
   account: number;
   cycleKey: string;
   text: string;
+  sourceMemoIds: number[];
   visibleToAni: boolean;
   sourceCount: number;
   createdAt: number;
@@ -35,6 +36,7 @@ interface PersonaMemoryView {
   account: number;
   pendingMessageCount: number;
   openSegmentCount: number;
+  cacheSessions: Array<{ sessionId: string; label: string; pendingMessageCount: number }>;
   memos: PersonaEventMemoView[];
   diaries: PersonaDiaryView[];
 }
@@ -50,8 +52,11 @@ export function PersonaMemoryPanel() {
   const [loading, setLoading] = useState(false);
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [savingId, setSavingId] = useState<number>();
+  const [cacheScope, setCacheScope] = useState('');
+  const [clearingCache, setClearingCache] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -102,6 +107,29 @@ export function PersonaMemoryPanel() {
     }
   }
 
+  async function clearCache(): Promise<void> {
+    if (account === undefined || clearingCache) return;
+    const selectedScope = visibleMemory?.cacheSessions.find(({ sessionId }) => sessionId === cacheScope);
+    const scopeLabel = selectedScope?.label ?? '全部已整理缓存';
+    if (!window.confirm(`确认清除${scopeLabel}中游标之前的原文缓存？未整理消息、memo、日记和事件簿不会被清除。`)) return;
+    setClearingCache(true);
+    setError('');
+    setNotice('');
+    try {
+      const sessionQuery = cacheScope ? `&sessionId=${encodeURIComponent(cacheScope)}` : '';
+      const result = await apiRequest<{ deletedMessages: number }>(
+        `/api/persona-memory/cache?account=${account}${sessionQuery}`,
+        { method: 'DELETE' },
+      );
+      setNotice(`已清除 ${result.deletedMessages} 条原文缓存。`);
+      setRefreshVersion((current) => current + 1);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '原文缓存清除失败');
+    } finally {
+      setClearingCache(false);
+    }
+  }
+
   const selectedAccount = accounts.find((candidate) => candidate.account === account);
   const visibleMemory = memoryForAccount(memory, account);
   return (
@@ -116,7 +144,11 @@ export function PersonaMemoryPanel() {
           <select
             value={account ?? ''}
             disabled={accountsLoading || accounts.length === 0}
-            onChange={(event) => setAccount(Number(event.currentTarget.value))}
+            onChange={(event) => {
+              setAccount(Number(event.currentTarget.value));
+              setCacheScope('');
+              setNotice('');
+            }}
           >
             {accounts.length === 0 && <option value="">暂无可用眷属</option>}
             {accounts.map((entry) => <option value={entry.account} key={entry.account}>{entry.name} · {entry.account}</option>)}
@@ -124,6 +156,7 @@ export function PersonaMemoryPanel() {
         </label>
       </header>
       {error && <p className="notice notice-warn" role="alert">{error}</p>}
+      {notice && <p className="notice" role="status">{notice}</p>}
       {loading && <p className="muted" role="status">正在读取近期记忆…</p>}
       {!loading && !accountsLoading && accounts.length === 0 && <p className="empty-state">当前没有已连接的眷属。</p>}
       {!loading && selectedAccount && visibleMemory && <>
@@ -135,6 +168,26 @@ export function PersonaMemoryPanel() {
             暂存 <strong>{visibleMemory.pendingMessageCount}</strong> 条，
             <strong>{visibleMemory.openSegmentCount}</strong> 段进行中
           </p>
+          <div className="persona-memory-cache-controls">
+            <label className="persona-memory-cache-scope">
+              <span>清理范围</span>
+              <select value={cacheScope} onChange={(event) => setCacheScope(event.currentTarget.value)}>
+                <option value="">全部已整理缓存</option>
+                {visibleMemory.cacheSessions.map((session) => (
+                  <option value={session.sessionId} key={session.sessionId}>{session.label}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="button button-warn"
+              type="button"
+              disabled={clearingCache}
+              onClick={() => void clearCache()}
+            >
+              {clearingCache ? '清除中…' : '清除原文缓存'}
+            </button>
+          </div>
+          <p className="persona-memory-cache-help muted">仅清理已整理且游标之前的原文；未整理内容、memo、日记和事件簿保留。</p>
           {visibleMemory.pendingMessageCount === 0 && <p className="muted">暂存区当前为空。</p>}
         </section>
         <section className="persona-memory-section" aria-labelledby="persona-event-memos-title">
@@ -183,6 +236,11 @@ export function PersonaMemoryPanel() {
                     </label>
                   </div>
                   <p className="persona-memory-diary-text">{diary.text}</p>
+                  {diary.sourceMemoIds.length > 0 && (
+                    <p className="persona-memory-citations muted">
+                      引用 memo：{diary.sourceMemoIds.map((id) => `#${id}`).join('、')}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>

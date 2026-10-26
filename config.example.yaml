@@ -32,6 +32,7 @@ affinity:
     negGain: { preset: default, points: [] }
     negLoss: { preset: default, points: [] }
 sleep: { enabled: false, bedtime: '02:00', wake: '09:00', wakeWords: ['起床', '醒醒', '别睡了'], goodnight: true }
+memory: { organizeAt: '04:00', rawRetentionDays: 7 }
 selfEdit: { enabled: true, scopes: [persona_behavior, persona_traits, persona_boundaries, behavior, session] }
 profile:
   schedule: { minimumMessages: 50, nightOwlRatio: 0.4, weekendActiveRatio: 1.5, morningRatio: 0.03, morningMinimumMessages: 100 }

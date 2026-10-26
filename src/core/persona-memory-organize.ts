@@ -5,8 +5,15 @@ import type { PersonaDiarySourceEntry } from '../store/persona-memory-repo.ts';
 import { parseSessionId } from './conversation/sessions.ts';
 import { redactSensitiveText } from './impressions/sensitive-text.ts';
 import { segmentMemoryMessages } from './persona-memory-segments.ts';
+import {
+  collectPersonaMemoryDiarySources,
+  generatePersonaMemoryDiary,
+  mergePersonaDiarySourceEntries,
+} from './persona-memory-diary.ts';
 import { sessionId, type SessionKey } from './shared/events.ts';
 import type {
+  PersonaMemoryDiaryGenerationInput,
+  PersonaMemoryDiaryGenerationResult,
   PersonaMemoryOrganizeInput,
   PersonaMemoryOrganizeResult,
   PersonaMemoryProcessResult,
@@ -42,20 +49,6 @@ function preservedDiaryPrefix(diary: { text: string; sourceEntries: PersonaDiary
   return diary.text.endsWith(generatedSuffix)
     ? diary.text.slice(0, -generatedSuffix.length)
     : diary.text;
-}
-
-function mergeDiarySourceEntries(
-  previous: readonly PersonaDiarySourceEntry[],
-  incoming: readonly PersonaDiarySourceEntry[],
-): PersonaDiarySourceEntry[] {
-  const entries = new Map<string, PersonaDiarySourceEntry>();
-  for (const entry of [...previous, ...incoming]) {
-    const key = JSON.stringify([entry.sessionId, entry.messageId]);
-    if (!entries.has(key)) entries.set(key, entry);
-  }
-  return [...entries.values()].sort((first, second) => first.createdAt - second.createdAt
-    || first.sessionId.localeCompare(second.sessionId)
-    || first.messageId.localeCompare(second.messageId));
 }
 
 function diaryEntries(records: readonly MessageStorageRecord[]): PersonaDiarySourceEntry[] {
@@ -112,6 +105,11 @@ export async function organizePersonaMemoryAtSleep(
 
     const recoveredCount = existingRun?.processedCount ?? 0;
     const totalPending = totalPendingMessages(options.repository, account);
+    const pendingDiarySources = options.generateDiary
+      ? collectPersonaMemoryDiarySources(options.repository, account, now)
+      : undefined;
+    const hasPendingDiarySources = (pendingDiarySources?.memos.length ?? 0) > 0
+      || (pendingDiarySources?.tails.length ?? 0) > 0;
     const observedMemoCount = Math.max(existingRun?.memoCount ?? 0, recoveredCount + totalPending);
     const remainingCapacity = Math.max(0, MEMO_BATCH_LIMIT - recoveredCount);
     const runReady = existingRun
@@ -131,7 +129,7 @@ export async function organizePersonaMemoryAtSleep(
       return { ...inputBase, status: 'already_run', memoCount: observedMemoCount, processedCount: recoveredCount };
     }
 
-    if (remainingCapacity === 0 || totalPending === 0) {
+    if (totalPending === 0 && !hasPendingDiarySources) {
       const status = remainingCapacity === 0 && totalPending > 0
         ? 'partial'
         : recoveredCount > 0 ? 'done' : 'empty';
@@ -146,7 +144,12 @@ export async function organizePersonaMemoryAtSleep(
     let status: 'done' | 'budget' | 'failed' | 'partial' | 'empty' = 'done';
     let reason: string | null = null;
     let sessionIssueReason: string | null = null;
-    let stopProcessing = false;
+    let diaryGenerated = false;
+    let stopProcessing = remainingCapacity === 0 && totalPending > 0;
+    if (stopProcessing) {
+      status = 'partial';
+      reason = 'memo-backlog-remains';
+    }
     const cursors = options.repository.listPersonaMemoryCursorSummaries(account);
 
     for (const cursor of cursors) {
@@ -272,9 +275,9 @@ export async function organizePersonaMemoryAtSleep(
               });
             }
             options.repository.savePersonaMemoryCursor(nextCursor);
-            if (entries.length > 0) {
+            if (!options.generateDiary && entries.length > 0) {
               const existingDiary = options.repository.personaDiary(account, cycleKey);
-              const sourceEntries = mergeDiarySourceEntries(existingDiary?.sourceEntries ?? [], entries);
+              const sourceEntries = mergePersonaDiarySourceEntries(existingDiary?.sourceEntries ?? [], entries);
               const generatedText = diaryText(sourceEntries);
               const legacyPrefix = existingDiary ? preservedDiaryPrefix(existingDiary) : '';
               options.repository.insertPersonaDiary({
@@ -305,16 +308,41 @@ export async function organizePersonaMemoryAtSleep(
       }
     }
 
+    if (options.generateDiary && status !== 'budget') {
+      const sources = collectPersonaMemoryDiarySources(options.repository, account, now);
+      if (sources.memos.length > 0 || sources.tails.length > 0) {
+        const diaryStatus = await generatePersonaMemoryDiary({
+          account,
+          cycleKey,
+          now,
+          sources,
+          repository: options.repository,
+          getConfig: options.getConfig,
+          generate: options.generateDiary,
+          onError: (error) => options.onError?.(error, account),
+        });
+        if (diaryStatus === 'budget') {
+          status = 'budget';
+          reason = 'budgetState=exceeded';
+        } else if (diaryStatus === 'failed') {
+          status = 'failed';
+          reason = 'diary-generation-failed';
+        } else if (diaryStatus === 'done') {
+          diaryGenerated = true;
+        }
+      }
+    }
+
     const pendingAfter = totalPendingMessages(options.repository, account);
     if (status === 'done' && sessionIssueReason !== null) {
-      status = processedCount > recoveredCount ? 'partial' : 'failed';
+      status = processedCount > recoveredCount || diaryGenerated ? 'partial' : 'failed';
       reason = sessionIssueReason;
     }
     if (status === 'done' && pendingAfter > 0) {
-      status = processedCount > recoveredCount ? 'partial' : 'failed';
+      status = processedCount > recoveredCount || diaryGenerated ? 'partial' : 'failed';
       reason = sessionIssueReason ?? 'memo-backlog-remains';
     }
-    if (status === 'done' && processedCount === recoveredCount) {
+    if (status === 'done' && processedCount === recoveredCount && !diaryGenerated) {
       status = pendingAfter > 0 ? 'failed' : 'empty';
       reason = pendingAfter > 0 ? sessionIssueReason ?? 'no-processable-segments' : null;
     }

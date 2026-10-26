@@ -52,6 +52,7 @@ export interface PersonaDiaryInput {
   cycleKey: string;
   text: string;
   sourceEntries?: PersonaDiarySourceEntry[];
+  sourceMemoIds?: number[];
   sourceCount: number;
   createdAt: number;
   visibleToAni?: boolean;
@@ -63,6 +64,7 @@ export interface PersonaDiarySourceEntry {
   senderName: string;
   text: string;
   createdAt: number;
+  level?: 'L0' | 'L1' | 'L2';
 }
 
 export interface PersonaDiaryRecord extends Required<PersonaDiaryInput> {
@@ -115,7 +117,7 @@ function validCycleKey(value: string): boolean {
 }
 
 function validDiarySourceEntries(value: unknown): value is PersonaDiarySourceEntry[] {
-  if (!Array.isArray(value) || value.length > 1_000) return false;
+  if (!Array.isArray(value) || value.length > 2_000) return false;
   return value.every((entry) => {
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return false;
     const record = entry as Record<string, unknown>;
@@ -123,8 +125,14 @@ function validDiarySourceEntries(value: unknown): value is PersonaDiarySourceEnt
       && typeof record.messageId === 'string' && record.messageId.length > 0 && record.messageId.length <= 512
       && typeof record.senderName === 'string' && record.senderName.length > 0 && record.senderName.length <= 120
       && typeof record.text === 'string' && record.text.length > 0 && record.text.length <= 2_000
-      && typeof record.createdAt === 'number' && Number.isSafeInteger(record.createdAt) && record.createdAt >= 0;
+      && typeof record.createdAt === 'number' && Number.isSafeInteger(record.createdAt) && record.createdAt >= 0
+      && (record.level === undefined || record.level === 'L0' || record.level === 'L1' || record.level === 'L2');
   });
+}
+
+function validSourceMemoIds(value: unknown): value is number[] {
+  return Array.isArray(value) && value.length <= 2_000
+    && value.every((id) => Number.isSafeInteger(id) && (id as number) > 0);
 }
 
 function memoRecord(row: Record<string, unknown>): PersonaMemoRecord {
@@ -157,17 +165,29 @@ function diaryRecord(row: Record<string, unknown>): PersonaDiaryRecord {
     cycleKey: stringValue(row.cycle_key, 'cycle_key'),
     text: stringValue(row.text, 'text'),
     sourceEntries: sourceEntriesValue(row.source_entries_json),
+    sourceMemoIds: sourceMemoIdsValue(row.source_memo_ids_json),
     visibleToAni: visibleToAni === 1,
     sourceCount: numberValue(row.source_count, 'source_count'),
     createdAt: numberValue(row.created_at, 'created_at'),
   };
 }
 
+function sourceMemoIdsValue(value: unknown): number[] {
+  if (typeof value !== 'string') throw new Error('数据库字段 source_memo_ids_json 不是文本');
+  let parsed: unknown;
+  try { parsed = JSON.parse(value) as unknown; } catch { throw new Error('数据库字段 source_memo_ids_json 无效'); }
+  if (!Array.isArray(parsed) || parsed.length > 2_000
+    || parsed.some((id) => typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0)) {
+    throw new Error('数据库字段 source_memo_ids_json 无效');
+  }
+  return [...new Set(parsed as number[])].sort((first, second) => first - second);
+}
+
 function sourceEntriesValue(value: unknown): PersonaDiarySourceEntry[] {
   if (typeof value !== 'string') throw new Error('数据库字段 source_entries_json 不是文本');
   let parsed: unknown;
   try { parsed = JSON.parse(value) as unknown; } catch { throw new Error('数据库字段 source_entries_json 无效'); }
-  if (!Array.isArray(parsed) || parsed.length > 1_000) throw new Error('数据库字段 source_entries_json 无效');
+  if (!Array.isArray(parsed) || parsed.length > 2_000) throw new Error('数据库字段 source_entries_json 无效');
   return parsed.map((entry) => {
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
       throw new Error('数据库日记来源无效');
@@ -177,7 +197,8 @@ function sourceEntriesValue(value: unknown): PersonaDiarySourceEntry[] {
       || typeof record.messageId !== 'string' || record.messageId.length < 1 || record.messageId.length > 512
       || typeof record.senderName !== 'string' || record.senderName.length < 1 || record.senderName.length > 120
       || typeof record.text !== 'string' || record.text.length < 1 || record.text.length > 2_000
-      || typeof record.createdAt !== 'number' || !Number.isSafeInteger(record.createdAt) || record.createdAt < 0) {
+      || typeof record.createdAt !== 'number' || !Number.isSafeInteger(record.createdAt) || record.createdAt < 0
+      || (record.level !== undefined && record.level !== 'L0' && record.level !== 'L1' && record.level !== 'L2')) {
       throw new Error('数据库日记来源无效');
     }
     return {
@@ -186,6 +207,7 @@ function sourceEntriesValue(value: unknown): PersonaDiarySourceEntry[] {
       senderName: record.senderName,
       text: record.text,
       createdAt: record.createdAt,
+      ...(record.level === undefined ? {} : { level: record.level }),
     };
   });
 }
@@ -251,30 +273,32 @@ export function createPersonaMemoryRepository(database: DatabaseSync): PersonaMe
     FROM persona_memory_runs WHERE account = ? AND cycle_key = ?
   `);
   const insertDiary = database.prepare(`
-    INSERT INTO persona_diaries (account, cycle_key, text, source_entries_json, visible_to_ani, source_count, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO persona_diaries
+      (account, cycle_key, text, source_entries_json, source_memo_ids_json, visible_to_ani, source_count, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (account, cycle_key) DO UPDATE SET
       text = excluded.text,
       source_entries_json = excluded.source_entries_json,
+      source_memo_ids_json = excluded.source_memo_ids_json,
       visible_to_ani = excluded.visible_to_ani,
       source_count = excluded.source_count,
       created_at = excluded.created_at
   `);
   const selectDiaryId = database.prepare('SELECT id FROM persona_diaries WHERE account = ? AND cycle_key = ?');
   const selectDiaryByCycle = database.prepare(`
-    SELECT id, account, cycle_key, text, source_entries_json, visible_to_ani, source_count, created_at
+    SELECT id, account, cycle_key, text, source_entries_json, source_memo_ids_json, visible_to_ani, source_count, created_at
     FROM persona_diaries WHERE account = ? AND cycle_key = ?
   `);
   const selectDiaries = database.prepare(`
-    SELECT id, account, cycle_key, text, source_entries_json, visible_to_ani, source_count, created_at
+    SELECT id, account, cycle_key, text, source_entries_json, source_memo_ids_json, visible_to_ani, source_count, created_at
     FROM persona_diaries WHERE account = ? ORDER BY created_at DESC, id DESC LIMIT ?
   `);
   const selectVisibleDiaries = database.prepare(`
-    SELECT id, account, cycle_key, text, source_entries_json, visible_to_ani, source_count, created_at
+    SELECT id, account, cycle_key, text, source_entries_json, source_memo_ids_json, visible_to_ani, source_count, created_at
     FROM persona_diaries WHERE account = ? AND visible_to_ani = 1 ORDER BY created_at DESC, id DESC LIMIT ?
   `);
   const selectVisibleDiariesInRange = database.prepare(`
-    SELECT id, account, cycle_key, text, source_entries_json, visible_to_ani, source_count, created_at
+    SELECT id, account, cycle_key, text, source_entries_json, source_memo_ids_json, visible_to_ani, source_count, created_at
     FROM persona_diaries
     WHERE account = ? AND visible_to_ani = 1 AND created_at >= ? AND created_at <= ?
     ORDER BY created_at DESC, id DESC
@@ -406,9 +430,10 @@ export function createPersonaMemoryRepository(database: DatabaseSync): PersonaMe
 
     insertPersonaDiary(diary) {
       const sourceEntries = diary.sourceEntries ?? [];
+      const sourceMemoIds = diary.sourceMemoIds ?? [];
       if (!validId(diary.account) || !validCycleKey(diary.cycleKey)
         || typeof diary.text !== 'string' || diary.text.length < 1 || diary.text.length > 4_000
-        || !validDiarySourceEntries(sourceEntries)
+        || !validDiarySourceEntries(sourceEntries) || !validSourceMemoIds(sourceMemoIds)
         || !Number.isSafeInteger(diary.sourceCount) || diary.sourceCount < 0
         || !Number.isSafeInteger(diary.createdAt) || diary.createdAt < 0
         || (diary.visibleToAni !== undefined && typeof diary.visibleToAni !== 'boolean')) {
@@ -419,6 +444,7 @@ export function createPersonaMemoryRepository(database: DatabaseSync): PersonaMe
         diary.cycleKey,
         diary.text,
         JSON.stringify(sourceEntries),
+        JSON.stringify([...new Set(sourceMemoIds)].sort((first, second) => first - second)),
         diary.visibleToAni === false ? 0 : 1,
         diary.sourceCount,
         diary.createdAt,

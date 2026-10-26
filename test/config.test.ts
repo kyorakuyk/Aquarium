@@ -21,6 +21,14 @@ test('config.example.yaml 符合配置 schema 并默认关闭所有会话', () =
   assert.equal(result.data.defaults.enabled, false);
   assert.equal(result.data.debug.enabled, false);
   assert.equal(result.data.debug.retainDays, 7);
+  assert.deepEqual(result.data.memory, { organizeAt: '04:00', rawRetentionDays: 7 });
+  const legacyMemoryConfig = structuredClone(exampleConfig) as Record<string, any>;
+  delete legacyMemoryConfig.memory;
+  assert.deepEqual(AquariumConfigSchema.parse(legacyMemoryConfig).memory, { organizeAt: '04:00', rawRetentionDays: 7 });
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...exampleConfig,
+    memory: { organizeAt: '4:00', rawRetentionDays: 0 },
+  }).success, false);
   assert.equal(result.data.accounts.length, 1);
   assert.equal((result.data.budget as { oneoffTaskCny?: number }).oneoffTaskCny, 3);
   assert.equal(result.data.slots.oneoff?.[0]?.model, 'deepseek-v4-pro');

@@ -52,7 +52,7 @@ export function createRecentDiaryBlock(
             origin: source.kind,
             sessionId: entry.sessionId,
             ownerId: source.kind === 'private' ? repository.mainUserIdFor(account, source.peer) : null,
-            level: 'L0',
+            level: entry.level ?? 'L0',
           },
           target,
           purpose: 'prompt',

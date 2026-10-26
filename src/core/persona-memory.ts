@@ -1,5 +1,7 @@
 import type { AquariumConfig } from '../config/schema.ts';
 import type { MessageStorageRecord, StoreRepository } from '../store/repository.ts';
+import type { PersonaEventMemoRecord } from '../store/persona-memory-event-repo.ts';
+import type { PersonaDiarySourceEntry } from '../store/persona-memory-repo.ts';
 import { sessionId, type IncomingMessage, type SessionKey } from './shared/events.ts';
 import { createRecentDiaryBlock } from './persona-memory-prompt.ts';
 import { segmentMemoryMessages } from './persona-memory-segments.ts';
@@ -14,6 +16,18 @@ export interface PersonaMemoryProcessResult {
   memos?: Array<Parameters<StoreRepository['insertPersonaEventMemo']>[0]>;
 }
 
+export interface PersonaMemoryDiaryGenerationInput {
+  account: number;
+  cycleKey: string;
+  now: number;
+  memos: PersonaEventMemoRecord[];
+  tailEntries: PersonaDiarySourceEntry[];
+}
+
+export type PersonaMemoryDiaryGenerationResult =
+  | { status: 'done'; text: string }
+  | { status: 'budget' | 'failed' };
+
 export interface PersonaMemoryServiceOptions {
   repository: StoreRepository;
   getConfig: () => AquariumConfig;
@@ -24,6 +38,7 @@ export interface PersonaMemoryServiceOptions {
     now: number,
   ) => Promise<PersonaMemoryProcessStatus | PersonaMemoryProcessResult>;
   isSignificantSegment?: (session: SessionKey, records: MessageStorageRecord[]) => boolean;
+  generateDiary?: (input: PersonaMemoryDiaryGenerationInput) => Promise<PersonaMemoryDiaryGenerationResult>;
   onError?: (error: unknown, account: number) => void;
 }
 

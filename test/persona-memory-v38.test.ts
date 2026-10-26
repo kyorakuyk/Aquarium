@@ -6,6 +6,7 @@ import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { openDatabase } from '../src/store/db.ts';
 import { createRepository } from '../src/store/repository.ts';
+import { CURRENT_SCHEMA_VERSION } from './schema-version.ts';
 
 test('v38 archives raw memos and creates event memos with source and privacy fields', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aquarium-memory-v38-'));
@@ -56,7 +57,7 @@ test('v38 archives raw memos and creates event memos with source and privacy fie
     assert.deepEqual(tables, ['persona_memory_tails', 'persona_memos', 'persona_memos_legacy_v26']);
 
     const version = upgraded.prepare('SELECT version FROM schema_version WHERE id = 1').get() as { version: number };
-    assert.equal(version.version, 38);
+    assert.equal(version.version, CURRENT_SCHEMA_VERSION);
     const archived = upgraded.prepare('SELECT text FROM persona_memos_legacy_v26 WHERE id = 1').get() as { text: string };
     assert.equal(archived.text, '原始记录归档');
     const cursor = upgraded.prepare(`

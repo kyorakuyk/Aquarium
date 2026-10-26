@@ -294,6 +294,11 @@ const sleepSchema = z.object({
   goodnight: true,
 });
 
+const memorySchema = z.object({
+  organizeAt: scheduleTimeSchema.default('04:00'),
+  rawRetentionDays: z.number().int().min(1).max(365).default(7),
+}).strict().default({ organizeAt: '04:00', rawRetentionDays: 7 });
+
 const profileScheduleSchema = z.object({
   minimumMessages: z.number().int().positive().default(50),
   nightOwlRatio: z.number().min(0).max(1).default(0.4),
@@ -348,6 +353,7 @@ export const AquariumConfigSchema = z.object({
   mood: moodSchema,
   affinity: affinitySchema,
   sleep: sleepSchema,
+  memory: memorySchema,
   selfEdit: selfEditSchema,
   profile: profileSchema,
   defaults: sessionSettingsSchema,

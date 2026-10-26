@@ -14,7 +14,7 @@ test('persona memory read is authenticated, account-scoped, and redacts stored t
     assert.deepEqual(await accountsResponse.json(), [{ account, name: 'Aquarium 测试' }]);
     const bearerValue = ['FAKE', '_SECRET', '_TOKEN', '_123456'].join('');
     const canary = `Authorization: Bearer ${bearerValue}`;
-    repository.insertPersonaEventMemo({
+    assert.equal(repository.insertPersonaEventMemo({
       account,
       sessionId: `${account}:private:42`,
       eventId: null,
@@ -25,8 +25,20 @@ test('persona memory read is authenticated, account-scoped, and redacts stored t
       endMessageId: 'panel-memo',
       level: 'L0',
       createdAt: now,
-    });
+    }), true);
+    const memoId = repository.listPersonaEventMemos(account, 10)[0]?.id;
+    assert.ok(memoId);
     const pendingSessionId = `${account}:private:42`;
+    repository.saveMessage({
+      sessionId: pendingSessionId,
+      messageId: 'panel-organized-message',
+      senderId: 42,
+      senderName: '朋友',
+      isSelf: false,
+      plainText: '已整理的原文缓存',
+      segments: [],
+      time: now - 2_000,
+    });
     repository.saveMessage({
       sessionId: pendingSessionId,
       messageId: 'panel-pending-message',
@@ -40,13 +52,14 @@ test('persona memory read is authenticated, account-scoped, and redacts stored t
     repository.savePersonaMemoryCursor({
       account,
       sessionId: pendingSessionId,
-      organizedUntilMessageTime: null,
+      organizedUntilMessageTime: now - 1_000,
       openSegmentStart: now,
     });
     repository.insertPersonaDiary({
       account,
       cycleKey: '2026-10-22',
       text: `日记内容 ${canary}`,
+      sourceMemoIds: [memoId],
       sourceCount: 1,
       createdAt: now,
     });
@@ -70,12 +83,18 @@ test('persona memory read is authenticated, account-scoped, and redacts stored t
       account: number;
       pendingMessageCount: number;
       openSegmentCount: number;
+      cacheSessions: Array<{ sessionId: string; label: string; pendingMessageCount: number }>;
       memos: Array<{ title: string; summary: string; level: string; eventId: number | null }>;
-      diaries: Array<{ text: string; visibleToAni: boolean }>;
+      diaries: Array<{ text: string; sourceMemoIds: number[]; visibleToAni: boolean }>;
     };
     assert.equal(body.account, account);
     assert.equal(body.pendingMessageCount, 1);
     assert.equal(body.openSegmentCount, 1);
+    assert.deepEqual(body.cacheSessions, [{
+      sessionId: pendingSessionId,
+      label: '私聊 42',
+      pendingMessageCount: 1,
+    }]);
     assert.equal(body.memos.length, 1);
     assert.equal(body.memos[0]?.title, '周末计划');
     assert.ok(body.memos[0]?.summary.includes('[敏感内容已隐藏]'));
@@ -83,9 +102,25 @@ test('persona memory read is authenticated, account-scoped, and redacts stored t
     assert.doesNotMatch(JSON.stringify(body), /abcdefghijklmnop/u);
     assert.doesNotMatch(JSON.stringify(body), /别的账号内容/u);
     assert.equal(body.diaries.length, 1);
+    assert.deepEqual(body.diaries[0]?.sourceMemoIds, [memoId]);
     assert.equal(body.diaries[0]?.visibleToAni, true);
     assert.ok(body.diaries[0]?.text.includes('[敏感内容已隐藏]'));
     assert.equal((await app.request('/api/persona-memory?account=999999', { headers: authHeaders() })).status, 400);
+
+    const cachePath = `/api/persona-memory/cache?account=${account}&sessionId=${encodeURIComponent(pendingSessionId)}`;
+    assert.equal((await app.request(cachePath, { method: 'DELETE' })).status, 401);
+    const cleared = await app.request(cachePath, { method: 'DELETE', headers: authHeaders() });
+    assert.equal(cleared.status, 200);
+    assert.deepEqual(await cleared.json(), { account, sessionId: pendingSessionId, deletedMessages: 1 });
+    assert.equal(repository.messageBySessionAndId(pendingSessionId, 'panel-organized-message'), undefined);
+    assert.ok(repository.messageBySessionAndId(pendingSessionId, 'panel-pending-message'));
+    assert.equal(repository.listPersonaEventMemos(account, 10).length, 1);
+    assert.equal(repository.listPersonaDiaries(account, 10).length, 1);
+    const foreignSessionId = `${account + 1}:private:42`;
+    assert.equal((await app.request(
+      `/api/persona-memory/cache?account=${account}&sessionId=${encodeURIComponent(foreignSessionId)}`,
+      { method: 'DELETE', headers: authHeaders() },
+    )).status, 400);
   });
 });
 
