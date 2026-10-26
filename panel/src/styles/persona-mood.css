@@ -115,6 +115,28 @@
 .persona-mood-preview-example { margin: 2px 0 0; padding: 7px 12px; border: 1px solid var(--line); border-radius: 10px; color: #4A4E55; font-size: 12px; }
 .persona-mood-preview-example strong { color: var(--mood-teal); }
 
+/* hold curve settings */
+.persona-mood-hold-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 22px; }
+.persona-mood-hold-control { display: grid; align-content: start; gap: 2px; min-width: 0; }
+.persona-mood-hold-control .persona-mood-slider-row input[type="range"] { min-height: 44px; }
+.persona-mood-hold-control-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 10px; }
+.persona-mood-hold-control-footer .persona-mood-small-button { min-height: 44px; }
+.persona-mood-hold-preview { display: grid; justify-items: start; gap: 4px; }
+.persona-mood-hold-chart { display: block; width: 100%; max-width: 440px; height: auto; overflow: visible; }
+.persona-mood-hold-axis { stroke: #8A8E95; stroke-width: 1; }
+.persona-mood-hold-gridline { stroke: #D6D3CA; stroke-width: 1; stroke-dasharray: 3 4; }
+.persona-mood-hold-exponential { fill: none; stroke: #8A8E95; stroke-width: 1.5; }
+.persona-mood-hold-hill { fill: none; stroke: var(--mood-orange); stroke-width: 2.5; }
+.persona-mood-hold-marker { stroke: var(--mood-teal); stroke-width: 1; stroke-dasharray: 3 3; }
+.persona-mood-hold-point { fill: var(--mood-teal); }
+.persona-mood-hold-marker-label { fill: var(--mood-teal); font-size: 9px; font-weight: 700; }
+.persona-mood-hold-axis-label { fill: #6F737A; font-size: 9px; }
+.persona-mood-hold-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--muted); font-size: 10px; }
+.persona-mood-hold-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.persona-mood-hold-legend i { display: inline-block; width: 14px; height: 2px; background: #8A8E95; }
+.persona-mood-hold-legend i.is-hill { height: 3px; background: var(--mood-orange); }
+.persona-mood-global-note { line-height: 1.5; }
+
 /* 其他 placeholder */
 .persona-mood-other-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .persona-mood-other-grid > div { display: grid; align-content: start; gap: 3px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 8px; }
@@ -123,7 +145,7 @@
 .persona-mood-other-grid b { color: var(--mood-teal); font-family: var(--mono); font-size: 10px; font-weight: 500; }
 
 @media (max-width: 760px) {
-  .persona-mood-edge-controls, .persona-mood-sub-controls, .persona-mood-other-grid { grid-template-columns: minmax(0, 1fr); }
+  .persona-mood-edge-controls, .persona-mood-sub-controls, .persona-mood-other-grid, .persona-mood-hold-controls { grid-template-columns: minmax(0, 1fr); }
   .persona-mood-add-form input { width: auto; flex: 1; }
 }
 

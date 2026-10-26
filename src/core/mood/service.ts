@@ -11,8 +11,6 @@ import type { PipelineModelCall } from '../conversation/steps/types.ts';
 import { runAppraise } from './appraise.ts';
 import { renderFloatBlock, renderMoodBlocks, type MoodPromptBlocks } from './render.ts';
 import {
-  DEFAULT_AROUSAL_HOLD_SHAPE,
-  DEFAULT_SURFACE_HOLD_SHAPE,
   bandOf,
   applyArousalDelta,
   applyDominanceDelta,
@@ -27,6 +25,8 @@ import {
   type EnergySource,
   type ReserveHistoryEntry,
 } from './core.ts';
+import { eventAnchorFields, reanchorMoodValues } from './anchors.ts';
+import { resolveMoodSettings } from './settings.ts';
 import { resolveMoodState, type ResolvedMoodState } from './state.ts';
 
 // 同一会话两次评估至少间隔 90 秒，间隔内不评估、不排队。
@@ -82,8 +82,20 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
   const lastCalledAt = new Map<string, number>();
   const pending = new Set<Promise<void>>();
 
-  function loadState(account: number, at: number, energySource: EnergySource): ResolvedMoodState {
-    const mood = options.getConfig().mood;
+  function effectiveMoodSettings(account: number, override?: PersonaMoodSettings) {
+    let personaSettings = override;
+    if (!personaSettings) {
+      try { personaSettings = getPersonaMoodSettings(account); } catch { personaSettings = DEFAULT_PERSONA_MOOD; }
+    }
+    return resolveMoodSettings(options.getConfig().mood, personaSettings);
+  }
+
+  function loadState(
+    account: number,
+    at: number,
+    energySource: EnergySource,
+    mood = effectiveMoodSettings(account),
+  ): ResolvedMoodState {
     const stored = options.repository.getMoodState(account);
     const resolvedAt = Math.max(at, stored?.updatedAt ?? at);
     const historyFrom = stored ? stored.updatedAt - 15 * 60_000 : resolvedAt - 15 * 60_000;
@@ -176,15 +188,6 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
     });
   }
 
-  function eventAnchorFields(state: ResolvedMoodState): Pick<MoodEventRecord,
-    'valenceUAfter' | 'arousalUAfter' | 'dominanceUAfter'> {
-    return {
-      valenceUAfter: state.valenceU,
-      arousalUAfter: state.arousalU,
-      dominanceUAfter: state.dominanceU,
-    };
-  }
-
   function reportError(error: unknown): void {
     try {
       options.onError?.(error);
@@ -201,7 +204,12 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
         const float = renderFloatBlock(input.template, 0.5, input.energy ?? 1);
         return float ? { float } : {};
       }
-      const current = loadState(input.account, input.now, energySource);
+      const current = loadState(
+        input.account,
+        input.now,
+        energySource,
+        effectiveMoodSettings(input.account, input.moodSettings),
+      );
       const resolvedEmotion = resolveEmotions(current, input.account, input.now, input.messageId ?? '', input.moodSettings);
       const emotionState = resolvedEmotion.state;
       const band = bandOf(current.valence, current.arousal);
@@ -268,13 +276,14 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
       const last = lastCalledAt.get(input.sessionId);
       if (last !== undefined && input.now - last < 10 * 60_000) return;
       lastCalledAt.set(input.sessionId, input.now);
-      const current = loadState(input.account, input.now, getEnergySource(input.account));
+      const settings = effectiveMoodSettings(input.account);
+      const current = loadState(input.account, input.now, getEnergySource(input.account), settings);
       const arousal = applyArousalDelta(current.arousal, CALLED_AROUSAL_BUMP);
       const arousalAnchor = reanchor(
-        current.arousal - moodConfig.baseline.arousal,
-        arousal - moodConfig.baseline.arousal,
+        current.arousal - settings.baseline.arousal,
+        arousal - settings.baseline.arousal,
         current.arousalU,
-        DEFAULT_AROUSAL_HOLD_SHAPE,
+        settings.arousalHoldShape,
       );
       const next = {
         ...current,
@@ -310,8 +319,9 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
       const config = options.getConfig();
       if (!config.mood.enabled) return;
       const energySource = input.energySource ?? 'mixed';
+      const settings = effectiveMoodSettings(input.account, input.moodSettings);
       const current = resolveEmotions(
-        loadState(input.account, input.now, energySource),
+        loadState(input.account, input.now, energySource, settings),
         input.account,
         input.now,
         input.messageId,
@@ -395,7 +405,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
 
         if (!result.ok) {
           const current = resolveEmotions(
-            loadState(input.account, completedAt, energySource),
+            loadState(input.account, completedAt, energySource, settings),
             input.account,
             completedAt,
             input.messageId,
@@ -426,7 +436,7 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
         }
 
         const current = resolveEmotions(
-          loadState(input.account, completedAt, energySource),
+          loadState(input.account, completedAt, energySource, settings),
           input.account,
           completedAt,
           input.messageId,
@@ -460,35 +470,9 @@ export function createMoodService(options: MoodServiceOptions): MoodService {
         const valence = Math.max(-1, Math.min(1, current.valence + buffered.surfaceDelta));
         const arousal = applyArousalDelta(current.arousal, result.arousal);
         const dominance = applyDominanceDelta(current.dominance, result.dominance);
-        const valenceAnchor = reanchor(
-          current.valence - config.mood.baseline.valence,
-          valence - config.mood.baseline.valence,
-          current.valenceU,
-          DEFAULT_SURFACE_HOLD_SHAPE,
-        );
-        const arousalAnchor = reanchor(
-          current.arousal - config.mood.baseline.arousal,
-          arousal - config.mood.baseline.arousal,
-          current.arousalU,
-          DEFAULT_AROUSAL_HOLD_SHAPE,
-        );
-        const dominanceAnchor = reanchor(
-          current.dominance,
-          dominance,
-          current.dominanceU,
-          DEFAULT_AROUSAL_HOLD_SHAPE,
-        );
         const anchored = {
           ...current,
-          valence,
-          arousal,
-          dominance,
-          valenceD0: valenceAnchor.d0,
-          valenceU: valenceAnchor.u,
-          arousalD0: arousalAnchor.d0,
-          arousalU: arousalAnchor.u,
-          dominanceD0: dominanceAnchor.d0,
-          dominanceU: dominanceAnchor.u,
+          ...reanchorMoodValues(current, { valence, arousal, dominance }, config.mood.baseline, settings),
         };
         const appliedDd = dominance - current.dominance;
         const band = bandOf(valence, arousal);

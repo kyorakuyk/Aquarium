@@ -105,6 +105,7 @@ export async function withPanel<T>(
     cliRuntime?: CliRuntime;
     callModel?: PanelServerOptions['callModel'];
     getEnergySource?: PanelServerOptions['getEnergySource'];
+    getPersonaMoodSettings?: PanelServerOptions['getPersonaMoodSettings'];
     stickerServices?: PanelServerOptions['stickerServices'];
     tagClassificationService?: PanelServerOptions['tagClassificationService'];
     onError?: PanelServerOptions['onError'];
@@ -188,6 +189,7 @@ export async function withPanel<T>(
     ...(panelOptions.env ? { env: panelOptions.env } : {}),
     ...(panelOptions.fetch ? { fetch: panelOptions.fetch } : {}),
     ...(panelOptions.getEnergySource ? { getEnergySource: panelOptions.getEnergySource } : {}),
+    ...(panelOptions.getPersonaMoodSettings ? { getPersonaMoodSettings: panelOptions.getPersonaMoodSettings } : {}),
     ...(panelOptions.testProvider ? { testProvider: panelOptions.testProvider } : {}),
     ...(panelOptions.cliRuntime ? { cliRuntime: panelOptions.cliRuntime } : {}),
     ...(panelOptions.stickerServices ? { stickerServices: panelOptions.stickerServices } : {}),

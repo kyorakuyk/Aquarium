@@ -3,6 +3,7 @@ import type { AquariumConfig } from '../config/schema.ts';
 import { SENDER_VALENCE_CAP, bandOf, nextReserveBand, resolveConfiguredMoodEmotions, type EnergySource } from '../core/mood/core.ts';
 import { resolveMoodState } from '../core/mood/state.ts';
 import { buildMoodSeriesPoints } from '../core/mood/series.ts';
+import { resolveMoodSettings } from '../core/mood/settings.ts';
 import { sleepEnergy, sleepPlan, type SleepWakeState } from '../core/sleep/index.ts';
 import { redactSensitiveText } from '../core/impressions/sensitive-text.ts';
 import type { MoodBand, StoredMoodEvent } from '../store/affect-repo.ts';
@@ -69,6 +70,10 @@ export function registerMoodRoutes(app: Hono, options: MoodRouteOptions): void {
     return options.accounts()[0]?.adapter.account ?? options.getConfig().accounts[0]?.uin ?? 0;
   }
 
+  function personaMoodSettings(account: number): PersonaMoodSettings {
+    try { return options.getPersonaMoodSettings?.(account) ?? DEFAULT_PERSONA_MOOD; } catch { return DEFAULT_PERSONA_MOOD; }
+  }
+
   function requestedAccount(raw: string | undefined): number | null {
     if (raw === undefined) return primaryAccount();
     if (!/^[1-9]\d*$/u.test(raw)) return null;
@@ -81,20 +86,20 @@ export function registerMoodRoutes(app: Hono, options: MoodRouteOptions): void {
     const config = options.getConfig();
     const source = options.getEnergySource?.(account) ?? 'mixed';
     const energyMultipliers = options.getEnergyMultipliers?.(account);
+    const personaMood = personaMoodSettings(account);
+    const moodSettings = resolveMoodSettings(config.mood, personaMood);
     const stored = options.repository.getMoodState(account);
     const resolvedAt = Math.max(at, stored?.updatedAt ?? at);
     const historyFrom = stored ? stored.updatedAt - 15 * 60_000 : resolvedAt - 15 * 60_000;
     const resolved = resolveMoodState({
       stored,
       at,
-      settings: config.mood,
+      settings: moodSettings,
       energySource: source,
       energyMultipliers,
       appraisalEvents: stored ? options.repository.moodEventsSince(account, historyFrom) : [],
       replyTimes: stored ? options.repository.replyTimesForAccount(account, historyFrom, resolvedAt) : [],
     });
-    let personaMood = DEFAULT_PERSONA_MOOD;
-    try { personaMood = options.getPersonaMoodSettings?.(account) ?? DEFAULT_PERSONA_MOOD; } catch { /* 缺失人设时退回默认情绪库 */ }
     const band = bandOf(resolved.valence, resolved.arousal);
     const reserveBand = nextReserveBand({
       band: resolved.reserveBand,
@@ -151,6 +156,9 @@ export function registerMoodRoutes(app: Hono, options: MoodRouteOptions): void {
       settings: {
         surfaceHalfLifeMin: config.mood.surfaceHalfLifeMin,
         arousalHalfLifeMin: config.mood.arousalHalfLifeMin,
+        surfaceHoldShape: config.mood.surfaceHoldShape,
+        arousalHoldShape: config.mood.arousalHoldShape,
+        reserveInitial: config.mood.reserve.initial,
         baseline: config.mood.baseline,
         senderHourlyCap: SENDER_VALENCE_CAP,
       },
@@ -173,6 +181,7 @@ export function registerMoodRoutes(app: Hono, options: MoodRouteOptions): void {
     const at = now();
     const from = at - hours * 60 * 60_000;
     const account = primaryAccount();
+    const moodSettings = resolveMoodSettings(config.mood, personaMoodSettings(account));
     const energySource = options.getEnergySource?.(account) ?? 'mixed';
     const energyMultipliers = options.getEnergyMultipliers?.(account);
     const previous = options.repository.latestMoodEventAtOrBefore(account, from);
@@ -182,12 +191,14 @@ export function registerMoodRoutes(app: Hono, options: MoodRouteOptions): void {
     const points = buildMoodSeriesPoints({
       from,
       to: at,
-      surfaceHalfLifeMin: config.mood.surfaceHalfLifeMin,
-      arousalHalfLifeMin: config.mood.arousalHalfLifeMin,
+      surfaceHalfLifeMin: moodSettings.surfaceHalfLifeMin,
+      arousalHalfLifeMin: moodSettings.arousalHalfLifeMin,
+      surfaceHoldShape: moodSettings.surfaceHoldShape,
+      arousalHoldShape: moodSettings.arousalHoldShape,
       energySource,
       energyMultipliers,
-      baseline: config.mood.baseline,
-      initialReserve: config.mood.reserve.initial,
+      baseline: moodSettings.baseline,
+      initialReserve: moodSettings.reserve.initial,
       ...(previous ? { previous } : {}),
       events,
       replyTimes,

@@ -78,15 +78,34 @@ test('mood 新默认与旧 halfLifeMin 兼容', () => {
     ...withoutMood,
     mood: { enabled: true, surfaceHalfLifeMin: 55, arousalHalfLifeMin: 25, reserve: { initial: 0.6 } },
   }).mood;
+  const shaped = AquariumConfigSchema.safeParse({
+    ...withoutMood,
+    mood: { enabled: true, surfaceHoldShape: 1, arousalHoldShape: 6 },
+  });
 
   assert.equal(defaults.surfaceHalfLifeMin, 40);
   assert.equal(defaults.arousalHalfLifeMin, 40);
+  assert.equal((defaults as typeof defaults & { surfaceHoldShape?: number }).surfaceHoldShape, 3);
+  assert.equal((defaults as typeof defaults & { arousalHoldShape?: number }).arousalHoldShape, 2);
   assert.deepEqual(defaults.reserve, { initial: 0.8 });
   assert.equal(legacy.surfaceHalfLifeMin, 30);
   assert.equal(legacy.arousalHalfLifeMin, 30);
   assert.equal(separate.surfaceHalfLifeMin, 55);
   assert.equal(separate.arousalHalfLifeMin, 25);
   assert.deepEqual(separate.reserve, { initial: 0.6 });
+  assert.equal(shaped.success, true);
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...withoutMood,
+    mood: { enabled: true, surfaceHoldShape: 0 },
+  }).success, false);
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...withoutMood,
+    mood: { enabled: true, arousalHoldShape: 6.1 },
+  }).success, false);
+  assert.equal(AquariumConfigSchema.safeParse({
+    ...withoutMood,
+    mood: { enabled: true, surfaceHoldShape: null },
+  }).success, false);
 });
 
 test('send.dedupeWindowMs 默认 8000，且 0 表示关闭', () => {

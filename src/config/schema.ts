@@ -233,6 +233,8 @@ const moodSchema = z.preprocess((value: unknown) => {
     ...input,
     surfaceHalfLifeMin: input.surfaceHalfLifeMin ?? legacyHalfLife ?? 40,
     arousalHalfLifeMin: input.arousalHalfLifeMin ?? legacyHalfLife ?? 40,
+    surfaceHoldShape: input.surfaceHoldShape === undefined ? 3 : input.surfaceHoldShape,
+    arousalHoldShape: input.arousalHoldShape === undefined ? 2 : input.arousalHoldShape,
     reserve: reserveInput,
   };
 }, z.object({
@@ -244,12 +246,16 @@ const moodSchema = z.preprocess((value: unknown) => {
   halfLifeMin: z.number().positive().optional(),
   surfaceHalfLifeMin: z.number().positive(),
   arousalHalfLifeMin: z.number().positive(),
+  surfaceHoldShape: z.number().min(1).max(6),
+  arousalHoldShape: z.number().min(1).max(6),
   reserve: z.object({ initial: z.number().min(0).max(1) }).strict(),
 }).strict().default({
   enabled: true,
   baseline: { valence: 0.1, arousal: 0.4 },
   surfaceHalfLifeMin: 40,
   arousalHalfLifeMin: 40,
+  surfaceHoldShape: 3,
+  arousalHoldShape: 2,
   reserve: { initial: 0.8 },
 }));
 

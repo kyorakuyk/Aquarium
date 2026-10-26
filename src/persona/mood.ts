@@ -29,6 +29,8 @@ export const PersonaMoodSchema = z.object({
   edgeOverrides: z.record(z.string().min(1), z.record(z.string().min(1), edgeOverrideSchema)).default({}),
   subMax: z.number().int().min(0).max(4).default(DEFAULT_SUB_MAX),
   subTh: z.number().min(0.2).max(0.9).default(DEFAULT_SUB_THRESHOLD),
+  surfaceHoldShape: z.number().min(1).max(6).optional(),
+  arousalHoldShape: z.number().min(1).max(6).optional(),
 }).strict().superRefine((value, context) => {
   const names = new Set<string>();
   for (const [index, name] of value.emotions.entries()) {
@@ -119,5 +121,7 @@ export function serializePersonaMood(settings: PersonaMoodSettings): PersonaMood
   if (Object.keys(edgeOverrides).length > 0) result.edgeOverrides = edgeOverrides;
   if (settings.subMax !== DEFAULT_SUB_MAX) result.subMax = settings.subMax;
   if (Math.abs(settings.subTh - DEFAULT_SUB_THRESHOLD) >= 1e-9) result.subTh = settings.subTh;
+  if (settings.surfaceHoldShape !== undefined) result.surfaceHoldShape = settings.surfaceHoldShape;
+  if (settings.arousalHoldShape !== undefined) result.arousalHoldShape = settings.arousalHoldShape;
   return Object.keys(result).length > 0 ? result : undefined;
 }

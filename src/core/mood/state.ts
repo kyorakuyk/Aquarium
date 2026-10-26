@@ -10,7 +10,7 @@ import {
 import type { PersonaEnergyMultipliers } from '../../persona/energy.ts';
 
 export type MoodSettings = Pick<AquariumConfig['mood'],
-  'baseline' | 'surfaceHalfLifeMin' | 'arousalHalfLifeMin' | 'reserve'>;
+  'baseline' | 'surfaceHalfLifeMin' | 'arousalHalfLifeMin' | 'surfaceHoldShape' | 'arousalHoldShape' | 'reserve'>;
 
 export interface ResolvedMoodState {
   valence: number;
@@ -142,6 +142,8 @@ export function resolveMoodState(input: {
         baseline: settings.baseline,
         surfaceHalfLifeMin: settings.surfaceHalfLifeMin,
         arousalHalfLifeMin: settings.arousalHalfLifeMin,
+        surfaceHoldShape: settings.surfaceHoldShape,
+        arousalHoldShape: settings.arousalHoldShape,
         energySource,
         energyMultipliers: input.energyMultipliers,
         lastReplyAt: state.lastReplyAt,

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { holdDecay, recoverReserve, surfaceHalfLifeMin } from '../src/core/mood/core.ts';
+import { DEFAULT_PERSONA_MOOD } from '../src/persona/mood.ts';
 import { sessionId } from '../src/core/shared/events.ts';
 import type { MoodBand } from '../src/store/affect-repo.ts';
 import { account, authHeaders, groupSession, now, withPanel } from './panel-test-helpers.ts';
@@ -175,8 +176,8 @@ test('mood series samples decay, five regions, and the latest reply injection tr
     ];
     for (const event of curveEvents) {
       const curves = [
-        { halfLifeMin: surfaceHalfLifeMin(event.reserve, 40), shape: 3 },
-        { halfLifeMin: 40, shape: 2 },
+        { halfLifeMin: surfaceHalfLifeMin(event.reserve, 40), shape: 4 },
+        { halfLifeMin: 40, shape: 5 },
       ];
       for (const { halfLifeMin, shape } of curves) {
         const t50Ms = halfLifeMin * 60_000;
@@ -206,7 +207,7 @@ test('mood series samples decay, five regions, and the latest reply injection tr
     assert.equal(body.points.find((point) => point.time === now - 12 * hourMs)?.absorbed, 0.05);
     const interpolated = body.points.find((point) => point.time === now - 12 * hourMs + 15 * 60_000);
     const surfaceHalfLife = 40 * 1.4 / (0.4 + 0.725);
-    const interpolatedValence = 0.1 + holdDecay(-0.6, 15 / surfaceHalfLife, 3);
+    const interpolatedValence = 0.1 + holdDecay(-0.6, 15 / surfaceHalfLife, 4);
     const interpolatedReserve = 0.725 - (interpolatedValence + 0.5) * 0.3;
     assert.ok(Math.abs((interpolated?.valence ?? 0) - interpolatedValence) < 1e-9);
     assert.ok(Math.abs((interpolated?.reserve ?? 0) - interpolatedReserve) < 1e-9);
@@ -259,7 +260,11 @@ test('mood series samples decay, five regions, and the latest reply injection tr
     assert.equal(slidingBody.current.band, 'aroused');
     assert.equal(slidingBody.current.bandSince, now - 4 * 60_000);
     assert.equal((await app.request('/api/mood/series?hours=0', { headers: authHeaders() })).status, 400);
-  });
+  }, undefined, { getPersonaMoodSettings: () => ({
+    ...DEFAULT_PERSONA_MOOD,
+    surfaceHoldShape: 4,
+    arousalHoldShape: 5,
+  }) });
 });
 
 test('mood series carries reply and appraisal history from before an old anchor', async () => {

@@ -21,7 +21,7 @@ pricing:
   deepseek-v4-pro: { input: 4.8, cachedInput: 0.16, output: 14.4 }
   deepseek-flash: { input: 1.1, cachedInput: 0.02, output: 4.3 }
 budget: { dailyCny: 5, warnRatio: 0.8, oneoffTaskCny: 3 }
-mood: { enabled: true, baseline: { valence: 0.1, arousal: 0.4 }, surfaceHalfLifeMin: 40, arousalHalfLifeMin: 40, reserve: { initial: 0.8 } }
+mood: { enabled: true, baseline: { valence: 0.1, arousal: 0.4 }, surfaceHalfLifeMin: 40, arousalHalfLifeMin: 40, surfaceHoldShape: 3, arousalHoldShape: 2, reserve: { initial: 0.8 } }
 affinity:
   enabled: true
   start: 15

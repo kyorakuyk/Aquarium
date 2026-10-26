@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { holdDecay } from '../src/core/mood/core.ts';
+import { resolveMoodSettings } from '../src/core/mood/settings.ts';
+import { resolveMoodState } from '../src/core/mood/state.ts';
+import { DEFAULT_PERSONA_MOOD } from '../src/persona/mood.ts';
 import { sessionId } from '../src/core/shared/events.ts';
 import { account, authHeaders, groupSession, now, withPanel } from './panel-test-helpers.ts';
 
@@ -135,4 +139,62 @@ test('mood API does not apply a future appraisal to earlier recovery', async () 
     const body = await response.json() as { reserveBand: string };
     assert.equal(body.reserveBand, 'tired');
   }, undefined, { getEnergySource: () => 'outer' });
+});
+
+test('mood API resolves decay with persona shapes but reports the global settings', async () => {
+  const personaMood = {
+    ...DEFAULT_PERSONA_MOOD,
+    surfaceHoldShape: 5,
+    arousalHoldShape: 4,
+  };
+  await withPanel(async ({ app, repository, getConfig }) => {
+    const updatedAt = now - 30 * 60_000;
+    repository.saveMoodState({
+      account,
+      valence: 0.1 + holdDecay(0.6, 0.25, 3),
+      arousal: 0.4 + holdDecay(0.4, 0.25, 2),
+      dominance: holdDecay(0.2, 0.25, 2),
+      valenceD0: 0.6,
+      valenceU: 0.25,
+      arousalD0: 0.4,
+      arousalU: 0.25,
+      dominanceD0: 0.2,
+      dominanceU: 0.25,
+      updatedAt,
+      band: 'calm',
+      bandSince: updatedAt,
+      lastBandChangeAt: updatedAt,
+      mainEmotion: null,
+      emotionSince: null,
+      lastEmotionChangeAt: null,
+      reserve: 0.6,
+      reserveBand: 'tired',
+      reserveBandSince: updatedAt,
+      reserveLastChangeAt: updatedAt,
+      lastReplyAt: null,
+    });
+    const response = await app.request('/api/mood', { headers: authHeaders() });
+    assert.equal(response.status, 200);
+    const body = await response.json() as {
+      valence: number;
+      arousal: number;
+      dominance: number;
+      settings: { surfaceHoldShape: number; arousalHoldShape: number };
+    };
+    const settings = resolveMoodSettings(getConfig().mood, personaMood);
+    const expected = resolveMoodState({
+      stored: repository.getMoodState(account),
+      at: now,
+      settings,
+      energySource: 'mixed',
+      appraisalEvents: [],
+      replyTimes: [],
+    });
+
+    assert.ok(Math.abs(body.valence - expected.valence) < 1e-12);
+    assert.ok(Math.abs(body.arousal - expected.arousal) < 1e-12);
+    assert.ok(Math.abs(body.dominance - expected.dominance) < 1e-12);
+    assert.equal(body.settings.surfaceHoldShape, getConfig().mood.surfaceHoldShape);
+    assert.equal(body.settings.arousalHoldShape, getConfig().mood.arousalHoldShape);
+  }, undefined, { getPersonaMoodSettings: () => personaMood });
 });

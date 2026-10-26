@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 import { buildEmotionLibrary, defaultEmotionEdge, DEFAULT_EMOTION_LIBRARY } from '../src/core/mood/emotions.ts';
-import { DEFAULT_PERSONA_MOOD } from '../src/persona/mood.ts';
+import { DEFAULT_PERSONA_MOOD, PersonaMoodSchema } from '../src/persona/mood.ts';
 import { emptyPersonaSections } from '../panel/src/persona-sections.ts';
 
 import {
@@ -101,12 +101,29 @@ test('custom mood edges use the distance formula and the three prohibited jumps 
 test('persona mood settings serialize minimally without replacing other metadata', () => {
   const form = emptyPersonaSections();
   form.metadata.energy = { aloneRecovery: 2 };
+  assert.equal(DEFAULT_PERSONA_MOOD.surfaceHoldShape, undefined);
+  assert.equal(DEFAULT_PERSONA_MOOD.arousalHoldShape, undefined);
   const changed = withPersonaMoodSettings(form, { ...DEFAULT_PERSONA_MOOD, subMax: 3 });
   assert.deepEqual(changed.metadata.energy, { aloneRecovery: 2 });
   assert.deepEqual(changed.metadata.mood, { subMax: 3 });
   const reset = withPersonaMoodSettings(changed, DEFAULT_PERSONA_MOOD);
   assert.equal(reset.metadata.mood, undefined);
   assert.deepEqual(reset.metadata.energy, { aloneRecovery: 2 });
+
+  const shaped = PersonaMoodSchema.safeParse({
+    ...DEFAULT_PERSONA_MOOD,
+    surfaceHoldShape: 4.5,
+    arousalHoldShape: 1,
+  });
+  assert.equal(shaped.success, true);
+  if (!shaped.success) return;
+  const shapedForm = withPersonaMoodSettings(form, shaped.data);
+  assert.deepEqual(shapedForm.metadata.mood, { surfaceHoldShape: 4.5, arousalHoldShape: 1 });
+  const inherited = withPersonaMoodSettings(shapedForm, DEFAULT_PERSONA_MOOD);
+  assert.equal(inherited.metadata.mood, undefined);
+  assert.deepEqual(inherited.metadata.energy, { aloneRecovery: 2 });
+  assert.equal(PersonaMoodSchema.safeParse({ ...DEFAULT_PERSONA_MOOD, surfaceHoldShape: 0 }).success, false);
+  assert.equal(PersonaMoodSchema.safeParse({ ...DEFAULT_PERSONA_MOOD, arousalHoldShape: 6.5 }).success, false);
 });
 
 test('sub-emotion settings stay within their documented bounds', () => {
@@ -115,7 +132,7 @@ test('sub-emotion settings stay within their documented bounds', () => {
   assert.throws(() => updateMoodSubSetting(DEFAULT_PERSONA_MOOD, 'subMax', 5));
 });
 
-test('persona mood editor renders its five planned cards', async () => {
+test('persona mood editor renders its six planned cards', async () => {
   const form = emptyPersonaSections();
   form.metadata.mood = DEFAULT_PERSONA_MOOD;
   const vite = await createServer({
@@ -147,9 +164,15 @@ test('persona mood editor renders its five planned cards', async () => {
       active: true,
     }));
     const moodStyles = readFileSync(fileURLToPath(new URL('../panel/src/styles/persona-mood.css', import.meta.url)), 'utf8');
-    for (const title of ['我的情绪', '切换难度', '全部切换一览', '主情绪与副情绪', '其他']) {
+    for (const title of ['我的情绪', '切换难度', '全部切换一览', '停留感', '主情绪与副情绪', '其他']) {
       assert.ok(html.includes(title), `缺少卡片标题：${title}`);
     }
+    assert.match(html, /id="persona-mood-surface-hold"[^>]*type="range"[^>]*min="1"[^>]*max="6"[^>]*step="0\.5"/u);
+    assert.match(html, /id="persona-mood-arousal-hold"[^>]*type="range"[^>]*min="1"[^>]*max="6"[^>]*step="0\.5"/u);
+    assert.match(html, /role="img" aria-label="停留感曲线预览/u);
+    assert.match(html, /旧指数/u);
+    assert.match(html, /当前 Hill/u);
+    assert.match(html, /4×T50/u);
     const matrixCellBodies = [...html.matchAll(/<button class="persona-mood-matrix-cell[^"]*"[^>]*>(.*?)<\/button>/gu)]
       .map((match) => match[1] ?? '');
     assert.equal(matrixCellBodies.length, DEFAULT_PERSONA_MOOD.emotions.length * (DEFAULT_PERSONA_MOOD.emotions.length - 1));

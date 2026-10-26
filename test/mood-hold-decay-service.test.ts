@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createMoodService } from '../src/core/mood/service.ts';
 import { holdDecay } from '../src/core/mood/core.ts';
+import { DEFAULT_PERSONA_MOOD } from '../src/persona/mood.ts';
 import { promptTemplateStore } from '../src/core/prompt/templates.ts';
 import { sessionId } from '../src/core/shared/events.ts';
 import { openDatabase } from '../src/store/db.ts';
@@ -71,15 +72,21 @@ test('successful appraisal reanchors all dimensions and persists event cursors',
   try {
     const repository = createRepository(database);
     const config = makeConfig();
+    Object.assign(config.mood, { surfaceHoldShape: 2, arousalHoldShape: 4 });
     const account = groupSession.account;
     const session = sessionId(groupSession);
     const now = 1_000_000;
     const initial = initialState(account, now);
+    const personaMoodSettings = {
+      ...DEFAULT_PERSONA_MOOD,
+      surfaceHoldShape: 5,
+    } as typeof DEFAULT_PERSONA_MOOD & { surfaceHoldShape: number };
     repository.saveMoodState(initial);
     const mood = createMoodService({
       repository,
       getConfig: () => config,
       now: () => now,
+      getPersonaMoodSettings: () => personaMoodSettings,
       callModel: async () => ({
         text: '{"valence":0.1,"reserve":0,"arousal":-0.1,"dominance":-0.1,"causeTag":"安慰","reason":"安慰"}',
         provider: 'fake',
@@ -104,9 +111,9 @@ test('successful appraisal reanchors all dimensions and persists event cursors',
     assert.ok(state);
     const valenceDelta = state.valence - config.mood.baseline.valence;
     const arousalDelta = state.arousal - config.mood.baseline.arousal;
-    const expectedValenceD0 = valenceDelta * (1 + initial.valenceU ** 3);
-    const expectedArousalD0 = arousalDelta * (1 + initial.arousalU ** 2);
-    const expectedDominanceD0 = state.dominance * (1 + initial.dominanceU ** 2);
+    const expectedValenceD0 = valenceDelta * (1 + initial.valenceU ** 5);
+    const expectedArousalD0 = arousalDelta * (1 + initial.arousalU ** 4);
+    const expectedDominanceD0 = state.dominance * (1 + initial.dominanceU ** 4);
     assert.equal(state.valenceU, initial.valenceU);
     assert.equal(state.arousalU, initial.arousalU);
     assert.equal(state.dominanceU, initial.dominanceU);

@@ -169,6 +169,9 @@ export interface MoodView {
   settings: {
     surfaceHalfLifeMin: number;
     arousalHalfLifeMin: number;
+    surfaceHoldShape: number;
+    arousalHoldShape: number;
+    reserveInitial: number;
     baseline: { valence: number; arousal: number };
     senderHourlyCap: number;
   };

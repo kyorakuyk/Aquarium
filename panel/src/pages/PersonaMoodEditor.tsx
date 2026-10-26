@@ -28,6 +28,7 @@ import { PersonaMoodEdgeMatrix } from './PersonaMoodEdgeMatrix.tsx';
 import { PersonaMoodGraph } from './PersonaMoodGraph.tsx';
 import {
   PersonaMoodLibraryCard,
+  PersonaMoodHoldCard,
   PersonaMoodOtherCard,
   PersonaMoodSubSettingsCard,
   SettingsRange,
@@ -43,6 +44,9 @@ interface MoodPreview {
 const DEFAULT_GLOBAL_MOOD_SETTINGS: MoodView['settings'] = {
   surfaceHalfLifeMin: 40,
   arousalHalfLifeMin: 40,
+  surfaceHoldShape: 3,
+  arousalHoldShape: 2,
+  reserveInitial: 0.8,
   baseline: { valence: 0.1, arousal: 0.4 },
   senderHourlyCap: 0.8,
 };
@@ -54,6 +58,9 @@ function parseSettings(form: PersonaSectionsForm) {
 function moodSettingsAreValid(settings: MoodView['settings']): boolean {
   return Number.isFinite(settings.surfaceHalfLifeMin) && settings.surfaceHalfLifeMin > 0
     && Number.isFinite(settings.arousalHalfLifeMin) && settings.arousalHalfLifeMin > 0
+    && Number.isFinite(settings.surfaceHoldShape) && settings.surfaceHoldShape >= 1 && settings.surfaceHoldShape <= 6
+    && Number.isFinite(settings.arousalHoldShape) && settings.arousalHoldShape >= 1 && settings.arousalHoldShape <= 6
+    && Number.isFinite(settings.reserveInitial) && settings.reserveInitial >= 0 && settings.reserveInitial <= 1
     && Number.isFinite(settings.baseline.valence) && settings.baseline.valence >= -1 && settings.baseline.valence <= 1
     && Number.isFinite(settings.baseline.arousal) && settings.baseline.arousal >= 0 && settings.baseline.arousal <= 1
     && Number.isFinite(settings.senderHourlyCap) && settings.senderHourlyCap >= 0;
@@ -355,6 +362,12 @@ export function PersonaMoodEditor({
         settings={settings}
         mainEmotion={emotionExample.mainEmotion}
         subEmotions={emotionExample.subEmotions}
+        disabled={disabled || !parsed.success}
+        onChange={commit}
+      />
+      <PersonaMoodHoldCard
+        settings={settings}
+        globalSettings={globalMoodSettings}
         disabled={disabled || !parsed.success}
         onChange={commit}
       />

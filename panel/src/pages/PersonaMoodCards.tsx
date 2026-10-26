@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DEFAULT_EMOTION_LIBRARY } from '../../../src/core/mood/emotions.ts';
+import { surfaceHalfLifeMin } from '../../../src/core/mood/core.ts';
 import type { PersonaMoodSettings } from '../../../src/persona/mood.ts';
 import {
   addMoodEmotion,
@@ -187,6 +188,128 @@ export function PersonaMoodSubSettingsCard({
         />
       </div>
       <p className="persona-mood-preview-example">现在是 <strong>{mainEmotion}</strong>（主）{subEmotions.length > 0 ? ` · 副：${subEmotions.join('、')}` : ' · 无明显副情绪'}</p>
+    </section>
+  );
+}
+
+function holdShapeLength(shape: number): string {
+  if (shape < 1.5) return '无';
+  if (shape < 2.5) return '短';
+  if (shape < 3.5) return '中';
+  return '长';
+}
+
+export function PersonaMoodHoldCard({
+  settings,
+  globalSettings,
+  disabled,
+  onChange,
+}: {
+  settings: PersonaMoodSettings;
+  globalSettings: {
+    surfaceHalfLifeMin: number;
+    surfaceHoldShape: number;
+    arousalHoldShape: number;
+    reserveInitial: number;
+  };
+  disabled: boolean;
+  onChange: (settings: PersonaMoodSettings) => void;
+}) {
+  const surfaceShape = settings.surfaceHoldShape ?? globalSettings.surfaceHoldShape;
+  const arousalShape = settings.arousalHoldShape ?? globalSettings.arousalHoldShape;
+  const t50Min = surfaceHalfLifeMin(globalSettings.reserveInitial, globalSettings.surfaceHalfLifeMin);
+  const tau10Min = t50Min * (1 / 9) ** (1 / surfaceShape);
+  const plot = { left: 34, right: 384, top: 12, bottom: 112 };
+  const plotWidth = plot.right - plot.left;
+  const plotHeight = plot.bottom - plot.top;
+  const xAt = (u: number) => plot.left + u / 4 * plotWidth;
+  const yAt = (remaining: number) => plot.top + (1 - remaining) * plotHeight;
+  const curvePath = (valueAt: (u: number) => number) => Array.from({ length: 49 }, (_, index) => {
+    const u = index / 12;
+    return `${index === 0 ? 'M' : 'L'}${xAt(u).toFixed(2)},${yAt(valueAt(u)).toFixed(2)}`;
+  }).join(' ');
+  const tau10X = xAt((1 / 9) ** (1 / surfaceShape));
+  const t50X = xAt(1);
+
+  return (
+    <section className="persona-form-card persona-mood-card" aria-labelledby="persona-mood-hold-title">
+      <header className="persona-mood-card-heading">
+        <div>
+          <h3 id="persona-mood-hold-title">停留感</h3>
+          <span className="muted">先停一会儿，再回到底色；数值越大，前段越平。</span>
+        </div>
+      </header>
+      <div className="persona-mood-hold-controls">
+        <div className="persona-mood-hold-control">
+          <SettingsRange
+            id="persona-mood-surface-hold"
+            label="心情停留感"
+            hint={`1 无 · 2 短 · 3 中 · 4+ 长 · 当前${holdShapeLength(surfaceShape)}`}
+            value={surfaceShape}
+            min={1}
+            max={6}
+            step={0.5}
+            display={surfaceShape.toFixed(1)}
+            disabled={disabled}
+            onChange={(value) => onChange({ ...settings, surfaceHoldShape: value })}
+          />
+          <div className="persona-mood-hold-control-footer">
+            <span>{settings.surfaceHoldShape === undefined ? `继承全局 ${surfaceShape.toFixed(1)}` : '人设覆盖'}</span>
+            <button
+              className="persona-mood-small-button"
+              type="button"
+              disabled={disabled || settings.surfaceHoldShape === undefined}
+              onClick={() => onChange({ ...settings, surfaceHoldShape: undefined })}
+            >恢复全局</button>
+          </div>
+        </div>
+        <div className="persona-mood-hold-control">
+          <SettingsRange
+            id="persona-mood-arousal-hold"
+            label="兴奋停留感"
+            hint={`1 无 · 2 短 · 3 中 · 4+ 长 · 当前${holdShapeLength(arousalShape)}`}
+            value={arousalShape}
+            min={1}
+            max={6}
+            step={0.5}
+            display={arousalShape.toFixed(1)}
+            disabled={disabled}
+            onChange={(value) => onChange({ ...settings, arousalHoldShape: value })}
+          />
+          <div className="persona-mood-hold-control-footer">
+            <span>{settings.arousalHoldShape === undefined ? `继承全局 ${arousalShape.toFixed(1)}` : '人设覆盖'}</span>
+            <button
+              className="persona-mood-small-button"
+              type="button"
+              disabled={disabled || settings.arousalHoldShape === undefined}
+              onClick={() => onChange({ ...settings, arousalHoldShape: undefined })}
+            >恢复全局</button>
+          </div>
+        </div>
+      </div>
+      <div className="persona-mood-hold-preview">
+        <svg className="persona-mood-hold-chart" role="img" aria-label="停留感曲线预览" viewBox="0 0 400 144">
+          <line className="persona-mood-hold-axis" x1={plot.left} y1={plot.bottom} x2={plot.right} y2={plot.bottom} />
+          <line className="persona-mood-hold-gridline" x1={plot.left} y1={yAt(0.5)} x2={plot.right} y2={yAt(0.5)} />
+          <path className="persona-mood-hold-exponential" d={curvePath((u) => 2 ** -u)} />
+          <path className="persona-mood-hold-hill" d={curvePath((u) => 1 / (1 + u ** surfaceShape))} />
+          <line className="persona-mood-hold-marker" x1={tau10X} y1={yAt(0.9)} x2={tau10X} y2={plot.bottom} />
+          <circle className="persona-mood-hold-point" cx={tau10X} cy={yAt(0.9)} r="3" />
+          <text className="persona-mood-hold-marker-label" x={tau10X} y={plot.top - 1} textAnchor="middle">τ10</text>
+          <line className="persona-mood-hold-marker" x1={t50X} y1={yAt(0.5)} x2={t50X} y2={plot.bottom} />
+          <circle className="persona-mood-hold-point" cx={t50X} cy={yAt(0.5)} r="3" />
+          <text className="persona-mood-hold-marker-label" x={t50X} y={plot.top - 1} textAnchor="middle">T50</text>
+          <text className="persona-mood-hold-axis-label" x={plot.left} y="130" textAnchor="middle">0</text>
+          <text className="persona-mood-hold-axis-label" x={xAt(2)} y="130" textAnchor="middle">2×T50</text>
+          <text className="persona-mood-hold-axis-label" x={plot.right} y="130" textAnchor="middle">4×T50</text>
+        </svg>
+        <div className="persona-mood-hold-legend">
+          <span><i className="is-exponential" />旧指数</span>
+          <span><i className="is-hill" />当前 Hill</span>
+          <span>τ10 ≈ {tau10Min.toFixed(1)} 分钟 · T50 = {t50Min.toFixed(1)} 分钟</span>
+        </div>
+      </div>
+      <p className="persona-mood-global-note">未设置人设覆盖时继承全局形状；预览按初始心灵能量对应的心情 T50 绘制。</p>
     </section>
   );
 }
